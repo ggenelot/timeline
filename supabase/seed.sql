@@ -1,27 +1,43 @@
--- Important: create users in Supabase Auth first with these emails:
+-- Seed designed to be idempotent.
+-- Before running seeds, create Auth users for these emails:
 -- admin@pcivile.test, responsable@pcivile.test, benevole@pcivile.test
--- Optional for richer tests: benevole2@pcivile.test, benevole3@pcivile.test
--- Suggested password for local demos: DemoPass123!
+-- optional: benevole2@pcivile.test, benevole3@pcivile.test
 
-update public.profiles
-set full_name = 'Alice Admin', role = 'admin', sector = 'National'
-where email = 'admin@pcivile.test';
-
-update public.profiles
-set full_name = 'Romain Responsable', role = 'responsable', sector = 'Nord'
-where email = 'responsable@pcivile.test';
-
-update public.profiles
-set full_name = 'Bruno Benevole', role = 'benevole', sector = 'Nord'
-where email = 'benevole@pcivile.test';
-
-update public.profiles
-set full_name = 'Bianca Benevole', role = 'benevole', sector = 'Nord'
-where email = 'benevole2@pcivile.test';
-
-update public.profiles
-set full_name = 'Basile Benevole', role = 'benevole', sector = 'Nord'
-where email = 'benevole3@pcivile.test';
+insert into public.profiles (id, full_name, email, role, sector)
+select
+  u.id,
+  case u.email
+    when 'admin@pcivile.test' then 'Alice Admin'
+    when 'responsable@pcivile.test' then 'Romain Responsable'
+    when 'benevole@pcivile.test' then 'Bruno Benevole'
+    when 'benevole2@pcivile.test' then 'Bianca Benevole'
+    when 'benevole3@pcivile.test' then 'Basile Benevole'
+    else split_part(u.email, '@', 1)
+  end as full_name,
+  u.email,
+  case u.email
+    when 'admin@pcivile.test' then 'admin'::public.app_role
+    when 'responsable@pcivile.test' then 'responsable'::public.app_role
+    else 'benevole'::public.app_role
+  end as role,
+  case u.email
+    when 'admin@pcivile.test' then 'National'
+    else 'Nord'
+  end as sector
+from auth.users u
+where u.email in (
+  'admin@pcivile.test',
+  'responsable@pcivile.test',
+  'benevole@pcivile.test',
+  'benevole2@pcivile.test',
+  'benevole3@pcivile.test'
+)
+on conflict (id) do update
+set
+  full_name = excluded.full_name,
+  email = excluded.email,
+  role = excluded.role,
+  sector = excluded.sector;
 
 insert into public.missions (
   title,
@@ -42,7 +58,7 @@ select
   timezone('utc', now()) + interval '2 days',
   timezone('utc', now()) + interval '2 days 6 hours',
   6,
-  'proposed'::mission_status,
+  'proposed'::public.mission_status,
   p.id
 from public.profiles p
 where p.email = 'responsable@pcivile.test'
@@ -69,7 +85,7 @@ select
   timezone('utc', now()) + interval '5 days',
   timezone('utc', now()) + interval '5 days 8 hours',
   4,
-  'draft'::mission_status,
+  'draft'::public.mission_status,
   p.id
 from public.profiles p
 where p.email = 'responsable@pcivile.test'
@@ -87,7 +103,7 @@ select
   m.id,
   v.id,
   r.id,
-  'no_response'::mission_proposal_response
+  'no_response'::public.mission_proposal_response
 from public.missions m
 join public.profiles r on r.email = 'responsable@pcivile.test'
 join public.profiles v on v.email in ('benevole@pcivile.test', 'benevole2@pcivile.test')

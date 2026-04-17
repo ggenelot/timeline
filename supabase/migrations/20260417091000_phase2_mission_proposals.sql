@@ -1,9 +1,33 @@
-alter table public.profiles enable row level security;
-alter table public.missions enable row level security;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'mission_proposal_response') THEN
+    CREATE TYPE public.mission_proposal_response AS ENUM ('no_response', 'available', 'unavailable', 'maybe');
+  END IF;
+END
+$$;
+
+create table if not exists public.mission_proposals (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references public.missions(id) on delete cascade,
+  volunteer_id uuid not null references public.profiles(id) on delete cascade,
+  proposed_by uuid not null references public.profiles(id) on delete cascade,
+  response public.mission_proposal_response not null default 'no_response',
+  responded_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now())
+);
+
+alter table public.mission_proposals
+  drop constraint if exists mission_proposals_mission_volunteer_key;
+
+alter table public.mission_proposals
+  add constraint mission_proposals_mission_volunteer_key unique (mission_id, volunteer_id);
+
+create index if not exists idx_mission_proposals_mission_id on public.mission_proposals(mission_id);
+create index if not exists idx_mission_proposals_volunteer_id on public.mission_proposals(volunteer_id);
+
 alter table public.mission_proposals enable row level security;
 
--- Profiles: each user can read/update own profile. Admin can read all.
--- Responsables can list volunteers to send proposals.
+-- Phase 2 keeps profile behavior where responsables can list volunteers.
 drop policy if exists "profiles_select_own_or_admin" on public.profiles;
 create policy "profiles_select_own_or_admin"
 on public.profiles
@@ -17,17 +41,8 @@ using (
   )
 );
 
-drop policy if exists "profiles_update_own" on public.profiles;
-create policy "profiles_update_own"
-on public.profiles
-for update
-using (auth.uid() = id)
-with check (auth.uid() = id);
-
--- Missions:
--- - admin/responsable can read all missions
--- - benevole can only read missions where they are proposed
-drop policy if exists "missions_select_authenticated" on public.missions;
+-- Phase 2 mission visibility: benevoles only see proposed missions.
+drop policy if exists "missions_select_by_role" on public.missions;
 create policy "missions_select_by_role"
 on public.missions
 for select
@@ -44,30 +59,6 @@ using (
   )
 );
 
--- Missions insert/update restricted to admin/responsable.
-drop policy if exists "missions_insert_admin_or_responsable" on public.missions;
-create policy "missions_insert_admin_or_responsable"
-on public.missions
-for insert
-with check (
-  auth.uid() = created_by
-  and public.current_user_role() in ('admin', 'responsable')
-);
-
-drop policy if exists "missions_update_creator_admin" on public.missions;
-create policy "missions_update_creator_admin"
-on public.missions
-for update
-using (
-  auth.uid() = created_by
-  or public.current_user_role() = 'admin'
-)
-with check (
-  auth.uid() = created_by
-  or public.current_user_role() = 'admin'
-);
-
--- Mission proposals
 -- Select:
 -- - admin can read all
 -- - responsable can read proposals of their missions
