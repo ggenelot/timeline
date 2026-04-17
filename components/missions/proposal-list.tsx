@@ -16,6 +16,7 @@ export type ProposalListItem = {
     title: string;
     starts_at: string;
     location: string | null;
+    sector: string | null;
   } | null;
   volunteer: {
     id: string;
@@ -83,6 +84,9 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
               </div>
               <div>
                 <dt className="inline font-medium text-slate-700">Lieu :</dt> {proposal.mission?.location ?? 'Non défini'}
+              </div>
+              <div>
+                <dt className="inline font-medium text-slate-700">Secteur :</dt> {proposal.mission?.sector ?? 'Non défini'}
               </div>
               <div>
                 <dt className="inline font-medium text-slate-700">Soumise le :</dt> {new Date(proposal.created_at).toLocaleString('fr-FR')}

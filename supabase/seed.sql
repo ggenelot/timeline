@@ -22,6 +22,7 @@ select
   end as role,
   case u.email
     when 'admin@pcivile.test' then 'National'
+    when 'benevole3@pcivile.test' then 'Sud'
     else 'Nord'
   end as sector
 from auth.users u
@@ -38,6 +39,14 @@ set
   email = excluded.email,
   role = excluded.role,
   sector = excluded.sector;
+
+insert into public.skills (name)
+values
+  ('secourisme'),
+  ('logistique'),
+  ('conduite'),
+  ('radio')
+on conflict (name) do nothing;
 
 insert into public.missions (
   title,
@@ -92,6 +101,75 @@ where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Renfort logistique - Inondations'
 );
+
+insert into public.missions (
+  title,
+  description,
+  location,
+  sector,
+  starts_at,
+  ends_at,
+  required_volunteers,
+  status,
+  created_by
+)
+select
+  'Soutien radio - Exercice départemental',
+  'Gestion des communications entre les points de rassemblement.',
+  'Montpellier',
+  'Sud',
+  timezone('utc', now()) + interval '9 days',
+  timezone('utc', now()) + interval '9 days 4 hours',
+  3,
+  'proposed'::public.mission_status,
+  p.id
+from public.profiles p
+where p.email = 'responsable@pcivile.test'
+and not exists (
+  select 1 from public.missions m where m.title = 'Soutien radio - Exercice départemental'
+);
+
+insert into public.profile_skills (profile_id, skill_id)
+select p.id, s.id
+from public.profiles p
+join public.skills s on s.name in ('secourisme', 'conduite')
+where p.email = 'benevole@pcivile.test'
+on conflict (profile_id, skill_id) do nothing;
+
+insert into public.profile_skills (profile_id, skill_id)
+select p.id, s.id
+from public.profiles p
+join public.skills s on s.name in ('logistique', 'radio')
+where p.email = 'benevole2@pcivile.test'
+on conflict (profile_id, skill_id) do nothing;
+
+insert into public.profile_skills (profile_id, skill_id)
+select p.id, s.id
+from public.profiles p
+join public.skills s on s.name in ('secourisme', 'logistique', 'radio')
+where p.email = 'benevole3@pcivile.test'
+on conflict (profile_id, skill_id) do nothing;
+
+insert into public.mission_required_skills (mission_id, skill_id)
+select m.id, s.id
+from public.missions m
+join public.skills s on s.name in ('secourisme', 'radio')
+where m.title = 'Poste de secours - Marathon de Lille'
+on conflict (mission_id, skill_id) do nothing;
+
+insert into public.mission_required_skills (mission_id, skill_id)
+select m.id, s.id
+from public.missions m
+join public.skills s on s.name in ('logistique', 'conduite')
+where m.title = 'Renfort logistique - Inondations'
+on conflict (mission_id, skill_id) do nothing;
+
+insert into public.mission_required_skills (mission_id, skill_id)
+select m.id, s.id
+from public.missions m
+join public.skills s on s.name in ('radio')
+where m.title = 'Soutien radio - Exercice départemental'
+on conflict (mission_id, skill_id) do nothing;
 
 insert into public.mission_proposals (
   mission_id,

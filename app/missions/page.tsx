@@ -5,15 +5,25 @@ import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 import { MissionCard } from '@/components/missions/mission-card';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposal, Profile } from '@/lib/types';
+import { Mission, MissionProposal, MissionRequiredSkill, Profile } from '@/lib/types';
+
+type MissionWithRequiredSkills = Mission & {
+  mission_required_skills: MissionRequiredSkill[] | null;
+};
 
 export default function MissionsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [missions, setMissions] = useState<Mission[]>([]);
+  const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const [selectedSector, setSelectedSector] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [selectedRequiredSkillId, setSelectedRequiredSkillId] = useState('all');
+
   const router = useRouter();
 
   async function loadData() {
@@ -43,7 +53,9 @@ export default function MissionsPage() {
 
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
-      .select('id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at')
+      .select(
+        'id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(mission_id,skill_id,created_at,skill:skills(id,name))'
+      )
       .order('starts_at', { ascending: true });
 
     if (missionError) {
@@ -52,7 +64,15 @@ export default function MissionsPage() {
       return;
     }
 
-    setMissions(missionData ?? []);
+    const mappedMissions: MissionWithRequiredSkills[] = (missionData ?? []).map((mission) => ({
+      ...mission,
+      mission_required_skills: (mission.mission_required_skills ?? []).map((requiredSkill) => ({
+        ...requiredSkill,
+        skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
+      }))
+    }));
+
+    setMissions(mappedMissions);
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
@@ -73,6 +93,55 @@ export default function MissionsPage() {
     [proposals]
   );
 
+  const sectors = useMemo(
+    () => Array.from(new Set(missions.map((mission) => mission.sector).filter((sector): sector is string => Boolean(sector)))).sort(),
+    [missions]
+  );
+
+  const requiredSkills = useMemo(() => {
+    const byId = new Map<string, string>();
+    missions.forEach((mission) => {
+      mission.mission_required_skills?.forEach((requiredSkill) => {
+        if (requiredSkill.skill) {
+          byId.set(requiredSkill.skill.id, requiredSkill.skill.name);
+        }
+      });
+    });
+
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [missions]);
+
+  const filteredMissions = useMemo(
+    () =>
+      missions.filter((mission) => {
+        if (selectedSector !== 'all' && mission.sector !== selectedSector) {
+          return false;
+        }
+
+        const missionDate = mission.starts_at.slice(0, 10);
+
+        if (dateFrom && missionDate < dateFrom) {
+          return false;
+        }
+
+        if (dateTo && missionDate > dateTo) {
+          return false;
+        }
+
+        if (selectedRequiredSkillId !== 'all') {
+          const hasSkill = (mission.mission_required_skills ?? []).some((requiredSkill) => requiredSkill.skill_id === selectedRequiredSkillId);
+          if (!hasSkill) {
+            return false;
+          }
+        }
+
+        return true;
+      }),
+    [missions, selectedSector, dateFrom, dateTo, selectedRequiredSkillId]
+  );
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
   }
@@ -88,21 +157,88 @@ export default function MissionsPage() {
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+          <label className="text-sm text-slate-700">
+            Secteur
+            <select
+              value={selectedSector}
+              onChange={(event) => setSelectedSector(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Tous les secteurs</option>
+              {sectors.map((sector) => (
+                <option key={sector} value={sector}>
+                  {sector}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Date début min
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Date début max
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Compétence requise
+            <select
+              value={selectedRequiredSkillId}
+              onChange={(event) => setSelectedRequiredSkillId(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Toutes</option>
+              {requiredSkills.map((skill) => (
+                <option key={skill.id} value={skill.id}>
+                  {skill.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      </section>
+
       <div className="space-y-3">
-        {missions.map((mission) => (
-          <MissionCard
-            key={mission.id}
-            mission={mission}
-            currentUserId={profile?.id ?? ''}
-            canPropose={profile?.role === 'benevole'}
-            proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
-            proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
-          />
+        {filteredMissions.map((mission) => (
+          <div key={mission.id} className="space-y-2">
+            <MissionCard
+              mission={mission}
+              currentUserId={profile?.id ?? ''}
+              canPropose={profile?.role === 'benevole'}
+              proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
+              proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
+            />
+            {(mission.mission_required_skills ?? []).length > 0 ? (
+              <p className="px-1 text-xs text-slate-600">
+                Compétences requises:{' '}
+                {(mission.mission_required_skills ?? [])
+                  .map((requiredSkill) => requiredSkill.skill?.name)
+                  .filter((skillName): skillName is string => Boolean(skillName))
+                  .join(', ')}
+              </p>
+            ) : null}
+          </div>
         ))}
 
-        {missions.length === 0 ? (
+        {filteredMissions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            Aucune mission disponible avec vos droits actuels.
+            Aucune mission ne correspond aux filtres sélectionnés.
           </div>
         ) : null}
       </div>
