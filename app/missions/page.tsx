@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
@@ -50,6 +51,11 @@ export default function MissionsPage() {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
   }
 
+  const helperText =
+    profile?.role === 'benevole'
+      ? 'Vous voyez uniquement les missions qui vous ont été proposées.'
+      : 'Vous voyez toutes les missions (selon vos droits).';
+
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white p-4">
@@ -57,6 +63,7 @@ export default function MissionsPage() {
         <p className="mt-1 text-sm text-slate-600">
           Connecté en tant que <span className="font-medium">{profile?.full_name ?? user?.email}</span> ({profile?.role ?? 'profil incomplet'})
         </p>
+        <p className="mt-1 text-sm text-slate-500">{helperText}</p>
       </div>
 
       <div className="space-y-3">
@@ -85,12 +92,20 @@ export default function MissionsPage() {
                 <dt className="inline font-medium text-slate-700">Bénévoles requis :</dt> {mission.required_volunteers}
               </div>
             </dl>
+            <div className="mt-4">
+              <Link
+                href={`/missions/${mission.id}`}
+                className="inline-flex rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+              >
+                Voir le détail
+              </Link>
+            </div>
           </article>
         ))}
 
         {missions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            Aucune mission de démonstration trouvée.
+            Aucune mission disponible avec vos droits actuels.
           </div>
         ) : null}
       </div>
