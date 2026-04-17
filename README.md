@@ -6,7 +6,8 @@ Socle minimal fonctionnel pour une application de gestion de missions bénévole
 
 - Node.js 20+
 - npm 10+
-- Un projet Supabase
+- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
+- Docker (requis par Supabase CLI pour la stack locale)
 
 ## Installation
 
@@ -27,15 +28,50 @@ cp .env.example .env.local
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-Ces valeurs sont disponibles dans **Supabase > Project Settings > API**.
+En local Supabase CLI, ces valeurs sont affichées par `supabase start`.
 
-## Exécution du SQL (Supabase)
+## Gestion de la base via migrations (Supabase CLI)
 
-Dans l'ordre, exécuter dans le SQL Editor:
+Le schéma est désormais versionné dans le repo sous `supabase/` :
 
-1. `supabase/01_schema.sql`
-2. `supabase/02_rls.sql`
-3. `supabase/03_seeds.sql`
+- `supabase/migrations/*.sql` : migrations SQL versionnées (phase 1 + phase 2)
+- `supabase/seed.sql` : données de test idempotentes
+- `supabase/config.toml` : configuration locale Supabase CLI
+
+### Démarrer Supabase en local
+
+```bash
+npm run supabase:start
+```
+
+### Appliquer les migrations
+
+- Sur une base locale neuve, `supabase start` applique déjà les migrations.
+- Pour appliquer explicitement les migrations en environnement lié :
+
+```bash
+npm run supabase:db:push
+```
+
+### Reset complet de la base (migrations + seed)
+
+```bash
+npm run supabase:db:reset
+```
+
+### Recharger les seeds seulement
+
+```bash
+npx supabase db seed
+```
+
+### Ajouter une future migration
+
+```bash
+npm run supabase:migration:new -- <nom_migration>
+```
+
+Puis compléter le fichier généré dans `supabase/migrations/`.
 
 ## Création des utilisateurs de test
 
@@ -63,6 +99,7 @@ Application disponible sur `http://localhost:3000`.
 
 - Table `mission_proposals` pour lier une mission à plusieurs bénévoles.
 - Réponses bénévoles possibles: `no_response`, `available`, `unavailable`, `maybe`.
+- Contrainte d'unicité `(mission_id, volunteer_id)` pour éviter les doublons de proposition.
 - Page de détail mission: `/missions/[id]`.
 - Responsable (créateur de mission) : propose une mission à plusieurs bénévoles.
 - Bénévole : voit seulement les missions qui lui sont proposées et peut répondre.
