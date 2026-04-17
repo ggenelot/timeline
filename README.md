@@ -1,6 +1,6 @@
-# Mission Planner - Phase 1
+# Mission Planner - Phase 2
 
-Socle minimal fonctionnel pour une application de gestion de missions bénévoles (protection civile).
+Socle minimal fonctionnel pour une application de gestion de missions bénévoles (protection civile), avec proposition ciblée et réponse bénévole.
 
 ## Prérequis
 
@@ -44,6 +44,8 @@ Avant d'exécuter les seeds, créer ces utilisateurs dans **Supabase Auth > User
 - `admin@pcivile.test`
 - `responsable@pcivile.test`
 - `benevole@pcivile.test`
+- `benevole2@pcivile.test` (optionnel, recommandé)
+- `benevole3@pcivile.test` (optionnel)
 
 Mot de passe recommandé pour les tests locaux : `DemoPass123!`
 
@@ -57,18 +59,31 @@ npm run dev
 
 Application disponible sur `http://localhost:3000`.
 
-## Test rapide phase 1
+## Fonctionnalités Phase 2
 
-1. Ouvrir `/login`
-2. Se connecter avec `responsable@pcivile.test`
-3. Vérifier la page `/missions`:
-   - profil affiché (nom + rôle)
-   - liste des missions de démonstration
-4. Se déconnecter puis reconnecter avec `benevole@pcivile.test` pour valider l'accès en lecture.
+- Table `mission_proposals` pour lier une mission à plusieurs bénévoles.
+- Réponses bénévoles possibles: `no_response`, `available`, `unavailable`, `maybe`.
+- Page de détail mission: `/missions/[id]`.
+- Responsable (créateur de mission) : propose une mission à plusieurs bénévoles.
+- Bénévole : voit seulement les missions qui lui sont proposées et peut répondre.
+- RLS stricte:
+  - bénévole: accès limité à ses propositions/missions proposées,
+  - responsable: accès à ses missions et propositions liées,
+  - admin: accès global.
 
-## Limites connues (phase 1)
+## Test rapide phase 2
 
-- Pas encore de proposition ciblée de mission par bénévole.
-- Pas encore de réponse disponible / indisponible / à confirmer.
-- Pas encore de vue responsable de suivi des réponses.
-- Pas encore de sélection d'équipe finale.
+1. Ouvrir `/login`.
+2. Se connecter avec `responsable@pcivile.test`.
+3. Aller sur `/missions` puis ouvrir une mission via **Voir le détail**.
+4. Dans **Proposer cette mission à des bénévoles**, sélectionner 1+ bénévoles puis envoyer.
+5. Se déconnecter et se connecter avec `benevole@pcivile.test`.
+6. Vérifier que `/missions` n'affiche que les missions proposées à ce bénévole.
+7. Ouvrir le détail mission et changer **Ma réponse** (disponible/indisponible/peut-être/sans réponse).
+8. Revenir avec le compte responsable et vérifier la réponse dans **Propositions envoyées**.
+
+## Notes de migration depuis la phase 1
+
+- Les écrans phase 1 sont conservés (`/login`, `/missions`).
+- Le listing missions continue de fonctionner pour admin/responsable.
+- Le comportement côté bénévole est volontairement restreint par RLS en phase 2.

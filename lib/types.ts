@@ -22,3 +22,15 @@ export type Mission = {
   created_by: string;
   created_at: string;
 };
+
+export type MissionProposalResponse = 'no_response' | 'available' | 'unavailable' | 'maybe';
+
+export type MissionProposal = {
+  id: string;
+  mission_id: string;
+  volunteer_id: string;
+  proposed_by: string;
+  response: MissionProposalResponse;
+  responded_at: string | null;
+  created_at: string;
+};
