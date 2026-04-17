@@ -1,5 +1,6 @@
 -- Important: create users in Supabase Auth first with these emails:
 -- admin@pcivile.test, responsable@pcivile.test, benevole@pcivile.test
+-- Optional for richer tests: benevole2@pcivile.test, benevole3@pcivile.test
 -- Suggested password for local demos: DemoPass123!
 
 update public.profiles
@@ -13,6 +14,14 @@ where email = 'responsable@pcivile.test';
 update public.profiles
 set full_name = 'Bruno Benevole', role = 'benevole', sector = 'Nord'
 where email = 'benevole@pcivile.test';
+
+update public.profiles
+set full_name = 'Bianca Benevole', role = 'benevole', sector = 'Nord'
+where email = 'benevole2@pcivile.test';
+
+update public.profiles
+set full_name = 'Basile Benevole', role = 'benevole', sector = 'Nord'
+where email = 'benevole3@pcivile.test';
 
 insert into public.missions (
   title,
@@ -67,3 +76,20 @@ where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Renfort logistique - Inondations'
 );
+
+insert into public.mission_proposals (
+  mission_id,
+  volunteer_id,
+  proposed_by,
+  response
+)
+select
+  m.id,
+  v.id,
+  r.id,
+  'no_response'::mission_proposal_response
+from public.missions m
+join public.profiles r on r.email = 'responsable@pcivile.test'
+join public.profiles v on v.email in ('benevole@pcivile.test', 'benevole2@pcivile.test')
+where m.title = 'Poste de secours - Marathon de Lille'
+on conflict (mission_id, volunteer_id) do nothing;

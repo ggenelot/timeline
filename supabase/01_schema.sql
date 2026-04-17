@@ -2,6 +2,7 @@ create extension if not exists "pgcrypto";
 
 create type app_role as enum ('admin', 'responsable', 'benevole');
 create type mission_status as enum ('draft', 'proposed', 'closed', 'confirmed', 'cancelled');
+create type mission_proposal_response as enum ('no_response', 'available', 'unavailable', 'maybe');
 
 create table if not exists public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
@@ -25,6 +26,17 @@ create table if not exists public.missions (
   created_by uuid not null references public.profiles(id),
   created_at timestamptz not null default timezone('utc', now()),
   constraint missions_time_check check (ends_at > starts_at)
+);
+
+create table if not exists public.mission_proposals (
+  id uuid primary key default gen_random_uuid(),
+  mission_id uuid not null references public.missions(id) on delete cascade,
+  volunteer_id uuid not null references public.profiles(id) on delete cascade,
+  proposed_by uuid not null references public.profiles(id) on delete cascade,
+  response mission_proposal_response not null default 'no_response',
+  responded_at timestamptz,
+  created_at timestamptz not null default timezone('utc', now()),
+  unique (mission_id, volunteer_id)
 );
 
 create or replace function public.handle_new_user()
@@ -64,3 +76,5 @@ $$;
 
 create index if not exists idx_missions_starts_at on public.missions(starts_at);
 create index if not exists idx_missions_created_by on public.missions(created_by);
+create index if not exists idx_mission_proposals_mission_id on public.mission_proposals(mission_id);
+create index if not exists idx_mission_proposals_volunteer_id on public.mission_proposals(volunteer_id);
