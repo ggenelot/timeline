@@ -7,14 +7,20 @@ import { User } from '@supabase/supabase-js';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionAssignment, MissionProposal, Profile } from '@/lib/types';
+import { Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
 
 type ProposalWithVolunteer = MissionProposal & {
-  volunteer: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
+  volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
+    profile_skills?: ProfileSkill[] | null;
+  }) | null;
 };
 
 type AssignmentWithVolunteer = MissionAssignment & {
   volunteer: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
+};
+
+type MissionWithSkills = Mission & {
+  mission_required_skills: MissionRequiredSkill[] | null;
 };
 
 export default function MissionDetailPage() {
@@ -24,9 +30,10 @@ export default function MissionDetailPage() {
 
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [mission, setMission] = useState<Mission | null>(null);
+  const [mission, setMission] = useState<MissionWithSkills | null>(null);
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
+  const [selectedVolunteerSkillId, setSelectedVolunteerSkillId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -42,6 +49,32 @@ export default function MissionDetailPage() {
     () => proposals.filter((proposal) => proposal.response === 'available' || proposal.response === 'maybe'),
     [proposals]
   );
+
+  const volunteerSkillOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+
+    eligibleProposals.forEach((proposal) => {
+      (proposal.volunteer?.profile_skills ?? []).forEach((profileSkill) => {
+        if (profileSkill.skill) {
+          byId.set(profileSkill.skill.id, profileSkill.skill.name);
+        }
+      });
+    });
+
+    return Array.from(byId.entries())
+      .map(([id, name]) => ({ id, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+  }, [eligibleProposals]);
+
+  const filteredEligibleProposals = useMemo(() => {
+    if (selectedVolunteerSkillId === 'all') {
+      return eligibleProposals;
+    }
+
+    return eligibleProposals.filter((proposal) =>
+      (proposal.volunteer?.profile_skills ?? []).some((profileSkill) => profileSkill.skill_id === selectedVolunteerSkillId)
+    );
+  }, [eligibleProposals, selectedVolunteerSkillId]);
 
   async function loadData() {
     setLoading(true);
@@ -71,7 +104,9 @@ export default function MissionDetailPage() {
 
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
-      .select('id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at')
+      .select(
+        'id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(mission_id,skill_id,created_at,skill:skills(id,name))'
+      )
       .eq('id', missionId)
       .single();
 
@@ -81,12 +116,20 @@ export default function MissionDetailPage() {
       return;
     }
 
-    setMission(missionData);
+    const mappedMission: MissionWithSkills = {
+      ...missionData,
+      mission_required_skills: (missionData.mission_required_skills ?? []).map((requiredSkill) => ({
+        ...requiredSkill,
+        skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
+      }))
+    };
+
+    setMission(mappedMission);
 
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
-        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)'
+        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name)))'
       )
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
@@ -109,10 +152,22 @@ export default function MissionDetailPage() {
       return;
     }
 
-    const mappedProposals: ProposalWithVolunteer[] = (proposalData ?? []).map((proposal) => ({
-      ...proposal,
-      volunteer: Array.isArray(proposal.volunteer) ? proposal.volunteer[0] ?? null : proposal.volunteer
-    }));
+    const mappedProposals: ProposalWithVolunteer[] = (proposalData ?? []).map((proposal) => {
+      const volunteer = Array.isArray(proposal.volunteer) ? proposal.volunteer[0] ?? null : proposal.volunteer;
+
+      return {
+        ...proposal,
+        volunteer: volunteer
+          ? {
+              ...volunteer,
+              profile_skills: (volunteer.profile_skills ?? []).map((profileSkill) => ({
+                ...profileSkill,
+                skill: Array.isArray(profileSkill.skill) ? profileSkill.skill[0] ?? null : profileSkill.skill
+              }))
+            }
+          : null
+      };
+    });
 
     const mappedAssignments: AssignmentWithVolunteer[] = (assignmentData ?? []).map((assignment) => ({
       ...assignment,
@@ -232,6 +287,16 @@ export default function MissionDetailPage() {
           </div>
         </dl>
 
+        {(mission.mission_required_skills ?? []).length > 0 ? (
+          <p className="mt-3 text-sm text-slate-700">
+            <span className="font-medium">Compétences requises :</span>{' '}
+            {(mission.mission_required_skills ?? [])
+              .map((requiredSkill) => requiredSkill.skill?.name)
+              .filter((skillName): skillName is string => Boolean(skillName))
+              .join(', ')}
+          </p>
+        ) : null}
+
         {profile?.role === 'benevole' ? (
           <div className="mt-4 flex flex-col items-start gap-3">
             <ProposalButton
@@ -260,18 +325,40 @@ export default function MissionDetailPage() {
             </button>
           </div>
 
+          <div className="mt-3">
+            <label className="text-sm text-slate-700">
+              Filtrer les bénévoles par compétence
+              <select
+                value={selectedVolunteerSkillId}
+                onChange={(event) => setSelectedVolunteerSkillId(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm md:max-w-sm"
+              >
+                <option value="all">Toutes les compétences</option>
+                {volunteerSkillOptions.map((skill) => (
+                  <option key={skill.id} value={skill.id}>
+                    {skill.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
           {mission.status === 'cancelled' ? <p className="mt-3 text-sm text-slate-600">Mission annulée : sélection verrouillée.</p> : null}
 
           <div className="mt-3 space-y-2">
-            {eligibleProposals.map((proposal) => {
+            {filteredEligibleProposals.map((proposal) => {
               const isSelected = selectedVolunteerIds.has(proposal.volunteer_id);
               const isSaving = actionLoading === proposal.volunteer_id;
+              const skillNames = (proposal.volunteer?.profile_skills ?? [])
+                .map((profileSkill) => profileSkill.skill?.name)
+                .filter((skillName): skillName is string => Boolean(skillName));
 
               return (
                 <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm text-slate-700">
                   <div>
                     <p className="font-medium">{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
                     <p className="text-xs text-slate-500">Réponse: {proposal.response}</p>
+                    <p className="text-xs text-slate-500">Compétences: {skillNames.length > 0 ? skillNames.join(', ') : 'Aucune'}</p>
                   </div>
                   <button
                     type="button"
@@ -285,8 +372,8 @@ export default function MissionDetailPage() {
               );
             })}
 
-            {eligibleProposals.length === 0 ? (
-              <p className="text-sm text-slate-600">Aucune réponse disponible ou peut-être pour constituer l&apos;équipe.</p>
+            {filteredEligibleProposals.length === 0 ? (
+              <p className="text-sm text-slate-600">Aucun bénévole ne correspond aux filtres actuels.</p>
             ) : null}
           </div>
 

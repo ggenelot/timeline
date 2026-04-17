@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ProposalList, ProposalListItem } from '@/components/missions/proposal-list';
 import { supabase } from '@/lib/supabase/client';
@@ -11,6 +11,9 @@ export default function AdminProposalsPage() {
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedSector, setSelectedSector] = useState('all');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const router = useRouter();
 
   useEffect(() => {
@@ -50,7 +53,7 @@ export default function AdminProposalsPage() {
           mission_id,
           status,
           created_at,
-          mission:missions(id,title,starts_at,location),
+          mission:missions(id,title,starts_at,location,sector),
           volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)
         `)
         .order('created_at', { ascending: false });
@@ -74,6 +77,40 @@ export default function AdminProposalsPage() {
     void loadData();
   }, [router]);
 
+  const sectors = useMemo(
+    () =>
+      Array.from(
+        new Set(proposals.map((proposal) => proposal.mission?.sector).filter((sector): sector is string => Boolean(sector)))
+      ).sort(),
+    [proposals]
+  );
+
+  const filteredProposals = useMemo(
+    () =>
+      proposals.filter((proposal) => {
+        if (!proposal.mission) {
+          return false;
+        }
+
+        if (selectedSector !== 'all' && proposal.mission.sector !== selectedSector) {
+          return false;
+        }
+
+        const missionDate = proposal.mission.starts_at.slice(0, 10);
+
+        if (dateFrom && missionDate < dateFrom) {
+          return false;
+        }
+
+        if (dateTo && missionDate > dateTo) {
+          return false;
+        }
+
+        return true;
+      }),
+    [proposals, selectedSector, dateFrom, dateTo]
+  );
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des propositions...</p>;
   }
@@ -91,7 +128,48 @@ export default function AdminProposalsPage() {
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
-      <ProposalList proposals={proposals} managerId={profile.id} />
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
+        <div className="mt-3 grid gap-3 md:grid-cols-3">
+          <label className="text-sm text-slate-700">
+            Secteur
+            <select
+              value={selectedSector}
+              onChange={(event) => setSelectedSector(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Tous les secteurs</option>
+              {sectors.map((sector) => (
+                <option key={sector} value={sector}>
+                  {sector}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Date début min
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => setDateFrom(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Date début max
+            <input
+              type="date"
+              value={dateTo}
+              onChange={(event) => setDateTo(event.target.value)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            />
+          </label>
+        </div>
+      </section>
+
+      <ProposalList proposals={filteredProposals} managerId={profile.id} />
     </div>
   );
 }

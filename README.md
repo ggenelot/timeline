@@ -1,6 +1,6 @@
-# Mission Planner - Phase 4
+# Mission Planner - Phase 5
 
-Application Next.js (App Router) pour gérer des missions proposées à des bénévoles, avec sélection finale d'équipe.
+Application Next.js (App Router) pour gérer des missions proposées à des bénévoles, avec sélection finale d'équipe et filtres métier.
 
 ## Prérequis
 
@@ -25,18 +25,19 @@ Renseignez ensuite dans `.env.local` :
 
 Les migrations sont sous `supabase/migrations/`.
 
-### Nouveautés SQL phase 4
+### Nouveautés SQL phase 5
 
-- `20260417193000_phase4_mission_assignments.sql`
-  - type `mission_assignment_status`
-  - table `mission_assignments`
-  - index + unicité `(mission_id, volunteer_id)`
-  - fonctions helper RLS :
-    - `can_manage_mission`
-    - `mission_status_is`
-    - `can_select_volunteer_for_mission`
-  - policies RLS strictes pour affectations
-  - ajustements RLS sur `mission_proposals` pour bloquer les réponses si mission non `proposed`
+- `20260417210000_phase5_skills_and_filters.sql`
+  - table `skills` (référentiel des compétences)
+  - table `profile_skills` (liaison profils ↔ compétences)
+  - table `mission_required_skills` (liaison missions ↔ compétences requises)
+  - contraintes d'unicité:
+    - `skills.name`
+    - `(profile_id, skill_id)`
+    - `(mission_id, skill_id)`
+  - index sur les colonnes de liaison
+  - fonction helper `can_read_mission` pour sécuriser l'accès lecture des compétences requises
+  - policies RLS strictes pour `skills`, `profile_skills`, `mission_required_skills`
 
 ### Appliquer les migrations
 
@@ -54,10 +55,11 @@ npm run supabase:db:seed
 
 Le seed inclut désormais :
 
-- une mission `proposed` avec plusieurs propositions,
-- un bénévole en `available`,
-- un bénévole en `maybe`,
-- une affectation déjà `selected` dans `mission_assignments`.
+- compétences réalistes : `secourisme`, `logistique`, `conduite`, `radio`,
+- affectation de compétences à plusieurs bénévoles,
+- missions dans des secteurs différents (`Nord`, `Sud`) et à des dates différentes,
+- missions avec compétences requises,
+- propositions + une affectation sélectionnée pour tester le workflow complet.
 
 Utilisateurs de test à créer dans Supabase Auth :
 
@@ -75,37 +77,56 @@ Mot de passe suggéré : `DemoPass123!`
 npm run dev
 ```
 
-## Fonctionnalités phase 4
+## Fonctionnalités phase 5
 
-- Sélection finale dans le détail mission (`/missions/[id]`) :
-  - liste des réponses bénévoles,
-  - bouton **Retenir / Retirer** pour l'équipe finale,
-  - sélection autorisée uniquement pour réponses `available` ou `maybe`,
-  - confirmation mission via bouton **Confirmer la mission** (statut `confirmed`).
-- Blocages métier minimaux :
-  - mission `cancelled` : plus de sélection,
-  - mission `closed`/`confirmed`/`cancelled` : plus de nouvelles réponses bénévoles.
-- Vue bénévole dédiée : `/my-missions`
-  - affiche uniquement les missions où le bénévole connecté est affecté.
+### Filtres missions
 
-## Test rapide phase 4
+Sur `/missions` :
+
+- filtre par secteur (`Tous les secteurs` ou secteur précis),
+- filtre par date de début min/max,
+- filtre par compétence requise,
+- affichage des compétences requises par mission.
+
+### Filtres suivi responsable
+
+Sur `/admin/proposals` :
+
+- filtre secteur,
+- filtre date de début min/max.
+
+### Filtre compétences sur détail mission
+
+Sur `/missions/[id]` (responsable/admin) :
+
+- affichage des compétences requises de la mission,
+- affichage des compétences de chaque bénévole,
+- filtre de la liste des répondants (`available` / `maybe`) par compétence.
+
+## RLS (résumé phase 5)
+
+- `skills` : lecture authentifiée, écriture admin uniquement.
+- `profile_skills` :
+  - bénévole : lecture de ses propres compétences,
+  - responsable : lecture des compétences des bénévoles,
+  - admin : lecture globale,
+  - écriture admin uniquement.
+- `mission_required_skills` :
+  - lecture selon accès mission,
+  - écriture réservée à l'admin ou au gestionnaire de la mission.
+
+## Test rapide phase 5
 
 1. Se connecter en `responsable@pcivile.test`.
-2. Aller sur `/missions`, ouvrir la mission “Poste de secours - Marathon de Lille”.
-3. Dans **Équipe finale**, cliquer sur **Retenir** pour un bénévole `available` ou `maybe`.
-4. Cliquer sur **Confirmer la mission**.
-5. Se connecter en `benevole@pcivile.test`.
-6. Aller sur `/my-missions`.
-7. Vérifier les informations : titre, date/heure, lieu, secteur, statut mission, statut affectation.
+2. Aller sur `/missions`.
+3. Tester les filtres secteur/date/compétence requise.
+4. Ouvrir la mission “Poste de secours - Marathon de Lille”.
+5. Dans **Équipe finale**, filtrer les bénévoles par compétence (ex: `secourisme`, `radio`).
+6. Vérifier que les compétences des bénévoles sont visibles dans la liste.
+7. Aller sur `/admin/proposals` et tester les filtres secteur/date.
 
-## RLS (résumé)
+## Limites connues phase 5
 
-- Bénévole :
-  - voit uniquement ses propres affectations,
-  - ne peut pas écrire dans `mission_assignments`.
-- Responsable :
-  - gère les affectations uniquement des missions qu'il a créées.
-- Admin :
-  - accès global.
-- Affectation impossible si la réponse bénévole n'est pas `available` ou `maybe`.
-- Confirmation mission réservée au créateur de mission (ou admin via policy update mission).
+- Pas d'interface d'administration complète pour créer/éditer les compétences (seed + SQL pour MVP).
+- Le filtrage est appliqué côté UI sur les données chargées (pas de recherche full-text ou pagination avancée).
+- Pas de niveau de compétence (volontairement hors périmètre MVP).
