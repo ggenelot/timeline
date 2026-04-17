@@ -11,11 +11,13 @@ export default function MissionsPage() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<Mission[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   useEffect(() => {
     async function loadData() {
+      setError(null);
       const { data: authData } = await supabase.auth.getUser();
 
       if (!authData.user) {
@@ -35,10 +37,14 @@ export default function MissionsPage() {
         setProfile(profileData);
       }
 
-      const { data: missionData } = await supabase
+      const { data: missionData, error: missionError } = await supabase
         .from('missions')
         .select('id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at')
         .order('starts_at', { ascending: true });
+
+      if (missionError) {
+        setError(`Erreur chargement missions: ${missionError.message}`);
+      }
 
       setMissions(missionData ?? []);
       setLoading(false);
@@ -67,6 +73,12 @@ export default function MissionsPage() {
       </div>
 
       <div className="space-y-3">
+        {error ? (
+          <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
         {missions.map((mission) => (
           <article key={mission.id} className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
