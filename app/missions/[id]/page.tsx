@@ -4,18 +4,13 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
+import { ProposalButton } from '@/components/missions/proposal-button';
+import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposal, MissionProposalResponse, Profile } from '@/lib/types';
+import { Mission, MissionProposal, Profile } from '@/lib/types';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
-};
-
-const responseLabels: Record<MissionProposalResponse, string> = {
-  no_response: 'Sans réponse',
-  available: 'Disponible',
-  unavailable: 'Indisponible',
-  maybe: 'Peut-être'
 };
 
 export default function MissionDetailPage() {
@@ -27,11 +22,8 @@ export default function MissionDetailPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mission, setMission] = useState<Mission | null>(null);
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
-  const [volunteers, setVolunteers] = useState<Pick<Profile, 'id' | 'full_name' | 'email'>[]>([]);
-  const [selectedVolunteerIds, setSelectedVolunteerIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const myProposal = useMemo(
     () => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null,
@@ -78,11 +70,17 @@ export default function MissionDetailPage() {
 
     setMission(missionData);
 
-    const { data: proposalData } = await supabase
+    const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
-      .select('id,mission_id,volunteer_id,proposed_by,response,responded_at,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)')
+      .select('id,mission_id,volunteer_id,proposed_by,status,decided_at,decided_by,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)')
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
+
+    if (proposalsError) {
+      setError(proposalsError.message);
+      setLoading(false);
+      return;
+    }
 
     const mappedProposals: ProposalWithVolunteer[] = (proposalData ?? []).map((proposal) => ({
       ...proposal,
@@ -90,17 +88,6 @@ export default function MissionDetailPage() {
     }));
 
     setProposals(mappedProposals);
-
-    if (profileData.role === 'responsable' || profileData.role === 'admin') {
-      const { data: volunteerData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email')
-        .eq('role', 'benevole')
-        .order('full_name', { ascending: true });
-
-      setVolunteers(volunteerData ?? []);
-    }
-
     setLoading(false);
   }
 
@@ -109,75 +96,14 @@ export default function MissionDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionId, router]);
 
-  function toggleVolunteer(volunteerId: string) {
-    setSelectedVolunteerIds((current) =>
-      current.includes(volunteerId) ? current.filter((id) => id !== volunteerId) : [...current, volunteerId]
-    );
-  }
-
-  async function handleProposeMission() {
-    if (!profile || !mission || selectedVolunteerIds.length === 0) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    const payload = selectedVolunteerIds.map((volunteerId) => ({
-      mission_id: mission.id,
-      volunteer_id: volunteerId,
-      proposed_by: profile.id,
-      response: 'no_response' as const
-    }));
-
-    const { error: insertError } = await supabase.from('mission_proposals').upsert(payload, {
-      onConflict: 'mission_id,volunteer_id',
-      ignoreDuplicates: false
-    });
-
-    if (insertError) {
-      setError(insertError.message);
-    } else {
-      setSelectedVolunteerIds([]);
-      await loadData();
-    }
-
-    setSaving(false);
-  }
-
-  async function handleVolunteerResponse(response: MissionProposalResponse) {
-    if (!myProposal) {
-      return;
-    }
-
-    setSaving(true);
-    setError(null);
-
-    const { error: updateError } = await supabase
-      .from('mission_proposals')
-      .update({
-        response,
-        responded_at: response === 'no_response' ? null : new Date().toISOString()
-      })
-      .eq('id', myProposal.id);
-
-    if (updateError) {
-      setError(updateError.message);
-    } else {
-      await loadData();
-    }
-
-    setSaving(false);
-  }
-
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement du détail mission...</p>;
   }
 
-  if (error && !mission) {
+  if (!mission) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-red-600">{error}</p>
+        <p className="text-sm text-red-600">{error ?? 'Mission introuvable.'}</p>
         <Link href="/missions" className="text-sm text-slate-700 underline">
           Retour à la liste
         </Link>
@@ -185,11 +111,7 @@ export default function MissionDetailPage() {
     );
   }
 
-  if (!mission) {
-    return null;
-  }
-
-  const canManageProposals = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === profile.id);
+  const canManageProposals = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === user?.id);
 
   return (
     <div className="space-y-6">
@@ -216,90 +138,36 @@ export default function MissionDetailPage() {
           <div>
             <dt className="inline font-medium text-slate-700">Fin :</dt> {new Date(mission.ends_at).toLocaleString('fr-FR')}
           </div>
-          <div>
-            <dt className="inline font-medium text-slate-700">Bénévoles requis :</dt> {mission.required_volunteers}
-          </div>
         </dl>
-      </article>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-slate-900">Propositions envoyées</h2>
-        <div className="mt-3 space-y-2">
-          {proposals.map((proposal) => (
-            <div key={proposal.id} className="rounded border border-slate-200 p-3 text-sm text-slate-700">
-              <p className="font-medium">{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
-              <p>Réponse : {responseLabels[proposal.response]}</p>
-            </div>
-          ))}
-          {proposals.length === 0 ? <p className="text-sm text-slate-600">Aucune proposition pour le moment.</p> : null}
-        </div>
-      </section>
+        {profile?.role === 'benevole' ? (
+          <div className="mt-4 flex items-center gap-3">
+            <ProposalButton
+              missionId={mission.id}
+              volunteerId={profile.id}
+              disabled={Boolean(myProposal)}
+            />
+            {myProposal ? <StatusBadge status={myProposal.status} /> : null}
+          </div>
+        ) : null}
+      </article>
 
       {canManageProposals ? (
         <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="text-lg font-semibold text-slate-900">Proposer cette mission à des bénévoles</h2>
-          <p className="mt-1 text-sm text-slate-600">Sélection multiple possible. Les propositions existantes sont conservées.</p>
+          <h2 className="text-lg font-semibold text-slate-900">Propositions reçues</h2>
           <div className="mt-3 space-y-2">
-            {volunteers.map((volunteer) => {
-              const isAlreadyProposed = proposals.some((proposal) => proposal.volunteer_id === volunteer.id);
-              const checked = selectedVolunteerIds.includes(volunteer.id);
-
-              return (
-                <label key={volunteer.id} className="flex items-center gap-2 text-sm text-slate-700">
-                  <input
-                    type="checkbox"
-                    checked={checked}
-                    disabled={isAlreadyProposed}
-                    onChange={() => toggleVolunteer(volunteer.id)}
-                  />
-                  <span>
-                    {volunteer.full_name ?? volunteer.email} {isAlreadyProposed ? '(déjà proposé)' : ''}
-                  </span>
-                </label>
-              );
-            })}
-          </div>
-          <button
-            type="button"
-            disabled={saving || selectedVolunteerIds.length === 0}
-            onClick={handleProposeMission}
-            className="mt-4 rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? 'Enregistrement...' : 'Envoyer les propositions'}
-          </button>
-        </section>
-      ) : null}
-
-      {profile?.role === 'benevole' ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="text-lg font-semibold text-slate-900">Ma réponse</h2>
-          {myProposal ? (
-            <div className="mt-3 space-y-3">
-              <p className="text-sm text-slate-700">
-                Statut actuel : <span className="font-medium">{responseLabels[myProposal.response]}</span>
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {(['no_response', 'available', 'unavailable', 'maybe'] as MissionProposalResponse[]).map((responseValue) => (
-                  <button
-                    key={responseValue}
-                    type="button"
-                    onClick={() => handleVolunteerResponse(responseValue)}
-                    disabled={saving}
-                    className="rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                  >
-                    {responseLabels[responseValue]}
-                  </button>
-                ))}
+            {proposals.map((proposal) => (
+              <div key={proposal.id} className="flex items-center justify-between rounded border border-slate-200 p-3 text-sm text-slate-700">
+                <p>{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
+                <StatusBadge status={proposal.status} />
               </div>
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-slate-600">Vous n&apos;avez pas de proposition associée à cette mission.</p>
-          )}
+            ))}
+            {proposals.length === 0 ? <p className="text-sm text-slate-600">Aucune proposition pour le moment.</p> : null}
+          </div>
         </section>
       ) : null}
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      <p className="text-xs text-slate-500">Utilisateur connecté: {profile?.full_name ?? user?.email}</p>
     </div>
   );
 }
