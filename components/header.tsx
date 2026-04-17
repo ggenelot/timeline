@@ -41,6 +41,9 @@ export function Header() {
               <Link href="/missions" className="text-slate-700 hover:text-slate-900">
                 Missions
               </Link>
+              <Link href="/my-missions" className="text-slate-700 hover:text-slate-900">
+                Mes missions
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50"

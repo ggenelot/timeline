@@ -9,6 +9,8 @@ export type Profile = {
   created_at: string;
 };
 
+export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
+
 export type Mission = {
   id: string;
   title: string;
@@ -18,20 +20,32 @@ export type Mission = {
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
-  status: 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
+  status: MissionStatus;
   created_by: string;
   created_at: string;
 };
 
 export type MissionProposalStatus = 'pending' | 'accepted' | 'refused';
+export type MissionProposalResponse = 'no_response' | 'available' | 'unavailable' | 'maybe';
 
 export type MissionProposal = {
   id: string;
   mission_id: string;
   volunteer_id: string;
   proposed_by: string;
+  response: MissionProposalResponse;
   status: MissionProposalStatus;
   decided_at: string | null;
   decided_by: string | null;
+  created_at: string;
+};
+
+export type MissionAssignmentStatus = 'selected' | 'confirmed' | 'declined' | 'replaced';
+
+export type MissionAssignment = {
+  id: string;
+  mission_id: string;
+  volunteer_id: string;
+  assignment_status: MissionAssignmentStatus;
   created_at: string;
 };

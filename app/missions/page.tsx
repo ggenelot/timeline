@@ -56,7 +56,7 @@ export default function MissionsPage() {
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
-      .select('id,mission_id,volunteer_id,proposed_by,status,decided_at,decided_by,created_at')
+      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at')
       .eq('volunteer_id', authData.user.id);
 
     setProposals(proposalData ?? []);
@@ -69,7 +69,7 @@ export default function MissionsPage() {
   }, [router]);
 
   const proposalByMission = useMemo(
-    () => new Map(proposals.map((proposal) => [proposal.mission_id, proposal.status])),
+    () => new Map(proposals.map((proposal) => [proposal.mission_id, proposal])),
     [proposals]
   );
 
@@ -95,7 +95,8 @@ export default function MissionsPage() {
             mission={mission}
             currentUserId={profile?.id ?? ''}
             canPropose={profile?.role === 'benevole'}
-            proposalStatus={proposalByMission.get(mission.id) ?? null}
+            proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
+            proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
           />
         ))}
 
