@@ -38,6 +38,31 @@ Le schéma est désormais versionné dans le repo sous `supabase/` :
 - `supabase/seed.sql` : données de test idempotentes
 - `supabase/config.toml` : configuration locale Supabase CLI
 
+### Workflow CLI pour Supabase distant (sans SQL manuel dashboard)
+
+Après avoir créé votre projet Supabase, utilisez **exactement** cette séquence :
+
+```bash
+npx supabase login
+npx supabase link --project-ref <project-ref>
+npx supabase db push
+```
+
+Optionnel pour charger les données de test depuis `supabase/seed.sql` :
+
+```bash
+npm run supabase:db:seed
+```
+
+Ou via scripts npm :
+
+```bash
+npm run supabase:db:push
+npm run supabase:db:seed
+```
+
+Règle d'équipe recommandée : **toute évolution de schéma doit passer par une nouvelle migration SQL dans `supabase/migrations/`**, puis être appliquée via CLI (`db push`).
+
 ### Démarrer Supabase en local
 
 ```bash
@@ -62,7 +87,7 @@ npm run supabase:db:reset
 ### Recharger les seeds seulement
 
 ```bash
-npx supabase db seed
+npm run supabase:db:seed
 ```
 
 ### Ajouter une future migration

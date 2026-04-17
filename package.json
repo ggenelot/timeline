@@ -12,7 +12,8 @@
     "supabase:stop": "npx supabase stop",
     "supabase:db:reset": "npx supabase db reset",
     "supabase:db:push": "npx supabase db push",
-    "supabase:migration:new": "npx supabase migration new"
+    "supabase:migration:new": "npx supabase migration new",
+    "supabase:db:seed": "npx supabase db seed"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
