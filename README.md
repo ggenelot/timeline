@@ -1,116 +1,73 @@
-# Mission Planner - Phase 2
+# Mission Planner - Phase 4
 
-Socle minimal fonctionnel pour une application de gestion de missions bénévoles (protection civile), avec proposition ciblée et réponse bénévole.
+Application Next.js (App Router) pour gérer des missions proposées à des bénévoles, avec sélection finale d'équipe.
 
 ## Prérequis
 
 - Node.js 20+
 - npm 10+
 - [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
-- Docker (requis par Supabase CLI pour la stack locale)
+- Docker (pour Supabase local)
 
 ## Installation
 
 ```bash
 npm install
-```
-
-## Variables d'environnement
-
-1. Copiez le fichier d'exemple :
-
-```bash
 cp .env.example .env.local
 ```
 
-2. Renseignez dans `.env.local` :
+Renseignez ensuite dans `.env.local` :
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-En local Supabase CLI, ces valeurs sont affichées par `supabase start`.
+## Base de données (migrations SQL)
 
-## Gestion de la base via migrations (Supabase CLI)
+Les migrations sont sous `supabase/migrations/`.
 
-Le schéma est désormais versionné dans le repo sous `supabase/` :
+### Nouveautés SQL phase 4
 
-- `supabase/migrations/*.sql` : migrations SQL versionnées (phase 1 + phase 2)
-- `supabase/seed.sql` : données de test idempotentes
-- `supabase/config.toml` : configuration locale Supabase CLI
-
-### Workflow CLI pour Supabase distant (sans SQL manuel dashboard)
-
-Après avoir créé votre projet Supabase, utilisez **exactement** cette séquence :
-
-```bash
-npx supabase login
-npx supabase link --project-ref <project-ref>
-npx supabase db push
-```
-
-Optionnel pour charger les données de test depuis `supabase/seed.sql` :
-
-```bash
-npm run supabase:db:seed
-```
-
-Ou via scripts npm :
-
-```bash
-npm run supabase:db:push
-npm run supabase:db:seed
-```
-
-Règle d'équipe recommandée : **toute évolution de schéma doit passer par une nouvelle migration SQL dans `supabase/migrations/`**, puis être appliquée via CLI (`db push`).
-
-### Démarrer Supabase en local
-
-```bash
-npm run supabase:start
-```
+- `20260417193000_phase4_mission_assignments.sql`
+  - type `mission_assignment_status`
+  - table `mission_assignments`
+  - index + unicité `(mission_id, volunteer_id)`
+  - fonctions helper RLS :
+    - `can_manage_mission`
+    - `mission_status_is`
+    - `can_select_volunteer_for_mission`
+  - policies RLS strictes pour affectations
+  - ajustements RLS sur `mission_proposals` pour bloquer les réponses si mission non `proposed`
 
 ### Appliquer les migrations
 
-- Sur une base locale neuve, `supabase start` applique déjà les migrations.
-- Pour appliquer explicitement les migrations en environnement lié :
-
 ```bash
 npm run supabase:db:push
 ```
 
-### Reset complet de la base (migrations + seed)
-
-```bash
-npm run supabase:db:reset
-```
-
-### Recharger les seeds seulement
+### Charger les seeds
 
 ```bash
 npm run supabase:db:seed
 ```
 
-### Ajouter une future migration
+## Données de test (seed)
 
-```bash
-npm run supabase:migration:new -- <nom_migration>
-```
+Le seed inclut désormais :
 
-Puis compléter le fichier généré dans `supabase/migrations/`.
+- une mission `proposed` avec plusieurs propositions,
+- un bénévole en `available`,
+- un bénévole en `maybe`,
+- une affectation déjà `selected` dans `mission_assignments`.
 
-## Création des utilisateurs de test
-
-Avant d'exécuter les seeds, créer ces utilisateurs dans **Supabase Auth > Users**:
+Utilisateurs de test à créer dans Supabase Auth :
 
 - `admin@pcivile.test`
 - `responsable@pcivile.test`
 - `benevole@pcivile.test`
-- `benevole2@pcivile.test` (optionnel, recommandé)
-- `benevole3@pcivile.test` (optionnel)
+- `benevole2@pcivile.test`
+- `benevole3@pcivile.test`
 
-Mot de passe recommandé pour les tests locaux : `DemoPass123!`
-
-Le trigger SQL crée automatiquement une ligne de profil lors de la création de chaque utilisateur.
+Mot de passe suggéré : `DemoPass123!`
 
 ## Lancement local
 
@@ -118,34 +75,37 @@ Le trigger SQL crée automatiquement une ligne de profil lors de la création de
 npm run dev
 ```
 
-Application disponible sur `http://localhost:3000`.
+## Fonctionnalités phase 4
 
-## Fonctionnalités Phase 2
+- Sélection finale dans le détail mission (`/missions/[id]`) :
+  - liste des réponses bénévoles,
+  - bouton **Retenir / Retirer** pour l'équipe finale,
+  - sélection autorisée uniquement pour réponses `available` ou `maybe`,
+  - confirmation mission via bouton **Confirmer la mission** (statut `confirmed`).
+- Blocages métier minimaux :
+  - mission `cancelled` : plus de sélection,
+  - mission `closed`/`confirmed`/`cancelled` : plus de nouvelles réponses bénévoles.
+- Vue bénévole dédiée : `/my-missions`
+  - affiche uniquement les missions où le bénévole connecté est affecté.
 
-- Table `mission_proposals` pour lier une mission à plusieurs bénévoles.
-- Réponses bénévoles possibles: `no_response`, `available`, `unavailable`, `maybe`.
-- Contrainte d'unicité `(mission_id, volunteer_id)` pour éviter les doublons de proposition.
-- Page de détail mission: `/missions/[id]`.
-- Responsable (créateur de mission) : propose une mission à plusieurs bénévoles.
-- Bénévole : voit seulement les missions qui lui sont proposées et peut répondre.
-- RLS stricte:
-  - bénévole: accès limité à ses propositions/missions proposées,
-  - responsable: accès à ses missions et propositions liées,
-  - admin: accès global.
+## Test rapide phase 4
 
-## Test rapide phase 2
+1. Se connecter en `responsable@pcivile.test`.
+2. Aller sur `/missions`, ouvrir la mission “Poste de secours - Marathon de Lille”.
+3. Dans **Équipe finale**, cliquer sur **Retenir** pour un bénévole `available` ou `maybe`.
+4. Cliquer sur **Confirmer la mission**.
+5. Se connecter en `benevole@pcivile.test`.
+6. Aller sur `/my-missions`.
+7. Vérifier les informations : titre, date/heure, lieu, secteur, statut mission, statut affectation.
 
-1. Ouvrir `/login`.
-2. Se connecter avec `responsable@pcivile.test`.
-3. Aller sur `/missions` puis ouvrir une mission via **Voir le détail**.
-4. Dans **Proposer cette mission à des bénévoles**, sélectionner 1+ bénévoles puis envoyer.
-5. Se déconnecter et se connecter avec `benevole@pcivile.test`.
-6. Vérifier que `/missions` n'affiche que les missions proposées à ce bénévole.
-7. Ouvrir le détail mission et changer **Ma réponse** (disponible/indisponible/peut-être/sans réponse).
-8. Revenir avec le compte responsable et vérifier la réponse dans **Propositions envoyées**.
+## RLS (résumé)
 
-## Notes de migration depuis la phase 1
-
-- Les écrans phase 1 sont conservés (`/login`, `/missions`).
-- Le listing missions continue de fonctionner pour admin/responsable.
-- Le comportement côté bénévole est volontairement restreint par RLS en phase 2.
+- Bénévole :
+  - voit uniquement ses propres affectations,
+  - ne peut pas écrire dans `mission_assignments`.
+- Responsable :
+  - gère les affectations uniquement des missions qu'il a créées.
+- Admin :
+  - accès global.
+- Affectation impossible si la réponse bénévole n'est pas `available` ou `maybe`.
+- Confirmation mission réservée au créateur de mission (ou admin via policy update mission).

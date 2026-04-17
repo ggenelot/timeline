@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Mission, MissionProposalStatus } from '@/lib/types';
+import { Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 
@@ -8,9 +8,10 @@ type MissionCardProps = {
   currentUserId: string;
   canPropose: boolean;
   proposalStatus: MissionProposalStatus | null;
+  proposalResponse: MissionProposalResponse | null;
 };
 
-export function MissionCard({ mission, currentUserId, canPropose, proposalStatus }: MissionCardProps) {
+export function MissionCard({ mission, currentUserId, canPropose, proposalStatus, proposalResponse }: MissionCardProps) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -43,7 +44,15 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
           Voir le détail
         </Link>
 
-        {canPropose ? <ProposalButton missionId={mission.id} volunteerId={currentUserId} disabled={Boolean(proposalStatus)} /> : null}
+        {canPropose ? (
+          <ProposalButton
+            missionId={mission.id}
+            volunteerId={currentUserId}
+            disabled={false}
+            missionStatus={mission.status}
+            currentResponse={proposalResponse}
+          />
+        ) : null}
         {proposalStatus ? <StatusBadge status={proposalStatus} /> : null}
       </div>
     </article>

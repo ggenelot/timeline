@@ -97,15 +97,39 @@ insert into public.mission_proposals (
   mission_id,
   volunteer_id,
   proposed_by,
-  response
+  response,
+  status
 )
 select
   m.id,
   v.id,
   r.id,
-  'no_response'::public.mission_proposal_response
+  case v.email
+    when 'benevole@pcivile.test' then 'available'::public.mission_proposal_response
+    when 'benevole2@pcivile.test' then 'maybe'::public.mission_proposal_response
+    else 'unavailable'::public.mission_proposal_response
+  end,
+  'accepted'::public.mission_proposal_status
 from public.missions m
 join public.profiles r on r.email = 'responsable@pcivile.test'
-join public.profiles v on v.email in ('benevole@pcivile.test', 'benevole2@pcivile.test')
+join public.profiles v on v.email in ('benevole@pcivile.test', 'benevole2@pcivile.test', 'benevole3@pcivile.test')
+where m.title = 'Poste de secours - Marathon de Lille'
+on conflict (mission_id, volunteer_id) do update
+set
+  response = excluded.response,
+  status = excluded.status,
+  proposed_by = excluded.proposed_by;
+
+insert into public.mission_assignments (
+  mission_id,
+  volunteer_id,
+  assignment_status
+)
+select
+  m.id,
+  v.id,
+  'selected'::public.mission_assignment_status
+from public.missions m
+join public.profiles v on v.email = 'benevole@pcivile.test'
 where m.title = 'Poste de secours - Marathon de Lille'
 on conflict (mission_id, volunteer_id) do nothing;
