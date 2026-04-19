@@ -94,7 +94,7 @@ select
   timezone('utc', now()) + interval '5 days',
   timezone('utc', now()) + interval '5 days 8 hours',
   4,
-  'draft'::public.mission_status,
+  'closed'::public.mission_status,
   p.id
 from public.profiles p
 where p.email = 'responsable@pcivile.test'
@@ -121,12 +121,39 @@ select
   timezone('utc', now()) + interval '9 days',
   timezone('utc', now()) + interval '9 days 4 hours',
   3,
-  'proposed'::public.mission_status,
+  'cancelled'::public.mission_status,
   p.id
 from public.profiles p
 where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Soutien radio - Exercice départemental'
+);
+
+insert into public.missions (
+  title,
+  description,
+  location,
+  sector,
+  starts_at,
+  ends_at,
+  required_volunteers,
+  status,
+  created_by
+)
+select
+  'Dispositif nuit - Festival communal',
+  'Equipe déjà confirmée pour la couverture de nuit.',
+  'Roubaix',
+  'Nord',
+  timezone('utc', now()) + interval '12 days',
+  timezone('utc', now()) + interval '12 days 7 hours',
+  2,
+  'confirmed'::public.mission_status,
+  p.id
+from public.profiles p
+where p.email = 'responsable@pcivile.test'
+and not exists (
+  select 1 from public.missions m where m.title = 'Dispositif nuit - Festival communal'
 );
 
 insert into public.profile_skills (profile_id, skill_id)
@@ -198,6 +225,25 @@ set
   status = excluded.status,
   proposed_by = excluded.proposed_by;
 
+insert into public.mission_proposals (
+  mission_id,
+  volunteer_id,
+  proposed_by,
+  response,
+  status
+)
+select
+  m.id,
+  v.id,
+  r.id,
+  'no_response'::public.mission_proposal_response,
+  'pending'::public.mission_proposal_status
+from public.missions m
+join public.profiles r on r.email = 'responsable@pcivile.test'
+join public.profiles v on v.email = 'benevole2@pcivile.test'
+where m.title = 'Dispositif nuit - Festival communal'
+on conflict (mission_id, volunteer_id) do nothing;
+
 insert into public.mission_assignments (
   mission_id,
   volunteer_id,
@@ -211,3 +257,32 @@ from public.missions m
 join public.profiles v on v.email = 'benevole@pcivile.test'
 where m.title = 'Poste de secours - Marathon de Lille'
 on conflict (mission_id, volunteer_id) do nothing;
+
+insert into public.mission_assignments (
+  mission_id,
+  volunteer_id,
+  assignment_status
+)
+select
+  m.id,
+  v.id,
+  'confirmed'::public.mission_assignment_status
+from public.missions m
+join public.profiles v on v.email = 'benevole3@pcivile.test'
+where m.title = 'Dispositif nuit - Festival communal'
+on conflict (mission_id, volunteer_id) do update
+set assignment_status = excluded.assignment_status;
+
+-- Ensure demo activity logs exist for UI checks even if triggers were not executed in previous environments.
+insert into public.activity_logs (mission_id, actor_id, action_type, entity_type, entity_id, description)
+select m.id, r.id, 'mission_status_changed', 'mission', m.id, 'Statut modifié : proposed → confirmed.'
+from public.missions m
+join public.profiles r on r.email = 'responsable@pcivile.test'
+where m.title = 'Dispositif nuit - Festival communal'
+  and not exists (
+    select 1
+    from public.activity_logs l
+    where l.mission_id = m.id
+      and l.action_type = 'mission_status_changed'
+      and l.description = 'Statut modifié : proposed → confirmed.'
+  );
