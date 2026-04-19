@@ -27,27 +27,73 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
   const missionBlocksResponse = ['cancelled', 'closed', 'confirmed'].includes(missionStatus);
 
+  function mapProposalError(message: string) {
+    const normalized = message.toLowerCase();
+
+    if (normalized.includes('row-level security')) {
+      return 'Impossible d’enregistrer votre réponse : vous n’êtes pas autorisé à proposer pour ce profil ou cette mission.';
+    }
+
+    if (normalized.includes('duplicate key value')) {
+      return 'Votre réponse existe déjà. Réessayez dans quelques secondes.';
+    }
+
+    return message;
+  }
+
   async function upsertResponse(response: MissionProposalResponse) {
     setLoadingResponse(response);
     setError(null);
     setSuccess(null);
 
+    const {
+      data: { user },
+      error: authError
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      setError('Session invalide. Reconnectez-vous pour répondre à la mission.');
+      setLoadingResponse(null);
+      return;
+    }
+
+    if (user.id !== volunteerId) {
+      setError('Action refusée : votre session ne correspond pas au profil bénévole affiché.');
+      setLoadingResponse(null);
+      return;
+    }
+
     const { data: existingProposal, error: existingProposalError } = await supabase
       .from('mission_proposals')
       .select('id')
       .eq('mission_id', missionId)
-      .eq('volunteer_id', volunteerId)
+      .eq('volunteer_id', user.id)
       .maybeSingle();
 
     if (existingProposalError) {
-      setError(existingProposalError.message);
+      setError(mapProposalError(existingProposalError.message));
       setLoadingResponse(null);
       return;
     }
 
     if (!existingProposal) {
-      setError('Aucune proposition active pour cette mission.');
+      const { error: insertError } = await supabase.from('mission_proposals').insert({
+        mission_id: missionId,
+        volunteer_id: user.id,
+        proposed_by: user.id,
+        response,
+        status: 'pending'
+      });
+
+      if (insertError) {
+        setError(mapProposalError(insertError.message));
+        setLoadingResponse(null);
+        return;
+      }
+
+      setSuccess('Réponse enregistrée.');
       setLoadingResponse(null);
+      router.refresh();
       return;
     }
 
@@ -60,7 +106,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
       .eq('id', existingProposal.id);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(mapProposalError(updateError.message));
       setLoadingResponse(null);
       return;
     }
