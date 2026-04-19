@@ -41,13 +41,13 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
     if (existingProposalError) {
       setError(existingProposalError.message);
-      setLoading(false);
+      setLoadingResponse(null);
       return;
     }
 
     if (!existingProposal) {
       setError('Aucune proposition active pour cette mission.');
-      setLoading(false);
+      setLoadingResponse(null);
       return;
     }
 
@@ -61,7 +61,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
     if (updateError) {
       setError(updateError.message);
-      setLoading(false);
+      setLoadingResponse(null);
       return;
     }
 
