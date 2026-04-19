@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ProposalList, ProposalListItem } from '@/components/missions/proposal-list';
 import { supabase } from '@/lib/supabase/client';
@@ -122,8 +123,20 @@ export default function AdminProposalsPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Validation des propositions</h1>
-        <p className="mt-1 text-sm text-slate-600">Acceptez ou refusez les bénévoles qui se proposent sur vos missions.</p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Validation des propositions</h1>
+            <p className="mt-1 text-sm text-slate-600">Acceptez ou refusez les bénévoles qui se proposent sur vos missions.</p>
+          </div>
+          {profile.role === 'admin' ? (
+            <Link
+              href="/admin/events/create"
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Créer un événement
+            </Link>
+          ) : null}
+        </div>
       </div>
 
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}

@@ -87,3 +87,12 @@ export type ActivityLog = {
   description: string;
   created_at: string;
 };
+
+export type Event = {
+  id: string;
+  title: string;
+  description: string | null;
+  date: string;
+  created_by: string;
+  created_at: string;
+};
