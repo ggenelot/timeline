@@ -32,20 +32,36 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
     setError(null);
     setSuccess(null);
 
-    const { error: upsertError } = await supabase.from('mission_proposals').upsert(
-      {
-        mission_id: missionId,
-        volunteer_id: volunteerId,
-        proposed_by: volunteerId,
+    const { data: existingProposal, error: existingProposalError } = await supabase
+      .from('mission_proposals')
+      .select('id')
+      .eq('mission_id', missionId)
+      .eq('volunteer_id', volunteerId)
+      .maybeSingle();
+
+    if (existingProposalError) {
+      setError(existingProposalError.message);
+      setLoading(false);
+      return;
+    }
+
+    if (!existingProposal) {
+      setError('Aucune proposition active pour cette mission.');
+      setLoading(false);
+      return;
+    }
+
+    const { error: updateError } = await supabase
+      .from('mission_proposals')
+      .update({
         response,
         status: 'pending'
-      },
-      { onConflict: 'mission_id,volunteer_id' }
-    );
+      })
+      .eq('id', existingProposal.id);
 
-    if (upsertError) {
-      setError(`Impossible d'enregistrer la réponse : ${upsertError.message}`);
-      setLoadingResponse(null);
+    if (updateError) {
+      setError(updateError.message);
+      setLoading(false);
       return;
     }
 
