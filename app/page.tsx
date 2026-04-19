@@ -3,9 +3,9 @@ import Link from 'next/link';
 export default function HomePage() {
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Socle MVP - Phase 2</h1>
+      <h1 className="text-2xl font-semibold text-slate-900">Mission Planner - MVP Phase 6</h1>
       <p className="text-slate-700">
-        Cette étape ajoute les propositions ciblées de mission et la réponse des bénévoles, en conservant le socle phase 1.
+        Gestion opérationnelle des missions bénévoles : propositions, réponses, sélection finale et historique métier minimal.
       </p>
       <div className="flex gap-3">
         <Link href="/login" className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700">

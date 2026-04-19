@@ -53,7 +53,7 @@ export default function AdminProposalsPage() {
           mission_id,
           status,
           created_at,
-          mission:missions(id,title,starts_at,location,sector),
+          mission:missions(id,title,starts_at,location,sector,status),
           volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)
         `)
         .order('created_at', { ascending: false });
@@ -169,7 +169,17 @@ export default function AdminProposalsPage() {
         </div>
       </section>
 
-      <ProposalList proposals={filteredProposals} managerId={profile.id} />
+      {proposals.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+          Aucune proposition reçue sur vos missions.
+        </div>
+      ) : filteredProposals.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+          Aucun résultat avec les filtres actuels.
+        </div>
+      ) : (
+        <ProposalList proposals={filteredProposals} managerId={profile.id} />
+      )}
     </div>
   );
 }

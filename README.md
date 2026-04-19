@@ -1,67 +1,83 @@
-# Mission Planner - Phase 5
+# Mission Planner - MVP Phase 6
 
-Application Next.js (App Router) pour gérer des missions proposées à des bénévoles, avec sélection finale d'équipe et filtres métier.
+Application web (Next.js + Supabase) pour gérer des missions de protection civile proposées à des bénévoles : proposition, réponse, sélection finale et suivi des missions retenues.
 
-## Prérequis
+## Stack
+
+- Next.js 14 (App Router)
+- TypeScript
+- Supabase (PostgreSQL + Auth + RLS)
+- Tailwind CSS
+
+## Fonctionnalités disponibles (fin phase 6)
+
+- Authentification et profils (`admin`, `responsable`, `benevole`).
+- Consultation des missions avec filtres (secteur, dates, compétences requises).
+- Réponses bénévoles sur mission proposée (`available`, `unavailable`, `maybe`).
+- Validation responsable/admin des propositions (`accepted`, `refused`).
+- Sélection/retrait des bénévoles pour l'équipe finale.
+- Vue bénévole des missions retenues.
+- Historique métier minimal sur mission (création, changement de statut, réponses, sélection/retrait équipe).
+- États vides et messages UX basiques (succès, erreur, chargement, actions désactivées).
+- Garde-fous métier et RLS renforcés (missions annulées/confirmées verrouillées selon cas).
+
+## Installation locale
+
+### Prérequis
 
 - Node.js 20+
 - npm 10+
-- [Supabase CLI](https://supabase.com/docs/guides/local-development/cli/getting-started)
-- Docker (pour Supabase local)
+- Docker
+- Supabase CLI
 
-## Installation
+### Installer les dépendances
 
 ```bash
 npm install
+```
+
+### Configuration front (`.env.local`)
+
+Créer `.env.local` :
+
+```bash
 cp .env.example .env.local
 ```
 
-Renseignez ensuite dans `.env.local` :
+Puis renseigner :
 
 - `NEXT_PUBLIC_SUPABASE_URL`
 - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
 
-## Base de données (migrations SQL)
+## Configuration Supabase locale
 
-Les migrations sont sous `supabase/migrations/`.
+### 1) Démarrer Supabase local
 
-### Nouveautés SQL phase 5
+```bash
+npm run supabase:start
+```
 
-- `20260417210000_phase5_skills_and_filters.sql`
-  - table `skills` (référentiel des compétences)
-  - table `profile_skills` (liaison profils ↔ compétences)
-  - table `mission_required_skills` (liaison missions ↔ compétences requises)
-  - contraintes d'unicité:
-    - `skills.name`
-    - `(profile_id, skill_id)`
-    - `(mission_id, skill_id)`
-  - index sur les colonnes de liaison
-  - fonction helper `can_read_mission` pour sécuriser l'accès lecture des compétences requises
-  - policies RLS strictes pour `skills`, `profile_skills`, `mission_required_skills`
+### 2) Appliquer les migrations SQL
 
-### Appliquer les migrations
+Ordre d'exécution (automatique via timestamp) :
+
+1. `20260417090000_phase1_base.sql`
+2. `20260417091000_phase2_mission_proposals.sql`
+3. `20260417170000_fix_rls_policy_recursion.sql`
+4. `20260417183000_phase3_mission_workflow.sql`
+5. `20260417193000_phase4_mission_assignments.sql`
+6. `20260417210000_phase5_skills_and_filters.sql`
+7. `20260417223000_phase6_activity_logs_and_guards.sql`
+
+Commande :
 
 ```bash
 npm run supabase:db:push
 ```
 
-### Charger les seeds
+### 3) Créer les comptes de test (Auth)
 
-```bash
-npm run supabase:db:seed
-```
-
-## Données de test (seed)
-
-Le seed inclut désormais :
-
-- compétences réalistes : `secourisme`, `logistique`, `conduite`, `radio`,
-- affectation de compétences à plusieurs bénévoles,
-- missions dans des secteurs différents (`Nord`, `Sud`) et à des dates différentes,
-- missions avec compétences requises,
-- propositions + une affectation sélectionnée pour tester le workflow complet.
-
-Utilisateurs de test à créer dans Supabase Auth :
+Créer dans Supabase Auth (mot de passe conseillé `DemoPass123!`) :
 
 - `admin@pcivile.test`
 - `responsable@pcivile.test`
@@ -69,7 +85,19 @@ Utilisateurs de test à créer dans Supabase Auth :
 - `benevole2@pcivile.test`
 - `benevole3@pcivile.test`
 
-Mot de passe suggéré : `DemoPass123!`
+### 4) Charger les seeds
+
+```bash
+npm run supabase:db:seed
+```
+
+Le seed couvre :
+
+- missions avec statuts variés (`proposed`, `closed`, `cancelled`, `confirmed`),
+- propositions avec statuts/réponses différents,
+- affectations existantes,
+- compétences profils + compétences requises mission,
+- événements d'historique minimaux.
 
 ## Lancement local
 
@@ -77,56 +105,40 @@ Mot de passe suggéré : `DemoPass123!`
 npm run dev
 ```
 
-## Fonctionnalités phase 5
+Application : http://localhost:3000
 
-### Filtres missions
-
-Sur `/missions` :
-
-- filtre par secteur (`Tous les secteurs` ou secteur précis),
-- filtre par date de début min/max,
-- filtre par compétence requise,
-- affichage des compétences requises par mission.
-
-### Filtres suivi responsable
-
-Sur `/admin/proposals` :
-
-- filtre secteur,
-- filtre date de début min/max.
-
-### Filtre compétences sur détail mission
-
-Sur `/missions/[id]` (responsable/admin) :
-
-- affichage des compétences requises de la mission,
-- affichage des compétences de chaque bénévole,
-- filtre de la liste des répondants (`available` / `maybe`) par compétence.
-
-## RLS (résumé phase 5)
-
-- `skills` : lecture authentifiée, écriture admin uniquement.
-- `profile_skills` :
-  - bénévole : lecture de ses propres compétences,
-  - responsable : lecture des compétences des bénévoles,
-  - admin : lecture globale,
-  - écriture admin uniquement.
-- `mission_required_skills` :
-  - lecture selon accès mission,
-  - écriture réservée à l'admin ou au gestionnaire de la mission.
-
-## Test rapide phase 5
+## Parcours de test recommandé
 
 1. Se connecter en `responsable@pcivile.test`.
-2. Aller sur `/missions`.
-3. Tester les filtres secteur/date/compétence requise.
-4. Ouvrir la mission “Poste de secours - Marathon de Lille”.
-5. Dans **Équipe finale**, filtrer les bénévoles par compétence (ex: `secourisme`, `radio`).
-6. Vérifier que les compétences des bénévoles sont visibles dans la liste.
-7. Aller sur `/admin/proposals` et tester les filtres secteur/date.
+2. Ouvrir `/missions`, tester les filtres et les états vides.
+3. Ouvrir une mission `proposed`, sélectionner/retirer un bénévole, confirmer la mission.
+4. Vérifier la section **Historique** sur la mission.
+5. Aller sur `/admin/proposals` et valider/refuser une proposition.
+6. Se connecter en `benevole@pcivile.test`.
+7. Répondre à une mission `proposed`, vérifier blocage sur missions `closed`/`confirmed`.
+8. Ouvrir `/my-missions` et vérifier la liste des affectations.
 
-## Limites connues phase 5
+## RLS (résumé MVP phase 6)
 
-- Pas d'interface d'administration complète pour créer/éditer les compétences (seed + SQL pour MVP).
-- Le filtrage est appliqué côté UI sur les données chargées (pas de recherche full-text ou pagination avancée).
-- Pas de niveau de compétence (volontairement hors périmètre MVP).
+- Bénévole : accès strict à ses propositions/affectations et aux missions qui lui sont proposées.
+- Responsable : gestion stricte des missions qu'il possède et des données liées.
+- Admin : vision globale.
+- Historique : lecture autorisée si l'utilisateur peut lire la mission associée (ou admin).
+- Écriture historique côté client désactivée (logs via triggers SQL uniquement).
+
+## Limites connues du MVP final
+
+- Historique minimal (pas de diff fin, pas de versioning, pas de pagination avancée).
+- Pas de notifications temps réel (email/push/SMS).
+- Pas de calendrier avancé ni de planning de conflits.
+- Pas d'interface back-office dédiée pour gérer finement les compétences.
+- Certaines validations métier restent concentrées sur statuts globaux (MVP volontairement simple).
+
+## Pistes réalistes pour une V2
+
+- Timeline mission paginée + filtres d'activité.
+- Notifications configurables (nouvelle proposition, changement de statut, sélection).
+- Gestion plus riche des affectations (remplacement, confirmation bénévole explicite, historique détaillé).
+- Édition mission côté responsable avec workflow guidé.
+- Recherche serveur + pagination sur missions/propositions.
+- Tableaux de bord opérationnels (charge par secteur, taux de réponse, couverture compétences).

@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionProposalStatus } from '@/lib/types';
+import { MissionProposalStatus, MissionStatus } from '@/lib/types';
 import { StatusBadge } from '@/components/missions/status-badge';
 
 export type ProposalListItem = {
@@ -17,6 +17,7 @@ export type ProposalListItem = {
     starts_at: string;
     location: string | null;
     sector: string | null;
+    status: MissionStatus;
   } | null;
   volunteer: {
     id: string;
@@ -33,11 +34,13 @@ type ProposalListProps = {
 export function ProposalList({ proposals, managerId }: ProposalListProps) {
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
   const router = useRouter();
 
   async function updateProposalStatus(proposalId: string, status: 'accepted' | 'refused') {
     setSavingId(proposalId);
     setError(null);
+    setSuccess(null);
 
     const { error: updateError } = await supabase
       .from('mission_proposals')
@@ -49,11 +52,12 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
       .eq('id', proposalId);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(`Impossible de mettre à jour la proposition : ${updateError.message}`);
       setSavingId(null);
       return;
     }
 
+    setSuccess(`Proposition ${status === 'accepted' ? 'acceptée' : 'refusée'}.`);
     setSavingId(null);
     router.refresh();
   }
@@ -61,9 +65,11 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
   return (
     <div className="space-y-3">
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {success ? <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
 
       {proposals.map((proposal) => {
         const isPending = proposal.status === 'pending';
+        const missionAllowsDecision = proposal.mission?.status === 'proposed';
         const isSaving = savingId === proposal.id;
 
         return (
@@ -89,14 +95,21 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
                 <dt className="inline font-medium text-slate-700">Secteur :</dt> {proposal.mission?.sector ?? 'Non défini'}
               </div>
               <div>
+                <dt className="inline font-medium text-slate-700">Statut mission :</dt> {proposal.mission?.status ?? 'N/A'}
+              </div>
+              <div>
                 <dt className="inline font-medium text-slate-700">Soumise le :</dt> {new Date(proposal.created_at).toLocaleString('fr-FR')}
               </div>
             </dl>
 
+            {!missionAllowsDecision ? (
+              <p className="mt-3 text-sm text-slate-600">Cette mission est verrouillée, la décision n&apos;est plus modifiable.</p>
+            ) : null}
+
             <div className="mt-4 flex gap-2">
               <button
                 type="button"
-                disabled={!isPending || isSaving}
+                disabled={!isPending || isSaving || !missionAllowsDecision}
                 onClick={() => updateProposalStatus(proposal.id, 'accepted')}
                 className="rounded-md bg-emerald-600 px-3 py-1.5 text-sm text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -104,7 +117,7 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
               </button>
               <button
                 type="button"
-                disabled={!isPending || isSaving}
+                disabled={!isPending || isSaving || !missionAllowsDecision}
                 onClick={() => updateProposalStatus(proposal.id, 'refused')}
                 className="rounded-md bg-rose-600 px-3 py-1.5 text-sm text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -117,7 +130,7 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
 
       {proposals.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          Aucune proposition disponible.
+          Aucune proposition à traiter pour le moment.
         </div>
       ) : null}
     </div>
