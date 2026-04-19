@@ -236,9 +236,13 @@ export default function MissionsPage() {
           </div>
         ))}
 
-        {filteredMissions.length === 0 ? (
+        {missions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            Aucune mission ne correspond aux filtres sélectionnés.
+            Aucune mission disponible pour le moment.
+          </div>
+        ) : filteredMissions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+            Aucun résultat avec les filtres sélectionnés.
           </div>
         ) : null}
       </div>

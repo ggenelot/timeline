@@ -69,3 +69,21 @@ export type MissionAssignment = {
   assignment_status: MissionAssignmentStatus;
   created_at: string;
 };
+
+export type ActivityLogActionType =
+  | 'mission_created'
+  | 'mission_status_changed'
+  | 'proposal_response_updated'
+  | 'volunteer_selected'
+  | 'volunteer_removed';
+
+export type ActivityLog = {
+  id: string;
+  mission_id: string | null;
+  actor_id: string | null;
+  action_type: ActivityLogActionType;
+  entity_type: string;
+  entity_id: string | null;
+  description: string;
+  created_at: string;
+};

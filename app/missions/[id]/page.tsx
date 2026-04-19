@@ -7,7 +7,7 @@ import { User } from '@supabase/supabase-js';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
+import { ActivityLog, Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -23,6 +23,10 @@ type MissionWithSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
 };
 
+type ActivityLogWithActor = ActivityLog & {
+  actor: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
+};
+
 export default function MissionDetailPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
@@ -33,10 +37,12 @@ export default function MissionDetailPage() {
   const [mission, setMission] = useState<MissionWithSkills | null>(null);
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
+  const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
   const [selectedVolunteerSkillId, setSelectedVolunteerSkillId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   const myProposal = useMemo(
     () => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null,
@@ -152,6 +158,19 @@ export default function MissionDetailPage() {
       return;
     }
 
+    const { data: logData, error: logsError } = await supabase
+      .from('activity_logs')
+      .select('id,mission_id,actor_id,action_type,entity_type,entity_id,description,created_at,actor:profiles!activity_logs_actor_id_fkey(id,full_name,email)')
+      .eq('mission_id', missionId)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    if (logsError) {
+      setError(logsError.message);
+      setLoading(false);
+      return;
+    }
+
     const mappedProposals: ProposalWithVolunteer[] = (proposalData ?? []).map((proposal) => {
       const volunteer = Array.isArray(proposal.volunteer) ? proposal.volunteer[0] ?? null : proposal.volunteer;
 
@@ -174,8 +193,14 @@ export default function MissionDetailPage() {
       volunteer: Array.isArray(assignment.volunteer) ? assignment.volunteer[0] ?? null : assignment.volunteer
     }));
 
+    const mappedLogs: ActivityLogWithActor[] = (logData ?? []).map((log) => ({
+      ...log,
+      actor: Array.isArray(log.actor) ? log.actor[0] ?? null : log.actor
+    }));
+
     setProposals(mappedProposals);
     setAssignments(mappedAssignments);
+    setActivityLogs(mappedLogs);
     setLoading(false);
   }
 
@@ -209,6 +234,7 @@ export default function MissionDetailPage() {
 
     setActionLoading(volunteerId);
     setError(null);
+    setSuccess(null);
 
     if (selectedVolunteerIds.has(volunteerId)) {
       const { error: deleteError } = await supabase
@@ -218,10 +244,12 @@ export default function MissionDetailPage() {
         .eq('volunteer_id', volunteerId);
 
       if (deleteError) {
-        setError(deleteError.message);
+        setError(`Impossible de retirer le bénévole : ${deleteError.message}`);
         setActionLoading(null);
         return;
       }
+
+      setSuccess('Bénévole retiré de l\'équipe finale.');
     } else {
       const { error: insertError } = await supabase.from('mission_assignments').insert({
         mission_id: mission.id,
@@ -230,10 +258,12 @@ export default function MissionDetailPage() {
       });
 
       if (insertError) {
-        setError(insertError.message);
+        setError(`Impossible de retenir ce bénévole : ${insertError.message}`);
         setActionLoading(null);
         return;
       }
+
+      setSuccess('Bénévole ajouté à l\'équipe finale.');
     }
 
     setActionLoading(null);
@@ -247,15 +277,17 @@ export default function MissionDetailPage() {
 
     setActionLoading('confirm-mission');
     setError(null);
+    setSuccess(null);
 
     const { error: updateError } = await supabase.from('missions').update({ status: 'confirmed' }).eq('id', mission.id);
 
     if (updateError) {
-      setError(updateError.message);
+      setError(`Impossible de confirmer la mission : ${updateError.message}`);
       setActionLoading(null);
       return;
     }
 
+    setSuccess('Mission confirmée.');
     setActionLoading(null);
     await loadData();
   }
@@ -265,6 +297,9 @@ export default function MissionDetailPage() {
       <Link href="/missions" className="text-sm text-slate-700 underline">
         ← Retour aux missions
       </Link>
+
+      {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
+      {success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
 
       <article className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -307,6 +342,7 @@ export default function MissionDetailPage() {
               currentResponse={myProposal?.response ?? null}
             />
             {myProposal ? <StatusBadge status={myProposal.status} /> : null}
+            {!myProposal ? <p className="text-xs text-slate-600">Aucune réponse enregistrée pour cette mission.</p> : null}
           </div>
         ) : null}
       </article>
@@ -343,7 +379,9 @@ export default function MissionDetailPage() {
             </label>
           </div>
 
-          {mission.status === 'cancelled' ? <p className="mt-3 text-sm text-slate-600">Mission annulée : sélection verrouillée.</p> : null}
+          {missionBlocksSelection ? (
+            <p className="mt-3 text-sm text-slate-600">Mission verrouillée : sélection finale indisponible.</p>
+          ) : null}
 
           <div className="mt-3 space-y-2">
             {filteredEligibleProposals.map((proposal) => {
@@ -372,8 +410,10 @@ export default function MissionDetailPage() {
               );
             })}
 
-            {filteredEligibleProposals.length === 0 ? (
-              <p className="text-sm text-slate-600">Aucun bénévole ne correspond aux filtres actuels.</p>
+            {eligibleProposals.length === 0 ? (
+              <p className="text-sm text-slate-600">Aucune réponse exploitable (available/maybe) pour composer l&apos;équipe.</p>
+            ) : filteredEligibleProposals.length === 0 ? (
+              <p className="text-sm text-slate-600">Aucun résultat avec ce filtre de compétence.</p>
             ) : null}
           </div>
 
@@ -394,7 +434,25 @@ export default function MissionDetailPage() {
         </section>
       ) : null}
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+        <p className="mt-1 text-sm text-slate-600">Événements récents de la mission, du plus récent au plus ancien.</p>
+
+        {activityLogs.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
+        ) : (
+          <ul className="mt-3 space-y-2">
+            {activityLogs.map((log) => (
+              <li key={log.id} className="rounded border border-slate-200 p-3 text-sm text-slate-700">
+                <p className="font-medium">{log.description}</p>
+                <p className="mt-1 text-xs text-slate-500">
+                  {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </div>
   );
 }
