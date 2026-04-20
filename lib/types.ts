@@ -25,12 +25,29 @@ export type ProfileSkill = {
 
 export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
 
+export type MissionCategory = 'maraude' | 'garde' | 'formation' | 'vie_antenne';
+
+export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: string }> = [
+  { value: 'maraude', label: 'Maraude' },
+  { value: 'garde', label: 'Garde' },
+  { value: 'formation', label: 'Formation' },
+  { value: 'vie_antenne', label: "Vie de l’antenne" }
+];
+
+export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
+  maraude: 'Maraude',
+  garde: 'Garde',
+  formation: 'Formation',
+  vie_antenne: "Vie de l’antenne"
+};
+
 export type Mission = {
   id: string;
   title: string;
   description: string | null;
   location: string | null;
   sector: string | null;
+  category: MissionCategory;
   starts_at: string;
   ends_at: string;
   required_volunteers: number;

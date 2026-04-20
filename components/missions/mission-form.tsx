@@ -1,5 +1,5 @@
 import { FormEvent } from 'react';
-import { MissionStatus } from '@/lib/types';
+import { MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus } from '@/lib/types';
 
 export type MissionFormState = {
   title: string;
@@ -11,6 +11,7 @@ export type MissionFormState = {
   ends_at_date: string;
   ends_at_time: string;
   required_volunteers: string;
+  category: MissionCategory;
   status: MissionStatus;
 };
 
@@ -24,6 +25,7 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   ends_at_date: '',
   ends_at_time: '',
   required_volunteers: '1',
+  category: 'maraude',
   status: 'draft'
 };
 
@@ -152,7 +154,7 @@ export function MissionForm({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-3">
         <label className="block text-sm text-slate-700">
           Bénévoles requis *
           <input
@@ -165,6 +167,25 @@ export function MissionForm({
             disabled={submitting}
             required
           />
+        </label>
+
+
+
+        <label className="block text-sm text-slate-700">
+          Catégorie *
+          <select
+            value={form.category}
+            onChange={(event) => onChange({ ...form, category: event.target.value as MissionCategory })}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={submitting}
+            required
+          >
+            {MISSION_CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
         </label>
 
         <label className="block text-sm text-slate-700">

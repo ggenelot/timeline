@@ -101,6 +101,7 @@ export default function AdminCreateMissionPage() {
         description: form.description.trim() || null,
         location: form.location.trim() || null,
         sector: form.sector.trim() || null,
+        category: form.category,
         starts_at: startsAtIso,
         ends_at: endsAtIso,
         required_volunteers: Number.parseInt(form.required_volunteers, 10),
