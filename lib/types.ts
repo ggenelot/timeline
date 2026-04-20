@@ -5,6 +5,7 @@ export type Profile = {
   full_name: string | null;
   email: string;
   role: AppRole;
+  phone?: string | null;
   sector: string | null;
   created_at: string;
 };

@@ -6,13 +6,14 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'created_at'>;
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'phone' | 'sector' | 'role' | 'created_at'>;
 
 type VolunteersPageClientProps = {
   created: boolean;
+  edited: boolean;
 };
 
-export function VolunteersPageClient({ created }: VolunteersPageClientProps) {
+export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,7 +53,7 @@ export function VolunteersPageClient({ created }: VolunteersPageClientProps) {
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,created_at')
+        .select('id,full_name,email,phone,sector,role,created_at')
         .eq('role', 'benevole')
         .order('created_at', { ascending: false });
 
@@ -109,6 +110,12 @@ export function VolunteersPageClient({ created }: VolunteersPageClientProps) {
         </div>
       ) : null}
 
+      {edited ? (
+        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+          Le bénévole a été modifié avec succès.
+        </div>
+      ) : null}
+
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       {volunteers.length === 0 ? (
@@ -122,7 +129,10 @@ export function VolunteersPageClient({ created }: VolunteersPageClientProps) {
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Email</th>
+                <th className="px-4 py-2 font-medium">Téléphone</th>
+                <th className="px-4 py-2 font-medium">Secteur</th>
                 <th className="px-4 py-2 font-medium">Créé le</th>
+                <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -130,7 +140,14 @@ export function VolunteersPageClient({ created }: VolunteersPageClientProps) {
                 <tr key={volunteer.id}>
                   <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
                   <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                  <td className="px-4 py-2 text-slate-700">{volunteer.phone ?? '—'}</td>
+                  <td className="px-4 py-2 text-slate-700">{volunteer.sector ?? '—'}</td>
                   <td className="px-4 py-2 text-slate-700">{new Date(volunteer.created_at).toLocaleString('fr-FR')}</td>
+                  <td className="px-4 py-2 text-slate-700">
+                    <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
+                      Modifier
+                    </Link>
+                  </td>
                 </tr>
               ))}
             </tbody>
