@@ -61,7 +61,7 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
 
   const guard = await assertAdmin(token);
   if (guard.errorResponse || !guard.client) {
-    return guard.errorResponse;
+    return guard.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
 
   const missionId = params.missionId;
@@ -98,7 +98,7 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
 
   const guard = await assertAdmin(token);
   if (guard.errorResponse || !guard.client || !guard.userId) {
-    return guard.errorResponse;
+    return guard.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
 
   let payload: AdminMissionVolunteerPayload;
