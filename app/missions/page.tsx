@@ -15,6 +15,7 @@ type MissionWithRequiredSkills = Mission & {
 
 const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
+const VOLUNTEER_STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'proposed', 'closed', 'confirmed', 'cancelled'];
 
 function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
   if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
@@ -115,7 +116,9 @@ export default function MissionsPage() {
       }))
     }));
 
-    setMissions(mappedMissions);
+    const visibleMissions = profileData.role === 'benevole' ? mappedMissions.filter((mission) => mission.status !== 'draft') : mappedMissions;
+
+    setMissions(visibleMissions);
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
@@ -199,6 +202,8 @@ export default function MissionsPage() {
     [missions, selectedCategory, selectedStatus, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
   );
 
+  const availableStatusFilters = profile?.role === 'benevole' ? VOLUNTEER_STATUS_FILTER_VALUES : STATUS_FILTER_VALUES;
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
   }
@@ -278,11 +283,11 @@ export default function MissionsPage() {
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             >
               <option value="all">Tous</option>
-              <option value="draft">Brouillon</option>
-              <option value="proposed">Proposée</option>
-              <option value="closed">Clôturée</option>
-              <option value="confirmed">Confirmée</option>
-              <option value="cancelled">Annulée</option>
+              {availableStatusFilters.includes('draft') ? <option value="draft">Brouillon</option> : null}
+              {availableStatusFilters.includes('proposed') ? <option value="proposed">Proposée</option> : null}
+              {availableStatusFilters.includes('closed') ? <option value="closed">Clôturée</option> : null}
+              {availableStatusFilters.includes('confirmed') ? <option value="confirmed">Confirmée</option> : null}
+              {availableStatusFilters.includes('cancelled') ? <option value="cancelled">Annulée</option> : null}
             </select>
           </label>
 
