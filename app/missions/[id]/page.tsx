@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
+import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
 import { ActivityLog, MISSION_CATEGORY_LABELS, Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
+import { getProposalResponseLabel } from '@/lib/missions';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type ProposalWithVolunteer = MissionProposal & {
@@ -53,7 +55,7 @@ export default function MissionDetailPage() {
   const selectedVolunteerIds = useMemo(() => new Set(assignments.map((assignment) => assignment.volunteer_id)), [assignments]);
 
   const eligibleProposals = useMemo(
-    () => proposals.filter((proposal) => proposal.response === 'available' || proposal.response === 'maybe'),
+    () => proposals.filter((proposal) => proposal.response === 'available'),
     [proposals]
   );
 
@@ -313,7 +315,7 @@ export default function MissionDetailPage() {
             <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
               {MISSION_CATEGORY_LABELS[mission.category]}
             </span>
-            <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium uppercase text-slate-700">{mission.status}</span>
+            <MissionStatusBadge status={mission.status} />
           </div>
         </div>
         <p className="mt-2 text-sm text-slate-700">{mission.description ?? 'Aucune description'}</p>
@@ -416,7 +418,7 @@ export default function MissionDetailPage() {
                 <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm text-slate-700">
                   <div>
                     <p className="font-medium">{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
-                    <p className="text-xs text-slate-500">Réponse: {proposal.response}</p>
+                    <p className="text-xs text-slate-500">Réponse: {getProposalResponseLabel(proposal.response)}</p>
                     <p className="text-xs text-slate-500">Compétences: {skillNames.length > 0 ? skillNames.join(', ') : 'Aucune'}</p>
                   </div>
                   <button
@@ -432,7 +434,7 @@ export default function MissionDetailPage() {
             })}
 
             {eligibleProposals.length === 0 ? (
-              <p className="text-sm text-slate-600">Aucune réponse exploitable (available/maybe) pour composer l&apos;équipe.</p>
+              <p className="text-sm text-slate-600">Aucune réponse exploitable (oui) pour composer l&apos;équipe.</p>
             ) : filteredEligibleProposals.length === 0 ? (
               <p className="text-sm text-slate-600">Aucun résultat avec ce filtre de compétence.</p>
             ) : null}

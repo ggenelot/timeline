@@ -1,7 +1,8 @@
 import Link from 'next/link';
-import { MISSION_CATEGORY_LABELS, Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
+import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
+import { MISSION_CATEGORY_LABELS, Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
 
 type MissionCardProps = {
   mission: Mission;
@@ -9,9 +10,10 @@ type MissionCardProps = {
   canPropose: boolean;
   proposalStatus: MissionProposalStatus | null;
   proposalResponse: MissionProposalResponse | null;
+  canEdit: boolean;
 };
 
-export function MissionCard({ mission, currentUserId, canPropose, proposalStatus, proposalResponse }: MissionCardProps) {
+export function MissionCard({ mission, currentUserId, canPropose, proposalStatus, proposalResponse, canEdit }: MissionCardProps) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -20,7 +22,7 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
           <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
             {MISSION_CATEGORY_LABELS[mission.category]}
           </span>
-          <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium uppercase text-slate-700">{mission.status}</span>
+          <MissionStatusBadge status={mission.status} />
         </div>
       </div>
 
@@ -41,13 +43,24 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
         </div>
       </dl>
 
-      <div className="mt-4 flex flex-wrap items-center gap-3">
-        <Link
-          href={`/missions/${mission.id}`}
-          className="inline-flex rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Voir le détail
-        </Link>
+      <div className="mt-4 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <Link
+            href={`/missions/${mission.id}`}
+            className="inline-flex rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+          >
+            Voir le détail
+          </Link>
+
+          {canEdit ? (
+            <Link
+              href={`/admin/missions/${mission.id}/edit`}
+              className="inline-flex rounded-md border border-slate-300 px-3 py-1 text-sm text-slate-700 hover:bg-slate-50"
+            >
+              Modifier
+            </Link>
+          ) : null}
+        </div>
 
         {canPropose ? (
           <ProposalButton
@@ -58,6 +71,7 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
             currentResponse={proposalResponse}
           />
         ) : null}
+
         {proposalStatus ? <StatusBadge status={proposalStatus} /> : null}
       </div>
     </article>

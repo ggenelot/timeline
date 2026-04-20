@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { MissionProposalStatus, MissionStatus } from '@/lib/types';
+import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { StatusBadge } from '@/components/missions/status-badge';
 
 export type ProposalListItem = {
@@ -95,7 +96,8 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
                 <dt className="inline font-medium text-slate-700">Secteur :</dt> {proposal.mission?.sector ?? 'Non défini'}
               </div>
               <div>
-                <dt className="inline font-medium text-slate-700">Statut mission :</dt> {proposal.mission?.status ?? 'N/A'}
+                <dt className="inline font-medium text-slate-700">Statut mission :</dt>{' '}
+                {proposal.mission ? <MissionStatusBadge status={proposal.mission.status} /> : 'N/A'}
               </div>
               <div>
                 <dt className="inline font-medium text-slate-700">Soumise le :</dt> {new Date(proposal.created_at).toLocaleString('fr-FR')}
