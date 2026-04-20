@@ -232,6 +232,12 @@ export default function MissionsPage() {
                 Ajouter un bénévole
               </Link>
               <Link
+                href="/admin/missions/import"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Importer des missions
+              </Link>
+              <Link
                 href="/admin/missions/create"
                 className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
               >

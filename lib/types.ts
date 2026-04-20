@@ -58,6 +58,14 @@ export type Mission = {
   status: MissionStatus;
   created_by: string;
   created_at: string;
+  do_status?: string | null;
+  requirements_notes?: string | null;
+  equipment_notes?: string | null;
+  reversion_expected?: number | null;
+  reversion_actual?: number | null;
+  validation_date?: string | null;
+  raw_import_payload?: Record<string, unknown> | null;
+  import_batch_id?: string | null;
 };
 
 export type MissionRequiredSkill = {
