@@ -22,7 +22,7 @@ export type ImportIssue = {
 
 export type RawMissionBlock = {
   blockIndex: number;
-  source: 'block' | 'tabular';
+  source: 'block' | 'tabular' | 'columnar';
   values: Record<ImportFieldKey, string | null>;
   rawPairs: Array<{ label: string; value: string }>;
 };
@@ -119,7 +119,49 @@ function mapLabelToKey(label: string): ImportFieldKey | null {
   return null;
 }
 
-function parseCsvLine(line: string): string[] {
+function countDelimiter(line: string, delimiter: string) {
+  let insideQuotes = false;
+  let count = 0;
+
+  for (let i = 0; i < line.length; i += 1) {
+    const char = line[i];
+
+    if (char === '"') {
+      if (insideQuotes && line[i + 1] === '"') {
+        i += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+      continue;
+    }
+
+    if (char === delimiter && !insideQuotes) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function detectCsvDelimiter(content: string): ';' | ',' | '\t' {
+  const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0).slice(0, 10);
+  const candidates: Array<';' | ',' | '\t'> = [';', ',', '\t'];
+
+  let bestDelimiter: ';' | ',' | '\t' = ';';
+  let bestScore = -1;
+
+  for (const candidate of candidates) {
+    const score = lines.reduce((sum, line) => sum + countDelimiter(line, candidate), 0);
+    if (score > bestScore) {
+      bestScore = score;
+      bestDelimiter = candidate;
+    }
+  }
+
+  return bestDelimiter;
+}
+
+function parseDelimitedLine(line: string, delimiter: ';' | ',' | '\t'): string[] {
   const values: string[] = [];
   let buffer = '';
   let insideQuotes = false;
@@ -137,7 +179,7 @@ function parseCsvLine(line: string): string[] {
       continue;
     }
 
-    if (char === ';' && !insideQuotes) {
+    if (char === delimiter && !insideQuotes) {
       values.push(buffer.trim());
       buffer = '';
       continue;
@@ -151,9 +193,11 @@ function parseCsvLine(line: string): string[] {
 }
 
 export function parseCsvContent(content: string): string[][] {
+  const delimiter = detectCsvDelimiter(content);
+
   return content
     .split(/\r?\n/)
-    .map((line) => parseCsvLine(line).map((cell) => normalizeCell(cell)));
+    .map((line) => parseDelimitedLine(line, delimiter).map((cell) => normalizeCell(cell)));
 }
 
 function isRowEmpty(row: string[]) {
@@ -169,6 +213,76 @@ function isTabularFormat(rows: string[][]): boolean {
 
   const knownHeaders = firstNonEmptyRow.filter((cell) => mapLabelToKey(cell)).length;
   return knownHeaders >= 2;
+}
+
+function isColumnarFormat(rows: string[][]): boolean {
+  if (rows.length < 3) {
+    return false;
+  }
+
+  const matchedLabels = rows.filter((row) => {
+    const label = normalizeCell(row[0] ?? '');
+    return mapLabelToKey(label) !== null;
+  }).length;
+
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+  return matchedLabels >= 4 && maxColumns >= 3;
+}
+
+function extractBlocksFromColumnarRows(rows: string[][]): RawMissionBlock[] {
+  const labelRows = rows
+    .map((row) => {
+      const label = normalizeCell(row[0] ?? '');
+      const key = mapLabelToKey(label);
+      return key ? { key, label, row } : null;
+    })
+    .filter((item): item is { key: ImportFieldKey; label: string; row: string[] } => item !== null);
+
+  const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
+
+  const blocks: RawMissionBlock[] = [];
+
+  for (let columnIndex = 1; columnIndex < maxColumns; columnIndex += 1) {
+    const values: Record<ImportFieldKey, string | null> = {
+      do_status: null,
+      title: null,
+      date: null,
+      time_range: null,
+      location: null,
+      requirements_notes: null,
+      equipment_notes: null,
+      reversion_expected: null,
+      reversion_actual: null,
+      type: null,
+      validation_date: null
+    };
+
+    const rawPairs: Array<{ label: string; value: string }> = [];
+
+    labelRows.forEach((labelRow) => {
+      const value = normalizeCell(labelRow.row[columnIndex] ?? '');
+
+      if (!value) {
+        return;
+      }
+
+      values[labelRow.key] = value;
+      rawPairs.push({ label: labelRow.label, value });
+    });
+
+    if (Object.values(values).every((value) => value === null)) {
+      continue;
+    }
+
+    blocks.push({
+      blockIndex: blocks.length,
+      source: 'columnar',
+      values,
+      rawPairs
+    });
+  }
+
+  return blocks;
 }
 
 function extractBlocksFromTabularRows(rows: string[][]): RawMissionBlock[] {
@@ -414,9 +528,15 @@ export function buildMissionsPreview(rows: string[][]): MissionImportPreview {
     .map((row) => row.map((cell) => normalizeCell(cell)))
     .filter((row) => row.some((cell) => cell.length > 0));
 
-  const blocks = isTabularFormat(normalizedRows)
-    ? extractBlocksFromTabularRows(normalizedRows)
-    : extractBlocksFromLabelValueRows(normalizedRows);
+  let blocks: RawMissionBlock[] = [];
+
+  if (isColumnarFormat(normalizedRows)) {
+    blocks = extractBlocksFromColumnarRows(normalizedRows);
+  } else if (isTabularFormat(normalizedRows)) {
+    blocks = extractBlocksFromTabularRows(normalizedRows);
+  } else {
+    blocks = extractBlocksFromLabelValueRows(normalizedRows);
+  }
 
   const items = blocks.map((block) => {
     const issues: ImportIssue[] = [];
