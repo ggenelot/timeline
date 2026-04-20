@@ -71,6 +71,7 @@ export type MissionRequiredSkill = {
 
 export type MissionProposalStatus = 'pending' | 'accepted' | 'refused';
 export type MissionProposalResponse = 'no_response' | 'available' | 'unavailable';
+export type MissionProposalSource = 'volunteer' | 'admin';
 
 export type MissionProposal = {
   id: string;
@@ -81,6 +82,10 @@ export type MissionProposal = {
   status: MissionProposalStatus;
   decided_at: string | null;
   decided_by: string | null;
+  updated_by_admin: boolean;
+  updated_by: string | null;
+  updated_at: string;
+  source: MissionProposalSource;
   created_at: string;
 };
 

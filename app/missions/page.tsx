@@ -122,7 +122,7 @@ export default function MissionsPage() {
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
-      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at')
+      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
       .eq('volunteer_id', authData.user.id);
 
     setProposals(proposalData ?? []);
