@@ -2,8 +2,10 @@ export type AppRole = 'admin' | 'responsable' | 'benevole';
 
 export type Profile = {
   id: string;
+  auth_user_id?: string | null;
   full_name: string | null;
-  email: string;
+  email: string | null;
+  invitation_sent_at?: string | null;
   role: AppRole;
   phone?: string | null;
   sector: string | null;

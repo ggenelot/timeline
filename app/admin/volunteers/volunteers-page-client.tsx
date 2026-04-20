@@ -16,6 +16,7 @@ type VolunteerSkill = {
 };
 
 type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'role'> & {
+  invitation_sent_at?: string | null;
   profile_skills: VolunteerSkill[] | null;
 };
 
@@ -29,12 +30,16 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+  const [inviteEmailByVolunteerId, setInviteEmailByVolunteerId] = useState<Record<string, string>>({});
+  const [invitingVolunteerId, setInvitingVolunteerId] = useState<string | null>(null);
 
   const router = useRouter();
 
   useEffect(() => {
     async function loadData() {
       setError(null);
+      setSuccess(null);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
@@ -64,7 +69,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,profile_skills(skill:skills(id,name))')
+        .select('id,full_name,email,role,invitation_sent_at,profile_skills(skill:skills(id,name))')
         .eq('role', 'benevole')
         .order('full_name', { ascending: true });
 
@@ -75,6 +80,9 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       }
 
       setVolunteers(volunteersData ?? []);
+      setInviteEmailByVolunteerId(
+        Object.fromEntries((volunteersData ?? []).map((volunteer) => [volunteer.id, volunteer.email ?? '']))
+      );
       setLoading(false);
     }
 
@@ -96,6 +104,61 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
   if (!profile) {
     return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+  }
+
+  async function handleInvite(volunteer: VolunteerProfile) {
+    if (!profile || profile.role !== 'admin') {
+      setError('Accès refusé : seuls les administrateurs peuvent inviter un bénévole.');
+      return;
+    }
+
+    setError(null);
+    setSuccess(null);
+    setInvitingVolunteerId(volunteer.id);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      setInvitingVolunteerId(null);
+      return;
+    }
+
+    const email = inviteEmailByVolunteerId[volunteer.id]?.trim().toLowerCase() ?? '';
+
+    const response = await fetch(`/api/admin/volunteers/${volunteer.id}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        email
+      })
+    });
+
+    const payload = (await response.json()) as { error?: string; message?: string; invitation_sent_at?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? "L'invitation n'a pas pu être envoyée.");
+      setInvitingVolunteerId(null);
+      return;
+    }
+
+    setSuccess(payload.message ?? 'Invitation envoyée.');
+    setVolunteers((previous) =>
+      previous.map((item) =>
+        item.id === volunteer.id
+          ? {
+              ...item,
+              email: email || item.email,
+              invitation_sent_at: payload.invitation_sent_at ?? new Date().toISOString()
+            }
+          : item
+      )
+    );
+    setInvitingVolunteerId(null);
   }
 
   return (
@@ -128,6 +191,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       ) : null}
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
 
       {volunteers.length === 0 ? (
         <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
@@ -141,6 +205,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Email</th>
                 <th className="px-4 py-2 font-medium">Compétences</th>
+                <th className="px-4 py-2 font-medium">Statut compte</th>
                 <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
@@ -159,7 +224,21 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 return (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                    <td className="px-4 py-2 text-slate-700">
+                      <input
+                        type="email"
+                        value={inviteEmailByVolunteerId[volunteer.id] ?? ''}
+                        onChange={(event) =>
+                          setInviteEmailByVolunteerId((previous) => ({
+                            ...previous,
+                            [volunteer.id]: event.target.value
+                          }))
+                        }
+                        placeholder="email@exemple.org"
+                        className="w-full rounded-md border border-slate-300 px-2 py-1 text-sm"
+                        disabled={invitingVolunteerId === volunteer.id}
+                      />
+                    </td>
                     <td className="px-4 py-2 text-slate-700">
                       {skillBadges.length === 0 ? (
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
@@ -174,9 +253,28 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       )}
                     </td>
                     <td className="px-4 py-2 text-slate-700">
-                      <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
-                        Modifier
-                      </Link>
+                      {!volunteer.email ? (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Pas de compte</span>
+                      ) : volunteer.invitation_sent_at ? (
+                        <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Invitation envoyée</span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">Pas de compte</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-slate-700">
+                      <div className="flex items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={() => void handleInvite(volunteer)}
+                          disabled={invitingVolunteerId === volunteer.id}
+                          className="rounded-md border border-slate-300 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {invitingVolunteerId === volunteer.id ? 'Envoi...' : 'Inviter'}
+                        </button>
+                        <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
+                          Modifier
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 );

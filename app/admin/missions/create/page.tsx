@@ -239,7 +239,7 @@ export default function AdminCreateMissionPage() {
         submitting={submitting}
         submitLabel="Créer la mission"
         submittingLabel="Création..."
-        createdByLabel={profile.full_name ? `${profile.full_name} (${profile.email})` : profile.email}
+        createdByLabel={profile.full_name ? `${profile.full_name} (${profile.email ?? 'email indisponible'})` : (profile.email ?? 'email indisponible')}
       />
     </section>
   );
