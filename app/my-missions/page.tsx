@@ -52,11 +52,17 @@ export default function MyMissionsPage() {
 
       setProfile(profileData);
 
-      const { data, error: assignmentsError } = await supabase
+      let assignmentsQuery = supabase
         .from('mission_assignments')
         .select('id,assignment_status,created_at,mission:missions(id,title,starts_at,location,sector,status)')
         .eq('volunteer_id', authData.user.id)
         .order('created_at', { ascending: false });
+
+      if (profileData.role === 'benevole') {
+        assignmentsQuery = assignmentsQuery.eq('mission.status', 'proposed');
+      }
+
+      const { data, error: assignmentsError } = await assignmentsQuery;
 
       if (assignmentsError) {
         setError(assignmentsError.message);
