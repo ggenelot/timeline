@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
@@ -118,7 +119,8 @@ export default function MyMissionsPage() {
                 <dt className="inline font-medium text-slate-700">Secteur :</dt> {row.mission?.sector ?? 'Non défini'}
               </div>
               <div>
-                <dt className="inline font-medium text-slate-700">Statut mission :</dt> {row.mission?.status ?? 'N/A'}
+                <dt className="inline font-medium text-slate-700">Statut mission :</dt>{' '}
+                {row.mission ? <MissionStatusBadge status={row.mission.status} /> : 'N/A'}
               </div>
             </dl>
 

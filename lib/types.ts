@@ -65,7 +65,7 @@ export type MissionRequiredSkill = {
 };
 
 export type MissionProposalStatus = 'pending' | 'accepted' | 'refused';
-export type MissionProposalResponse = 'no_response' | 'available' | 'unavailable' | 'maybe';
+export type MissionProposalResponse = 'no_response' | 'available' | 'unavailable';
 
 export type MissionProposal = {
   id: string;

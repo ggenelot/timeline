@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { getProposalResponseLabel } from '@/lib/missions';
 import { MissionProposalResponse, MissionStatus } from '@/lib/types';
 
 type ProposalButtonProps = {
@@ -14,9 +15,8 @@ type ProposalButtonProps = {
 };
 
 const responseOptions: Array<{ label: string; value: MissionProposalResponse }> = [
-  { label: 'Disponible', value: 'available' },
-  { label: 'Peut-être', value: 'maybe' },
-  { label: 'Indisponible', value: 'unavailable' }
+  { label: 'Oui', value: 'available' },
+  { label: 'Non', value: 'unavailable' }
 ];
 
 export function ProposalButton({ missionId, volunteerId, disabled, missionStatus, currentResponse }: ProposalButtonProps) {
@@ -63,12 +63,14 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
       return;
     }
 
-    const { data: existingProposal, error: existingProposalError } = await supabase
+    const { data: existingProposals, error: existingProposalError } = await supabase
       .from('mission_proposals')
       .select('id')
       .eq('mission_id', missionId)
       .eq('volunteer_id', user.id)
-      .maybeSingle();
+      .limit(1);
+
+    const existingProposal = existingProposals?.[0] ?? null;
 
     if (existingProposalError) {
       setError(mapProposalError(existingProposalError.message));
@@ -139,7 +141,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
           );
         })}
       </div>
-      {currentResponse ? <p className="text-xs text-slate-600">Réponse actuelle : {currentResponse}</p> : null}
+      {currentResponse ? <p className="text-xs text-slate-600">Réponse actuelle : {getProposalResponseLabel(currentResponse)}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
     </div>
