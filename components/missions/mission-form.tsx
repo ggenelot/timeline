@@ -37,9 +37,23 @@ export const MISSION_STATUS_OPTIONS: Array<{ value: MissionStatus; label: string
   { value: 'cancelled', label: 'Annulée' }
 ];
 
+export type MissionRequirementFormState = {
+  skill_id: string;
+  quantity: string;
+};
+
+type SkillOption = {
+  id: string;
+  name: string;
+};
+
 type MissionFormProps = {
   form: MissionFormState;
   onChange: (nextValue: MissionFormState) => void;
+  requirements?: MissionRequirementFormState[];
+  onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
+  availableSkills?: SkillOption[];
+  requirementsError?: string | null;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitting: boolean;
   submitLabel: string;
@@ -50,12 +64,43 @@ type MissionFormProps = {
 export function MissionForm({
   form,
   onChange,
+  requirements = [],
+  onRequirementsChange,
+  availableSkills = [],
+  requirementsError,
   onSubmit,
   submitting,
   submitLabel,
   submittingLabel,
   createdByLabel
 }: MissionFormProps) {
+  const selectedSkillIds = requirements.map((requirement) => requirement.skill_id).filter(Boolean);
+  const canManageRequirements = Boolean(onRequirementsChange);
+
+  function updateRequirement(index: number, patch: Partial<MissionRequirementFormState>) {
+    if (!onRequirementsChange) {
+      return;
+    }
+
+    onRequirementsChange(requirements.map((requirement, currentIndex) => (currentIndex === index ? { ...requirement, ...patch } : requirement)));
+  }
+
+  function removeRequirement(index: number) {
+    if (!onRequirementsChange) {
+      return;
+    }
+
+    onRequirementsChange(requirements.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function addRequirement() {
+    if (!onRequirementsChange) {
+      return;
+    }
+
+    onRequirementsChange([...requirements, { skill_id: '', quantity: '1' }]);
+  }
+
   return (
     <form className="space-y-4" onSubmit={onSubmit}>
       <label className="block text-sm text-slate-700">
@@ -205,6 +250,90 @@ export function MissionForm({
           </select>
         </label>
       </div>
+
+      {canManageRequirements ? (
+        <section className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">Besoins en compétences</h2>
+              <p className="text-xs text-slate-600">Optionnel. Vous pouvez définir les compétences et quantités nécessaires pour la mission.</p>
+            </div>
+            <button
+              type="button"
+              onClick={addRequirement}
+              disabled={submitting || requirements.length >= availableSkills.length}
+              className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Ajouter un besoin
+            </button>
+          </div>
+
+          {requirements.length > 0 ? (
+            <div className="space-y-2">
+              {requirements.map((requirement, index) => {
+                const usedSkillIdsByOtherRows = new Set(
+                  selectedSkillIds.filter((skillId, selectedIndex) => selectedIndex !== index && skillId.length > 0)
+                );
+
+                return (
+                  <div key={`${index}-${requirement.skill_id || 'empty'}`} className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_120px_auto]">
+                    <label className="text-xs text-slate-700">
+                      Compétence
+                      <select
+                        value={requirement.skill_id}
+                        onChange={(event) => updateRequirement(index, { skill_id: event.target.value })}
+                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                        disabled={submitting}
+                        required
+                      >
+                        <option value="">Sélectionner une compétence</option>
+                        {availableSkills.map((skill) => {
+                          const isUsedInAnotherRow = usedSkillIdsByOtherRows.has(skill.id);
+
+                          return (
+                            <option key={skill.id} value={skill.id} disabled={isUsedInAnotherRow}>
+                              {skill.name}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
+
+                    <label className="text-xs text-slate-700">
+                      Quantité
+                      <input
+                        type="number"
+                        min={1}
+                        step={1}
+                        value={requirement.quantity}
+                        onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
+                        className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+                        disabled={submitting}
+                        required
+                      />
+                    </label>
+
+                    <div className="flex items-end">
+                      <button
+                        type="button"
+                        onClick={() => removeRequirement(index)}
+                        disabled={submitting}
+                        className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        Supprimer
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="text-xs text-slate-600">Aucun besoin spécifique défini.</p>
+          )}
+
+          {requirementsError ? <p className="text-xs text-red-700">{requirementsError}</p> : null}
+        </section>
+      ) : null}
 
       {createdByLabel ? (
         <label className="block text-sm text-slate-700">

@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MissionForm, MissionFormState, INITIAL_MISSION_FORM } from '@/components/missions/mission-form';
+import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, Skill } from '@/lib/types';
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -15,6 +15,9 @@ export default function AdminCreateMissionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<MissionFormState>(INITIAL_MISSION_FORM);
+  const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -23,6 +26,7 @@ export default function AdminCreateMissionPage() {
   useEffect(() => {
     async function loadProfile() {
       setError(null);
+      setRequirementsError(null);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
@@ -43,6 +47,19 @@ export default function AdminCreateMissionPage() {
       }
 
       setProfile(profileData);
+
+      const { data: skillData, error: skillError } = await supabase
+        .from('skills')
+        .select('id,name,label,created_at')
+        .order('name', { ascending: true });
+
+      if (skillError) {
+        setError(`Impossible de charger les compétences: ${skillError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      setSkills(skillData ?? []);
       setLoading(false);
     }
 
@@ -52,6 +69,7 @@ export default function AdminCreateMissionPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setRequirementsError(null);
     setSuccess(null);
 
     if (!profile) {
@@ -92,6 +110,34 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
+    const cleanedRequirements = requirements
+      .map((requirement) => ({
+        skill_id: requirement.skill_id,
+        quantity: requirement.quantity.trim()
+      }))
+      .filter((requirement) => requirement.skill_id || requirement.quantity);
+
+    const selectedSkillIds = new Set<string>();
+
+    for (const requirement of cleanedRequirements) {
+      if (!requirement.skill_id) {
+        setRequirementsError('Chaque besoin doit avoir une compétence.');
+        return;
+      }
+
+      if (selectedSkillIds.has(requirement.skill_id)) {
+        setRequirementsError('Une compétence ne peut pas être ajoutée en double.');
+        return;
+      }
+
+      if (!isPositiveInteger(requirement.quantity)) {
+        setRequirementsError('La quantité doit être un entier strictement positif.');
+        return;
+      }
+
+      selectedSkillIds.add(requirement.skill_id);
+    }
+
     setSubmitting(true);
 
     const { data: createdMission, error: insertError } = await supabase
@@ -121,8 +167,26 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
+    if ((createdMission?.id ?? null) && cleanedRequirements.length > 0) {
+      const { error: requirementInsertError } = await supabase.from('mission_required_skills').insert(
+        cleanedRequirements.map((requirement) => ({
+          mission_id: createdMission.id,
+          skill_id: requirement.skill_id,
+          quantity: Number.parseInt(requirement.quantity, 10)
+        }))
+      );
+
+      if (requirementInsertError) {
+        await supabase.from('missions').delete().eq('id', createdMission.id);
+        setError(`Mission non enregistrée: impossible de créer les besoins en compétences (${requirementInsertError.message}).`);
+        setSubmitting(false);
+        return;
+      }
+    }
+
     setSuccess('Mission créée avec succès. Redirection en cours...');
     setForm(INITIAL_MISSION_FORM);
+    setRequirements([]);
 
     window.setTimeout(() => {
       if (createdMission?.id) {
@@ -162,6 +226,10 @@ export default function AdminCreateMissionPage() {
       <MissionForm
         form={form}
         onChange={setForm}
+        requirements={requirements}
+        onRequirementsChange={setRequirements}
+        requirementsError={requirementsError}
+        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name ?? skill.label ?? 'Compétence sans nom' }))}
         onSubmit={handleSubmit}
         submitting={submitting}
         submitLabel="Créer la mission"
