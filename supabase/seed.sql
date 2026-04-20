@@ -42,10 +42,19 @@ set
 
 insert into public.skills (name)
 values
-  ('secourisme'),
-  ('logistique'),
-  ('conduite'),
-  ('radio')
+  ('aide-formateur'),
+  ('formateur PSC'),
+  ('formateur PS'),
+  ('PSC'),
+  ('PSE1'),
+  ('PSE2'),
+  ('CE'),
+  ('CP'),
+  ('CEPS'),
+  ('conducteur VL'),
+  ('conducteur CPS'),
+  ('3S'),
+  ('CE2S')
 on conflict (name) do nothing;
 
 insert into public.missions (
@@ -159,42 +168,42 @@ and not exists (
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.name in ('secourisme', 'conduite')
+join public.skills s on s.name in ('PSE2', 'conducteur CPS')
 where p.email = 'benevole@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.name in ('logistique', 'radio')
+join public.skills s on s.name in ('PSC', '3S')
 where p.email = 'benevole2@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.name in ('secourisme', 'logistique', 'radio')
+join public.skills s on s.name in ('CEPS', 'CE2S')
 where p.email = 'benevole3@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.name in ('secourisme', 'radio')
+join public.skills s on s.name in ('PSE1', '3S')
 where m.title = 'Poste de secours - Marathon de Lille'
 on conflict (mission_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.name in ('logistique', 'conduite')
+join public.skills s on s.name in ('CP', 'conducteur VL')
 where m.title = 'Renfort logistique - Inondations'
 on conflict (mission_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.name in ('radio')
+join public.skills s on s.name in ('CE2S')
 where m.title = 'Soutien radio - Exercice départemental'
 on conflict (mission_id, skill_id) do nothing;
 
