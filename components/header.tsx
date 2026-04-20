@@ -32,7 +32,7 @@ export function Header() {
   return (
     <header className="border-b border-slate-200 bg-white">
       <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
-        <Link href="/" className="font-semibold text-slate-800">
+        <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
           Mission Planner
         </Link>
         <nav className="flex items-center gap-4 text-sm">
