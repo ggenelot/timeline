@@ -40,7 +40,7 @@ export default function MissionsPage() {
 
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id,full_name,email,role,sector,created_at')
+      .select('id,full_name,email,phone,role,sector,created_at')
       .eq('id', authData.user.id)
       .single();
 
@@ -158,12 +158,20 @@ export default function MissionsPage() {
             </p>
           </div>
           {profile?.role === 'admin' ? (
-            <Link
-              href="/admin/missions/create"
-              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
-            >
-              Nouvelle mission
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin/volunteers"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Ajouter un bénévole
+              </Link>
+              <Link
+                href="/admin/missions/create"
+                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+              >
+                Nouvelle mission
+              </Link>
+            </div>
           ) : null}
         </div>
       </div>
