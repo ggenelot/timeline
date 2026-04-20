@@ -9,7 +9,7 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
 import { ActivityLog, MISSION_CATEGORY_LABELS, Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
-import { getProposalResponseLabel } from '@/lib/missions';
+import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type ProposalWithVolunteer = MissionProposal & {
@@ -337,10 +337,10 @@ export default function MissionDetailPage() {
         {(mission.mission_required_skills ?? []).length > 0 ? (
           <div className="mt-3 text-sm text-slate-700">
             <p className="font-medium">Compétences requises :</p>
-            <ul className="mt-1 list-inside list-disc">
+            <ul className="mt-1 space-y-1">
               {(mission.mission_required_skills ?? []).map((requiredSkill) => (
-                <li key={requiredSkill.id}>
-                  {(requiredSkill.skill?.name ?? 'Compétence')} ×{requiredSkill.quantity}
+                <li key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+                  {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
                 </li>
               ))}
             </ul>

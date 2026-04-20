@@ -8,6 +8,7 @@ import { MissionCard } from '@/components/missions/mission-card';
 import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
+import { formatMissionRequirementLabel } from '@/lib/missions';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
@@ -357,12 +358,13 @@ export default function MissionsPage() {
               canEdit={profile?.role === 'admin'}
             />
             {(mission.mission_required_skills ?? []).length > 0 ? (
-              <p className="px-1 text-xs text-slate-600">
-                Compétences requises:{' '}
-                {(mission.mission_required_skills ?? [])
-                  .map((requiredSkill) => `${requiredSkill.skill?.name ?? 'Compétence'} ×${requiredSkill.quantity}`)
-                  .join(', ')}
-              </p>
+              <div className="flex flex-wrap gap-1 px-1">
+                {(mission.mission_required_skills ?? []).map((requiredSkill) => (
+                  <span key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+                    {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
+                  </span>
+                ))}
+              </div>
             ) : null}
           </div>
         ))}

@@ -11,8 +11,46 @@ type MissionSkillOption = {
   name: string | null;
 };
 
+type ParsedRequirement = {
+  skill_id: string | null;
+  quantity: number;
+};
+
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
+}
+
+function parseMissionRequirements(requirements: MissionRequirementFormState[]): { parsedRequirements: ParsedRequirement[]; error: string | null } {
+  const trimmedRequirements = requirements
+    .map((requirement) => ({
+      skill_id: requirement.skill_id.trim(),
+      quantity: requirement.quantity.trim()
+    }))
+    .filter((requirement) => requirement.skill_id.length > 0 || requirement.quantity.length > 0);
+
+  const parsedRequirements: ParsedRequirement[] = [];
+  const selectedSkillIds = new Set<string>();
+
+  for (const requirement of trimmedRequirements) {
+    if (!isPositiveInteger(requirement.quantity)) {
+      return { parsedRequirements: [], error: 'La quantité doit être un entier strictement positif.' };
+    }
+
+    const normalizedSkillId = requirement.skill_id.length > 0 ? requirement.skill_id : null;
+    const skillKey = normalizedSkillId ?? '__generic__';
+
+    if (selectedSkillIds.has(skillKey)) {
+      return { parsedRequirements: [], error: 'Un même besoin (compétence ou bénévole générique) ne peut pas être ajouté en double.' };
+    }
+
+    selectedSkillIds.add(skillKey);
+    parsedRequirements.push({
+      skill_id: normalizedSkillId,
+      quantity: Number.parseInt(requirement.quantity, 10)
+    });
+  }
+
+  return { parsedRequirements, error: null };
 }
 
 export default function AdminCreateMissionPage() {
@@ -115,32 +153,11 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
-    const cleanedRequirements = requirements
-      .map((requirement) => ({
-        skill_id: requirement.skill_id,
-        quantity: requirement.quantity.trim()
-      }))
-      .filter((requirement) => requirement.skill_id || requirement.quantity);
+    const { parsedRequirements, error: parsedRequirementsError } = parseMissionRequirements(requirements);
 
-    const selectedSkillIds = new Set<string>();
-
-    for (const requirement of cleanedRequirements) {
-      if (!requirement.skill_id) {
-        setRequirementsError('Chaque besoin doit avoir une compétence.');
-        return;
-      }
-
-      if (selectedSkillIds.has(requirement.skill_id)) {
-        setRequirementsError('Une compétence ne peut pas être ajoutée en double.');
-        return;
-      }
-
-      if (!isPositiveInteger(requirement.quantity)) {
-        setRequirementsError('La quantité doit être un entier strictement positif.');
-        return;
-      }
-
-      selectedSkillIds.add(requirement.skill_id);
+    if (parsedRequirementsError) {
+      setRequirementsError(parsedRequirementsError);
+      return;
     }
 
     setSubmitting(true);
@@ -172,12 +189,12 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
-    if ((createdMission?.id ?? null) && cleanedRequirements.length > 0) {
+    if ((createdMission?.id ?? null) && parsedRequirements.length > 0) {
       const { error: requirementInsertError } = await supabase.from('mission_required_skills').insert(
-        cleanedRequirements.map((requirement) => ({
+        parsedRequirements.map((requirement) => ({
           mission_id: createdMission.id,
           skill_id: requirement.skill_id,
-          quantity: Number.parseInt(requirement.quantity, 10)
+          quantity: requirement.quantity
         }))
       );
 

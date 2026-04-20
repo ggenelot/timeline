@@ -33,3 +33,13 @@ export function getProposalResponseLabel(response: MissionProposalResponse | nul
 
   return labels[response];
 }
+
+export function formatMissionRequirementLabel(skillName: string | null | undefined, quantity: number) {
+  const safeQuantity = Number.isFinite(quantity) ? Math.max(1, Math.trunc(quantity)) : 1;
+
+  if (!skillName) {
+    return `${safeQuantity} bénévole${safeQuantity > 1 ? 's' : ''}`;
+  }
+
+  return `${safeQuantity} ${skillName}`;
+}
