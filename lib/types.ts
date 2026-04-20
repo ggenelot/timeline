@@ -7,6 +7,7 @@ export type Profile = {
   phone: string | null;
   role: AppRole;
   sector: string | null;
+  phone?: string | null;
   created_at: string;
 };
 
