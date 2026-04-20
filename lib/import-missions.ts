@@ -2,6 +2,7 @@ import { MissionCategory } from '@/lib/types';
 
 export type ImportFieldKey =
   | 'do_status'
+  | 'retained_status'
   | 'title'
   | 'date'
   | 'time_range'
@@ -36,8 +37,10 @@ export type NormalizedMissionImport = {
   required_volunteers: number;
   category: MissionCategory;
   do_status: string | null;
+  retained_status: string | null;
   requirements_notes: string | null;
   equipment_notes: string | null;
+  source_type_label: string | null;
   reversion_expected: number | null;
   reversion_actual: number | null;
   validation_date: string | null;
@@ -60,6 +63,7 @@ export type MissionImportPreview = {
 
 const LABEL_SYNONYMS: Array<{ key: ImportFieldKey; aliases: string[] }> = [
   { key: 'do_status', aliases: ['etat do', 'état do', 'etatdo'] },
+  { key: 'retained_status', aliases: ['retenue', 'retenu'] },
   { key: 'title', aliases: ['intitule', 'intitulé', 'titre'] },
   { key: 'date', aliases: ['date', 'jour'] },
   { key: 'time_range', aliases: ['horaires', 'horaire', 'heure'] },
@@ -215,6 +219,23 @@ function isTabularFormat(rows: string[][]): boolean {
   return knownHeaders >= 2;
 }
 
+function createEmptyImportValues(): Record<ImportFieldKey, string | null> {
+  return {
+    do_status: null,
+    retained_status: null,
+    title: null,
+    date: null,
+    time_range: null,
+    location: null,
+    requirements_notes: null,
+    equipment_notes: null,
+    reversion_expected: null,
+    reversion_actual: null,
+    type: null,
+    validation_date: null
+  };
+}
+
 function isColumnarFormat(rows: string[][]): boolean {
   if (rows.length < 3) {
     return false;
@@ -234,28 +255,16 @@ function extractBlocksFromColumnarRows(rows: string[][]): RawMissionBlock[] {
     .map((row) => {
       const label = normalizeCell(row[0] ?? '');
       const key = mapLabelToKey(label);
-      return key ? { key, label, row } : null;
+      return { key, label, row };
     })
-    .filter((item): item is { key: ImportFieldKey; label: string; row: string[] } => item !== null);
+    .filter((item) => item.label.length > 0);
 
   const maxColumns = rows.reduce((max, row) => Math.max(max, row.length), 0);
 
   const blocks: RawMissionBlock[] = [];
 
   for (let columnIndex = 1; columnIndex < maxColumns; columnIndex += 1) {
-    const values: Record<ImportFieldKey, string | null> = {
-      do_status: null,
-      title: null,
-      date: null,
-      time_range: null,
-      location: null,
-      requirements_notes: null,
-      equipment_notes: null,
-      reversion_expected: null,
-      reversion_actual: null,
-      type: null,
-      validation_date: null
-    };
+    const values = createEmptyImportValues();
 
     const rawPairs: Array<{ label: string; value: string }> = [];
 
@@ -266,8 +275,10 @@ function extractBlocksFromColumnarRows(rows: string[][]): RawMissionBlock[] {
         return;
       }
 
-      values[labelRow.key] = value;
       rawPairs.push({ label: labelRow.label, value });
+      if (labelRow.key) {
+        values[labelRow.key] = value;
+      }
     });
 
     if (Object.values(values).every((value) => value === null)) {
@@ -302,31 +313,21 @@ function extractBlocksFromTabularRows(rows: string[][]): RawMissionBlock[] {
       return;
     }
 
-    const values: Record<ImportFieldKey, string | null> = {
-      do_status: null,
-      title: null,
-      date: null,
-      time_range: null,
-      location: null,
-      requirements_notes: null,
-      equipment_notes: null,
-      reversion_expected: null,
-      reversion_actual: null,
-      type: null,
-      validation_date: null
-    };
+    const values = createEmptyImportValues();
 
     const rawPairs: Array<{ label: string; value: string }> = [];
 
     row.forEach((cell, index) => {
       const key = mappedHeaders[index];
       const value = normalizeCell(cell);
-      if (!key || !value) {
+      if (!value) {
         return;
       }
 
-      values[key] = value;
       rawPairs.push({ label: headerRow[index] ?? key, value });
+      if (key) {
+        values[key] = value;
+      }
     });
 
     if (Object.values(values).every((value) => value === null)) {
@@ -368,55 +369,33 @@ function extractBlocksFromLabelValueRows(rows: string[][]): RawMissionBlock[] {
     const value = normalized.slice(labelIndex + 1).join(' ').trim();
     const key = mapLabelToKey(label);
 
-    if (!key) {
+    const isPotentialNewBlock = key === 'title' || key === 'do_status';
+
+    if (!current && !key) {
       return;
     }
-
-    const isPotentialNewBlock = key === 'title' || key === 'do_status';
 
     if (!current) {
       current = {
         blockIndex: blocks.length,
         source: 'block',
-        values: {
-          do_status: null,
-          title: null,
-          date: null,
-          time_range: null,
-          location: null,
-          requirements_notes: null,
-          equipment_notes: null,
-          reversion_expected: null,
-          reversion_actual: null,
-          type: null,
-          validation_date: null
-        },
+        values: createEmptyImportValues(),
         rawPairs: []
       };
-    } else if (isPotentialNewBlock && current.values[key] !== null) {
+    } else if (key && isPotentialNewBlock && current.values[key] !== null) {
       pushCurrent();
       current = {
         blockIndex: blocks.length,
         source: 'block',
-        values: {
-          do_status: null,
-          title: null,
-          date: null,
-          time_range: null,
-          location: null,
-          requirements_notes: null,
-          equipment_notes: null,
-          reversion_expected: null,
-          reversion_actual: null,
-          type: null,
-          validation_date: null
-        },
+        values: createEmptyImportValues(),
         rawPairs: []
       };
     }
 
-    current.values[key] = value || null;
     current.rawPairs.push({ label, value });
+    if (key) {
+      current.values[key] = value || null;
+    }
   });
 
   pushCurrent();
@@ -431,6 +410,76 @@ function parseFrenchDecimal(value: string | null): number | null {
   const normalized = value.replace(/\s+/g, '').replace(',', '.');
   const parsed = Number.parseFloat(normalized);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Convention d'import:
+ * - Les dates/heures saisies dans les fichiers d'import sont interprétées en Europe/Paris.
+ * - Les timestamps stockés en base restent des ISO UTC (timestamptz).
+ */
+const PARIS_TIME_ZONE = 'Europe/Paris';
+
+function getParisDateParts(timestampMs: number) {
+  const formatter = new Intl.DateTimeFormat('fr-FR', {
+    timeZone: PARIS_TIME_ZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  });
+
+  const parts = formatter.formatToParts(new Date(timestampMs));
+  const read = (type: Intl.DateTimeFormatPartTypes) => Number.parseInt(parts.find((part) => part.type === type)?.value ?? '0', 10);
+
+  return {
+    year: read('year'),
+    month: read('month'),
+    day: read('day'),
+    hour: read('hour'),
+    minute: read('minute')
+  };
+}
+
+export function parseParisLocalToUtcIso(
+  value: { year: number; month: number; day: number; hour: number; minute: number } | null
+): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const guess = Date.UTC(value.year, value.month - 1, value.day, value.hour, value.minute, 0);
+
+  for (let delta = -360; delta <= 360; delta += 1) {
+    const candidate = guess - delta * 60_000;
+    const parts = getParisDateParts(candidate);
+
+    if (
+      parts.year === value.year &&
+      parts.month === value.month &&
+      parts.day === value.day &&
+      parts.hour === value.hour &&
+      parts.minute === value.minute
+    ) {
+      return new Date(candidate).toISOString();
+    }
+  }
+
+  return null;
+}
+
+export function utcIsoToParisParts(iso: string): { date: string; time: string } | null {
+  const timestampMs = new Date(iso).getTime();
+  if (Number.isNaN(timestampMs)) {
+    return null;
+  }
+
+  const parts = getParisDateParts(timestampMs);
+  return {
+    date: `${parts.year.toString().padStart(4, '0')}-${parts.month.toString().padStart(2, '0')}-${parts.day.toString().padStart(2, '0')}`,
+    time: `${parts.hour.toString().padStart(2, '0')}:${parts.minute.toString().padStart(2, '0')}`
+  };
 }
 
 function parseDateValue(value: string | null, fallbackYear?: number): { year: number; month: number; day: number } | null {
@@ -589,31 +638,69 @@ export function buildMissionsPreview(rows: string[][]): MissionImportPreview {
     let normalized: NormalizedMissionImport | null = null;
 
     if (parsedMissionDate && parsedRange && title) {
-      const startsAtDate = new Date(Date.UTC(parsedMissionDate.year, parsedMissionDate.month - 1, parsedMissionDate.day, parsedRange.startHour, parsedRange.startMinute, 0));
-      const endsAtDate = new Date(Date.UTC(parsedMissionDate.year, parsedMissionDate.month - 1, parsedMissionDate.day, parsedRange.endHour, parsedRange.endMinute, 0));
+      const startsAtIso = parseParisLocalToUtcIso({
+        year: parsedMissionDate.year,
+        month: parsedMissionDate.month,
+        day: parsedMissionDate.day,
+        hour: parsedRange.startHour,
+        minute: parsedRange.startMinute
+      });
 
-      if (endsAtDate <= startsAtDate) {
-        endsAtDate.setUTCDate(endsAtDate.getUTCDate() + 1);
+      const baseEndDate = { year: parsedMissionDate.year, month: parsedMissionDate.month, day: parsedMissionDate.day };
+      const firstEndIso = parseParisLocalToUtcIso({
+        ...baseEndDate,
+        hour: parsedRange.endHour,
+        minute: parsedRange.endMinute
+      });
+
+      let endsAtIso = firstEndIso;
+      if (startsAtIso && firstEndIso && new Date(firstEndIso).getTime() <= new Date(startsAtIso).getTime()) {
+        const dayAfter = new Date(Date.UTC(parsedMissionDate.year, parsedMissionDate.month - 1, parsedMissionDate.day, 12, 0, 0));
+        dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+        const year = dayAfter.getUTCFullYear();
+        const month = dayAfter.getUTCMonth() + 1;
+        const day = dayAfter.getUTCDate();
+
+        endsAtIso = parseParisLocalToUtcIso({
+          year,
+          month,
+          day,
+          hour: parsedRange.endHour,
+          minute: parsedRange.endMinute
+        });
       }
 
-      normalized = {
+      if (!startsAtIso || !endsAtIso) {
+        issues.push({
+          code: 'timezone_conversion_error',
+          severity: 'error',
+          message: 'Impossible de convertir la date/heure importée en timezone Europe/Paris.'
+        });
+      } else {
+        const rawPayload = block.rawPairs.reduce<Record<string, string | null>>((acc, pair) => {
+          acc[pair.label] = pair.value || null;
+          return acc;
+        }, {});
+
+        normalized = {
         sourceBlockIndex: block.blockIndex,
         title,
         location: block.values.location?.trim() || null,
-        starts_at: startsAtDate.toISOString(),
-        ends_at: endsAtDate.toISOString(),
+        starts_at: startsAtIso,
+        ends_at: endsAtIso,
         required_volunteers: inferRequiredVolunteers(block.values.requirements_notes),
         category: inferCategory(block.values.type),
         do_status: block.values.do_status?.trim() || null,
+        retained_status: block.values.retained_status?.trim() || null,
         requirements_notes: block.values.requirements_notes?.trim() || null,
         equipment_notes: block.values.equipment_notes?.trim() || null,
+        source_type_label: block.values.type?.trim() || null,
         reversion_expected: expected,
         reversion_actual: actual,
         validation_date: validation ? `${validation.year.toString().padStart(4, '0')}-${validation.month.toString().padStart(2, '0')}-${validation.day.toString().padStart(2, '0')}` : null,
-        raw_import_payload: {
-          ...block.values
-        }
-      };
+        raw_import_payload: rawPayload
+        };
+      }
     }
 
     const blockingErrorCount = issues.filter((issue) => issue.severity === 'error').length;

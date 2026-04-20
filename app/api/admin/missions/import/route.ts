@@ -11,8 +11,10 @@ type ImportMissionPayload = {
   required_volunteers: number;
   category: MissionCategory;
   do_status: string | null;
+  retained_status: string | null;
   requirements_notes: string | null;
   equipment_notes: string | null;
+  source_type_label: string | null;
   reversion_expected: number | null;
   reversion_actual: number | null;
   validation_date: string | null;
@@ -137,8 +139,10 @@ export async function POST(request: NextRequest) {
     status: 'draft',
     created_by: userData.user.id,
     do_status: mission.do_status,
+    retained_status: mission.retained_status,
     requirements_notes: mission.requirements_notes,
     equipment_notes: mission.equipment_notes,
+    source_type_label: mission.source_type_label,
     reversion_expected: mission.reversion_expected,
     reversion_actual: mission.reversion_actual,
     validation_date: mission.validation_date,

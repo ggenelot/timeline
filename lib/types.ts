@@ -59,8 +59,10 @@ export type Mission = {
   created_by: string;
   created_at: string;
   do_status?: string | null;
+  retained_status?: string | null;
   requirements_notes?: string | null;
   equipment_notes?: string | null;
+  source_type_label?: string | null;
   reversion_expected?: number | null;
   reversion_actual?: number | null;
   validation_date?: string | null;
