@@ -59,8 +59,10 @@ export type Mission = {
 };
 
 export type MissionRequiredSkill = {
+  id: string;
   mission_id: string;
   skill_id: string;
+  quantity: number;
   created_at: string;
   skill: Pick<Skill, 'id' | 'name'> | null;
 };

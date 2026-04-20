@@ -118,7 +118,7 @@ export default function MissionDetailPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(mission_id,skill_id,created_at,skill:skills(id,name))'
+        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,label))'
       )
       .eq('id', missionId)
       .single();
@@ -335,20 +335,16 @@ export default function MissionDetailPage() {
         </dl>
 
         {(mission.mission_required_skills ?? []).length > 0 ? (
-          <p className="mt-3 text-sm text-slate-700">
-            <span className="font-medium">Compétences requises :</span>{' '}
-            {(() => {
-              const explicitSkillNames = (mission.mission_required_skills ?? [])
-                .map((requiredSkill) => requiredSkill.skill?.name)
-                .filter((skillName): skillName is string => Boolean(skillName));
-
-              const expandedSkills = Array.from(buildExpandedSkillSet(explicitSkillNames))
-                .sort(compareSkillCodes)
-                .map((skillCode) => getSkillLabel(skillCode));
-
-              return expandedSkills.join(', ');
-            })()}
-          </p>
+          <div className="mt-3 text-sm text-slate-700">
+            <p className="font-medium">Compétences requises :</p>
+            <ul className="mt-1 list-inside list-disc">
+              {(mission.mission_required_skills ?? []).map((requiredSkill) => (
+                <li key={requiredSkill.id}>
+                  {(requiredSkill.skill?.name ?? requiredSkill.skill?.label ?? 'Compétence')} ×{requiredSkill.quantity}
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : null}
 
         {profile?.role === 'benevole' ? (
