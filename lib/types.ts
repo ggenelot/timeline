@@ -12,7 +12,8 @@ export type Profile = {
 
 export type Skill = {
   id: string;
-  name: string;
+  label?: string;
+  name?: string;
   created_at: string;
 };
 
@@ -20,7 +21,7 @@ export type ProfileSkill = {
   profile_id: string;
   skill_id: string;
   created_at: string;
-  skill: Pick<Skill, 'id' | 'name'> | null;
+  skill: Pick<Skill, 'id' | 'name' | 'label'> | null;
 };
 
 export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
@@ -43,7 +44,7 @@ export type MissionRequiredSkill = {
   mission_id: string;
   skill_id: string;
   created_at: string;
-  skill: Pick<Skill, 'id' | 'name'> | null;
+  skill: Pick<Skill, 'id' | 'name' | 'label'> | null;
 };
 
 export type MissionProposalStatus = 'pending' | 'accepted' | 'refused';

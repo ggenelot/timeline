@@ -8,7 +8,7 @@ import { AppRole, Profile } from '@/lib/types';
 
 type SkillOption = {
   id: string;
-  name: string;
+  label: string;
 };
 
 type VolunteerPayload = {
@@ -318,7 +318,7 @@ export default function EditVolunteerPage() {
             <div className="flex flex-wrap gap-2">
               {selectedSkillOptions.map((skill) => (
                 <span key={skill.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-800">
-                  {skill.name}
+                  {skill.label}
                   <button
                     type="button"
                     onClick={() => handleRemoveSkill(skill.id)}
@@ -332,6 +332,12 @@ export default function EditVolunteerPage() {
             </div>
           )}
 
+          {skills.length === 0 ? (
+            <p className="text-sm text-amber-700">
+              Aucune compétence disponible dans le référentiel. Ajoutez des lignes dans la table <code>skills</code> pour activer le menu.
+            </p>
+          ) : null}
+
           <div className="flex flex-wrap items-end gap-2">
             <label className="block min-w-64 flex-1 text-sm text-slate-700">
               Ajouter une compétence
@@ -341,10 +347,12 @@ export default function EditVolunteerPage() {
                 className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
                 disabled={submitting || availableSkillOptions.length === 0}
               >
-                <option value="">Sélectionner...</option>
+                <option value="">
+                  {availableSkillOptions.length === 0 ? 'Aucune compétence disponible' : 'Sélectionner...'}
+                </option>
                 {availableSkillOptions.map((skill) => (
                   <option key={skill.id} value={skill.id}>
-                    {skill.name}
+                    {skill.label}
                   </option>
                 ))}
               </select>
