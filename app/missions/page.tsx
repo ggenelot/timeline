@@ -360,7 +360,7 @@ export default function MissionsPage() {
               <p className="px-1 text-xs text-slate-600">
                 Compétences requises:{' '}
                 {(mission.mission_required_skills ?? [])
-                  .map((requiredSkill) => `${requiredSkill.skill?.name ?? requiredSkill.skill?.label ?? 'Compétence'} ×${requiredSkill.quantity}`)
+                  .map((requiredSkill) => `${requiredSkill.skill?.name ?? 'Compétence'} ×${requiredSkill.quantity}`)
                   .join(', ')}
               </p>
             ) : null}
