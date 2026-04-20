@@ -2,16 +2,33 @@
 
 import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
 import { MissionCard } from '@/components/missions/mission-card';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposal, MissionRequiredSkill, Profile } from '@/lib/types';
+import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
 };
+
+const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
+const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
+
+function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
+  if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
+    return value as 'all' | MissionCategory;
+  }
+  return 'all';
+}
+
+function parseStatusFilter(value: string | null): 'all' | MissionStatus {
+  if (value && STATUS_FILTER_VALUES.includes(value as 'all' | MissionStatus)) {
+    return value as 'all' | MissionStatus;
+  }
+  return 'all';
+}
 
 export default function MissionsPage() {
   const [user, setUser] = useState<User | null>(null);
@@ -27,6 +44,30 @@ export default function MissionsPage() {
   const [selectedRequiredSkillCode, setSelectedRequiredSkillCode] = useState<'all' | SkillCode>('all');
 
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const selectedCategory = useMemo(() => parseCategoryFilter(searchParams.get('category')), [searchParams]);
+  const selectedStatus = useMemo(() => parseStatusFilter(searchParams.get('status')), [searchParams]);
+
+  function updateMainFilters(nextCategory: 'all' | MissionCategory, nextStatus: 'all' | MissionStatus) {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (nextCategory === 'all') {
+      params.delete('category');
+    } else {
+      params.set('category', nextCategory);
+    }
+
+    if (nextStatus === 'all') {
+      params.delete('status');
+    } else {
+      params.set('status', nextStatus);
+    }
+
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }
 
   async function loadData() {
     setError(null);
@@ -56,7 +97,7 @@ export default function MissionsPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,sector,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(mission_id,skill_id,created_at,skill:skills(id,name))'
+        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(mission_id,skill_id,created_at,skill:skills(id,name))'
       )
       .order('starts_at', { ascending: true });
 
@@ -119,6 +160,14 @@ export default function MissionsPage() {
   const filteredMissions = useMemo(
     () =>
       missions.filter((mission) => {
+        if (selectedCategory !== 'all' && mission.category !== selectedCategory) {
+          return false;
+        }
+
+        if (selectedStatus !== 'all' && mission.status !== selectedStatus) {
+          return false;
+        }
+
         if (selectedSector !== 'all' && mission.sector !== selectedSector) {
           return false;
         }
@@ -147,7 +196,7 @@ export default function MissionsPage() {
 
         return true;
       }),
-    [missions, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
+    [missions, selectedCategory, selectedStatus, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
   );
 
   if (loading) {
@@ -163,6 +212,7 @@ export default function MissionsPage() {
             <p className="mt-1 text-sm text-slate-600">
               Connecté en tant que <span className="font-medium">{profile?.full_name ?? user?.email}</span> ({profile?.role ?? 'profil incomplet'})
             </p>
+            <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
           </div>
           {profile?.role === 'admin' ? (
             <div className="flex flex-wrap items-center gap-2">
@@ -186,8 +236,56 @@ export default function MissionsPage() {
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
+          <button
+            type="button"
+            onClick={() => {
+              updateMainFilters('all', 'all');
+              setSelectedSector('all');
+              setDateFrom('');
+              setDateTo('');
+              setSelectedRequiredSkillCode('all');
+            }}
+            className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
+          >
+            Réinitialiser les filtres
+          </button>
+        </div>
+
+        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+          <label className="text-sm text-slate-700">
+            Catégorie
+            <select
+              value={selectedCategory}
+              onChange={(event) => updateMainFilters(event.target.value as 'all' | MissionCategory, selectedStatus)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Toutes</option>
+              {MISSION_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label className="text-sm text-slate-700">
+            Statut
+            <select
+              value={selectedStatus}
+              onChange={(event) => updateMainFilters(selectedCategory, event.target.value as 'all' | MissionStatus)}
+              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+            >
+              <option value="all">Tous</option>
+              <option value="draft">Brouillon</option>
+              <option value="proposed">Proposée</option>
+              <option value="closed">Clôturée</option>
+              <option value="confirmed">Confirmée</option>
+              <option value="cancelled">Annulée</option>
+            </select>
+          </label>
+
           <label className="text-sm text-slate-700">
             Secteur
             <select

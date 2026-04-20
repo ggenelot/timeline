@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
+import { MISSION_CATEGORY_LABELS, Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 
@@ -16,7 +16,12 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
     <article className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-lg font-semibold text-slate-900">{mission.title}</h2>
-        <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium uppercase text-slate-700">{mission.status}</span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
+            {MISSION_CATEGORY_LABELS[mission.category]}
+          </span>
+          <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium uppercase text-slate-700">{mission.status}</span>
+        </div>
       </div>
 
       <p className="mt-2 text-sm text-slate-700">{mission.description ?? 'Aucune description'}</p>
