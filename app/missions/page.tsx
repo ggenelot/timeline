@@ -117,9 +117,7 @@ export default function MissionsPage() {
       }))
     }));
 
-    const visibleMissions = profileData.role === 'benevole' ? mappedMissions.filter((mission) => mission.status !== 'draft') : mappedMissions;
-
-    setMissions(visibleMissions);
+    setMissions(mappedMissions);
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
