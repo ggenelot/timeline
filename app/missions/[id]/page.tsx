@@ -115,11 +115,11 @@ export default function MissionDetailPage() {
 
     setProfile(profileData);
 
-    const { data: missionData, error: missionError } = await supabase
-      .from('missions')
-      .select(
-        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,label))'
-      )
+      const { data: missionData, error: missionError } = await supabase
+        .from('missions')
+        .select(
+          'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        )
       .eq('id', missionId)
       .single();
 
