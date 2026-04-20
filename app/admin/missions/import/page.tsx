@@ -346,16 +346,29 @@ export default function AdminMissionImportPage() {
         body: JSON.stringify({ missions: validMissions })
       });
 
-      const payload = (await response.json()) as { error?: string; imported?: number; detected?: number; importBatchId?: string };
+      const payload = (await response.json()) as {
+        error?: string;
+        warning?: string;
+        imported?: number;
+        detected?: number;
+        failed?: number;
+        importBatchId?: string;
+        validationErrors?: Array<{ index: number; sourceBlockIndex: number; error: string }>;
+      };
 
       if (!response.ok) {
-        setError(payload.error ?? 'Import impossible.');
+        const details = (payload.validationErrors ?? []).map((item) => `Bloc #${item.sourceBlockIndex + 1}: ${item.error}`).join(' | ');
+        setError([payload.error ?? 'Import impossible.', details].filter(Boolean).join(' '));
         return;
       }
 
       setSuccess(
-        `Import terminé : ${payload.detected ?? validMissions.length} missions valides détectées, ${payload.imported ?? 0} importées. Batch: ${payload.importBatchId ?? 'n/a'}.`
+        `Import terminé : ${payload.detected ?? validMissions.length} détectées, ${payload.imported ?? 0} importées, ${payload.failed ?? 0} en échec. Batch: ${payload.importBatchId ?? 'n/a'}.`
       );
+
+      if (payload.warning) {
+        setError(payload.warning);
+      }
     } finally {
       setImporting(false);
     }

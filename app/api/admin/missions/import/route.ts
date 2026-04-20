@@ -69,6 +69,8 @@ function validateMissionPayload(mission: ImportMissionPayload) {
   return null;
 }
 
+type ValidationError = { index: number; sourceBlockIndex: number; error: string };
+
 export async function POST(request: NextRequest) {
   const token = getBearerToken(request);
 
@@ -112,12 +114,14 @@ export async function POST(request: NextRequest) {
       const error = validateMissionPayload(mission);
       return error ? { index, sourceBlockIndex: mission.sourceBlockIndex, error } : null;
     })
-    .filter((item): item is { index: number; sourceBlockIndex: number; error: string } => item !== null);
+    .filter((item): item is ValidationError => item !== null);
 
-  if (validationErrors.length > 0) {
+  const validMissions = missions.filter((_, index) => !validationErrors.some((error) => error.index === index));
+
+  if (validMissions.length === 0) {
     return NextResponse.json(
       {
-        error: 'Le lot contient des missions invalides.',
+        error: 'Le lot contient uniquement des missions invalides.',
         details: validationErrors
       },
       { status: 400 }
@@ -127,7 +131,7 @@ export async function POST(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const importBatchId = crypto.randomUUID();
 
-  const payload = missions.map((mission) => ({
+  const payload = validMissions.map((mission) => ({
     title: mission.title.trim(),
     description: null,
     location: mission.location,
@@ -135,7 +139,7 @@ export async function POST(request: NextRequest) {
     starts_at: mission.starts_at,
     ends_at: mission.ends_at,
     required_volunteers: mission.required_volunteers,
-    category: mission.category,
+    category: isValidCategory(mission.category) ? mission.category : 'maraude',
     status: 'draft',
     created_by: userData.user.id,
     do_status: mission.do_status,
@@ -152,6 +156,28 @@ export async function POST(request: NextRequest) {
 
   const { data: insertedMissions, error: insertError } = await serviceClient.from('missions').insert(payload).select('id,title');
 
+  if (insertError && (insertError.message.includes('retained_status') || insertError.message.includes('source_type_label'))) {
+    const fallbackPayload = payload.map(({ retained_status, source_type_label, ...rest }) => rest);
+    const { data: fallbackInsertedMissions, error: fallbackInsertError } = await serviceClient
+      .from('missions')
+      .insert(fallbackPayload)
+      .select('id,title');
+
+    if (fallbackInsertError) {
+      return NextResponse.json({ error: `Échec de l'import : ${fallbackInsertError.message}` }, { status: 500 });
+    }
+
+    return NextResponse.json({
+      importBatchId,
+      detected: missions.length,
+      imported: fallbackInsertedMissions?.length ?? 0,
+      failed: missions.length - (fallbackInsertedMissions?.length ?? 0),
+      validationErrors,
+      warning:
+        "Import partiel des colonnes additionnelles : migration manquante pour 'retained_status' ou 'source_type_label'. Exécutez les migrations Supabase."
+    });
+  }
+
   if (insertError) {
     return NextResponse.json({ error: `Échec de l'import : ${insertError.message}` }, { status: 500 });
   }
@@ -160,7 +186,8 @@ export async function POST(request: NextRequest) {
     importBatchId,
     detected: missions.length,
     imported: insertedMissions?.length ?? 0,
-    failed: 0,
-    insertedMissions: insertedMissions ?? []
+    failed: missions.length - (insertedMissions?.length ?? 0),
+    insertedMissions: insertedMissions ?? [],
+    validationErrors
   });
 }
