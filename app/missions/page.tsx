@@ -98,7 +98,7 @@ export default function MissionsPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,label))'
+        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
       )
       .order('starts_at', { ascending: true });
 
@@ -360,7 +360,7 @@ export default function MissionsPage() {
               <p className="px-1 text-xs text-slate-600">
                 Compétences requises:{' '}
                 {(mission.mission_required_skills ?? [])
-                  .map((requiredSkill) => `${requiredSkill.skill?.name ?? requiredSkill.skill?.label ?? 'Compétence'} ×${requiredSkill.quantity}`)
+                  .map((requiredSkill) => `${requiredSkill.skill?.name ?? 'Compétence'} ×${requiredSkill.quantity}`)
                   .join(', ')}
               </p>
             ) : null}
