@@ -4,12 +4,10 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, Skill } from '@/lib/types';
+import { SkillBadge } from '@/components/skills/skill-badge';
 
-type SkillOption = {
-  id: string;
-  name: string;
-};
+type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
 type VolunteerSkill = {
   skill: SkillOption | SkillOption[] | null;
@@ -28,6 +26,7 @@ type VolunteersPageClientProps = {
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
+  const [selectedSkillId, setSelectedSkillId] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -89,14 +88,55 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
     void loadData();
   }, [router]);
 
+  const volunteersWithSkills = useMemo(
+    () =>
+      volunteers.map((volunteer) => {
+        const skills = (volunteer.profile_skills ?? [])
+          .flatMap((profileSkill) => {
+            if (!profileSkill.skill) {
+              return [];
+            }
+
+            return Array.isArray(profileSkill.skill) ? profileSkill.skill : [profileSkill.skill];
+          })
+          .filter((skill): skill is SkillOption => Boolean(skill));
+
+        return {
+          volunteer,
+          skills
+        };
+      }),
+    [volunteers]
+  );
+
+  const availableSkills = useMemo(() => {
+    const uniqueSkills = new Map<string, SkillOption>();
+
+    volunteersWithSkills.forEach(({ skills }) => {
+      skills.forEach((skill) => {
+        uniqueSkills.set(skill.id, skill);
+      });
+    });
+
+    return Array.from(uniqueSkills.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
+  }, [volunteersWithSkills]);
+
+  const filteredVolunteers = useMemo(() => {
+    if (selectedSkillId === 'all') {
+      return volunteersWithSkills;
+    }
+
+    return volunteersWithSkills.filter(({ skills }) => skills.some((skill) => skill.id === selectedSkillId));
+  }, [selectedSkillId, volunteersWithSkills]);
+
   const volunteerCountLabel = useMemo(() => {
-    const count = volunteers.length;
+    const count = filteredVolunteers.length;
     if (count <= 1) {
       return `${count} bénévole`;
     }
 
     return `${count} bénévoles`;
-  }, [volunteers]);
+  }, [filteredVolunteers.length]);
 
   const handleInvite = async (volunteer: VolunteerProfile) => {
     if (!profile || profile.role !== 'admin') {
@@ -167,7 +207,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Gestion des bénévoles</h1>
-            <p className="mt-1 text-sm text-slate-600">{volunteerCountLabel} enregistré(s).</p>
+            <p className="mt-1 text-sm text-slate-600">{volunteerCountLabel} affiché(s).</p>
           </div>
           <Link
             href="/admin/volunteers/create"
@@ -240,14 +280,12 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       />
                     </td>
                     <td className="px-4 py-2 text-slate-700">
-                      {skillBadges.length === 0 ? (
+                      {skills.length === 0 ? (
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {skillBadges.map((skill) => (
-                            <span key={`${volunteer.id}-${skill.id}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
-                              {skill.name}
-                            </span>
+                          {skills.map((skill) => (
+                            <SkillBadge key={`${volunteer.id}-${skill.id}`} name={skill.name} category={skill.category} />
                           ))}
                         </div>
                       )}
@@ -277,11 +315,11 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       </div>
                     </td>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   );
