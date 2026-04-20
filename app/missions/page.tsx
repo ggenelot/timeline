@@ -245,6 +245,16 @@ export default function MissionsPage() {
               proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
             />
+            {profile?.role === 'admin' ? (
+              <div className="px-1">
+                <Link
+                  href={`/admin/missions/${mission.id}/edit`}
+                  className="inline-flex rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Modifier
+                </Link>
+              </div>
+            ) : null}
             {(mission.mission_required_skills ?? []).length > 0 ? (
               <p className="px-1 text-xs text-slate-600">
                 Compétences requises:{' '}
