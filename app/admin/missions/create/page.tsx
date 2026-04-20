@@ -4,9 +4,12 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, Skill } from '@/lib/types';
+import { Profile } from '@/lib/types';
 
-type MissionSkillOption = Pick<Skill, 'id' | 'name' | 'category' | 'level' | 'created_at'>;
+type MissionSkillOption = {
+  id: string;
+  name: string | null;
+};
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -52,7 +55,7 @@ export default function AdminCreateMissionPage() {
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
-        .select('id,name,category,level,created_at')
+        .select('id,name')
         .order('name', { ascending: true });
 
       if (skillError) {
