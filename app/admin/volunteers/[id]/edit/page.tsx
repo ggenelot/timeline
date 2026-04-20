@@ -14,7 +14,8 @@ type SkillOption = {
 type VolunteerPayload = {
   id: string;
   full_name: string | null;
-  email: string;
+  email: string | null;
+  invitation_sent_at: string | null;
   phone: string | null;
   sector: string | null;
   role: AppRole;
@@ -58,6 +59,8 @@ export default function EditVolunteerPage() {
   const [skillToAdd, setSkillToAdd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [invitationSentAt, setInvitationSentAt] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -121,12 +124,13 @@ export default function EditVolunteerPage() {
 
       setForm({
         full_name: payload.volunteer.full_name ?? '',
-        email: payload.volunteer.email,
+        email: payload.volunteer.email ?? '',
         phone: payload.volunteer.phone ?? '',
         sector: payload.volunteer.sector ?? '',
         role: payload.volunteer.role === 'responsable' ? 'responsable' : 'benevole',
         skill_ids: selectedSkillIds
       });
+      setInvitationSentAt(payload.volunteer.invitation_sent_at);
       setSkills(payload.skills ?? []);
       setLoading(false);
     }
@@ -183,11 +187,6 @@ export default function EditVolunteerPage() {
       return;
     }
 
-    if (!form.email.trim()) {
-      setError('Un email valide est obligatoire.');
-      return;
-    }
-
     setSubmitting(true);
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -230,6 +229,44 @@ export default function EditVolunteerPage() {
     return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
   }
 
+  async function handleInvite() {
+    setError(null);
+    setSuccess(null);
+    setInviting(true);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      setInviting(false);
+      return;
+    }
+
+    const response = await fetch(`/api/admin/volunteers/${volunteerId}/invite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`
+      },
+      body: JSON.stringify({
+        email: form.email.trim()
+      })
+    });
+
+    const payload = (await response.json()) as { error?: string; message?: string; invitation_sent_at?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? "L'invitation n'a pas pu être envoyée.");
+      setInviting(false);
+      return;
+    }
+
+    setSuccess(payload.message ?? 'Invitation envoyée avec succès.');
+    setInvitationSentAt(payload.invitation_sent_at ?? new Date().toISOString());
+    setInviting(false);
+  }
+
   return (
     <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex items-start justify-between gap-3">
@@ -246,6 +283,21 @@ export default function EditVolunteerPage() {
       {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="text-sm font-medium text-slate-900">Statut du compte</p>
+          <p className="mt-1 text-sm text-slate-700">
+            {!form.email.trim() ? 'Pas de compte (email manquant).' : invitationSentAt ? 'Invitation envoyée.' : 'Pas de compte.'}
+          </p>
+          <button
+            type="button"
+            onClick={() => void handleInvite()}
+            disabled={inviting || submitting}
+            className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {inviting ? 'Envoi en cours...' : 'Inviter le bénévole'}
+          </button>
+        </div>
+
         <label className="block text-sm text-slate-700">
           Nom complet
           <input

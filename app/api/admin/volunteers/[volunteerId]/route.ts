@@ -57,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: volunteer, error: volunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,email,phone,sector,role,created_at')
+    .select('id,auth_user_id,full_name,email,phone,sector,role,invitation_sent_at,created_at')
     .eq('id', volunteerId)
     .single();
 
@@ -114,8 +114,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
   }
 
-  if (!email || !EMAIL_REGEX.test(email)) {
-    return NextResponse.json({ error: 'Un email valide est obligatoire.' }, { status: 400 });
+  if (email && !EMAIL_REGEX.test(email)) {
+    return NextResponse.json({ error: 'Email invalide.' }, { status: 400 });
   }
 
   if (!['benevole', 'responsable'].includes(role)) {
@@ -150,7 +150,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     .from('profiles')
     .update({
       full_name: fullName,
-      email,
+      email: email || null,
       phone: phone || null,
       sector: sector || null,
       role
@@ -161,16 +161,18 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: `Impossible de mettre à jour le profil : ${profileUpdateError.message}` }, { status: 400 });
   }
 
-  const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(volunteerId, {
-    email,
-    user_metadata: {
-      full_name: fullName,
-      phone: phone || null
-    }
-  });
+  if (email) {
+    const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(volunteerId, {
+      email,
+      user_metadata: {
+        full_name: fullName,
+        phone: phone || null
+      }
+    });
 
-  if (authUpdateError) {
-    return NextResponse.json({ error: `Profil mis à jour, mais email Auth non synchronisé : ${authUpdateError.message}` }, { status: 500 });
+    if (authUpdateError) {
+      return NextResponse.json({ error: `Profil mis à jour, mais email Auth non synchronisé : ${authUpdateError.message}` }, { status: 500 });
+    }
   }
 
   const { error: deleteSkillsError } = await serviceClient.from('profile_skills').delete().eq('profile_id', volunteerId);
