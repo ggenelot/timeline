@@ -44,6 +44,7 @@ export default function MissionsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedRequiredSkillCode, setSelectedRequiredSkillCode] = useState<'all' | SkillCode>('all');
+  const [showOnlyMissionsWithoutResponse, setShowOnlyMissionsWithoutResponse] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -198,9 +199,13 @@ export default function MissionsPage() {
           }
         }
 
+        if (profile?.role === 'benevole' && showOnlyMissionsWithoutResponse && proposalByMission.has(mission.id)) {
+          return false;
+        }
+
         return true;
       }),
-    [missions, selectedCategory, selectedStatus, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
+    [missions, selectedCategory, selectedStatus, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode, profile?.role, showOnlyMissionsWithoutResponse, proposalByMission]
   );
 
   const availableStatusFilters = profile?.role === 'benevole' ? VOLUNTEER_STATUS_FILTER_VALUES : STATUS_FILTER_VALUES;
@@ -252,6 +257,7 @@ export default function MissionsPage() {
               setDateFrom('');
               setDateTo('');
               setSelectedRequiredSkillCode('all');
+              setShowOnlyMissionsWithoutResponse(false);
             }}
             className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
           >
@@ -343,6 +349,18 @@ export default function MissionsPage() {
               ))}
             </select>
           </label>
+
+          {profile?.role === 'benevole' ? (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={showOnlyMissionsWithoutResponse}
+                onChange={(event) => setShowOnlyMissionsWithoutResponse(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+              />
+              Missions sans réponse
+            </label>
+          ) : null}
         </div>
       </section>
 
@@ -375,7 +393,9 @@ export default function MissionsPage() {
           </div>
         ) : filteredMissions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            Aucun résultat avec les filtres sélectionnés.
+            {profile?.role === 'benevole' && showOnlyMissionsWithoutResponse
+              ? 'Vous avez déjà répondu à toutes les missions affichées.'
+              : 'Aucun résultat avec les filtres sélectionnés.'}
           </div>
         ) : null}
       </div>
