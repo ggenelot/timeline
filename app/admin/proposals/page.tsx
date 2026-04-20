@@ -29,7 +29,7 @@ export default function AdminProposalsPage() {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
+        .select('id,full_name,email,phone,role,sector,created_at')
         .eq('id', authData.user.id)
         .single();
 
@@ -129,12 +129,20 @@ export default function AdminProposalsPage() {
             <p className="mt-1 text-sm text-slate-600">Acceptez ou refusez les bénévoles qui se proposent sur vos missions.</p>
           </div>
           {profile.role === 'admin' ? (
-            <Link
-              href="/admin/events/create"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Créer un événement
-            </Link>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link
+                href="/admin/volunteers"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Ajouter un bénévole
+              </Link>
+              <Link
+                href="/admin/events/create"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Créer un événement
+              </Link>
+            </div>
           ) : null}
         </div>
       </div>
