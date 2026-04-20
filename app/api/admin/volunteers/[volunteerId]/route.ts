@@ -67,14 +67,14 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: profileSkills, error: profileSkillsError } = await serviceClient
     .from('profile_skills')
-    .select('skill_id, skill:skills(id,label,name)')
+    .select('skill_id, skill:skills(id,name)')
     .eq('profile_id', volunteerId);
 
   if (profileSkillsError) {
     return NextResponse.json({ error: `Impossible de charger les compétences : ${profileSkillsError.message}` }, { status: 500 });
   }
 
-  const { data: skills, error: skillsError } = await serviceClient.from('skills').select('id,label').order('label', { ascending: true });
+  const { data: skills, error: skillsError } = await serviceClient.from('skills').select('id,name').order('name', { ascending: true });
 
   if (skillsError) {
     return NextResponse.json({ error: `Impossible de charger le référentiel de compétences : ${skillsError.message}` }, { status: 500 });

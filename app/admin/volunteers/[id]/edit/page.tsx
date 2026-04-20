@@ -8,7 +8,7 @@ import { AppRole, Profile } from '@/lib/types';
 
 type SkillOption = {
   id: string;
-  label: string;
+  name: string;
 };
 
 type VolunteerPayload = {
@@ -318,7 +318,7 @@ export default function EditVolunteerPage() {
             <div className="flex flex-wrap gap-2">
               {selectedSkillOptions.map((skill) => (
                 <span key={skill.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-800">
-                  {skill.label}
+                  {skill.name}
                   <button
                     type="button"
                     onClick={() => handleRemoveSkill(skill.id)}
@@ -352,7 +352,7 @@ export default function EditVolunteerPage() {
                 </option>
                 {availableSkillOptions.map((skill) => (
                   <option key={skill.id} value={skill.id}>
-                    {skill.label}
+                    {skill.name}
                   </option>
                 ))}
               </select>
