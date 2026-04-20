@@ -8,6 +8,7 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
 import { ActivityLog, Mission, MissionAssignment, MissionProposal, MissionRequiredSkill, Profile, ProfileSkill } from '@/lib/types';
+import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -38,7 +39,7 @@ export default function MissionDetailPage() {
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
-  const [selectedVolunteerSkillId, setSelectedVolunteerSkillId] = useState<string>('all');
+  const [selectedVolunteerSkillCode, setSelectedVolunteerSkillCode] = useState<'all' | SkillCode>('all');
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -57,30 +58,34 @@ export default function MissionDetailPage() {
   );
 
   const volunteerSkillOptions = useMemo(() => {
-    const byId = new Map<string, string>();
+    const usedCodes = new Set<SkillCode>();
 
     eligibleProposals.forEach((proposal) => {
-      (proposal.volunteer?.profile_skills ?? []).forEach((profileSkill) => {
-        if (profileSkill.skill) {
-          byId.set(profileSkill.skill.id, profileSkill.skill.name);
-        }
-      });
+      const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
+        .map((profileSkill) => profileSkill.skill?.name)
+        .filter((skillName): skillName is string => Boolean(skillName));
+
+      buildExpandedSkillSet(explicitSkillNames).forEach((skillCode) => usedCodes.add(skillCode));
     });
 
-    return Array.from(byId.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    return Array.from(usedCodes)
+      .sort(compareSkillCodes)
+      .map((skillCode) => ({ code: skillCode, name: getSkillLabel(skillCode) }));
   }, [eligibleProposals]);
 
   const filteredEligibleProposals = useMemo(() => {
-    if (selectedVolunteerSkillId === 'all') {
+    if (selectedVolunteerSkillCode === 'all') {
       return eligibleProposals;
     }
 
-    return eligibleProposals.filter((proposal) =>
-      (proposal.volunteer?.profile_skills ?? []).some((profileSkill) => profileSkill.skill_id === selectedVolunteerSkillId)
-    );
-  }, [eligibleProposals, selectedVolunteerSkillId]);
+    return eligibleProposals.filter((proposal) => {
+      const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
+        .map((profileSkill) => profileSkill.skill?.name)
+        .filter((skillName): skillName is string => Boolean(skillName));
+
+      return buildExpandedSkillSet(explicitSkillNames).has(selectedVolunteerSkillCode);
+    });
+  }, [eligibleProposals, selectedVolunteerSkillCode]);
 
   async function loadData() {
     setLoading(true);
@@ -325,10 +330,17 @@ export default function MissionDetailPage() {
         {(mission.mission_required_skills ?? []).length > 0 ? (
           <p className="mt-3 text-sm text-slate-700">
             <span className="font-medium">Compétences requises :</span>{' '}
-            {(mission.mission_required_skills ?? [])
-              .map((requiredSkill) => requiredSkill.skill?.name)
-              .filter((skillName): skillName is string => Boolean(skillName))
-              .join(', ')}
+            {(() => {
+              const explicitSkillNames = (mission.mission_required_skills ?? [])
+                .map((requiredSkill) => requiredSkill.skill?.name)
+                .filter((skillName): skillName is string => Boolean(skillName));
+
+              const expandedSkills = Array.from(buildExpandedSkillSet(explicitSkillNames))
+                .sort(compareSkillCodes)
+                .map((skillCode) => getSkillLabel(skillCode));
+
+              return expandedSkills.join(', ');
+            })()}
           </p>
         ) : null}
 
@@ -365,13 +377,13 @@ export default function MissionDetailPage() {
             <label className="text-sm text-slate-700">
               Filtrer les bénévoles par compétence
               <select
-                value={selectedVolunteerSkillId}
-                onChange={(event) => setSelectedVolunteerSkillId(event.target.value)}
+                value={selectedVolunteerSkillCode}
+                onChange={(event) => setSelectedVolunteerSkillCode((event.target.value as SkillCode | 'all'))}
                 className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm md:max-w-sm"
               >
                 <option value="all">Toutes les compétences</option>
                 {volunteerSkillOptions.map((skill) => (
-                  <option key={skill.id} value={skill.id}>
+                  <option key={skill.code} value={skill.code}>
                     {skill.name}
                   </option>
                 ))}
@@ -387,9 +399,13 @@ export default function MissionDetailPage() {
             {filteredEligibleProposals.map((proposal) => {
               const isSelected = selectedVolunteerIds.has(proposal.volunteer_id);
               const isSaving = actionLoading === proposal.volunteer_id;
-              const skillNames = (proposal.volunteer?.profile_skills ?? [])
+              const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
                 .map((profileSkill) => profileSkill.skill?.name)
                 .filter((skillName): skillName is string => Boolean(skillName));
+
+              const skillNames = Array.from(buildExpandedSkillSet(explicitSkillNames))
+                .sort(compareSkillCodes)
+                .map((skillCode) => getSkillLabel(skillCode));
 
               return (
                 <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm text-slate-700">

@@ -7,6 +7,7 @@ import { User } from '@supabase/supabase-js';
 import { MissionCard } from '@/components/missions/mission-card';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposal, MissionRequiredSkill, Profile } from '@/lib/types';
+import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
@@ -23,7 +24,7 @@ export default function MissionsPage() {
   const [selectedSector, setSelectedSector] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [selectedRequiredSkillId, setSelectedRequiredSkillId] = useState('all');
+  const [selectedRequiredSkillCode, setSelectedRequiredSkillCode] = useState<'all' | SkillCode>('all');
 
   const router = useRouter();
 
@@ -100,18 +101,19 @@ export default function MissionsPage() {
   );
 
   const requiredSkills = useMemo(() => {
-    const byId = new Map<string, string>();
+    const usedCodes = new Set<SkillCode>();
+
     missions.forEach((mission) => {
-      mission.mission_required_skills?.forEach((requiredSkill) => {
-        if (requiredSkill.skill) {
-          byId.set(requiredSkill.skill.id, requiredSkill.skill.name);
-        }
-      });
+      const explicitSkillNames = (mission.mission_required_skills ?? [])
+        .map((requiredSkill) => requiredSkill.skill?.name)
+        .filter((skillName): skillName is string => Boolean(skillName));
+
+      buildExpandedSkillSet(explicitSkillNames).forEach((skillCode) => usedCodes.add(skillCode));
     });
 
-    return Array.from(byId.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, 'fr'));
+    return Array.from(usedCodes)
+      .sort(compareSkillCodes)
+      .map((skillCode) => ({ code: skillCode, name: getSkillLabel(skillCode) }));
   }, [missions]);
 
   const filteredMissions = useMemo(
@@ -131,16 +133,21 @@ export default function MissionsPage() {
           return false;
         }
 
-        if (selectedRequiredSkillId !== 'all') {
-          const hasSkill = (mission.mission_required_skills ?? []).some((requiredSkill) => requiredSkill.skill_id === selectedRequiredSkillId);
-          if (!hasSkill) {
+        if (selectedRequiredSkillCode !== 'all') {
+          const explicitSkillNames = (mission.mission_required_skills ?? [])
+            .map((requiredSkill) => requiredSkill.skill?.name)
+            .filter((skillName): skillName is string => Boolean(skillName));
+
+          const expandedSkillSet = buildExpandedSkillSet(explicitSkillNames);
+
+          if (!expandedSkillSet.has(selectedRequiredSkillCode)) {
             return false;
           }
         }
 
         return true;
       }),
-    [missions, selectedSector, dateFrom, dateTo, selectedRequiredSkillId]
+    [missions, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
   );
 
   if (loading) {
@@ -220,13 +227,13 @@ export default function MissionsPage() {
           <label className="text-sm text-slate-700">
             Compétence requise
             <select
-              value={selectedRequiredSkillId}
-              onChange={(event) => setSelectedRequiredSkillId(event.target.value)}
+              value={selectedRequiredSkillCode}
+              onChange={(event) => setSelectedRequiredSkillCode((event.target.value as SkillCode | 'all'))}
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             >
               <option value="all">Toutes</option>
               {requiredSkills.map((skill) => (
-                <option key={skill.id} value={skill.id}>
+                <option key={skill.code} value={skill.code}>
                   {skill.name}
                 </option>
               ))}
@@ -258,10 +265,17 @@ export default function MissionsPage() {
             {(mission.mission_required_skills ?? []).length > 0 ? (
               <p className="px-1 text-xs text-slate-600">
                 Compétences requises:{' '}
-                {(mission.mission_required_skills ?? [])
-                  .map((requiredSkill) => requiredSkill.skill?.name)
-                  .filter((skillName): skillName is string => Boolean(skillName))
-                  .join(', ')}
+                {(() => {
+                  const explicitSkillNames = (mission.mission_required_skills ?? [])
+                    .map((requiredSkill) => requiredSkill.skill?.name)
+                    .filter((skillName): skillName is string => Boolean(skillName));
+
+                  const expandedSkills = Array.from(buildExpandedSkillSet(explicitSkillNames))
+                    .sort(compareSkillCodes)
+                    .map((skillCode) => getSkillLabel(skillCode));
+
+                  return expandedSkills.join(', ');
+                })()}
               </p>
             ) : null}
           </div>
