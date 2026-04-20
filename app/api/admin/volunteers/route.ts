@@ -93,10 +93,12 @@ export async function POST(request: NextRequest) {
   const { error: profileUpsertError } = await serviceClient.from('profiles').upsert(
     {
       id: createdUserData.user.id,
+      auth_user_id: createdUserData.user.id,
       full_name: fullName,
       email,
       phone: phone || null,
-      role: 'benevole'
+      role: 'benevole',
+      invitation_sent_at: null
     },
     { onConflict: 'id' }
   );
