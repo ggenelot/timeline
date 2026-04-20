@@ -84,7 +84,11 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
         volunteer_id: user.id,
         proposed_by: user.id,
         response,
-        status: 'pending'
+        status: 'pending',
+        updated_by_admin: false,
+        updated_by: null,
+        source: 'volunteer',
+        updated_at: new Date().toISOString()
       });
 
       if (insertError) {
@@ -103,7 +107,11 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
       .from('mission_proposals')
       .update({
         response,
-        status: 'pending'
+        status: 'pending',
+        updated_by_admin: false,
+        updated_by: null,
+        source: 'volunteer',
+        updated_at: new Date().toISOString()
       })
       .eq('id', existingProposal.id);
 

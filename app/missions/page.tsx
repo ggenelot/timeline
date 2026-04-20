@@ -16,7 +16,7 @@ type MissionWithRequiredSkills = Mission & {
 
 const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
-const VOLUNTEER_STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'proposed', 'closed', 'confirmed', 'cancelled'];
+const VOLUNTEER_STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'proposed'];
 
 function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
   if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
@@ -44,6 +44,7 @@ export default function MissionsPage() {
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedRequiredSkillCode, setSelectedRequiredSkillCode] = useState<'all' | SkillCode>('all');
+  const [showOnlyMissionsWithoutResponse, setShowOnlyMissionsWithoutResponse] = useState(false);
 
   const router = useRouter();
   const pathname = usePathname();
@@ -96,12 +97,17 @@ export default function MissionsPage() {
 
     setProfile(profileData);
 
-    const { data: missionData, error: missionError } = await supabase
+    let missionQuery = supabase
       .from('missions')
       .select(
         'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
-      )
-      .order('starts_at', { ascending: true });
+      );
+
+    if (profileData.role === 'benevole') {
+      missionQuery = missionQuery.eq('status', 'proposed');
+    }
+
+    const { data: missionData, error: missionError } = await missionQuery.order('starts_at', { ascending: true });
 
     if (missionError) {
       setError(`Erreur chargement missions: ${missionError.message}`);
@@ -117,13 +123,11 @@ export default function MissionsPage() {
       }))
     }));
 
-    const visibleMissions = profileData.role === 'benevole' ? mappedMissions.filter((mission) => mission.status !== 'draft') : mappedMissions;
-
-    setMissions(visibleMissions);
+    setMissions(mappedMissions);
 
     const { data: proposalData } = await supabase
       .from('mission_proposals')
-      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at')
+      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
       .eq('volunteer_id', authData.user.id);
 
     setProposals(proposalData ?? []);
@@ -161,6 +165,9 @@ export default function MissionsPage() {
       .map((skillCode) => ({ code: skillCode, name: getSkillLabel(skillCode) }));
   }, [missions]);
 
+  const effectiveSelectedStatus =
+    profile?.role === 'benevole' && selectedStatus !== 'all' && selectedStatus !== 'proposed' ? 'all' : selectedStatus;
+
   const filteredMissions = useMemo(
     () =>
       missions.filter((mission) => {
@@ -168,7 +175,7 @@ export default function MissionsPage() {
           return false;
         }
 
-        if (selectedStatus !== 'all' && mission.status !== selectedStatus) {
+        if (effectiveSelectedStatus !== 'all' && mission.status !== effectiveSelectedStatus) {
           return false;
         }
 
@@ -198,9 +205,24 @@ export default function MissionsPage() {
           }
         }
 
+        if (profile?.role === 'benevole' && showOnlyMissionsWithoutResponse && proposalByMission.has(mission.id)) {
+          return false;
+        }
+
         return true;
       }),
-    [missions, selectedCategory, selectedStatus, selectedSector, dateFrom, dateTo, selectedRequiredSkillCode]
+    [
+      missions,
+      selectedCategory,
+      effectiveSelectedStatus,
+      selectedSector,
+      dateFrom,
+      dateTo,
+      selectedRequiredSkillCode,
+      profile?.role,
+      showOnlyMissionsWithoutResponse,
+      proposalByMission
+    ]
   );
 
   const availableStatusFilters = profile?.role === 'benevole' ? VOLUNTEER_STATUS_FILTER_VALUES : STATUS_FILTER_VALUES;
@@ -258,6 +280,7 @@ export default function MissionsPage() {
               setDateFrom('');
               setDateTo('');
               setSelectedRequiredSkillCode('all');
+              setShowOnlyMissionsWithoutResponse(false);
             }}
             className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
           >
@@ -270,7 +293,7 @@ export default function MissionsPage() {
             Catégorie
             <select
               value={selectedCategory}
-              onChange={(event) => updateMainFilters(event.target.value as 'all' | MissionCategory, selectedStatus)}
+              onChange={(event) => updateMainFilters(event.target.value as 'all' | MissionCategory, effectiveSelectedStatus)}
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             >
               <option value="all">Toutes</option>
@@ -285,7 +308,7 @@ export default function MissionsPage() {
           <label className="text-sm text-slate-700">
             Statut
             <select
-              value={selectedStatus}
+              value={effectiveSelectedStatus}
               onChange={(event) => updateMainFilters(selectedCategory, event.target.value as 'all' | MissionStatus)}
               className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
             >
@@ -349,6 +372,18 @@ export default function MissionsPage() {
               ))}
             </select>
           </label>
+
+          {profile?.role === 'benevole' ? (
+            <label className="flex items-center gap-2 text-sm text-slate-700">
+              <input
+                type="checkbox"
+                checked={showOnlyMissionsWithoutResponse}
+                onChange={(event) => setShowOnlyMissionsWithoutResponse(event.target.checked)}
+                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
+              />
+              Missions sans réponse
+            </label>
+          ) : null}
         </div>
       </section>
 
@@ -381,7 +416,9 @@ export default function MissionsPage() {
           </div>
         ) : filteredMissions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            Aucun résultat avec les filtres sélectionnés.
+            {profile?.role === 'benevole' && showOnlyMissionsWithoutResponse
+              ? 'Vous avez déjà répondu à toutes les missions affichées.'
+              : 'Aucun résultat avec les filtres sélectionnés.'}
           </div>
         ) : null}
       </div>
