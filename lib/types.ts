@@ -6,6 +6,7 @@ export type Profile = {
   email: string;
   role: AppRole;
   sector: string | null;
+  phone?: string | null;
   created_at: string;
 };
 
