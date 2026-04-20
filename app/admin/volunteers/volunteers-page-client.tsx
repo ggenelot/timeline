@@ -6,7 +6,18 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'phone' | 'sector' | 'role' | 'created_at'>;
+type SkillOption = {
+  id: string;
+  name: string;
+};
+
+type VolunteerSkill = {
+  skill: SkillOption | SkillOption[] | null;
+};
+
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'role'> & {
+  profile_skills: VolunteerSkill[] | null;
+};
 
 type VolunteersPageClientProps = {
   created: boolean;
@@ -53,9 +64,9 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,phone,sector,role,created_at')
+        .select('id,full_name,email,role,profile_skills(skill:skills(id,name))')
         .eq('role', 'benevole')
-        .order('created_at', { ascending: false });
+        .order('full_name', { ascending: true });
 
       if (volunteersError) {
         setError(volunteersError.message);
@@ -129,27 +140,47 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Email</th>
-                <th className="px-4 py-2 font-medium">Téléphone</th>
-                <th className="px-4 py-2 font-medium">Secteur</th>
-                <th className="px-4 py-2 font-medium">Créé le</th>
+                <th className="px-4 py-2 font-medium">Compétences</th>
                 <th className="px-4 py-2 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {volunteers.map((volunteer) => (
-                <tr key={volunteer.id}>
-                  <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
-                  <td className="px-4 py-2 text-slate-700">{volunteer.phone ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{volunteer.sector ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{new Date(volunteer.created_at).toLocaleString('fr-FR')}</td>
-                  <td className="px-4 py-2 text-slate-700">
-                    <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
-                      Modifier
-                    </Link>
-                  </td>
-                </tr>
-              ))}
+              {volunteers.map((volunteer) => {
+                const skillBadges = (volunteer.profile_skills ?? [])
+                  .flatMap((profileSkill) => {
+                    if (!profileSkill.skill) {
+                      return [];
+                    }
+
+                    return Array.isArray(profileSkill.skill) ? profileSkill.skill : [profileSkill.skill];
+                  })
+                  .filter((skill): skill is SkillOption => Boolean(skill));
+
+                return (
+                  <tr key={volunteer.id}>
+                    <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
+                    <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                    <td className="px-4 py-2 text-slate-700">
+                      {skillBadges.length === 0 ? (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
+                      ) : (
+                        <div className="flex flex-wrap gap-1.5">
+                          {skillBadges.map((skill) => (
+                            <span key={`${volunteer.id}-${skill.id}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">
+                              {skill.name}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-slate-700">
+                      <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
+                        Modifier
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
