@@ -6,6 +6,8 @@ import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirement
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill } from '@/lib/types';
 
+type MissionSkillOption = Pick<Skill, 'id' | 'name' | 'category' | 'level' | 'created_at'>;
+
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
 }
@@ -16,7 +18,7 @@ export default function AdminCreateMissionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<MissionFormState>(INITIAL_MISSION_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
-  const [skills, setSkills] = useState<Skill[]>([]);
+  const [skills, setSkills] = useState<MissionSkillOption[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -50,7 +52,7 @@ export default function AdminCreateMissionPage() {
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
-        .select('id,name,label,created_at')
+        .select('id,name,category,level,created_at')
         .order('name', { ascending: true });
 
       if (skillError) {
@@ -229,7 +231,7 @@ export default function AdminCreateMissionPage() {
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
-        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name ?? skill.label ?? 'Compétence sans nom' }))}
+        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom' }))}
         onSubmit={handleSubmit}
         submitting={submitting}
         submitLabel="Créer la mission"

@@ -340,7 +340,7 @@ export default function MissionDetailPage() {
             <ul className="mt-1 list-inside list-disc">
               {(mission.mission_required_skills ?? []).map((requiredSkill) => (
                 <li key={requiredSkill.id}>
-                  {(requiredSkill.skill?.name ?? requiredSkill.skill?.label ?? 'Compétence')} ×{requiredSkill.quantity}
+                  {(requiredSkill.skill?.name ?? 'Compétence')} ×{requiredSkill.quantity}
                 </li>
               ))}
             </ul>
