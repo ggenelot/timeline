@@ -298,6 +298,7 @@ export default function AdminEditMissionPage() {
 
     setSuccess('Mission mise à jour avec succès.');
     setSubmitting(false);
+    router.push(`/missions/${mission.id}`);
   }
 
   if (loading) {
