@@ -466,6 +466,14 @@ export default function MissionDetailPage() {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-semibold text-slate-900">{mission.title}</h1>
           <div className="flex items-center gap-2">
+            {isAdmin ? (
+              <Link
+                href={`/admin/missions/${mission.id}/edit`}
+                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Modifier
+              </Link>
+            ) : null}
             <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{MISSION_CATEGORY_LABELS[mission.category]}</span>
             <MissionStatusBadge status={mission.status} />
           </div>
