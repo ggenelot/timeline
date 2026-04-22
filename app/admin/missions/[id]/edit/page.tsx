@@ -351,17 +351,19 @@ export default function AdminEditMissionPage() {
         submitting={submitting}
         submitLabel="Enregistrer"
         submittingLabel="Enregistrement..."
-      />
-
-      <AdminDeleteMissionButton
-        missionId={mission.id}
-        onError={(message) => {
-          setError(message);
-          setSuccess(null);
-        }}
-        onDeleted={() => {
-          router.push('/missions');
-        }}
+        footerActions={
+          <AdminDeleteMissionButton
+            missionId={mission.id}
+            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+            onError={(message) => {
+              setError(message);
+              setSuccess(null);
+            }}
+            onDeleted={() => {
+              router.push('/missions');
+            }}
+          />
+        }
       />
     </section>
   );
