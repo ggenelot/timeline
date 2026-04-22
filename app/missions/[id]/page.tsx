@@ -21,6 +21,7 @@ import {
 } from '@/lib/types';
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
+import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -662,6 +663,19 @@ export default function MissionDetailPage() {
           </ul>
         )}
       </section>
+
+      {isAdmin ? (
+        <AdminDeleteMissionButton
+          missionId={mission.id}
+          onError={(message) => {
+            setError(message);
+            setSuccess(null);
+          }}
+          onDeleted={() => {
+            router.push('/missions');
+          }}
+        />
+      ) : null}
     </div>
   );
 }
