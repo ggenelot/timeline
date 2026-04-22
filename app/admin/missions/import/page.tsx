@@ -3,6 +3,8 @@
 import { ChangeEvent, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  buildMissionDedupKey,
+  getMissionDateForDedupFromStartsAt,
   MissionImportPreviewItem,
   NormalizedMissionImport,
   buildMissionsPreview,
@@ -226,6 +228,9 @@ export default function AdminMissionImportPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [existingMissionKeys, setExistingMissionKeys] = useState<Set<string>>(new Set());
+  const [checkingDuplicates, setCheckingDuplicates] = useState(false);
+  const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -263,15 +268,108 @@ export default function AdminMissionImportPage() {
     [rows]
   );
 
-  const validMissions = useMemo(
-    () => normalizedRows.filter((entry) => entry.result.normalized && entry.result.errors.length === 0).map((entry) => entry.result.normalized!),
+  const validMissionEntries = useMemo(
+    () => normalizedRows.filter((entry) => entry.result.normalized && entry.result.errors.length === 0).map((entry) => ({ row: entry.row, mission: entry.result.normalized! })),
     [normalizedRows]
   );
 
-  const blockingErrors = useMemo(
-    () => normalizedRows.reduce((count, entry) => count + entry.result.errors.length, 0),
-    [normalizedRows]
-  );
+  useEffect(() => {
+    if (validMissionEntries.length === 0) {
+      setExistingMissionKeys(new Set());
+      setDuplicateCheckError(null);
+      setCheckingDuplicates(false);
+      return;
+    }
+
+    const startsAtValues = validMissionEntries.map((entry) => entry.mission.starts_at);
+    const rangeStart = startsAtValues.reduce((min, current) => (current < min ? current : min), startsAtValues[0]);
+    const rangeEnd = startsAtValues.reduce((max, current) => (current > max ? current : max), startsAtValues[0]);
+    let cancelled = false;
+
+    async function loadExistingMissions() {
+      setCheckingDuplicates(true);
+      setDuplicateCheckError(null);
+
+      const { data, error: queryError } = await supabase
+        .from('missions')
+        .select('title,starts_at')
+        .gte('starts_at', rangeStart)
+        .lte('starts_at', rangeEnd);
+
+      if (cancelled) {
+        return;
+      }
+
+      if (queryError) {
+        setDuplicateCheckError("Impossible de vérifier les doublons existants en base. L'import reste possible.");
+        setCheckingDuplicates(false);
+        return;
+      }
+
+      const keys = new Set<string>();
+      (data ?? []).forEach((mission) => {
+        const missionDate = getMissionDateForDedupFromStartsAt(mission.starts_at);
+        const key = buildMissionDedupKey({ title: mission.title ?? '', missionDate });
+        if (key) {
+          keys.add(key);
+        }
+      });
+
+      setExistingMissionKeys(keys);
+      setCheckingDuplicates(false);
+    }
+
+    void loadExistingMissions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [validMissionEntries]);
+
+  const dedupAnalysis = useMemo(() => {
+    const duplicateInFile = new Set<string>();
+    const duplicateInDatabase = new Set<string>();
+    const seenInFile = new Set<string>();
+    const readyMissions: NormalizedMissionImport[] = [];
+
+    validMissionEntries.forEach(({ row, mission }) => {
+      const key = buildMissionDedupKey({
+        title: mission.title,
+        missionDate: getMissionDateForDedupFromStartsAt(mission.starts_at)
+      });
+
+      if (!key) {
+        return;
+      }
+
+      const isFileDuplicate = seenInFile.has(key);
+      if (isFileDuplicate) {
+        duplicateInFile.add(row.rowId);
+      } else {
+        seenInFile.add(key);
+      }
+
+      const isDatabaseDuplicate = existingMissionKeys.has(key);
+      if (isDatabaseDuplicate) {
+        duplicateInDatabase.add(row.rowId);
+      }
+
+      if (!isFileDuplicate && !isDatabaseDuplicate) {
+        readyMissions.push(mission);
+      }
+    });
+
+    return {
+      duplicateInFile,
+      duplicateInDatabase,
+      readyMissions,
+      ignoredAsDuplicateCount: new Set([...duplicateInFile, ...duplicateInDatabase]).size
+    };
+  }, [existingMissionKeys, validMissionEntries]);
+
+  const previewInvalidCount = useMemo(() => {
+    return rows.filter((row) => !row.deleted).length - dedupAnalysis.readyMissions.length - dedupAnalysis.ignoredAsDuplicateCount;
+  }, [dedupAnalysis.ignoredAsDuplicateCount, dedupAnalysis.readyMissions.length, rows]);
 
   function updateRow(rowId: string, patch: Partial<EditableImportRow>) {
     setRows((previous) => previous.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
@@ -316,13 +414,8 @@ export default function AdminMissionImportPage() {
       return;
     }
 
-    if (validMissions.length === 0) {
-      setError('Aucune mission valide à importer.');
-      return;
-    }
-
-    if (blockingErrors > 0) {
-      setError('Corrigez les lignes invalides ou supprimez-les avant de confirmer.');
+    if (dedupAnalysis.readyMissions.length === 0) {
+      setError('Aucune ligne nouvelle à importer (les lignes restantes sont invalides ou déjà existantes).');
       return;
     }
 
@@ -343,7 +436,7 @@ export default function AdminMissionImportPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ missions: validMissions })
+        body: JSON.stringify({ missions: dedupAnalysis.readyMissions })
       });
 
       const payload = (await response.json()) as {
@@ -351,6 +444,7 @@ export default function AdminMissionImportPage() {
         warning?: string;
         imported?: number;
         detected?: number;
+        ignoredDuplicates?: number;
         failed?: number;
         importBatchId?: string;
         validationErrors?: Array<{ index: number; sourceBlockIndex: number; error: string }>;
@@ -363,7 +457,7 @@ export default function AdminMissionImportPage() {
       }
 
       setSuccess(
-        `Import terminé : ${payload.detected ?? validMissions.length} détectées, ${payload.imported ?? 0} importées, ${payload.failed ?? 0} en échec. Batch: ${payload.importBatchId ?? 'n/a'}.`
+        `Import terminé : ${payload.imported ?? 0} créées, ${payload.ignoredDuplicates ?? dedupAnalysis.ignoredAsDuplicateCount} doublons ignorés, ${payload.failed ?? 0} en échec.`
       );
 
       if (payload.warning) {
@@ -409,9 +503,11 @@ export default function AdminMissionImportPage() {
       {rows.length > 0 ? (
         <div className="space-y-3">
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <p>{rows.filter((row) => !row.deleted).length} lignes à relire</p>
-            <p>{validMissions.length} lignes valides</p>
-            <p>{blockingErrors} erreurs bloquantes</p>
+            <p>{dedupAnalysis.readyMissions.length} lignes prêtes à être importées</p>
+            <p>{dedupAnalysis.ignoredAsDuplicateCount} lignes ignorées (déjà existantes ou dupliquées dans le fichier)</p>
+            <p>{previewInvalidCount} lignes invalides à corriger</p>
+            {checkingDuplicates ? <p>Vérification des doublons en base en cours...</p> : null}
+            {duplicateCheckError ? <p className="text-amber-700">{duplicateCheckError}</p> : null}
           </div>
 
           <div className="space-y-3">
@@ -421,6 +517,9 @@ export default function AdminMissionImportPage() {
               }
 
               const validation = validateAndNormalizeRow(row);
+              const isDuplicateInFile = dedupAnalysis.duplicateInFile.has(row.rowId);
+              const isDuplicateInDatabase = dedupAnalysis.duplicateInDatabase.has(row.rowId);
+              const isDuplicate = isDuplicateInFile || isDuplicateInDatabase;
 
               return (
                 <article key={row.rowId} className="space-y-3 rounded-md border border-slate-200 p-3 text-sm">
@@ -511,12 +610,20 @@ export default function AdminMissionImportPage() {
                     </ul>
                   ) : null}
 
+                  {isDuplicate ? (
+                    <p className="text-amber-700">
+                      Ligne ignorée : {isDuplicateInDatabase ? 'événement déjà existant en base (même intitulé + même date).' : 'doublon détecté dans le fichier importé.'}
+                    </p>
+                  ) : null}
+
                   {validation.errors.length > 0 ? (
                     <ul className="space-y-1 text-red-700">
                       {validation.errors.map((issue, index) => (
                         <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
                       ))}
                     </ul>
+                  ) : isDuplicate ? (
+                    <p className="text-amber-700">Ligne valide mais ignorée.</p>
                   ) : (
                     <p className="text-emerald-700">Ligne valide.</p>
                   )}
@@ -529,10 +636,10 @@ export default function AdminMissionImportPage() {
             <button
               type="button"
               onClick={handleImport}
-              disabled={importing || validMissions.length === 0 || blockingErrors > 0}
+              disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {importing ? 'Import en cours...' : `Confirmer l'import (${validMissions.length})`}
+              {importing ? 'Import en cours...' : `Confirmer l'import (${dedupAnalysis.readyMissions.length})`}
             </button>
             <button
               type="button"

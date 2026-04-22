@@ -1,4 +1,10 @@
-import { buildMissionsPreview, parseCsvContent, parseParisLocalToUtcIso, utcIsoToParisParts } from '@/lib/import-missions';
+import {
+  buildMissionDedupKey,
+  buildMissionsPreview,
+  parseCsvContent,
+  parseParisLocalToUtcIso,
+  utcIsoToParisParts
+} from '@/lib/import-missions';
 
 function assert(condition: unknown, message: string) {
   if (!condition) {
@@ -27,4 +33,8 @@ export function runImportMissionsParsingTests() {
 
   const dstWinterIso = parseParisLocalToUtcIso({ year: 2026, month: 10, day: 25, hour: 2, minute: 30 });
   assert(Boolean(dstWinterIso), 'Conversion heure locale Paris vers UTC (changement heure hiver) doit réussir.');
+
+  const dedupKeyA = buildMissionDedupKey({ title: '  Soirée   T7 ', missionDate: '2026-04-30' });
+  const dedupKeyB = buildMissionDedupKey({ title: 'soirée t7', missionDate: '2026-04-30' });
+  assert(dedupKeyA === dedupKeyB, 'La clé de déduplication doit ignorer casse et espaces superflus.');
 }
