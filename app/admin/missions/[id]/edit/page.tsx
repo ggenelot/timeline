@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, Profile } from '@/lib/types';
+import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -349,6 +350,17 @@ export default function AdminEditMissionPage() {
         submitting={submitting}
         submitLabel="Enregistrer"
         submittingLabel="Enregistrement..."
+      />
+
+      <AdminDeleteMissionButton
+        missionId={mission.id}
+        onError={(message) => {
+          setError(message);
+          setSuccess(null);
+        }}
+        onDeleted={() => {
+          router.push('/missions');
+        }}
       />
     </section>
   );
