@@ -385,24 +385,17 @@ export default function MissionsPage() {
 
       <div className="space-y-3">
         {filteredMissions.map((mission) => (
-          <div key={mission.id} className="space-y-2">
+          <div key={mission.id}>
             <MissionCard
               mission={mission}
+              requiredSkills={mission.mission_required_skills ?? []}
+              formatMissionRequirementLabel={formatMissionRequirementLabel}
               currentUserId={profile?.id ?? ''}
               canPropose={profile?.role === 'benevole'}
               proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
               canEdit={profile?.role === 'admin'}
             />
-            {(mission.mission_required_skills ?? []).length > 0 ? (
-              <div className="flex flex-wrap gap-1 px-1">
-                {(mission.mission_required_skills ?? []).map((requiredSkill) => (
-                  <span key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
-                    {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
-                  </span>
-                ))}
-              </div>
-            ) : null}
           </div>
         ))}
 

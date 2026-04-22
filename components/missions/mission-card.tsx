@@ -2,10 +2,18 @@ import Link from 'next/link';
 import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
-import { MISSION_CATEGORY_LABELS, Mission, MissionProposalResponse, MissionProposalStatus } from '@/lib/types';
+import {
+  MISSION_CATEGORY_LABELS,
+  Mission,
+  MissionProposalResponse,
+  MissionProposalStatus,
+  MissionRequiredSkill
+} from '@/lib/types';
 
 type MissionCardProps = {
   mission: Mission;
+  requiredSkills: MissionRequiredSkill[];
+  formatMissionRequirementLabel: (skillName: string | undefined, quantity: number) => string;
   currentUserId: string;
   canPropose: boolean;
   proposalStatus: MissionProposalStatus | null;
@@ -13,7 +21,16 @@ type MissionCardProps = {
   canEdit: boolean;
 };
 
-export function MissionCard({ mission, currentUserId, canPropose, proposalStatus, proposalResponse, canEdit }: MissionCardProps) {
+export function MissionCard({
+  mission,
+  requiredSkills,
+  formatMissionRequirementLabel,
+  currentUserId,
+  canPropose,
+  proposalStatus,
+  proposalResponse,
+  canEdit
+}: MissionCardProps) {
   return (
     <article className="rounded-lg border border-slate-200 bg-white p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -42,6 +59,16 @@ export function MissionCard({ mission, currentUserId, canPropose, proposalStatus
           <dt className="inline font-medium text-slate-700">Fin :</dt> {new Date(mission.ends_at).toLocaleString('fr-FR')}
         </div>
       </dl>
+
+      {requiredSkills.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-1">
+          {requiredSkills.map((requiredSkill) => (
+            <span key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+              {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       <div className="mt-4 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
