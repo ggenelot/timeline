@@ -1,10 +1,11 @@
 'use client';
 
-import { FormEvent, useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, useEffect, useRef, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
+import { getEventTemplateById } from '@/lib/event-templates';
 
 type MissionSkillOption = {
   id: string;
@@ -65,6 +66,8 @@ export default function AdminCreateMissionPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const hasInitializedTemplate = useRef(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -108,6 +111,24 @@ export default function AdminCreateMissionPage() {
 
     void loadProfile();
   }, [router]);
+
+
+  useEffect(() => {
+    if (hasInitializedTemplate.current) {
+      return;
+    }
+
+    const template = getEventTemplateById(searchParams.get('template'));
+
+    if (template) {
+      setForm((previousForm) => ({
+        ...previousForm,
+        ...template.defaults
+      }));
+    }
+
+    hasInitializedTemplate.current = true;
+  }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

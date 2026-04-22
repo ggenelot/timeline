@@ -1,0 +1,57 @@
+import type { MissionFormState } from '@/components/missions/mission-form';
+
+export type EventTemplateId = 'maraude' | 'poste' | 'garde' | 'psc1';
+
+export type EventTemplate = {
+  id: EventTemplateId;
+  label: string;
+  defaults: Partial<MissionFormState>;
+};
+
+export const EVENT_TEMPLATES: EventTemplate[] = [
+  {
+    id: 'maraude',
+    label: 'Maraude',
+    defaults: {
+      title: 'Maraude',
+      category: 'maraude',
+      starts_at_time: '19:00',
+      ends_at_time: '22:00',
+      required_volunteers: '3'
+    }
+  },
+  {
+    id: 'poste',
+    label: 'Poste',
+    defaults: {
+      title: 'Poste de secours',
+      category: 'poste_de_secours'
+    }
+  },
+  {
+    id: 'garde',
+    label: 'Garde',
+    defaults: {
+      title: 'Garde',
+      category: 'garde'
+    }
+  },
+  {
+    id: 'psc1',
+    label: 'PSC1',
+    defaults: {
+      title: 'Formation PSC1',
+      category: 'formation'
+    }
+  }
+];
+
+const EVENT_TEMPLATE_MAP = new Map<EventTemplateId, EventTemplate>(EVENT_TEMPLATES.map((template) => [template.id, template]));
+
+export function getEventTemplateById(templateId: string | null): EventTemplate | null {
+  if (!templateId) {
+    return null;
+  }
+
+  return EVENT_TEMPLATE_MAP.get(templateId as EventTemplateId) ?? null;
+}
