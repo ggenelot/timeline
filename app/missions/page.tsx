@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 import { formatMissionRequirementLabel } from '@/lib/missions';
+import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
@@ -256,12 +257,7 @@ export default function MissionsPage() {
               >
                 Importer des missions
               </Link>
-              <Link
-                href="/admin/missions/create"
-                className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
-              >
-                Nouvelle mission
-              </Link>
+              <NewMissionSplitButton />
             </div>
           ) : null}
         </div>
