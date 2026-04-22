@@ -1,20 +1,5 @@
-import Link from 'next/link';
+import { redirect } from 'next/navigation';
 
 export default function HomePage() {
-  return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold text-slate-900">Mission Planner - MVP Phase 6</h1>
-      <p className="text-slate-700">
-        Gestion opérationnelle des missions bénévoles : propositions, réponses, sélection finale et historique métier minimal.
-      </p>
-      <div className="flex gap-3">
-        <Link href="/login" className="rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700">
-          Se connecter
-        </Link>
-        <Link href="/missions" className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
-          Voir les missions
-        </Link>
-      </div>
-    </div>
-  );
+  redirect('/missions');
 }
