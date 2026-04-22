@@ -70,10 +70,12 @@ export default function MyMissionsPage() {
         return;
       }
 
-      const mapped: AssignmentMissionRow[] = (data ?? []).map((row) => ({
-        ...row,
-        mission: Array.isArray(row.mission) ? row.mission[0] ?? null : row.mission
-      }));
+      const mapped: AssignmentMissionRow[] = (data ?? [])
+        .map((row) => ({
+          ...row,
+          mission: Array.isArray(row.mission) ? row.mission[0] ?? null : row.mission
+        }))
+        .filter((row) => row.mission !== null);
 
       setRows(mapped);
       setLoading(false);
