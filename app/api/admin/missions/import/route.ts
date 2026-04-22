@@ -34,6 +34,36 @@ function isValidCategory(value: string): value is MissionCategory {
   return ['maraude', 'garde', 'formation', 'vie_antenne'].includes(value);
 }
 
+function normalizeCategory(value: string | null | undefined): MissionCategory {
+  if (!value) {
+    return 'maraude';
+  }
+
+  if (isValidCategory(value)) {
+    return value;
+  }
+
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+
+  if (normalized.includes('garde') || normalized.includes('poste de secours') || normalized.includes('pds')) {
+    return 'garde';
+  }
+
+  if (normalized.includes('format')) {
+    return 'formation';
+  }
+
+  if (normalized.includes('antenne') || normalized.includes('vie')) {
+    return 'vie_antenne';
+  }
+
+  return 'maraude';
+}
+
 function isIsoDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
@@ -45,10 +75,6 @@ function validateMissionPayload(mission: ImportMissionPayload) {
 
   if (!Number.isInteger(mission.required_volunteers) || mission.required_volunteers < 1) {
     return 'Le nombre de bénévoles requis doit être un entier positif.';
-  }
-
-  if (!isValidCategory(mission.category)) {
-    return 'La catégorie de mission est invalide.';
   }
 
   const startsAt = new Date(mission.starts_at);
@@ -70,6 +96,23 @@ function validateMissionPayload(mission: ImportMissionPayload) {
 }
 
 type ValidationError = { index: number; sourceBlockIndex: number; error: string };
+const OPTIONAL_IMPORT_COLUMNS = [
+  'do_status',
+  'retained_status',
+  'requirements_notes',
+  'equipment_notes',
+  'source_type_label',
+  'reversion_expected',
+  'reversion_actual',
+  'validation_date',
+  'raw_import_payload',
+  'import_batch_id'
+] as const;
+
+function getMissingColumnFromError(message: string) {
+  const match = message.match(/Could not find the '([^']+)' column/i);
+  return match?.[1] ?? null;
+}
 
 export async function POST(request: NextRequest) {
   const token = getBearerToken(request);
@@ -131,7 +174,7 @@ export async function POST(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const importBatchId = crypto.randomUUID();
 
-  const payload = validMissions.map((mission) => ({
+  const payload: Record<string, unknown>[] = validMissions.map((mission) => ({
     title: mission.title.trim(),
     description: null,
     location: mission.location,
@@ -139,7 +182,7 @@ export async function POST(request: NextRequest) {
     starts_at: mission.starts_at,
     ends_at: mission.ends_at,
     required_volunteers: mission.required_volunteers,
-    category: isValidCategory(mission.category) ? mission.category : 'maraude',
+    category: normalizeCategory(mission.category),
     status: 'draft',
     created_by: userData.user.id,
     do_status: mission.do_status,
@@ -154,27 +197,34 @@ export async function POST(request: NextRequest) {
     import_batch_id: importBatchId
   }));
 
-  const { data: insertedMissions, error: insertError } = await serviceClient.from('missions').insert(payload).select('id,title');
+  let candidatePayload = payload;
+  const removedColumns = new Set<string>();
+  let insertedMissions: Array<{ id: string; title: string }> | null = null;
+  let insertError: { message: string } | null = null;
 
-  if (insertError && (insertError.message.includes('retained_status') || insertError.message.includes('source_type_label'))) {
-    const fallbackPayload = payload.map(({ retained_status, source_type_label, ...rest }) => rest);
-    const { data: fallbackInsertedMissions, error: fallbackInsertError } = await serviceClient
-      .from('missions')
-      .insert(fallbackPayload)
-      .select('id,title');
+  while (true) {
+    const result = await serviceClient.from('missions').insert(candidatePayload).select('id,title');
+    insertedMissions = result.data;
+    insertError = result.error;
 
-    if (fallbackInsertError) {
-      return NextResponse.json({ error: `Échec de l'import : ${fallbackInsertError.message}` }, { status: 500 });
+    if (!insertError) {
+      break;
     }
 
-    return NextResponse.json({
-      importBatchId,
-      detected: missions.length,
-      imported: fallbackInsertedMissions?.length ?? 0,
-      failed: missions.length - (fallbackInsertedMissions?.length ?? 0),
-      validationErrors,
-      warning:
-        "Import partiel des colonnes additionnelles : migration manquante pour 'retained_status' ou 'source_type_label'. Exécutez les migrations Supabase."
+    const missingColumn = getMissingColumnFromError(insertError.message);
+
+    if (!missingColumn || !OPTIONAL_IMPORT_COLUMNS.includes(missingColumn as (typeof OPTIONAL_IMPORT_COLUMNS)[number])) {
+      break;
+    }
+
+    if (removedColumns.has(missingColumn)) {
+      break;
+    }
+
+    removedColumns.add(missingColumn);
+    candidatePayload = candidatePayload.map((mission) => {
+      const { [missingColumn]: _ignored, ...rest } = mission;
+      return rest;
     });
   }
 
@@ -188,6 +238,10 @@ export async function POST(request: NextRequest) {
     imported: insertedMissions?.length ?? 0,
     failed: missions.length - (insertedMissions?.length ?? 0),
     insertedMissions: insertedMissions ?? [],
-    validationErrors
+    validationErrors,
+    warning:
+      removedColumns.size > 0
+        ? `Import partiel des colonnes additionnelles (${Array.from(removedColumns).join(', ')}). Exécutez les migrations Supabase pour aligner le schéma local.`
+        : undefined
   });
 }
