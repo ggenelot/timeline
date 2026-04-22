@@ -116,11 +116,31 @@ export default function MissionDetailPage() {
     [proposals]
   );
 
+  const requiredSkillCodes = useMemo(() => {
+    const skillNames = (mission?.mission_required_skills ?? [])
+      .map((requiredSkill) => requiredSkill.skill?.name)
+      .filter((skillName): skillName is string => Boolean(skillName));
+
+    return buildExpandedSkillSet(skillNames);
+  }, [mission?.mission_required_skills]);
+
   const proposalsTableRows = useMemo(
     () =>
       proposals.map((proposal) => ({
         id: proposal.id,
+        volunteerId: proposal.volunteer_id,
         volunteerLabel: proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id,
+        matchingRequiredSkills: Array.from(
+          buildExpandedSkillSet(
+            (proposal.volunteer?.profile_skills ?? [])
+              .map((profileSkill) => profileSkill.skill?.name)
+              .filter((skillName): skillName is string => Boolean(skillName))
+          )
+        )
+          .filter((skillCode) => requiredSkillCodes.has(skillCode))
+          .sort(compareSkillCodes)
+          .map((skillCode) => getSkillLabel(skillCode)),
+        response: proposal.response,
         responseLabel: getProposalResponseLabel(proposal.response),
         responseTone:
           proposal.response === 'available'
@@ -128,9 +148,15 @@ export default function MissionDetailPage() {
             : proposal.response === 'unavailable'
               ? 'text-rose-700'
               : 'text-slate-600',
+        responseRowBackground:
+          proposal.response === 'available'
+            ? 'bg-emerald-50/50'
+            : proposal.response === 'unavailable'
+              ? 'bg-rose-50/50'
+              : 'bg-slate-100/60',
         updatedByAdminLabel: proposal.updated_by_admin ? 'Oui' : 'Non'
       })),
-    [proposals]
+    [proposals, requiredSkillCodes]
   );
 
   const availableVolunteersToAdd = useMemo(() => {
@@ -502,7 +528,7 @@ export default function MissionDetailPage() {
             <p>Sans réponse : <span className="font-semibold text-slate-700">{proposalsByStatus.no_response}</span></p>
           </div>
 
-          <div className="overflow-hidden rounded border border-slate-200">
+          <div className="max-h-80 overflow-y-auto rounded border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
@@ -510,22 +536,47 @@ export default function MissionDetailPage() {
                   <th className="px-3 py-2 font-medium">Bénévole</th>
                   <th className="px-3 py-2 font-medium">Disponibilité</th>
                   <th className="px-3 py-2 font-medium">Modifié admin</th>
+                  <th className="px-3 py-2 font-medium">Sélectionné</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {proposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-3 text-slate-500">
+                    <td colSpan={5} className="px-3 py-3 text-slate-500">
                       Aucun bénévole lié à cette mission.
                     </td>
                   </tr>
                 ) : (
                   proposalsTableRows.map((row, index) => (
-                    <tr key={row.id}>
+                    <tr key={row.id} className={row.responseRowBackground}>
                       <td className="px-3 py-2 font-mono text-slate-500">{index + 1}</td>
-                      <td className="px-3 py-2">{row.volunteerLabel}</td>
+                      <td className="space-y-1 px-3 py-2">
+                        <p>{row.volunteerLabel}</p>
+                        {row.matchingRequiredSkills.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {row.matchingRequiredSkills.map((skill) => (
+                              <span key={`${row.id}-${skill}`} className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                                {skill}
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-slate-500">Aucune compétence requise identifiée</p>
+                        )}
+                      </td>
                       <td className={`px-3 py-2 font-medium ${row.responseTone}`}>{row.responseLabel}</td>
                       <td className="px-3 py-2 text-slate-500">{row.updatedByAdminLabel}</td>
+                      <td className="px-3 py-2">
+                        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
+                          <input
+                            type="checkbox"
+                            checked={selectedVolunteerIds.has(row.volunteerId)}
+                            onChange={() => toggleSelection(row.volunteerId)}
+                            disabled={missionBlocksSelection || actionLoading === row.volunteerId || row.response !== 'available'}
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
+                          />
+                        </label>
+                      </td>
                     </tr>
                   ))
                 )}
