@@ -218,7 +218,7 @@ select
   r.id,
   case v.email
     when 'benevole@pcivile.test' then 'available'::public.mission_proposal_response
-    when 'benevole2@pcivile.test' then 'maybe'::public.mission_proposal_response
+    when 'benevole2@pcivile.test' then 'available'::public.mission_proposal_response
     else 'unavailable'::public.mission_proposal_response
   end,
   'accepted'::public.mission_proposal_status
