@@ -21,13 +21,19 @@ export function AdminDeleteMissionButton({ missionId, className, onDeleted, onEr
 
     setDeleting(true);
 
-    const { error } = await supabase.from('missions').delete().eq('id', missionId);
+    const { data, error } = await supabase.from('missions').delete().eq('id', missionId).select('id');
 
     if (error) {
       const errorMessage = error.message.toLowerCase().includes('row-level security')
         ? "Action refusée par la politique d'accès (RLS). Vérifiez que votre profil est admin."
         : `Impossible de supprimer la mission : ${error.message}`;
       onError?.(errorMessage);
+      setDeleting(false);
+      return;
+    }
+
+    if (!data || data.length === 0) {
+      onError?.("La mission n'a pas été supprimée. Vérifiez vos droits d'accès puis actualisez la page.");
       setDeleting(false);
       return;
     }
