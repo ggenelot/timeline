@@ -1,4 +1,4 @@
-import { FormEvent } from 'react';
+import { FormEvent, ReactNode } from 'react';
 import { MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus } from '@/lib/types';
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
@@ -60,6 +60,7 @@ type MissionFormProps = {
   submitLabel: string;
   submittingLabel: string;
   createdByLabel?: string;
+  footerActions?: ReactNode;
 };
 
 export function MissionForm({
@@ -73,7 +74,8 @@ export function MissionForm({
   submitting,
   submitLabel,
   submittingLabel,
-  createdByLabel
+  createdByLabel,
+  footerActions
 }: MissionFormProps) {
   const canManageRequirements = Boolean(onRequirementsChange);
 
@@ -250,13 +252,17 @@ export function MissionForm({
         </label>
       ) : null}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {submitting ? submittingLabel : submitLabel}
-      </button>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button
+          type="submit"
+          disabled={submitting}
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {submitting ? submittingLabel : submitLabel}
+        </button>
+
+        {footerActions}
+      </div>
     </form>
   );
 }
