@@ -103,6 +103,30 @@ function sanitize(value: string) {
     .trim();
 }
 
+export function normalizeMissionTitleForDedup(value: string) {
+  return sanitize(value).replace(/\s+/g, ' ').trim();
+}
+
+export function normalizeMissionDateForDedup(value: string) {
+  const normalized = value.trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(normalized) ? normalized : '';
+}
+
+export function getMissionDateForDedupFromStartsAt(startsAtIso: string): string {
+  return utcIsoToParisParts(startsAtIso)?.date ?? '';
+}
+
+export function buildMissionDedupKey(params: { title: string; missionDate: string }) {
+  const normalizedTitle = normalizeMissionTitleForDedup(params.title);
+  const normalizedDate = normalizeMissionDateForDedup(params.missionDate);
+
+  if (!normalizedTitle || !normalizedDate) {
+    return '';
+  }
+
+  return `${normalizedTitle}__${normalizedDate}`;
+}
+
 function normalizeCell(value: unknown) {
   if (value === null || value === undefined) {
     return '';

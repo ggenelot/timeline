@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { MissionCategory } from '@/lib/types';
+import { buildMissionDedupKey, getMissionDateForDedupFromStartsAt } from '@/lib/import-missions';
 
 type ImportMissionPayload = {
   sourceBlockIndex: number;
@@ -66,6 +67,17 @@ function normalizeCategory(value: string | null | undefined): MissionCategory {
 
 function isIsoDate(value: string) {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+function getDateRange(values: string[]) {
+  if (values.length === 0) {
+    return null;
+  }
+
+  const start = values.reduce((min, current) => (current < min ? current : min), values[0]);
+  const end = values.reduce((max, current) => (current > max ? current : max), values[0]);
+
+  return { start, end };
 }
 
 function validateMissionPayload(mission: ImportMissionPayload) {
@@ -173,8 +185,69 @@ export async function POST(request: NextRequest) {
 
   const serviceClient = createServerSupabaseServiceClient();
   const importBatchId = crypto.randomUUID();
+  const startsAtRange = getDateRange(validMissions.map((mission) => mission.starts_at));
+  const existingKeys = new Set<string>();
 
-  const payload: Record<string, unknown>[] = validMissions.map((mission) => ({
+  if (startsAtRange) {
+    const { data: existingMissions, error: existingMissionsError } = await serviceClient
+      .from('missions')
+      .select('title,starts_at')
+      .gte('starts_at', startsAtRange.start)
+      .lte('starts_at', startsAtRange.end);
+
+    if (existingMissionsError) {
+      return NextResponse.json({ error: `Échec de vérification des doublons : ${existingMissionsError.message}` }, { status: 500 });
+    }
+
+    (existingMissions ?? []).forEach((mission) => {
+      const key = buildMissionDedupKey({
+        title: mission.title ?? '',
+        missionDate: getMissionDateForDedupFromStartsAt(mission.starts_at)
+      });
+
+      if (key) {
+        existingKeys.add(key);
+      }
+    });
+  }
+
+  const seenInPayload = new Set<string>();
+  const deduplicatedMissions: ImportMissionPayload[] = [];
+  let ignoredDuplicates = 0;
+
+  validMissions.forEach((mission) => {
+    const key = buildMissionDedupKey({
+      title: mission.title,
+      missionDate: getMissionDateForDedupFromStartsAt(mission.starts_at)
+    });
+
+    if (!key) {
+      deduplicatedMissions.push(mission);
+      return;
+    }
+
+    if (seenInPayload.has(key) || existingKeys.has(key)) {
+      ignoredDuplicates += 1;
+      return;
+    }
+
+    seenInPayload.add(key);
+    deduplicatedMissions.push(mission);
+  });
+
+  if (deduplicatedMissions.length === 0) {
+    return NextResponse.json({
+      importBatchId,
+      detected: missions.length,
+      imported: 0,
+      ignoredDuplicates,
+      failed: 0,
+      insertedMissions: [],
+      validationErrors
+    });
+  }
+
+  const payload: Record<string, unknown>[] = deduplicatedMissions.map((mission) => ({
     title: mission.title.trim(),
     description: null,
     location: mission.location,
@@ -236,12 +309,13 @@ export async function POST(request: NextRequest) {
     importBatchId,
     detected: missions.length,
     imported: insertedMissions?.length ?? 0,
-    failed: missions.length - (insertedMissions?.length ?? 0),
+    ignoredDuplicates,
+    failed: deduplicatedMissions.length - (insertedMissions?.length ?? 0),
     insertedMissions: insertedMissions ?? [],
     validationErrors,
     warning:
       removedColumns.size > 0
-        ? `Import partiel des colonnes additionnelles (${Array.from(removedColumns).join(', ')}). Exécutez les migrations Supabase pour aligner le schéma local.`
+        ? `Colonnes optionnelles absentes dans la table missions (${Array.from(removedColumns).join(', ')}). Import principal effectué sans ces champs. Appliquez les migrations Supabase locales pour les activer.`
         : undefined
   });
 }
