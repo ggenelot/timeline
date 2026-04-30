@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import { useMemo, useState } from 'react';
 import { ProposalButton } from '@/components/missions/proposal-button';
+import { SkillBadge } from '@/components/skills/skill-badge';
 import {
   MISSION_CATEGORY_LABELS,
   Mission,
@@ -17,7 +19,7 @@ type MissionCardProps = {
   canEdit: boolean;
   availableVolunteersCount: number;
   unavailableVolunteersCount: number;
-  availableVolunteerNames: string[];
+  availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
 };
 
 const MISSION_STATUS_LABELS = {
@@ -38,8 +40,27 @@ export function MissionCard({
   canEdit,
   availableVolunteersCount,
   unavailableVolunteersCount,
-  availableVolunteerNames
+  availableVolunteers
 }: MissionCardProps) {
+  const [selectedSkillFilter, setSelectedSkillFilter] = useState<string>('all');
+
+  const requiredSkillOptions = useMemo(
+    () =>
+      requiredSkills
+        .map((requiredSkill) => requiredSkill.skill?.name?.trim() ?? '')
+        .filter((skillName): skillName is string => Boolean(skillName))
+        .filter((skillName, index, array) => array.indexOf(skillName) === index),
+    [requiredSkills]
+  );
+
+  const filteredAvailableVolunteers = useMemo(() => {
+    if (selectedSkillFilter === 'all') {
+      return availableVolunteers;
+    }
+
+    return availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === selectedSkillFilter));
+  }, [availableVolunteers, selectedSkillFilter]);
+
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
       <div className="p-5">
@@ -104,7 +125,56 @@ export function MissionCard({
         </div>
       </div>
       <div className="border-t border-slate-200 bg-white px-5 py-3 text-sm text-slate-500">
-        Personnes disponibles : {availableVolunteerNames.length > 0 ? availableVolunteerNames.join(', ') : '-'}
+        {requiredSkillOptions.length > 0 ? (
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="text-xs text-slate-500">Filtrer par compétence requise :</span>
+            <button
+              type="button"
+              onClick={() => setSelectedSkillFilter('all')}
+              className={`rounded-full border px-2 py-0.5 text-xs ${
+                selectedSkillFilter === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
+              }`}
+            >
+              Toutes
+            </button>
+            {requiredSkillOptions.map((skillName) => (
+              <button
+                key={skillName}
+                type="button"
+                onClick={() => setSelectedSkillFilter(skillName)}
+                className={`rounded-full border px-2 py-0.5 text-xs ${
+                  selectedSkillFilter === skillName ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
+                }`}
+              >
+                {skillName}
+              </button>
+            ))}
+          </div>
+        ) : null}
+        Personnes disponibles :{' '}
+        {filteredAvailableVolunteers.length > 0 ? (
+          <span className="inline-flex flex-wrap items-center gap-x-1">
+            {filteredAvailableVolunteers.map((volunteer, index) => (
+              <span key={`${volunteer.name}-${index}`} className="group relative inline-flex items-center">
+                <span className="cursor-help underline decoration-dotted underline-offset-2">{volunteer.name}</span>
+                <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max max-w-72 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-md group-hover:block">
+                  {volunteer.skills.length > 0 ? (
+                    <span className="inline-flex flex-wrap gap-1">
+                      {volunteer.skills.map((skill) => (
+                        <SkillBadge key={`${volunteer.name}-${skill.name}`} name={skill.name} category={skill.category} />
+                      ))}
+                    </span>
+                  ) : (
+                    'Aucune compétence renseignée'
+                  )}
+                </span>
+                {index < filteredAvailableVolunteers.length - 1 ? ',' : ''}
+              </span>
+            ))}
+          </span>
+        ) : (
+          '-'
+        )}
       </div>
     </article>
   );
