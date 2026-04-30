@@ -32,7 +32,7 @@ function getBearerToken(request: NextRequest): string {
 }
 
 function isValidCategory(value: string): value is MissionCategory {
-  return ['maraude', 'garde', 'formation', 'vie_antenne'].includes(value);
+  return ['maraude', 'garde', 'formation', 'vie_antenne', 'poste_de_secours'].includes(value);
 }
 
 function normalizeCategory(value: string | null | undefined): MissionCategory {
@@ -50,7 +50,11 @@ function normalizeCategory(value: string | null | undefined): MissionCategory {
     .toLowerCase()
     .trim();
 
-  if (normalized.includes('garde') || normalized.includes('poste de secours') || normalized.includes('pds')) {
+  if (normalized.includes('poste de secours') || normalized.includes('poste') || normalized.includes('pds') || normalized.includes('dps')) {
+    return 'poste_de_secours';
+  }
+
+  if (normalized.includes('garde')) {
     return 'garde';
   }
 
