@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseAnonClient } from '@/lib/supabase/server';
 import { MissionProposalResponse } from '@/lib/types';
+import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { notifyVolunteerRejected } from '@/lib/slack/workflows';
 
 type AdminMissionVolunteerPayload = {
   volunteer_id?: string;
@@ -9,25 +10,14 @@ type AdminMissionVolunteerPayload = {
 
 const ALLOWED_ADMIN_RESPONSES: MissionProposalResponse[] = ['available', 'unavailable'];
 
-function getBearerToken(request: NextRequest): string {
-  const authorization = request.headers.get('authorization');
-  return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
-}
-
 async function assertAdmin(token: string) {
-  const client = createServerSupabaseAnonClient(token);
-  const {
-    data: { user },
-    error: userError
-  } = await client.auth.getUser(token);
+  const auth = await requireAuthenticatedUser(token);
 
-  if (userError || !user) {
-    return { client: null, userId: null, errorResponse: NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 }) };
+  if (auth.errorResponse || !auth.client || !auth.user || !auth.profile) {
+    return { client: null, userId: null, errorResponse: auth.errorResponse };
   }
 
-  const { data: profile, error: profileError } = await client.from('profiles').select('id,role').eq('id', user.id).single();
-
-  if (profileError || !profile || profile.role !== 'admin') {
+  if (auth.profile.role !== 'admin') {
     return {
       client: null,
       userId: null,
@@ -35,7 +25,7 @@ async function assertAdmin(token: string) {
     };
   }
 
-  return { client, userId: user.id, errorResponse: null };
+  return { client: auth.client, userId: auth.user.id, errorResponse: null };
 }
 
 function parsePayload(payload: AdminMissionVolunteerPayload) {
@@ -153,6 +143,20 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     }
 
     return NextResponse.json({ error: `Impossible d'enregistrer le statut : ${upsertError.message}` }, { status: 400 });
+  }
+
+  if (parsed.response === 'unavailable') {
+    try {
+      await notifyVolunteerRejected(missionId, parsed.volunteerId);
+    } catch (error) {
+      return NextResponse.json(
+        {
+          message: 'Statut bénévole enregistré, mais échec de notification Slack.',
+          slackError: error instanceof Error ? error.message : 'Erreur inconnue'
+        },
+        { status: 202 }
+      );
+    }
   }
 
   return NextResponse.json({ message: 'Statut bénévole enregistré par un administrateur.' });

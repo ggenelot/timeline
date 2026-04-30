@@ -142,3 +142,40 @@ Application : http://localhost:3000
 - Édition mission côté responsable avec workflow guidé.
 - Recherche serveur + pagination sur missions/propositions.
 - Tableaux de bord opérationnels (charge par secteur, taux de réponse, couverture compétences).
+
+## Intégration Slack (V1)
+
+### Variables d'environnement serveur
+
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `APP_BASE_URL`
+- `SLACK_BOT_TOKEN`
+- `SLACK_SIGNING_SECRET`
+- `SLACK_CLIENT_ID`
+- `SLACK_CLIENT_SECRET`
+- `SLACK_OAUTH_REDIRECT_URI` (ex: `http://localhost:3000/api/slack/connect/callback`)
+
+### Scopes Slack requis
+
+Bot scopes:
+- `chat:write`
+- `channels:manage`
+- `groups:write`
+- `groups:read`
+- `im:write`
+
+User scopes:
+- `users:read`
+
+### Endpoints Slack ajoutés
+
+- `POST /api/slack/connect/start` : initie le flux OAuth de liaison de compte.
+- `GET /api/slack/connect/callback` : finalise la liaison et met à jour le profil Timeline.
+- `DELETE /api/slack/connect` : délie le compte Slack du profil.
+- `POST /api/slack/commands` : endpoint signé Slack (base pour future auth depuis Slack).
+
+### Flux métier branchés
+
+- Passage bénévole à `unavailable` via admin mission -> DM Slack idempotent (`volunteer_rejected_dm`).
+- Confirmation mission via endpoint serveur -> création/sync canal privé + invitation des bénévoles retenus.
+- Action manuelle en fiche mission: **Créer / resynchroniser le canal Slack**.
