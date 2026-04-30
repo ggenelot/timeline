@@ -179,3 +179,28 @@ User scopes:
 - Passage bénévole à `unavailable` via admin mission -> DM Slack idempotent (`volunteer_rejected_dm`).
 - Confirmation mission via endpoint serveur -> création/sync canal privé + invitation des bénévoles retenus.
 - Action manuelle en fiche mission: **Créer / resynchroniser le canal Slack**.
+
+
+## Auth Slack (V2)
+
+Nouveaux endpoints:
+- `POST /api/auth/slack/start`
+- `GET /api/auth/slack/callback`
+- `GET /auth/slack/magic?token=...`
+
+Variables supplémentaires:
+- `SLACK_AUTH_REDIRECT_URI` (ex: `http://localhost:3000/api/auth/slack/callback`)
+
+Slash command:
+- `/timeline login` sur `POST /api/slack/commands` (réponse ephemeral avec lien one-time, TTL 10 min).
+
+Sécurité:
+- états OAuth one-time + expiration
+- challenges magic one-time hashés + expiration
+- signature Slack vérifiée sur `/api/slack/commands`
+
+Rollout recommandé:
+1. déployer DB + backend derrière feature flag UI login Slack
+2. activer bouton `/login` en interne
+3. monitorer erreurs `slack=state_invalid|auth_failed|magic_invalid`
+4. ouvrir à tous utilisateurs
