@@ -75,6 +75,7 @@ export default function MissionDetailPage() {
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -181,6 +182,55 @@ export default function MissionDetailPage() {
     const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
     return allVolunteers.filter((volunteer) => !linkedVolunteerIds.has(volunteer.id));
   }, [allVolunteers, proposals]);
+
+
+
+  const requiredSkillsVolunteerDirectory = useMemo(() => {
+    const requiredSkills = (mission?.mission_required_skills ?? [])
+      .map((requiredSkill) => ({
+        id: requiredSkill.id,
+        name: requiredSkill.skill?.name ?? null
+      }))
+      .filter((requiredSkill): requiredSkill is { id: string; name: string } => Boolean(requiredSkill.name));
+
+    return requiredSkills.map((requiredSkill) => {
+      const requiredSkillCode = buildExpandedSkillSet([requiredSkill.name]);
+
+      const volunteers = proposals
+        .map((proposal) => {
+          const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
+            .map((profileSkill) => profileSkill.skill?.name)
+            .filter((skillName): skillName is string => Boolean(skillName));
+
+          const volunteerSkillCodes = buildExpandedSkillSet(explicitSkillNames);
+          const matchesRequiredSkill = Array.from(requiredSkillCode).some((skillCode) => volunteerSkillCodes.has(skillCode));
+
+          if (!matchesRequiredSkill || !proposal.volunteer) {
+            return null;
+          }
+
+          return {
+            id: proposal.volunteer.id,
+            fullName: proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole',
+            initials: (proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'B')
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() ?? '')
+              .join('')
+          };
+        })
+        .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
+
+      const uniqueVolunteers = volunteers.filter((volunteer, index, list) => list.findIndex((entry) => entry.id === volunteer.id) === index);
+
+      return {
+        requiredSkillId: requiredSkill.id,
+        requiredSkillName: requiredSkill.name,
+        volunteers: uniqueVolunteers
+      };
+    });
+  }, [mission?.mission_required_skills, proposals]);
 
   const activityTypeCounts = useMemo(() => {
     const counts: Record<ActivityLog['action_type'], number> = {
@@ -880,6 +930,51 @@ export default function MissionDetailPage() {
           ) : null}
         </section>
       ) : null}
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Compétences des bénévoles</h2>
+          <button
+            type="button"
+            aria-expanded={isSkillsDirectoryExpanded}
+            aria-controls="mission-skills-directory-content"
+            aria-label={isSkillsDirectoryExpanded ? 'Masquer les compétences des bénévoles' : 'Afficher les compétences des bénévoles'}
+            onClick={() => setIsSkillsDirectoryExpanded((current) => !current)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className={`text-base leading-none transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">Vue par compétence requise avec les bénévoles correspondants.</p>
+
+        {isSkillsDirectoryExpanded ? (
+          <div id="mission-skills-directory-content" className="mt-3 space-y-4">
+            {requiredSkillsVolunteerDirectory.length === 0 ? (
+              <p className="text-sm text-slate-600">Aucune compétence requise sur cette mission.</p>
+            ) : (
+              requiredSkillsVolunteerDirectory.map((skillGroup) => (
+                <div key={skillGroup.requiredSkillId} className="rounded-md border border-slate-200 p-3">
+                  <h3 className="text-sm font-semibold text-slate-900">{skillGroup.requiredSkillName}</h3>
+                  {skillGroup.volunteers.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
+                  ) : (
+                    <ul className="mt-3 flex flex-wrap gap-4">
+                      {skillGroup.volunteers.map((volunteer) => (
+                        <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-20 text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
+                            {volunteer.initials || 'B'}
+                          </div>
+                          <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        ) : null}
+      </section>
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">
