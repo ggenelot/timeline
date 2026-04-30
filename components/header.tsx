@@ -4,11 +4,12 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
-import { AppRole } from '@/lib/types';
+import { AppRole, Profile } from '@/lib/types';
 
 export function Header() {
   const [session, setSession] = useState<Session | null>(null);
   const [role, setRole] = useState<AppRole | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   useEffect(() => {
     async function loadUserState(currentSession: Session | null) {
@@ -16,11 +17,18 @@ export function Header() {
 
       if (!currentSession?.user) {
         setRole(null);
+        setProfile(null);
         return;
       }
 
-      const { data } = await supabase.from('profiles').select('role').eq('id', currentSession.user.id).single();
+      const { data } = await supabase
+        .from('profiles')
+        .select('id,full_name,email,phone,role,sector,created_at')
+        .eq('id', currentSession.user.id)
+        .single();
+
       setRole(data?.role ?? null);
+      setProfile(data ?? null);
     }
 
     supabase.auth.getSession().then(({ data }) => {
@@ -52,6 +60,7 @@ export function Header() {
         <nav className="flex items-center gap-4 text-sm">
           {session ? (
             <>
+              <span className="text-slate-600">Bonjour, {profile?.full_name ?? session.user.email}</span>
               <Link href="/missions" className="text-slate-700 hover:text-slate-900">
                 Missions
               </Link>
