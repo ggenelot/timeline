@@ -1,12 +1,10 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
 export default function ProfilePage() {
-  const searchParams = useSearchParams();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState(false);
@@ -36,7 +34,7 @@ export default function ProfilePage() {
         setProfile(data);
       }
 
-      const slackStatus = searchParams.get('slack');
+      const slackStatus = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slack') : null;
       if (slackStatus === 'connected') {
         setSuccess('Compte Slack connecté avec succès.');
       } else if (slackStatus === 'expired') {
@@ -49,7 +47,7 @@ export default function ProfilePage() {
     }
 
     void load();
-  }, [searchParams]);
+  }, []);
 
   async function handleConnectSlack() {
     setWorking(true);
