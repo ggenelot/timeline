@@ -53,30 +53,32 @@ export function Header() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-4xl items-center gap-6 px-4 py-3">
         <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
           Timeline
         </Link>
-        <nav className="flex items-center gap-4 text-sm">
+        <nav className="flex flex-1 items-center gap-4 text-sm">
           {session ? (
             <>
               <span className="text-slate-600">Bonjour, {profile?.full_name ?? session.user.email}</span>
-              <Link href="/missions" className="text-slate-700 hover:text-slate-900">
-                Missions
-              </Link>
-              <Link href={role === 'admin' ? '/admin/volunteers' : '/my-missions'} className="text-slate-700 hover:text-slate-900">
-                {role === 'admin' ? 'Bénévoles' : 'Mes missions'}
-              </Link>
-              <Link href="/profile" className="text-slate-700 hover:text-slate-900">
-                Profil
-              </Link>
-              <button
-                onClick={handleSignOut}
-                className="rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50"
-                type="button"
-              >
-                Se déconnecter
-              </button>
+              <div className="ml-auto flex items-center gap-4">
+                <Link href="/missions" className="text-slate-700 hover:text-slate-900">
+                  Missions
+                </Link>
+                <Link href={role === 'admin' ? '/admin/volunteers' : '/my-missions'} className="text-slate-700 hover:text-slate-900">
+                  {role === 'admin' ? 'Bénévoles' : 'Mes missions'}
+                </Link>
+                <Link href="/profile" className="text-slate-700 hover:text-slate-900">
+                  Profil
+                </Link>
+                <button
+                  onClick={handleSignOut}
+                  className="rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50"
+                  type="button"
+                >
+                  Se déconnecter
+                </button>
+              </div>
             </>
           ) : (
             <Link href="/login" className="text-slate-700 hover:text-slate-900">

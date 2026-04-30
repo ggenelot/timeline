@@ -1,8 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
+import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
@@ -34,7 +36,14 @@ export default function MissionsPage() {
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
-    Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>
+    Map<
+      string,
+      {
+        availableCount: number;
+        unavailableCount: number;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+      }
+    >
   >(new Map());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -134,18 +143,43 @@ export default function MissionsPage() {
     );
 
     const { data: availableProfiles } = availableVolunteerIds.length
-      ? await supabase.from('profiles').select('id,full_name').in('id', availableVolunteerIds)
+      ? await supabase
+        .from('profiles')
+        .select('id,full_name,profile_skills(skill:skills(name,category))')
+        .in('id', availableVolunteerIds)
       : { data: [] };
 
-    const namesByVolunteerId = new Map((availableProfiles ?? []).map((profile) => [profile.id, profile.full_name?.trim() || 'Sans nom']));
-    const nextProposalStats = new Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>();
+    const volunteersById = new Map(
+      (availableProfiles ?? []).map((profile) => [
+        profile.id,
+        {
+          name: profile.full_name?.trim() || 'Sans nom',
+          skills: (
+            (profile.profile_skills ?? []) as Array<{
+              skill?: { name?: string; category?: string | null } | Array<{ name?: string; category?: string | null }> | null;
+            }>
+          )
+            .map((profileSkill) => (Array.isArray(profileSkill.skill) ? profileSkill.skill[0] : profileSkill.skill) ?? null)
+            .filter((skill): skill is { name?: string; category?: string | null } => Boolean(skill?.name))
+            .map((skill) => ({ name: skill.name ?? 'Compétence sans nom', category: skill.category ?? null }))
+        }
+      ])
+    );
+    const nextProposalStats = new Map<
+      string,
+      {
+        availableCount: number;
+        unavailableCount: number;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+      }
+    >();
 
     allMissionProposals.forEach((proposal) => {
-      const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteerNames: [] };
+      const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteers: [] };
 
       if (proposal.response === 'available') {
         current.availableCount += 1;
-        current.availableVolunteerNames.push(namesByVolunteerId.get(proposal.volunteer_id) ?? 'Sans nom');
+        current.availableVolunteers.push(volunteersById.get(proposal.volunteer_id) ?? { name: 'Sans nom', skills: [] });
       }
 
       if (proposal.response === 'unavailable') {
@@ -235,24 +269,45 @@ export default function MissionsPage() {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
+            {profile?.role === 'admin' ? (
+              <>
+                <p className="mt-1 text-sm text-slate-600">
+                  Connecté en tant que <span className="font-medium">{profile?.full_name ?? profile?.email ?? 'Utilisateur'}</span> ({profile?.role ?? 'profil incomplet'})
+                </p>
+                <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
+              </>
+            ) : null}
+          </div>
+          {profile?.role === 'admin' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/admin/volunteers')}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Ajouter un bénévole
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/admin/missions/import')}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Importer des missions
+              </button>
+              <NewMissionSplitButton />
+            </div>
+          ) : null}
+        </div>
+      </div>
+
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
-          <button
-            type="button"
-            onClick={() => {
-              updateMainFilters('all', 'all');
-              setSearchQuery('');
-            }}
-            className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
-          >
-            Réinitialiser les filtres
-          </button>
-        </div>
-
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           <input
             type="search"
             value={searchQuery}
@@ -306,7 +361,7 @@ export default function MissionsPage() {
                   canEdit={profile?.role === 'admin'}
                   availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
                   unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-                  availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
+                  availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
                 />
               </div>
             ))}
@@ -325,7 +380,7 @@ export default function MissionsPage() {
               canEdit={profile?.role === 'admin'}
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
               unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-              availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
+              availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
             />
           </div>
         ))}
