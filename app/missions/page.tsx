@@ -427,7 +427,6 @@ export default function MissionsPage() {
               formatMissionRequirementLabel={formatMissionRequirementLabel}
               currentUserId={profile?.id ?? ''}
               canPropose={profile?.role === 'benevole'}
-              proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
               canEdit={profile?.role === 'admin'}
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}

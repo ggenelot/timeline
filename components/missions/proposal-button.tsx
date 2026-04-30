@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { getProposalResponseLabel } from '@/lib/missions';
 import { MissionProposalResponse, MissionStatus } from '@/lib/types';
 
 type ProposalButtonProps = {
@@ -133,9 +132,19 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        {responseOptions.map((option) => {
+        {currentResponse ? (
+          <div className="mr-auto">
+            <p className="text-sm text-slate-500">Etat actuel</p>
+            <p className="text-3xl text-slate-900">{currentResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
+          </div>
+        ) : null}
+        {(currentResponse
+          ? responseOptions.filter((option) => (currentResponse === 'available' ? option.value === 'unavailable' : option.value === 'available'))
+          : responseOptions
+        ).map((option) => {
           const isSaving = loadingResponse === option.value;
           const isAvailableOption = option.value === 'available';
+          const isDisengageAction = currentResponse === 'available' && option.value === 'unavailable';
 
           return (
             <button
@@ -143,18 +152,19 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
               type="button"
               disabled={disabled || loadingResponse !== null}
               onClick={() => upsertResponse(option.value)}
-              className={`rounded-xl border px-7 py-3 text-2xl font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
-                isAvailableOption
-                  ? 'border-emerald-400 bg-emerald-400 text-slate-900 hover:bg-emerald-300'
-                  : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
+              className={`rounded-md border px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
+                isDisengageAction
+                  ? 'border-rose-500 bg-rose-500 text-white hover:bg-rose-400'
+                  : isAvailableOption
+                    ? 'border-emerald-400 bg-emerald-400 text-slate-900 hover:bg-emerald-300'
+                    : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
               }`}
             >
-              {isSaving ? 'Envoi...' : option.label}
+              {isSaving ? 'Envoi...' : isDisengageAction ? 'Se désengager' : option.label}
             </button>
           );
         })}
       </div>
-      {currentResponse ? <p className="text-sm text-slate-500">Vous avez répondu : {getProposalResponseLabel(currentResponse)}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
     </div>
