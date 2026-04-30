@@ -31,6 +31,25 @@ export async function GET(request: NextRequest) {
     let profileId = identity?.profile_id ?? null;
 
     if (!profileId) {
+      const { data: legacyProfile } = await service
+        .from('profiles')
+        .select('id')
+        .eq('slack_team_id', slackTeamId)
+        .eq('slack_user_id', slackUserId)
+        .maybeSingle<{ id: string }>();
+      if (legacyProfile?.id) {
+        profileId = legacyProfile.id;
+        await service.from('slack_identities').upsert({
+          profile_id: profileId,
+          slack_team_id: slackTeamId,
+          slack_user_id: slackUserId,
+          is_primary: true,
+          last_login_at: new Date().toISOString()
+        });
+      }
+    }
+
+    if (!profileId) {
       const syntheticEmail = `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
       const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
         email: syntheticEmail,
