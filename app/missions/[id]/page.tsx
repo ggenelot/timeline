@@ -191,7 +191,7 @@ export default function MissionDetailPage() {
         id: requiredSkill.id,
         name: requiredSkill.skill?.name ?? null
       }))
-      .filter((requiredSkill): requiredSkill is { id: number; name: string } => Boolean(requiredSkill.name));
+      .filter((requiredSkill): requiredSkill is { id: string; name: string } => Boolean(requiredSkill.name));
 
     return requiredSkills.map((requiredSkill) => {
       const requiredSkillCode = buildExpandedSkillSet([requiredSkill.name]);
