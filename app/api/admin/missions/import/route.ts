@@ -26,6 +26,23 @@ type ImportRequestBody = {
   missions?: ImportMissionPayload[];
 };
 
+function buildPublicGoogleSheetCsvUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    const match = parsed.pathname.match(/\/spreadsheets\/d\/([^/]+)/);
+    const documentId = match?.[1];
+    if (!documentId) {
+      return null;
+    }
+
+    const hashParams = new URLSearchParams(parsed.hash.replace(/^#/, ''));
+    const gid = parsed.searchParams.get('gid') ?? hashParams.get('gid') ?? '0';
+    return `https://docs.google.com/spreadsheets/d/${documentId}/export?format=csv&gid=${encodeURIComponent(gid)}`;
+  } catch {
+    return null;
+  }
+}
+
 function getBearerToken(request: NextRequest): string {
   const authorization = request.headers.get('authorization');
   return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
@@ -321,5 +338,49 @@ export async function POST(request: NextRequest) {
       removedColumns.size > 0
         ? `Colonnes optionnelles absentes dans la table missions (${Array.from(removedColumns).join(', ')}). Import principal effectué sans ces champs. Appliquez les migrations Supabase locales pour les activer.`
         : undefined
+  });
+}
+
+export async function GET(request: NextRequest) {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const requesterClient = createServerSupabaseAnonClient(token);
+  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
+
+  if (userError || !userData.user) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const { data: requesterProfile, error: requesterProfileError } = await requesterClient.from('profiles').select('role').eq('id', userData.user.id).single();
+
+  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
+    return NextResponse.json({ error: 'Accès refusé : seuls les admins peuvent importer des missions.' }, { status: 403 });
+  }
+
+  const sourceUrl = process.env.GOOGLE_MISSIONS_SHEET_PUBLIC_URL;
+  if (!sourceUrl) {
+    return NextResponse.json({ error: "Variable d'environnement GOOGLE_MISSIONS_SHEET_PUBLIC_URL absente." }, { status: 400 });
+  }
+
+  const csvUrl = buildPublicGoogleSheetCsvUrl(sourceUrl);
+  if (!csvUrl) {
+    return NextResponse.json({ error: "L'URL Google Sheet fournie est invalide." }, { status: 400 });
+  }
+
+  const response = await fetch(csvUrl, { cache: 'no-store' });
+  if (!response.ok) {
+    return NextResponse.json({ error: `Impossible de télécharger le Google Sheet public (${response.status}).` }, { status: 502 });
+  }
+
+  const content = await response.text();
+  const first11Lines = content.split(/\r?\n/).slice(0, 11).join('\n');
+
+  return NextResponse.json({
+    fileName: 'google-sheet-public.csv',
+    content: first11Lines
   });
 }

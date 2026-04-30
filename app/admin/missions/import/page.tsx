@@ -232,6 +232,7 @@ export default function AdminMissionImportPage() {
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
+  const [loadingFromGoogleSheet, setLoadingFromGoogleSheet] = useState(false);
 
   useEffect(() => {
     async function loadProfile() {
@@ -469,6 +470,72 @@ export default function AdminMissionImportPage() {
     }
   }
 
+  async function fetchAccessToken() {
+    const { data: sessionData } = await supabase.auth.getSession();
+    return sessionData.session?.access_token ?? null;
+  }
+
+  async function handleImportFromGoogleSheet() {
+    setError(null);
+    setSuccess(null);
+    setLoadingFromGoogleSheet(true);
+
+    try {
+      const accessToken = await fetchAccessToken();
+      if (!accessToken) {
+        setError('Session invalide. Veuillez vous reconnecter.');
+        return;
+      }
+
+      const response = await fetch('/api/admin/missions/import', {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      const payload = (await response.json()) as { error?: string; fileName?: string; content?: string };
+
+      if (!response.ok || !payload.content) {
+        setError(payload.error ?? "Impossible de récupérer le Google Sheet public.");
+        return;
+      }
+
+      const parsedRows = parseCsvContent(payload.content);
+      const preview = buildMissionsPreview(parsedRows);
+      setRows(preview.items.map((item, index) => normalizeEditableRow(item, index)));
+      setFileName(payload.fileName ?? 'google-sheet-public.csv');
+      setSuccess('Import depuis Google Sheet chargé (11 premières lignes seulement).');
+    } finally {
+      setLoadingFromGoogleSheet(false);
+    }
+  }
+
+  async function importSingleMission(mission: NormalizedMissionImport) {
+    setError(null);
+    setSuccess(null);
+    const accessToken = await fetchAccessToken();
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      return;
+    }
+
+    setImporting(true);
+    try {
+      const response = await fetch('/api/admin/missions/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ missions: [mission] })
+      });
+      const payload = (await response.json()) as { error?: string; imported?: number; ignoredDuplicates?: number };
+      if (!response.ok) {
+        setError(payload.error ?? 'Import impossible.');
+        return;
+      }
+
+      setSuccess(`Import unitaire terminé : ${payload.imported ?? 0} créée(s), ${payload.ignoredDuplicates ?? 0} doublon(s) ignoré(s).`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   if (loadingProfile) {
     return <p className="text-sm text-slate-600">Chargement...</p>;
   }
@@ -498,6 +565,14 @@ export default function AdminMissionImportPage() {
             className="mt-1 block w-full text-sm"
           />
         </label>
+        <button
+          type="button"
+          onClick={handleImportFromGoogleSheet}
+          disabled={analyzing || importing || loadingFromGoogleSheet}
+          className="mt-3 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {loadingFromGoogleSheet ? 'Chargement du Google Sheet...' : 'Importer depuis Google Sheet public'}
+        </button>
         {fileName ? <p className="mt-2 text-xs text-slate-500">Fichier sélectionné : {fileName}</p> : null}
       </div>
 
@@ -512,6 +587,14 @@ export default function AdminMissionImportPage() {
           </div>
 
           <div className="space-y-3">
+            <button
+              type="button"
+              onClick={handleImport}
+              disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
+              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {importing ? 'Import en cours...' : `Importer toutes les missions (${dedupAnalysis.readyMissions.length})`}
+            </button>
             {rows.map((row) => {
               if (row.deleted) {
                 return null;
@@ -521,6 +604,11 @@ export default function AdminMissionImportPage() {
               const isDuplicateInFile = dedupAnalysis.duplicateInFile.has(row.rowId);
               const isDuplicateInDatabase = dedupAnalysis.duplicateInDatabase.has(row.rowId);
               const isDuplicate = isDuplicateInFile || isDuplicateInDatabase;
+              if (isDuplicate) {
+                return null;
+              }
+              const normalizedMission = validation.normalized;
+              const isImportable = normalizedMission && validation.errors.length === 0;
 
               return (
                 <article key={row.rowId} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 text-sm shadow-sm">
@@ -543,6 +631,18 @@ export default function AdminMissionImportPage() {
                           disabled={importing}
                         >
                           Supprimer
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+                          onClick={() => {
+                            if (normalizedMission) {
+                              void importSingleMission(normalizedMission);
+                            }
+                          }}
+                          disabled={importing || checkingDuplicates || !isImportable}
+                        >
+                          Importer
                         </button>
                       </div>
                     </div>
@@ -638,20 +738,12 @@ export default function AdminMissionImportPage() {
                     </ul>
                   ) : null}
 
-                  {isDuplicate ? (
-                    <p className="text-amber-700">
-                      Ligne ignorée : {isDuplicateInDatabase ? 'événement déjà existant en base (même intitulé + même date).' : 'doublon détecté dans le fichier importé.'}
-                    </p>
-                  ) : null}
-
                   {validation.errors.length > 0 ? (
                     <ul className="space-y-1 text-red-700">
                       {validation.errors.map((issue, index) => (
                         <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
                       ))}
                     </ul>
-                  ) : isDuplicate ? (
-                    <p className="text-amber-700">Ligne valide mais ignorée.</p>
                   ) : (
                     <p className="text-emerald-700">Ligne valide.</p>
                   )}
@@ -662,14 +754,6 @@ export default function AdminMissionImportPage() {
           </div>
 
           <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleImport}
-              disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              {importing ? 'Import en cours...' : `Confirmer l'import (${dedupAnalysis.readyMissions.length})`}
-            </button>
             <button
               type="button"
               onClick={() => {
