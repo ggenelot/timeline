@@ -112,7 +112,7 @@ export default function MyMissionsPage() {
   return (
     <div className="space-y-6">
       <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <h1 className="text-xl font-semibold text-slate-900">Mes missions retenues</h1>
+        <h1 className="text-xl font-semibold text-slate-900">Mes missions ({rows.length})</h1>
         <p className="mt-1 text-sm text-slate-600">Missions dans lesquelles vous êtes sélectionné.</p>
         {calendarLinks ? (
           <div className="mt-3 flex flex-wrap gap-3 text-sm">
