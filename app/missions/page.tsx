@@ -236,27 +236,38 @@ export default function MissionsPage() {
 
   return (
     <div className="space-y-6">
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      {profile?.role === 'admin' ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
-          <div className="flex flex-wrap items-center justify-end gap-2">
-            <Link
-              href="/admin/volunteers"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Ajouter un bénévole
-            </Link>
-            <Link
-              href="/admin/missions/import"
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Importer des missions
-            </Link>
-            <NewMissionSplitButton />
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Connecté en tant que <span className="font-medium">{profile?.full_name ?? user?.email}</span> ({profile?.role ?? 'profil incomplet'})
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
           </div>
-        </section>
-      ) : null}
+          {profile?.role === 'admin' ? (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => router.push('/admin/volunteers')}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Ajouter un bénévole
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/admin/missions/import')}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Importer des missions
+              </button>
+              <NewMissionSplitButton />
+            </div>
+          ) : null}
+        </div>
+      </div>
+
+      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="space-y-3">
