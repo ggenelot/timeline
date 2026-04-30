@@ -13,7 +13,7 @@ type VolunteerSkill = {
   skill: SkillOption | SkillOption[] | null;
 };
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'role'> & {
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_connected_at'> & {
   profile_skills: VolunteerSkill[] | null;
 };
 
@@ -63,7 +63,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,profile_skills(skill:skills(id,name,category))')
+        .select('id,full_name,email,role,slack_user_id,slack_team_id,slack_connected_at,profile_skills(skill:skills(id,name,category))')
         .eq('role', 'benevole')
         .order('full_name', { ascending: true });
 
@@ -212,6 +212,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 <tr>
                   <th className="px-4 py-2 font-medium">Nom</th>
                   <th className="px-4 py-2 font-medium">Email</th>
+                  <th className="px-4 py-2 font-medium">Compte Slack</th>
                   <th className="px-4 py-2 font-medium">Compétences</th>
                   <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
@@ -221,6 +222,22 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                    <td className="px-4 py-2 text-slate-700">
+                      {volunteer.slack_user_id && volunteer.slack_team_id ? (
+                        <div className="space-y-1">
+                          <p className="font-medium text-emerald-700">
+                            Connecté ({volunteer.slack_team_id} / {volunteer.slack_user_id})
+                          </p>
+                          {volunteer.slack_connected_at ? (
+                            <p className="text-xs text-slate-500">
+                              Lié le {new Date(volunteer.slack_connected_at).toLocaleString('fr-FR')}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Non connecté</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-slate-700">
                       {skills.length === 0 ? (
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
