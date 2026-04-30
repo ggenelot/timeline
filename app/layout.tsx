@@ -4,7 +4,7 @@ import { Header } from '@/components/header';
 import { AuthGuard } from '@/components/auth-guard';
 
 export const metadata: Metadata = {
-  title: 'Mission Planner',
+  title: 'Timeline',
   description: 'Gestion simple des missions de bénévoles'
 };
 

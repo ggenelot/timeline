@@ -1,4 +1,4 @@
-# Mission Planner - MVP Phase 6
+# Timeline - MVP Phase 6
 
 Application web (Next.js + Supabase) pour gérer des missions de protection civile proposées à des bénévoles : proposition, réponse, sélection finale et suivi des missions retenues.
 
