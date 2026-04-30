@@ -959,19 +959,53 @@ export default function MissionDetailPage() {
                     <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
                   ) : (
                     <ul className="mt-3 flex flex-wrap gap-4">
-                      {skillGroup.volunteers.map((volunteer) => (
-                        <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-20 text-center">
-                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
-                            {volunteer.initials || 'B'}
-                          </div>
-                          <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
-                        </li>
-                      ))}
+                      {skillGroup.volunteers.map((volunteer) => {
+                        const isSelected = selectedVolunteerIds.has(volunteer.id);
+                        const canToggle = canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id;
+
+                        return (
+                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelection(volunteer.id)}
+                              disabled={!canToggle || isSelected}
+                              className={`w-full rounded-md p-1 transition ${
+                                isSelected
+                                  ? 'bg-emerald-50 ring-1 ring-emerald-300'
+                                  : 'hover:bg-slate-50'
+                              } ${
+                                !canToggle || isSelected ? 'cursor-not-allowed opacity-45' : ''
+                              }`}
+                            >
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
+                                {volunteer.initials || 'B'}
+                              </div>
+                              <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
+                            </button>
+                            {isSelected ? (
+                              <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
               ))
             )}
+
+            {canManageMission ? (
+              <div className="sticky bottom-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={confirmMission}
+                  disabled={assignments.length === 0 || mission?.status !== 'proposed' || actionLoading === 'confirm-mission'}
+                  className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === 'confirm-mission' ? 'Confirmation...' : "Confirmer la sélection de l'équipage"}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>
