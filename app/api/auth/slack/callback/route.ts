@@ -16,8 +16,12 @@ export async function GET(request: NextRequest) {
 
   try {
     const oauth = await SlackService.exchangeOAuthCode(code, 'auth');
-    const slackUserId = oauth.authed_user?.id;
-    const slackTeamId = oauth.team?.id;
+    const userToken = oauth.authed_user?.access_token;
+    const openIdProfile = userToken ? await SlackService.getOpenIdUserInfo(userToken) : null;
+    const slackUserId = openIdProfile?.sub ?? oauth.authed_user?.id;
+    const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? oauth.team?.id;
+    const slackEmail = openIdProfile?.email ?? null;
+    const slackName = openIdProfile?.name ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
 
     const service = createServerSupabaseServiceClient();
@@ -50,11 +54,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (!profileId) {
-      const syntheticEmail = `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
+      const syntheticEmail = slackEmail ?? `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
       const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
-        user_metadata: { full_name: `Slack ${slackUserId}` }
+        user_metadata: { full_name: slackName ?? `Slack ${slackUserId}` }
       });
 
       if (createUserError || !createdUser.user?.id) {

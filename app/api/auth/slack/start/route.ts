@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { createSlackOAuthState } from '@/lib/slack/auth';
 import { getSlackConfig } from '@/lib/slack/config';
 
-const USER_SCOPES = ['users:read'];
+const OIDC_SCOPES = ['openid', 'profile', 'email'];
 
 export async function POST() {
   const config = getSlackConfig();
@@ -17,9 +17,10 @@ export async function POST() {
   }
 
   const state = await createSlackOAuthState(null, 'login');
-  const oauthUrl = new URL('https://slack.com/oauth/v2/authorize');
+  const oauthUrl = new URL('https://slack.com/openid/connect/authorize');
   oauthUrl.searchParams.set('client_id', config.clientId);
-  oauthUrl.searchParams.set('user_scope', USER_SCOPES.join(','));
+  oauthUrl.searchParams.set('scope', OIDC_SCOPES.join(' '));
+  oauthUrl.searchParams.set('response_type', 'code');
   oauthUrl.searchParams.set('state', state);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);
 
