@@ -53,7 +53,7 @@ export function Header() {
 
   return (
     <header className="border-b border-slate-200 bg-white">
-      <div className="mx-auto flex max-w-4xl items-center justify-between px-4 py-3">
+      <div className="mx-auto flex max-w-4xl items-center gap-6 px-4 py-3">
         <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
           Timeline
         </Link>
