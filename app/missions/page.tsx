@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
@@ -35,7 +36,7 @@ export default function MissionsPage() {
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
-    Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>
+    Map<string, { availableCount: number; unavailableCount: number; availableVolunteers: Array<{ name: string; skills: string[] }> }>
   >(new Map());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -135,18 +136,31 @@ export default function MissionsPage() {
     );
 
     const { data: availableProfiles } = availableVolunteerIds.length
-      ? await supabase.from('profiles').select('id,full_name').in('id', availableVolunteerIds)
+      ? await supabase
+        .from('profiles')
+        .select('id,full_name,profile_skills(skill:skills(name))')
+        .in('id', availableVolunteerIds)
       : { data: [] };
 
-    const namesByVolunteerId = new Map((availableProfiles ?? []).map((profile) => [profile.id, profile.full_name?.trim() || 'Sans nom']));
-    const nextProposalStats = new Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>();
+    const volunteersById = new Map(
+      (availableProfiles ?? []).map((profile) => [
+        profile.id,
+        {
+          name: profile.full_name?.trim() || 'Sans nom',
+          skills: ((profile.profile_skills ?? []) as Array<{ skill?: { name?: string } | Array<{ name?: string }> | null }>)
+            .map((profileSkill) => (Array.isArray(profileSkill.skill) ? profileSkill.skill[0]?.name : profileSkill.skill?.name) ?? null)
+            .filter((name): name is string => Boolean(name))
+        }
+      ])
+    );
+    const nextProposalStats = new Map<string, { availableCount: number; unavailableCount: number; availableVolunteers: Array<{ name: string; skills: string[] }> }>();
 
     allMissionProposals.forEach((proposal) => {
-      const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteerNames: [] };
+      const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteers: [] };
 
       if (proposal.response === 'available') {
         current.availableCount += 1;
-        current.availableVolunteerNames.push(namesByVolunteerId.get(proposal.volunteer_id) ?? 'Sans nom');
+        current.availableVolunteers.push(volunteersById.get(proposal.volunteer_id) ?? { name: 'Sans nom', skills: [] });
       }
 
       if (proposal.response === 'unavailable') {
@@ -324,7 +338,7 @@ export default function MissionsPage() {
                   canEdit={profile?.role === 'admin'}
                   availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
                   unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-                  availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
+                  availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
                 />
               </div>
             ))}
@@ -343,7 +357,7 @@ export default function MissionsPage() {
               canEdit={profile?.role === 'admin'}
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
               unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-              availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
+              availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
             />
           </div>
         ))}
