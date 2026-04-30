@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { User } from '@supabase/supabase-js';
 import { MissionCard } from '@/components/missions/mission-card';
+import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
 import { formatMissionRequirementLabel } from '@/lib/missions';
-import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
@@ -32,7 +31,6 @@ function parseStatusFilter(value: string | null): 'all' | MissionStatus {
 }
 
 export default function MissionsPage() {
-  const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
@@ -78,8 +76,6 @@ export default function MissionsPage() {
       router.replace('/login');
       return;
     }
-
-    setUser(authData.user);
 
     const { data: profileData } = await supabase
       .from('profiles')
