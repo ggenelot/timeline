@@ -93,7 +93,7 @@ export class SlackService {
     });
   }
 
-  static async exchangeOAuthCode(code: string) {
+  static async exchangeOAuthCode(code: string, mode: 'connect' | 'auth' = 'connect') {
     const config = getSlackConfig();
 
     if (!config.clientId || !config.clientSecret) {
@@ -106,8 +106,9 @@ export class SlackService {
       code
     });
 
-    if (config.redirectUri) {
-      params.set('redirect_uri', config.redirectUri);
+    const redirectUri = mode === 'auth' ? config.authRedirectUri : config.redirectUri;
+    if (redirectUri) {
+      params.set('redirect_uri', redirectUri);
     }
 
     const response = await fetch('https://slack.com/api/oauth.v2.access', {
