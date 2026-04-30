@@ -15,8 +15,8 @@ type ProposalButtonProps = {
 };
 
 const responseOptions: Array<{ label: string; value: MissionProposalResponse }> = [
-  { label: 'Oui', value: 'available' },
-  { label: 'Non', value: 'unavailable' }
+  { label: "S'engager", value: 'available' },
+  { label: 'Non disponible', value: 'unavailable' }
 ];
 
 export function ProposalButton({ missionId, volunteerId, disabled, missionStatus, currentResponse }: ProposalButtonProps) {
@@ -132,9 +132,10 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         {responseOptions.map((option) => {
           const isSaving = loadingResponse === option.value;
+          const isAvailableOption = option.value === 'available';
 
           return (
             <button
@@ -142,14 +143,18 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
               type="button"
               disabled={disabled || loadingResponse !== null}
               onClick={() => upsertResponse(option.value)}
-              className="rounded-md bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
+              className={`rounded-xl border px-8 py-4 text-3xl font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+                isAvailableOption
+                  ? 'border-emerald-400 bg-emerald-400 text-slate-900 hover:bg-emerald-300'
+                  : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
+              }`}
             >
               {isSaving ? 'Envoi...' : option.label}
             </button>
           );
         })}
       </div>
-      {currentResponse ? <p className="text-xs text-slate-600">Réponse actuelle : {getProposalResponseLabel(currentResponse)}</p> : null}
+      {currentResponse ? <p className="text-base text-slate-500">Vous avez répondu : {getProposalResponseLabel(currentResponse)}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
     </div>

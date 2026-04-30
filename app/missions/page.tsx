@@ -38,6 +38,9 @@ export default function MissionsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
+  const [proposalStatsByMission, setProposalStatsByMission] = useState<
+    Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>
+  >(new Map());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -129,9 +132,41 @@ export default function MissionsPage() {
     const { data: proposalData } = await supabase
       .from('mission_proposals')
       .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
-      .eq('volunteer_id', authData.user.id);
+      .in(
+        'mission_id',
+        mappedMissions.map((mission) => mission.id)
+      );
 
-    setProposals(proposalData ?? []);
+    const allMissionProposals = proposalData ?? [];
+    setProposals(allMissionProposals.filter((proposal) => proposal.volunteer_id === authData.user.id));
+
+    const availableVolunteerIds = Array.from(
+      new Set(allMissionProposals.filter((proposal) => proposal.response === 'available').map((proposal) => proposal.volunteer_id))
+    );
+
+    const { data: availableProfiles } = availableVolunteerIds.length
+      ? await supabase.from('profiles').select('id,full_name').in('id', availableVolunteerIds)
+      : { data: [] };
+
+    const namesByVolunteerId = new Map((availableProfiles ?? []).map((profile) => [profile.id, profile.full_name?.trim() || 'Sans nom']));
+    const nextProposalStats = new Map<string, { availableCount: number; unavailableCount: number; availableVolunteerNames: string[] }>();
+
+    allMissionProposals.forEach((proposal) => {
+      const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteerNames: [] };
+
+      if (proposal.response === 'available') {
+        current.availableCount += 1;
+        current.availableVolunteerNames.push(namesByVolunteerId.get(proposal.volunteer_id) ?? 'Sans nom');
+      }
+
+      if (proposal.response === 'unavailable') {
+        current.unavailableCount += 1;
+      }
+
+      nextProposalStats.set(proposal.mission_id, current);
+    });
+
+    setProposalStatsByMission(nextProposalStats);
     setLoading(false);
   }
 
@@ -395,6 +430,9 @@ export default function MissionsPage() {
               proposalStatus={proposalByMission.get(mission.id)?.status ?? null}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
               canEdit={profile?.role === 'admin'}
+              availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
+              unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
+              availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
             />
           </div>
         ))}
