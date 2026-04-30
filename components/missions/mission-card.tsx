@@ -22,6 +22,15 @@ type MissionCardProps = {
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
 };
 
+
+const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
+  poste_de_secours: 'bg-orange-400 text-slate-900',
+  garde: 'bg-red-500 text-white',
+  formation: 'bg-blue-900 text-white',
+  maraude: 'bg-violet-500 text-white',
+  vie_antenne: 'bg-sky-400 text-slate-900'
+};
+
 const MISSION_STATUS_LABELS = {
   draft: 'Brouillon',
   proposed: 'Proposé',
@@ -61,16 +70,22 @@ export function MissionCard({
     return availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === selectedSkillFilter));
   }, [availableVolunteers, selectedSkillFilter]);
 
+  const doStatusLabel = mission.do_status?.trim() || 'Antenne En attente';
+
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
       <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="rounded-full bg-amber-400 px-3 py-1.5 text-slate-900">{MISSION_CATEGORY_LABELS[mission.category]}</span>
+            <span
+              className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[mission.category] ?? 'bg-amber-400 text-slate-900'}`}
+            >
+              {MISSION_CATEGORY_LABELS[mission.category]}
+            </span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-500">{MISSION_STATUS_LABELS[mission.status]}</span>
             <span className="text-slate-400">|</span>
-            <span className="text-slate-500">Antenne En attente</span>
+            <span className="text-slate-500">{doStatusLabel}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>

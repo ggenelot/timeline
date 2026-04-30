@@ -10,14 +10,24 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get('state');
   const base = getSlackConfig().appBaseUrl ?? `${url.protocol}//${url.host}`;
 
+  const providerError = url.searchParams.get('error');
+  if (providerError) {
+    console.error('[slack-auth-callback] provider error', { providerError });
+    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
+  }
+
   if (!code || !state || !(await consumeSlackOAuthState(state, 'login'))) {
     return NextResponse.redirect(new URL('/login?slack=state_invalid', base));
   }
 
   try {
     const oauth = await SlackService.exchangeOAuthCode(code, 'auth');
-    const slackUserId = oauth.authed_user?.id;
-    const slackTeamId = oauth.team?.id;
+    const userToken = oauth.authed_user?.access_token;
+    const openIdProfile = userToken ? await SlackService.getOpenIdUserInfo(userToken) : null;
+    const slackUserId = openIdProfile?.sub ?? oauth.authed_user?.id;
+    const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? oauth.team?.id;
+    const slackEmail = openIdProfile?.email ?? null;
+    const slackName = openIdProfile?.name ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
 
     const service = createServerSupabaseServiceClient();
@@ -31,15 +41,48 @@ export async function GET(request: NextRequest) {
     let profileId = identity?.profile_id ?? null;
 
     if (!profileId) {
-      const syntheticEmail = `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
+      const { data: legacyProfile } = await service
+        .from('profiles')
+        .select('id')
+        .eq('slack_team_id', slackTeamId)
+        .eq('slack_user_id', slackUserId)
+        .maybeSingle<{ id: string }>();
+      if (legacyProfile?.id) {
+        profileId = legacyProfile.id;
+        await service.from('slack_identities').upsert({
+          profile_id: profileId,
+          slack_team_id: slackTeamId,
+          slack_user_id: slackUserId,
+          is_primary: true,
+          last_login_at: new Date().toISOString()
+        });
+      }
+    }
+
+    if (!profileId && slackEmail) {
+      const { data: profileByEmail } = await service.from('profiles').select('id').eq('email', slackEmail).maybeSingle<{ id: string }>();
+      if (profileByEmail?.id) {
+        profileId = profileByEmail.id;
+        await service.from('slack_identities').upsert({
+          profile_id: profileId,
+          slack_team_id: slackTeamId,
+          slack_user_id: slackUserId,
+          is_primary: true,
+          last_login_at: new Date().toISOString()
+        });
+      }
+    }
+
+    if (!profileId) {
+      const syntheticEmail = slackEmail ?? `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
       const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
         email: syntheticEmail,
         email_confirm: true,
-        user_metadata: { full_name: `Slack ${slackUserId}` }
+        user_metadata: { full_name: slackName ?? `Slack ${slackUserId}` }
       });
 
       if (createUserError || !createdUser.user?.id) {
-        throw new Error('user_create_failed');
+        throw new Error(`user_create_failed:${createUserError?.message ?? 'unknown'}`);
       }
 
       profileId = createdUser.user.id;
@@ -65,7 +108,9 @@ export async function GET(request: NextRequest) {
     if (linkError || !linkData?.properties?.action_link) throw new Error('magic_link_failed');
 
     return NextResponse.redirect(linkData.properties.action_link);
-  } catch {
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown';
+    console.error('[slack-auth-callback] failure', { reason });
     return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
   }
 }

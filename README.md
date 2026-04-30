@@ -164,8 +164,13 @@ Bot scopes:
 - `groups:read`
 - `im:write`
 
-User scopes:
+User scopes (OAuth connect V1):
 - `users:read`
+
+OpenID scopes (login V2):
+- `openid`
+- `profile`
+- `email`
 
 ### Endpoints Slack ajoutés
 

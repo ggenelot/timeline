@@ -12,7 +12,7 @@ import {
   parseParisLocalToUtcIso,
   utcIsoToParisParts
 } from '@/lib/import-missions';
-import { MISSION_CATEGORY_OPTIONS, MissionCategory, Profile } from '@/lib/types';
+import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 
 type EditableImportRow = {
@@ -110,7 +110,7 @@ function normalizeEditableRow(item: MissionImportPreviewItem, index: number): Ed
     startTime: fallbackTimes?.startTime ?? '',
     endTime: fallbackTimes?.endTime ?? '',
     location: item.block.values.location ?? '',
-    category: 'maraude',
+    category: 'poste_de_secours',
     do_status: item.block.values.do_status ?? '',
     retained_status: item.block.values.retained_status ?? '',
     requirements_notes: item.block.values.requirements_notes ?? '',
@@ -231,6 +231,7 @@ export default function AdminMissionImportPage() {
   const [existingMissionKeys, setExistingMissionKeys] = useState<Set<string>>(new Set());
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
+  const [editingRowId, setEditingRowId] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadProfile() {
@@ -522,20 +523,47 @@ export default function AdminMissionImportPage() {
               const isDuplicate = isDuplicateInFile || isDuplicateInDatabase;
 
               return (
-                <article key={row.rowId} className="space-y-3 rounded-md border border-slate-200 p-3 text-sm">
-                  <div className="flex items-center justify-between">
-                    <p className="font-medium text-slate-900">Bloc #{row.sourceBlockIndex + 1}</p>
-                    <button
-                      type="button"
-                      className="text-xs text-red-700 underline"
-                      onClick={() => updateRow(row.rowId, { deleted: true })}
-                      disabled={importing}
-                    >
-                      Supprimer la ligne
-                    </button>
-                  </div>
+                <article key={row.rowId} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 text-sm shadow-sm">
+                  <div className="space-y-3 p-4">
+                    <div className="flex items-center justify-between">
+                      <p className="font-medium text-slate-900">Bloc #{row.sourceBlockIndex + 1}</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                          onClick={() => setEditingRowId((current) => (current === row.rowId ? null : row.rowId))}
+                          disabled={importing}
+                        >
+                          {editingRowId === row.rowId ? 'Fermer' : 'Éditer'}
+                        </button>
+                        <button
+                          type="button"
+                          className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+                          onClick={() => updateRow(row.rowId, { deleted: true })}
+                          disabled={importing}
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    </div>
 
-                  <div className="grid gap-2 md:grid-cols-2">
+                    <div className="grid gap-2 text-slate-700 md:grid-cols-2">
+                      <p><span className="font-medium text-slate-900">Intitulé :</span> {row.title || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Lieu :</span> {row.location || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Date :</span> {row.date || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Début :</span> {row.startTime || '-'} | <span className="font-medium text-slate-900">Fin :</span> {row.endTime || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Catégorie :</span> {MISSION_CATEGORY_LABELS[row.category]} </p>
+                      <p><span className="font-medium text-slate-900">Etat DO :</span> {row.do_status || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Retenue :</span> {row.retained_status || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Type source :</span> {row.source_type_label || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Réversion :</span> {row.reversion_expected || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Réversion réelle :</span> {row.reversion_actual || '-'} </p>
+                      <p><span className="font-medium text-slate-900">Validation :</span> {row.validation_date || '-'} </p>
+                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {row.requirements_notes || '-'} </p>
+                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {row.equipment_notes || '-'} </p>
+                    </div>
+
+                    {editingRowId === row.rowId ? <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-2">
                     <label className="text-slate-700">
                       Intitulé *
                       <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.title} onChange={(e) => updateRow(row.rowId, { title: e.target.value })} />
@@ -600,7 +628,7 @@ export default function AdminMissionImportPage() {
                       Matériel spécifique
                       <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.equipment_notes} onChange={(e) => updateRow(row.rowId, { equipment_notes: e.target.value })} />
                     </label>
-                  </div>
+                  </div> : null}
 
                   {row.issues.length > 0 ? (
                     <ul className="space-y-1 text-amber-700">
@@ -627,6 +655,7 @@ export default function AdminMissionImportPage() {
                   ) : (
                     <p className="text-emerald-700">Ligne valide.</p>
                   )}
+                  </div>
                 </article>
               );
             })}
