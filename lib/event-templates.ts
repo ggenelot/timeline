@@ -6,6 +6,10 @@ export type EventTemplate = {
   id: EventTemplateId;
   label: string;
   defaults: Partial<MissionFormState>;
+  requirementDefaults?: Array<{
+    skillName?: string;
+    quantity: string;
+  }>;
 };
 
 export const EVENT_TEMPLATES: EventTemplate[] = [
@@ -15,10 +19,12 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     defaults: {
       title: 'Maraude',
       category: 'maraude',
-      starts_at_time: '19:00',
-      ends_at_time: '22:00',
-      required_volunteers: '3'
-    }
+      required_volunteers: '2'
+    },
+    requirementDefaults: [
+      { skillName: 'CE2S', quantity: '1' },
+      { skillName: 'conducteur VTP', quantity: '1' }
+    ]
   },
   {
     id: 'poste',
@@ -33,16 +39,29 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     label: 'Garde',
     defaults: {
       title: 'Garde',
-      category: 'garde'
-    }
+      category: 'garde',
+      required_volunteers: '5'
+    },
+    requirementDefaults: [
+      { skillName: 'CEPS', quantity: '1' },
+      { skillName: 'conducteur VPS', quantity: '1' },
+      { quantity: '3' }
+    ]
   },
   {
     id: 'psc1',
     label: 'PSC1',
     defaults: {
       title: 'Formation PSC1',
-      category: 'formation'
-    }
+      category: 'formation',
+      starts_at_time: '08:30',
+      ends_at_time: '17:30',
+      required_volunteers: '3'
+    },
+    requirementDefaults: [
+      { skillName: 'formateur PSC', quantity: '1' },
+      { quantity: '2' }
+    ]
   }
 ];
 

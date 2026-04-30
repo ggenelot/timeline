@@ -50,6 +50,14 @@ const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
   volunteer_removed: 'Retiré'
 };
 
+const ACTIVITY_TYPE_TINTS: Record<ActivityLog['action_type'], string> = {
+  mission_created: 'border-emerald-200 bg-emerald-50/50',
+  mission_status_changed: 'border-blue-200 bg-blue-50/50',
+  proposal_response_updated: 'border-amber-200 bg-amber-50/50',
+  volunteer_selected: 'border-violet-200 bg-violet-50/50',
+  volunteer_removed: 'border-rose-200 bg-rose-50/50'
+};
+
 const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposalResponse, 'no_response'> }> = [
   { label: 'Disponible', value: 'available' },
   { label: 'Indisponible', value: 'unavailable' }
@@ -66,6 +74,8 @@ export default function MissionDetailPage() {
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
+  const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -172,6 +182,55 @@ export default function MissionDetailPage() {
     const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
     return allVolunteers.filter((volunteer) => !linkedVolunteerIds.has(volunteer.id));
   }, [allVolunteers, proposals]);
+
+
+
+  const requiredSkillsVolunteerDirectory = useMemo(() => {
+    const requiredSkills = (mission?.mission_required_skills ?? [])
+      .map((requiredSkill) => ({
+        id: requiredSkill.id,
+        name: requiredSkill.skill?.name ?? null
+      }))
+      .filter((requiredSkill): requiredSkill is { id: string; name: string } => Boolean(requiredSkill.name));
+
+    return requiredSkills.map((requiredSkill) => {
+      const requiredSkillCode = buildExpandedSkillSet([requiredSkill.name]);
+
+      const volunteers = proposals
+        .map((proposal) => {
+          const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
+            .map((profileSkill) => profileSkill.skill?.name)
+            .filter((skillName): skillName is string => Boolean(skillName));
+
+          const volunteerSkillCodes = buildExpandedSkillSet(explicitSkillNames);
+          const matchesRequiredSkill = Array.from(requiredSkillCode).some((skillCode) => volunteerSkillCodes.has(skillCode));
+
+          if (!matchesRequiredSkill || !proposal.volunteer) {
+            return null;
+          }
+
+          return {
+            id: proposal.volunteer.id,
+            fullName: proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole',
+            initials: (proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'B')
+              .split(/\s+/)
+              .filter(Boolean)
+              .slice(0, 2)
+              .map((part) => part[0]?.toUpperCase() ?? '')
+              .join('')
+          };
+        })
+        .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
+
+      const uniqueVolunteers = volunteers.filter((volunteer, index, list) => list.findIndex((entry) => entry.id === volunteer.id) === index);
+
+      return {
+        requiredSkillId: requiredSkill.id,
+        requiredSkillName: requiredSkill.name,
+        volunteers: uniqueVolunteers
+      };
+    });
+  }, [mission?.mission_required_skills, proposals]);
 
   const activityTypeCounts = useMemo(() => {
     const counts: Record<ActivityLog['action_type'], number> = {
@@ -873,9 +932,102 @@ export default function MissionDetailPage() {
       ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Compétences des bénévoles</h2>
+          <button
+            type="button"
+            aria-expanded={isSkillsDirectoryExpanded}
+            aria-controls="mission-skills-directory-content"
+            aria-label={isSkillsDirectoryExpanded ? 'Masquer les compétences des bénévoles' : 'Afficher les compétences des bénévoles'}
+            onClick={() => setIsSkillsDirectoryExpanded((current) => !current)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className={`text-base leading-none transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">Vue par compétence requise avec les bénévoles correspondants.</p>
+
+        {isSkillsDirectoryExpanded ? (
+          <div id="mission-skills-directory-content" className="mt-3 space-y-4">
+            {requiredSkillsVolunteerDirectory.length === 0 ? (
+              <p className="text-sm text-slate-600">Aucune compétence requise sur cette mission.</p>
+            ) : (
+              requiredSkillsVolunteerDirectory.map((skillGroup) => (
+                <div key={skillGroup.requiredSkillId} className="rounded-md border border-slate-200 p-3">
+                  <h3 className="text-sm font-semibold text-slate-900">{skillGroup.requiredSkillName}</h3>
+                  {skillGroup.volunteers.length === 0 ? (
+                    <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
+                  ) : (
+                    <ul className="mt-3 flex flex-wrap gap-4">
+                      {skillGroup.volunteers.map((volunteer) => {
+                        const isSelected = selectedVolunteerIds.has(volunteer.id);
+                        const canToggle = canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id;
+
+                        return (
+                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelection(volunteer.id)}
+                              disabled={!canToggle || isSelected}
+                              className={`w-full rounded-md p-1 transition ${
+                                isSelected
+                                  ? 'bg-emerald-50 ring-1 ring-emerald-300'
+                                  : 'hover:bg-slate-50'
+                              } ${
+                                !canToggle || isSelected ? 'cursor-not-allowed opacity-45' : ''
+                              }`}
+                            >
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
+                                {volunteer.initials || 'B'}
+                              </div>
+                              <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
+                            </button>
+                            {isSelected ? (
+                              <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  )}
+                </div>
+              ))
+            )}
+
+            {canManageMission ? (
+              <div className="sticky bottom-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={confirmMission}
+                  disabled={assignments.length === 0 || mission?.status !== 'proposed' || actionLoading === 'confirm-mission'}
+                  className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === 'confirm-mission' ? 'Confirmation...' : "Confirmer la sélection de l'équipage"}
+                </button>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+          <button
+            type="button"
+            aria-expanded={isHistoryExpanded}
+            aria-controls="mission-history-content"
+            aria-label={isHistoryExpanded ? "Masquer l'historique" : "Afficher l'historique"}
+            onClick={() => setIsHistoryExpanded((current) => !current)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className={`text-base leading-none transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
         <p className="mt-1 text-sm text-slate-600">Événements récents de la mission, du plus récent au plus ancien.</p>
-        <div className="mt-3 space-y-3">
+
+        {isHistoryExpanded ? (
+          <div id="mission-history-content" className="mt-3 space-y-3">
           <label className="block">
             <span className="sr-only">Rechercher dans l&apos;historique</span>
             <input
@@ -913,24 +1065,24 @@ export default function MissionDetailPage() {
               </button>
             ))}
           </div>
+          {activityLogs.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
+          ) : filteredActivityLogs.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {filteredActivityLogs.map((log) => (
+                <li key={log.id} className={`rounded border p-3 text-sm text-slate-700 ${ACTIVITY_TYPE_TINTS[log.action_type]}`}>
+                  <p className="font-medium">{log.description}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-
-        {activityLogs.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
-        ) : filteredActivityLogs.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {filteredActivityLogs.map((log) => (
-              <li key={log.id} className="rounded border border-slate-200 p-3 text-sm text-slate-700">
-                <p className="font-medium">{log.description}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
+        ) : null}
       </section>
 
     </div>

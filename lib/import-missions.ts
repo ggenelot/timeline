@@ -567,6 +567,10 @@ function inferCategory(value: string | null): MissionCategory {
 
   const normalized = sanitize(value);
 
+  if (normalized.includes('poste de secours') || normalized.includes('poste') || normalized.includes('dps')) {
+    return 'poste_de_secours';
+  }
+
   if (normalized.includes('garde')) {
     return 'garde';
   }
