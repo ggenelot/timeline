@@ -16,6 +16,14 @@ export type SlackOAuthAccessResponse = {
   };
 };
 
+export type SlackOpenIdUserInfo = {
+  sub?: string;
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  'https://slack.com/team_id'?: string;
+};
+
 export class SlackService {
   private botToken: string;
 
@@ -93,7 +101,7 @@ export class SlackService {
     });
   }
 
-  static async exchangeOAuthCode(code: string) {
+  static async exchangeOAuthCode(code: string, mode: 'connect' | 'auth' = 'connect') {
     const config = getSlackConfig();
 
     if (!config.clientId || !config.clientSecret) {
@@ -106,8 +114,9 @@ export class SlackService {
       code
     });
 
-    if (config.redirectUri) {
-      params.set('redirect_uri', config.redirectUri);
+    const redirectUri = mode === 'auth' ? config.authRedirectUri : config.redirectUri;
+    if (redirectUri) {
+      params.set('redirect_uri', redirectUri);
     }
 
     const response = await fetch('https://slack.com/api/oauth.v2.access', {
@@ -120,6 +129,22 @@ export class SlackService {
 
     if (!response.ok || !json.ok) {
       throw new Error(`Slack OAuth failed: ${'error' in json ? json.error : `HTTP ${response.status}`}`);
+    }
+
+    return json;
+  }
+
+  static async getOpenIdUserInfo(userAccessToken: string) {
+    const response = await fetch('https://slack.com/api/openid.connect.userInfo', {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${userAccessToken}`
+      }
+    });
+
+    const json = (await response.json()) as SlackApiResponse<SlackOpenIdUserInfo>;
+    if (!response.ok || !json.ok) {
+      throw new Error(`Slack OpenID userInfo failed: ${'error' in json ? json.error : `HTTP ${response.status}`}`);
     }
 
     return json;
