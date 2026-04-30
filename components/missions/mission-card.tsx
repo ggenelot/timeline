@@ -22,6 +22,15 @@ type MissionCardProps = {
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
 };
 
+
+const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
+  poste_de_secours: 'bg-orange-400 text-slate-900',
+  garde: 'bg-red-500 text-white',
+  formation: 'bg-blue-900 text-white',
+  maraude: 'bg-violet-500 text-white',
+  vie_antenne: 'bg-sky-400 text-slate-900'
+};
+
 const MISSION_STATUS_LABELS = {
   draft: 'Brouillon',
   proposed: 'Proposé',
@@ -66,7 +75,11 @@ export function MissionCard({
       <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="rounded-full bg-amber-400 px-3 py-1.5 text-slate-900">{MISSION_CATEGORY_LABELS[mission.category]}</span>
+            <span
+              className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[mission.category] ?? 'bg-amber-400 text-slate-900'}`}
+            >
+              {MISSION_CATEGORY_LABELS[mission.category]}
+            </span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-500">{MISSION_STATUS_LABELS[mission.status]}</span>
             <span className="text-slate-400">|</span>
