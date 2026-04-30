@@ -42,6 +42,14 @@ type ActivityLogWithActor = ActivityLog & {
   actor: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
 };
 
+const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
+  mission_created: 'Création',
+  mission_status_changed: 'Statut',
+  proposal_response_updated: 'Réponse',
+  volunteer_selected: 'Retenu',
+  volunteer_removed: 'Retiré'
+};
+
 const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposalResponse, 'no_response'> }> = [
   { label: 'Disponible', value: 'available' },
   { label: 'Indisponible', value: 'unavailable' }
@@ -58,6 +66,8 @@ export default function MissionDetailPage() {
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
+  const [activitySearch, setActivitySearch] = useState('');
+  const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
   const [selectedVolunteerSkillCode, setSelectedVolunteerSkillCode] = useState<'all' | SkillCode>('all');
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
@@ -162,6 +172,39 @@ export default function MissionDetailPage() {
     const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
     return allVolunteers.filter((volunteer) => !linkedVolunteerIds.has(volunteer.id));
   }, [allVolunteers, proposals]);
+
+  const activityTypeCounts = useMemo(() => {
+    const counts: Record<ActivityLog['action_type'], number> = {
+      mission_created: 0,
+      mission_status_changed: 0,
+      proposal_response_updated: 0,
+      volunteer_selected: 0,
+      volunteer_removed: 0
+    };
+
+    activityLogs.forEach((log) => {
+      counts[log.action_type] += 1;
+    });
+
+    return counts;
+  }, [activityLogs]);
+
+  const filteredActivityLogs = useMemo(() => {
+    const normalizedSearch = activitySearch.trim().toLocaleLowerCase('fr-FR');
+    return activityLogs.filter((log) => {
+      if (selectedActivityType !== 'all' && log.action_type !== selectedActivityType) {
+        return false;
+      }
+
+      if (normalizedSearch.length === 0) {
+        return true;
+      }
+
+      const actorLabel = (log.actor?.full_name ?? log.actor?.email ?? 'système').toLocaleLowerCase('fr-FR');
+      const haystack = `${log.description} ${ACTIVITY_TYPE_LABELS[log.action_type]} ${actorLabel}`.toLocaleLowerCase('fr-FR');
+      return haystack.includes(normalizedSearch);
+    });
+  }, [activityLogs, activitySearch, selectedActivityType]);
 
   async function getAccessToken() {
     const {
@@ -832,12 +875,53 @@ export default function MissionDetailPage() {
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
         <p className="mt-1 text-sm text-slate-600">Événements récents de la mission, du plus récent au plus ancien.</p>
+        <div className="mt-3 space-y-3">
+          <label className="block">
+            <span className="sr-only">Rechercher dans l&apos;historique</span>
+            <input
+              type="search"
+              value={activitySearch}
+              onChange={(event) => setActivitySearch(event.target.value)}
+              placeholder="Rechercher dans l'historique"
+              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setSelectedActivityType('all')}
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                selectedActivityType === 'all'
+                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              Toutes {activityLogs.length}
+            </button>
+            {Object.entries(ACTIVITY_TYPE_LABELS).map(([type, label]) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSelectedActivityType(type as ActivityLog['action_type'])}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                  selectedActivityType === type
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {label} {activityTypeCounts[type as ActivityLog['action_type']]}
+              </button>
+            ))}
+          </div>
+        </div>
 
         {activityLogs.length === 0 ? (
           <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
+        ) : filteredActivityLogs.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
         ) : (
           <ul className="mt-3 space-y-2">
-            {activityLogs.map((log) => (
+            {filteredActivityLogs.map((log) => (
               <li key={log.id} className="rounded border border-slate-200 p-3 text-sm text-slate-700">
                 <p className="font-medium">{log.description}</p>
                 <p className="mt-1 text-xs text-slate-500">
