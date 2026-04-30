@@ -83,6 +83,7 @@ export default function MissionDetailPage() {
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
   const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
+  const [pendingVolunteerIds, setPendingVolunteerIds] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -182,6 +183,10 @@ export default function MissionDetailPage() {
     const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
     return allVolunteers.filter((volunteer) => !linkedVolunteerIds.has(volunteer.id));
   }, [allVolunteers, proposals]);
+
+  useEffect(() => {
+    setPendingVolunteerIds(new Set(assignments.map((assignment) => assignment.volunteer_id)));
+  }, [assignments]);
 
 
 
@@ -498,37 +503,52 @@ export default function MissionDetailPage() {
       return;
     }
 
-    setActionLoading(volunteerId);
+    setPendingVolunteerIds((current) => {
+      const next = new Set(current);
+      if (next.has(volunteerId)) {
+        next.delete(volunteerId);
+      } else {
+        next.add(volunteerId);
+      }
+      return next;
+    });
+  }
+
+  async function saveCrewSelection() {
+    if (!mission || missionBlocksSelection) {
+      return;
+    }
+
+    setActionLoading('save-selection');
     setError(null);
     setSuccess(null);
 
-    if (selectedVolunteerIds.has(volunteerId)) {
-      const { error: deleteError } = await supabase.from('mission_assignments').delete().eq('mission_id', mission.id).eq('volunteer_id', volunteerId);
+    const currentlySelectedIds = new Set(assignments.map((assignment) => assignment.volunteer_id));
+    const toInsert = Array.from(pendingVolunteerIds).filter((volunteerId) => !currentlySelectedIds.has(volunteerId));
+    const toDelete = Array.from(currentlySelectedIds).filter((volunteerId) => !pendingVolunteerIds.has(volunteerId));
 
+    if (toDelete.length > 0) {
+      const { error: deleteError } = await supabase.from('mission_assignments').delete().eq('mission_id', mission.id).in('volunteer_id', toDelete);
       if (deleteError) {
-        setError(`Impossible de retirer le bénévole : ${deleteError.message}`);
+        setError(`Impossible de mettre à jour la sélection : ${deleteError.message}`);
         setActionLoading(null);
         return;
       }
+    }
 
-      setSuccess("Bénévole retiré de l'équipe finale.");
-    } else {
-      const { error: insertError } = await supabase.from('mission_assignments').insert({
-        mission_id: mission.id,
-        volunteer_id: volunteerId,
-        assignment_status: 'selected'
-      });
-
+    if (toInsert.length > 0) {
+      const { error: insertError } = await supabase.from('mission_assignments').insert(
+        toInsert.map((volunteerId) => ({ mission_id: mission.id, volunteer_id: volunteerId, assignment_status: 'selected' }))
+      );
       if (insertError) {
-        setError(`Impossible de retenir ce bénévole : ${insertError.message}`);
+        setError(`Impossible de mettre à jour la sélection : ${insertError.message}`);
         setActionLoading(null);
         return;
       }
-
-      setSuccess("Bénévole ajouté à l'équipe finale.");
     }
 
     setActionLoading(null);
+    setSuccess('Sélection de l’équipage mise à jour.');
     await loadData();
   }
 
@@ -739,7 +759,7 @@ export default function MissionDetailPage() {
                         <label className="inline-flex items-center gap-2 text-xs text-slate-700">
                           <input
                             type="checkbox"
-                            checked={selectedVolunteerIds.has(row.volunteerId)}
+                            checked={pendingVolunteerIds.has(row.volunteerId)}
                             onChange={() => toggleSelection(row.volunteerId)}
                             disabled={missionBlocksSelection || actionLoading === row.volunteerId || row.response !== 'available'}
                             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
@@ -876,7 +896,7 @@ export default function MissionDetailPage() {
 
               <div className="space-y-2">
                 {filteredEligibleProposals.map((proposal) => {
-                  const isSelected = selectedVolunteerIds.has(proposal.volunteer_id);
+                  const isSelected = pendingVolunteerIds.has(proposal.volunteer_id);
                   const isSaving = actionLoading === proposal.volunteer_id;
                   const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
                     .map((profileSkill) => profileSkill.skill?.name)
@@ -959,19 +979,53 @@ export default function MissionDetailPage() {
                     <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
                   ) : (
                     <ul className="mt-3 flex flex-wrap gap-4">
-                      {skillGroup.volunteers.map((volunteer) => (
-                        <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-20 text-center">
-                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
-                            {volunteer.initials || 'B'}
-                          </div>
-                          <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
-                        </li>
-                      ))}
+                      {skillGroup.volunteers.map((volunteer) => {
+                        const isSelected = pendingVolunteerIds.has(volunteer.id);
+                        const canToggle = canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id;
+
+                        return (
+                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
+                            <button
+                              type="button"
+                              onClick={() => toggleSelection(volunteer.id)}
+                              disabled={!canToggle}
+                              className={`w-full rounded-md p-1 transition ${
+                                isSelected
+                                  ? 'bg-emerald-50 ring-1 ring-emerald-300'
+                                  : 'hover:bg-slate-50'
+                              } ${
+                                !canToggle ? 'cursor-not-allowed opacity-45' : ''
+                              }`}
+                            >
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
+                                {volunteer.initials || 'B'}
+                              </div>
+                              <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
+                            </button>
+                            {isSelected ? (
+                              <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>
               ))
             )}
+
+            {canManageMission ? (
+              <div className="sticky bottom-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={saveCrewSelection}
+                  disabled={missionBlocksSelection || actionLoading === 'save-selection'}
+                  className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {actionLoading === 'save-selection' ? 'Enregistrement...' : "Confirmer la sélection de l'équipage"}
+                </button>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </section>
