@@ -36,7 +36,14 @@ export default function MissionsPage() {
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
-    Map<string, { availableCount: number; unavailableCount: number; availableVolunteers: Array<{ name: string; skills: string[] }> }>
+    Map<
+      string,
+      {
+        availableCount: number;
+        unavailableCount: number;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+      }
+    >
   >(new Map());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -138,7 +145,7 @@ export default function MissionsPage() {
     const { data: availableProfiles } = availableVolunteerIds.length
       ? await supabase
         .from('profiles')
-        .select('id,full_name,profile_skills(skill:skills(name))')
+        .select('id,full_name,profile_skills(skill:skills(name,category))')
         .in('id', availableVolunteerIds)
       : { data: [] };
 
@@ -147,13 +154,25 @@ export default function MissionsPage() {
         profile.id,
         {
           name: profile.full_name?.trim() || 'Sans nom',
-          skills: ((profile.profile_skills ?? []) as Array<{ skill?: { name?: string } | Array<{ name?: string }> | null }>)
-            .map((profileSkill) => (Array.isArray(profileSkill.skill) ? profileSkill.skill[0]?.name : profileSkill.skill?.name) ?? null)
-            .filter((name): name is string => Boolean(name))
+          skills: (
+            (profile.profile_skills ?? []) as Array<{
+              skill?: { name?: string; category?: string | null } | Array<{ name?: string; category?: string | null }> | null;
+            }>
+          )
+            .map((profileSkill) => (Array.isArray(profileSkill.skill) ? profileSkill.skill[0] : profileSkill.skill) ?? null)
+            .filter((skill): skill is { name?: string; category?: string | null } => Boolean(skill?.name))
+            .map((skill) => ({ name: skill.name ?? 'Compétence sans nom', category: skill.category ?? null }))
         }
       ])
     );
-    const nextProposalStats = new Map<string, { availableCount: number; unavailableCount: number; availableVolunteers: Array<{ name: string; skills: string[] }> }>();
+    const nextProposalStats = new Map<
+      string,
+      {
+        availableCount: number;
+        unavailableCount: number;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+      }
+    >();
 
     allMissionProposals.forEach((proposal) => {
       const current = nextProposalStats.get(proposal.mission_id) ?? { availableCount: 0, unavailableCount: 0, availableVolunteers: [] };
