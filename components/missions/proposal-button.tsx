@@ -133,9 +133,9 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-3">
         {currentResponse ? (
-          <div className="mr-auto">
-            <p className="text-sm text-slate-500">Etat actuel</p>
-            <p className="text-3xl text-slate-900">{currentResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
+          <div className="mr-auto flex items-center gap-2 text-sm text-slate-700">
+            <p className="text-slate-500">Etat actuel</p>
+            <p className="font-semibold text-slate-900">{currentResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
           </div>
         ) : null}
         {(currentResponse
