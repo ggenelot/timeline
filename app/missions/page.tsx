@@ -224,6 +224,17 @@ export default function MissionsPage() {
     ]
   );
 
+  const prioritizedMissions = useMemo(() => {
+    if (profile?.role !== 'benevole') {
+      return { pendingResponse: [] as MissionWithRequiredSkills[], others: filteredMissions };
+    }
+
+    const pendingResponse = filteredMissions.filter((mission) => !proposalByMission.has(mission.id));
+    const others = filteredMissions.filter((mission) => proposalByMission.has(mission.id));
+
+    return { pendingResponse, others };
+  }, [filteredMissions, proposalByMission, profile?.role]);
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
   }
@@ -315,7 +326,29 @@ export default function MissionsPage() {
       </section>
 
       <div className="space-y-3">
-        {filteredMissions.map((mission) => (
+        {profile?.role === 'benevole' && prioritizedMissions.pendingResponse.length > 0 ? (
+          <section className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
+            <h2 className="text-sm font-semibold text-emerald-900">Nouvelles missions ({prioritizedMissions.pendingResponse.length})</h2>
+            {prioritizedMissions.pendingResponse.map((mission) => (
+              <div key={mission.id}>
+                <MissionCard
+                  mission={mission}
+                  requiredSkills={mission.mission_required_skills ?? []}
+                  formatMissionRequirementLabel={formatMissionRequirementLabel}
+                  currentUserId={profile?.id ?? ''}
+                  canPropose={profile?.role === 'benevole'}
+                  proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
+                  canEdit={profile?.role === 'admin'}
+                  availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
+                  unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
+                  availableVolunteerNames={proposalStatsByMission.get(mission.id)?.availableVolunteerNames ?? []}
+                />
+              </div>
+            ))}
+          </section>
+        ) : null}
+
+        {(profile?.role === 'benevole' ? prioritizedMissions.others : filteredMissions).map((mission) => (
           <div key={mission.id}>
             <MissionCard
               mission={mission}
