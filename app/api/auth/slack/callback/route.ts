@@ -10,6 +10,11 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get('state');
   const base = getSlackConfig().appBaseUrl ?? `${url.protocol}//${url.host}`;
 
+  const providerError = url.searchParams.get('error');
+  if (providerError) {
+    return NextResponse.redirect(new URL(`/login?slack=auth_failed&reason=${encodeURIComponent(providerError)}`, base));
+  }
+
   if (!code || !state || !(await consumeSlackOAuthState(state, 'login'))) {
     return NextResponse.redirect(new URL('/login?slack=state_invalid', base));
   }
@@ -53,6 +58,20 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    if (!profileId && slackEmail) {
+      const { data: profileByEmail } = await service.from('profiles').select('id').eq('email', slackEmail).maybeSingle<{ id: string }>();
+      if (profileByEmail?.id) {
+        profileId = profileByEmail.id;
+        await service.from('slack_identities').upsert({
+          profile_id: profileId,
+          slack_team_id: slackTeamId,
+          slack_user_id: slackUserId,
+          is_primary: true,
+          last_login_at: new Date().toISOString()
+        });
+      }
+    }
+
     if (!profileId) {
       const syntheticEmail = slackEmail ?? `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
       const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
@@ -62,7 +81,7 @@ export async function GET(request: NextRequest) {
       });
 
       if (createUserError || !createdUser.user?.id) {
-        throw new Error('user_create_failed');
+        throw new Error(`user_create_failed:${createUserError?.message ?? 'unknown'}`);
       }
 
       profileId = createdUser.user.id;
@@ -88,7 +107,9 @@ export async function GET(request: NextRequest) {
     if (linkError || !linkData?.properties?.action_link) throw new Error('magic_link_failed');
 
     return NextResponse.redirect(linkData.properties.action_link);
-  } catch {
-    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : 'unknown';
+    console.error('[slack-auth-callback] failure', { reason });
+    return NextResponse.redirect(new URL(`/login?slack=auth_failed&reason=${encodeURIComponent(reason)}`, base));
   }
 }
