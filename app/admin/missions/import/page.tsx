@@ -110,7 +110,7 @@ function normalizeEditableRow(item: MissionImportPreviewItem, index: number): Ed
     startTime: fallbackTimes?.startTime ?? '',
     endTime: fallbackTimes?.endTime ?? '',
     location: item.block.values.location ?? '',
-    category: 'maraude',
+    category: 'poste_de_secours',
     do_status: item.block.values.do_status ?? '',
     retained_status: item.block.values.retained_status ?? '',
     requirements_notes: item.block.values.requirements_notes ?? '',

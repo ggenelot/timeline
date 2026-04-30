@@ -37,7 +37,7 @@ function isValidCategory(value: string): value is MissionCategory {
 
 function normalizeCategory(value: string | null | undefined): MissionCategory {
   if (!value) {
-    return 'maraude';
+    return 'poste_de_secours';
   }
 
   if (isValidCategory(value)) {
@@ -66,7 +66,7 @@ function normalizeCategory(value: string | null | undefined): MissionCategory {
     return 'vie_antenne';
   }
 
-  return 'maraude';
+  return 'poste_de_secours';
 }
 
 function isIsoDate(value: string) {
