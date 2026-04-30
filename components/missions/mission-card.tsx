@@ -105,10 +105,10 @@ export function MissionCard({
           <div className="flex flex-wrap items-center justify-end gap-3">
             {canEdit ? (
               <Link
-                href={`/admin/missions/${mission.id}/edit`}
+                href={`/missions/${mission.id}`}
                 className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
               >
-                Modifier
+                Gérer
               </Link>
             ) : null}
           </div>
