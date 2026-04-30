@@ -50,6 +50,14 @@ const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
   volunteer_removed: 'Retiré'
 };
 
+const ACTIVITY_TYPE_TINTS: Record<ActivityLog['action_type'], string> = {
+  mission_created: 'border-emerald-200 bg-emerald-50/50',
+  mission_status_changed: 'border-blue-200 bg-blue-50/50',
+  proposal_response_updated: 'border-amber-200 bg-amber-50/50',
+  volunteer_selected: 'border-violet-200 bg-violet-50/50',
+  volunteer_removed: 'border-rose-200 bg-rose-50/50'
+};
+
 const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposalResponse, 'no_response'> }> = [
   { label: 'Disponible', value: 'available' },
   { label: 'Indisponible', value: 'unavailable' }
@@ -66,6 +74,7 @@ export default function MissionDetailPage() {
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
+  const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -873,9 +882,23 @@ export default function MissionDetailPage() {
       ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+          <button
+            type="button"
+            aria-expanded={isHistoryExpanded}
+            aria-controls="mission-history-content"
+            aria-label={isHistoryExpanded ? "Masquer l'historique" : "Afficher l'historique"}
+            onClick={() => setIsHistoryExpanded((current) => !current)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className={`text-base leading-none transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
         <p className="mt-1 text-sm text-slate-600">Événements récents de la mission, du plus récent au plus ancien.</p>
-        <div className="mt-3 space-y-3">
+
+        {isHistoryExpanded ? (
+          <div id="mission-history-content" className="mt-3 space-y-3">
           <label className="block">
             <span className="sr-only">Rechercher dans l&apos;historique</span>
             <input
@@ -913,24 +936,24 @@ export default function MissionDetailPage() {
               </button>
             ))}
           </div>
+          {activityLogs.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
+          ) : filteredActivityLogs.length === 0 ? (
+            <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
+          ) : (
+            <ul className="mt-3 space-y-2">
+              {filteredActivityLogs.map((log) => (
+                <li key={log.id} className={`rounded border p-3 text-sm text-slate-700 ${ACTIVITY_TYPE_TINTS[log.action_type]}`}>
+                  <p className="font-medium">{log.description}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
+                  </p>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
-
-        {activityLogs.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
-        ) : filteredActivityLogs.length === 0 ? (
-          <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
-        ) : (
-          <ul className="mt-3 space-y-2">
-            {filteredActivityLogs.map((log) => (
-              <li key={log.id} className="rounded border border-slate-200 p-3 text-sm text-slate-700">
-                <p className="font-medium">{log.description}</p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
-                </p>
-              </li>
-            ))}
-          </ul>
-        )}
+        ) : null}
       </section>
 
     </div>
