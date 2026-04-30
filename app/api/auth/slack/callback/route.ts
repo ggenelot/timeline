@@ -12,7 +12,8 @@ export async function GET(request: NextRequest) {
 
   const providerError = url.searchParams.get('error');
   if (providerError) {
-    return NextResponse.redirect(new URL(`/login?slack=auth_failed&reason=${encodeURIComponent(providerError)}`, base));
+    console.error('[slack-auth-callback] provider error', { providerError });
+    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
   }
 
   if (!code || !state || !(await consumeSlackOAuthState(state, 'login'))) {
@@ -110,6 +111,6 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown';
     console.error('[slack-auth-callback] failure', { reason });
-    return NextResponse.redirect(new URL(`/login?slack=auth_failed&reason=${encodeURIComponent(reason)}`, base));
+    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
   }
 }
