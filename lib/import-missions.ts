@@ -562,7 +562,7 @@ function parseTimeRange(value: string | null): { startHour: number; startMinute:
 
 function inferCategory(value: string | null): MissionCategory {
   if (!value) {
-    return 'maraude';
+    return 'poste_de_secours';
   }
 
   const normalized = sanitize(value);
@@ -583,7 +583,7 @@ function inferCategory(value: string | null): MissionCategory {
     return 'vie_antenne';
   }
 
-  return 'maraude';
+  return 'poste_de_secours';
 }
 
 function inferRequiredVolunteers(value: string | null): number {
