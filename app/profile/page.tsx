@@ -24,7 +24,7 @@ export default function ProfilePage() {
 
       const { data, error: profileError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,sector,phone,created_at,slack_user_id,slack_team_id,slack_connected_at')
+        .select('id,full_name,email,role,sector,phone,created_at,slack_user_id,slack_team_id,slack_username,slack_connected_at')
         .eq('id', authData.user.id)
         .single();
 
@@ -113,6 +113,7 @@ export default function ProfilePage() {
             ...previous,
             slack_user_id: null,
             slack_team_id: null,
+            slack_username: null,
             slack_connected_at: null
           }
         : previous
@@ -147,7 +148,7 @@ export default function ProfilePage() {
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
         <p className="font-medium text-slate-900">Intégration Slack</p>
         <p className="mt-1 text-slate-700">
-          État: {isSlackConnected ? `Connecté (${profile.slack_team_id} / ${profile.slack_user_id})` : 'Non connecté'}
+          État: {isSlackConnected ? `Connecté (${profile.slack_username ? `@${profile.slack_username}` : `${profile.slack_team_id} / ${profile.slack_user_id}`})` : 'Non connecté'}
         </p>
         {profile.slack_connected_at ? <p className="mt-1 text-xs text-slate-500">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
         <div className="mt-3 flex gap-2">

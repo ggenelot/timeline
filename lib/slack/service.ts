@@ -74,6 +74,14 @@ export class SlackService {
     });
   }
 
+
+
+  async getUserInfo(slackUserId: string) {
+    return this.callApi<{ user?: { name?: string } }>('users.info', {
+      user: slackUserId
+    });
+  }
+
   async inviteUsersToChannel(channel: string, users: string[]) {
     if (users.length === 0) {
       return;
