@@ -33,16 +33,21 @@ export async function GET(request: NextRequest) {
     const oauth = await SlackService.exchangeOAuthCode(code);
     const slackUserId = oauth.authed_user?.id;
     const slackTeamId = oauth.team?.id;
+    const slack = new SlackService();
 
     if (!slackUserId || !slackTeamId) {
       throw new Error('Slack OAuth n\'a pas renvoyé les identifiants utilisateur/équipe.');
     }
+
+    const userInfo = await slack.getUserInfo(slackUserId);
+    const slackUsername = userInfo.user?.name ?? null;
 
     const { error: profileError } = await serviceClient
       .from('profiles')
       .update({
         slack_user_id: slackUserId,
         slack_team_id: slackTeamId,
+        slack_username: slackUsername,
         slack_connected_at: new Date().toISOString()
       })
       .eq('id', stateRow.profile_id);

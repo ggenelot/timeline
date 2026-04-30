@@ -10,6 +10,7 @@ export type Profile = {
   created_at: string;
   slack_user_id?: string | null;
   slack_team_id?: string | null;
+  slack_username?: string | null;
   slack_connected_at?: string | null;
 };
 
