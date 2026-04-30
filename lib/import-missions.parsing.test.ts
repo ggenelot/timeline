@@ -37,4 +37,9 @@ export function runImportMissionsParsingTests() {
   const dedupKeyA = buildMissionDedupKey({ title: '  Soirée   T7 ', missionDate: '2026-04-30' });
   const dedupKeyB = buildMissionDedupKey({ title: 'soirée t7', missionDate: '2026-04-30' });
   assert(dedupKeyA === dedupKeyB, 'La clé de déduplication doit ignorer casse et espaces superflus.');
+
+  const categoryCsv = `Intitulé;Date;Horaires;Type\nDPS Test;30/04/26;08h00 - 12h00;DPS`;
+  const categoryPreview = buildMissionsPreview(parseCsvContent(categoryCsv));
+  const importedCategory = categoryPreview.items[0]?.normalized?.category;
+  assert(importedCategory === 'poste_de_secours', 'Le type DPS doit être importé en catégorie poste_de_secours.');
 }
