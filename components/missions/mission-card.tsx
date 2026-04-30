@@ -19,7 +19,18 @@ type MissionCardProps = {
   proposalStatus: MissionProposalStatus | null;
   proposalResponse: MissionProposalResponse | null;
   canEdit: boolean;
+  availableVolunteersCount: number;
+  unavailableVolunteersCount: number;
+  availableVolunteerNames: string[];
 };
+
+const MISSION_STATUS_LABELS = {
+  draft: 'Brouillon',
+  proposed: 'Proposé',
+  closed: 'Clos',
+  confirmed: 'Confirmé',
+  cancelled: 'Annulé'
+} as const;
 
 export function MissionCard({
   mission,
@@ -29,22 +40,25 @@ export function MissionCard({
   canPropose,
   proposalStatus,
   proposalResponse,
-  canEdit
+  canEdit,
+  availableVolunteersCount,
+  unavailableVolunteersCount,
+  availableVolunteerNames
 }: MissionCardProps) {
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
       <div className="p-6">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
-            <span className="rounded-full bg-amber-400 px-3 py-1.5 text-slate-900">DPS SITES</span>
+            <span className="rounded-full bg-amber-400 px-3 py-1.5 text-slate-900">{MISSION_CATEGORY_LABELS[mission.category]}</span>
             <span className="text-slate-400">|</span>
-            <span className="text-slate-500">Recensement ouvert</span>
+            <span className="text-slate-500">{MISSION_STATUS_LABELS[mission.status]}</span>
             <span className="text-slate-400">|</span>
             <span className="text-slate-500">Antenne En attente</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">1 DISPONIBLES</span>
-            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-400">20 INDISPONIBLES</span>
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-400">{unavailableVolunteersCount} INDISPONIBLES</span>
           </div>
         </div>
 
@@ -106,6 +120,9 @@ export function MissionCard({
 
           {proposalStatus ? <StatusBadge status={proposalStatus} /> : null}
         </div>
+      </div>
+      <div className="border-t border-slate-200 bg-white px-6 py-3 text-sm text-slate-500">
+        Personnes disponibles : {availableVolunteerNames.length > 0 ? availableVolunteerNames.join(', ') : '-'}
       </div>
       <div className="border-t border-slate-200 bg-white px-6 py-3 text-sm text-slate-500">Personnes disponibles : -</div>
     </article>
