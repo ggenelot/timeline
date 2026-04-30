@@ -204,7 +204,7 @@ export default function MissionDetailPage() {
 
     const { data: profileData } = await supabase
       .from('profiles')
-      .select('id,full_name,email,phone,role,sector,created_at')
+      .select('id,full_name,email,phone,role,sector,created_at,slack_user_id,slack_team_id,slack_connected_at')
       .eq('id', authData.user.id)
       .single();
 
@@ -219,7 +219,7 @@ export default function MissionDetailPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
       )
       .eq('id', missionId)
       .single();
@@ -435,19 +435,67 @@ export default function MissionDetailPage() {
       return;
     }
 
+    const token = await getAccessToken();
+    if (!token) {
+      setError('Session invalide. Reconnectez-vous puis réessayez.');
+      return;
+    }
+
     setActionLoading('confirm-mission');
     setError(null);
     setSuccess(null);
 
-    const { error: updateError } = await supabase.from('missions').update({ status: 'confirmed' }).eq('id', mission.id);
+    const response = await fetch(`/api/admin/missions/${mission.id}/confirm`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
 
-    if (updateError) {
-      setError(`Impossible de confirmer la mission : ${updateError.message}`);
+    const payload = (await response.json()) as { error?: string; message?: string; slackError?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? 'Impossible de confirmer la mission.');
       setActionLoading(null);
       return;
     }
 
-    setSuccess('Mission confirmée.');
+    setSuccess(payload.slackError ? `${payload.message} (${payload.slackError})` : payload.message ?? 'Mission confirmée.');
+    setActionLoading(null);
+    await loadData();
+  }
+
+  async function syncSlackChannel() {
+    if (!mission) {
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+      setError('Session invalide. Reconnectez-vous puis réessayez.');
+      return;
+    }
+
+    setActionLoading('sync-slack-channel');
+    setError(null);
+    setSuccess(null);
+
+    const response = await fetch(`/api/admin/missions/${mission.id}/slack-sync`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const payload = (await response.json()) as { error?: string; message?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? 'Synchronisation Slack impossible.');
+      setActionLoading(null);
+      return;
+    }
+
+    setSuccess(payload.message ?? 'Synchronisation Slack terminée.');
     setActionLoading(null);
     await loadData();
   }
@@ -526,6 +574,18 @@ export default function MissionDetailPage() {
               className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {actionLoading === 'confirm-mission' ? 'Validation...' : 'Confirmer la mission'}
+            </button>
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p>Canal Slack mission : {mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : 'Non créé'}</p>
+            <button
+              type="button"
+              onClick={syncSlackChannel}
+              disabled={actionLoading === 'sync-slack-channel'}
+              className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              {actionLoading === 'sync-slack-channel' ? 'Synchronisation...' : 'Créer / resynchroniser le canal Slack'}
             </button>
           </div>
 

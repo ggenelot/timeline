@@ -1,0 +1,29 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+
+export async function DELETE(request: NextRequest) {
+  const token = getBearerToken(request);
+  if (!token) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const auth = await requireAuthenticatedUser(token);
+  if (auth.errorResponse || !auth.client || !auth.profile) {
+    return auth.errorResponse ?? NextResponse.json({ error: 'Utilisateur introuvable.' }, { status: 401 });
+  }
+
+  const { error } = await auth.client
+    .from('profiles')
+    .update({
+      slack_user_id: null,
+      slack_team_id: null,
+      slack_connected_at: null
+    })
+    .eq('id', auth.profile.id);
+
+  if (error) {
+    return NextResponse.json({ error: `Impossible de déconnecter Slack : ${error.message}` }, { status: 400 });
+  }
+
+  return NextResponse.json({ message: 'Compte Slack déconnecté.' });
+}

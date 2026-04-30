@@ -58,6 +58,9 @@ export function Header() {
               <Link href={role === 'admin' ? '/admin/volunteers' : '/my-missions'} className="text-slate-700 hover:text-slate-900">
                 {role === 'admin' ? 'Bénévoles' : 'Mes missions'}
               </Link>
+              <Link href="/profile" className="text-slate-700 hover:text-slate-900">
+                Profil
+              </Link>
               <button
                 onClick={handleSignOut}
                 className="rounded-md border border-slate-300 px-3 py-1 text-slate-700 hover:bg-slate-50"

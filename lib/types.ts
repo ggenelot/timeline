@@ -8,6 +8,9 @@ export type Profile = {
   phone?: string | null;
   sector: string | null;
   created_at: string;
+  slack_user_id?: string | null;
+  slack_team_id?: string | null;
+  slack_connected_at?: string | null;
 };
 
 export type Skill = {
@@ -68,6 +71,9 @@ export type Mission = {
   validation_date?: string | null;
   raw_import_payload?: Record<string, unknown> | null;
   import_batch_id?: string | null;
+  slack_channel_id?: string | null;
+  slack_channel_name?: string | null;
+  slack_channel_created_at?: string | null;
 };
 
 export type MissionRequiredSkill = {

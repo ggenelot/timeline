@@ -1,0 +1,177 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
+import { Profile } from '@/lib/types';
+
+export default function ProfilePage() {
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true);
+      setError(null);
+
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        window.location.href = '/login';
+        return;
+      }
+
+      const { data, error: profileError } = await supabase
+        .from('profiles')
+        .select('id,full_name,email,role,sector,phone,created_at,slack_user_id,slack_team_id,slack_connected_at')
+        .eq('id', authData.user.id)
+        .single();
+
+      if (profileError || !data) {
+        setError('Impossible de charger votre profil.');
+      } else {
+        setProfile(data);
+      }
+
+      const slackStatus = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slack') : null;
+      if (slackStatus === 'connected') {
+        setSuccess('Compte Slack connecté avec succès.');
+      } else if (slackStatus === 'expired') {
+        setError('Lien Slack expiré ou déjà utilisé.');
+      } else if (slackStatus === 'error') {
+        setError('Connexion Slack échouée.');
+      }
+
+      setLoading(false);
+    }
+
+    void load();
+  }, []);
+
+  async function handleConnectSlack() {
+    setWorking(true);
+    setError(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setError('Session invalide.');
+      setWorking(false);
+      return;
+    }
+
+    const response = await fetch('/api/slack/connect/start', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const payload = (await response.json()) as { oauthUrl?: string; error?: string };
+
+    if (!response.ok || !payload.oauthUrl) {
+      setError(payload.error ?? 'Impossible de démarrer la connexion Slack.');
+      setWorking(false);
+      return;
+    }
+
+    window.location.href = payload.oauthUrl;
+  }
+
+  async function handleDisconnectSlack() {
+    setWorking(true);
+    setError(null);
+    setSuccess(null);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const token = sessionData.session?.access_token;
+    if (!token) {
+      setError('Session invalide.');
+      setWorking(false);
+      return;
+    }
+
+    const response = await fetch('/api/slack/connect', {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    const payload = (await response.json()) as { error?: string; message?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? 'Déconnexion Slack impossible.');
+      setWorking(false);
+      return;
+    }
+
+    setProfile((previous) =>
+      previous
+        ? {
+            ...previous,
+            slack_user_id: null,
+            slack_team_id: null,
+            slack_connected_at: null
+          }
+        : previous
+    );
+    setSuccess(payload.message ?? 'Compte Slack déconnecté.');
+    setWorking(false);
+  }
+
+  if (loading) {
+    return <p className="text-sm text-slate-600">Chargement...</p>;
+  }
+
+  if (!profile) {
+    return <p className="text-sm text-red-600">{error ?? 'Profil introuvable.'}</p>;
+  }
+
+  const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
+
+  return (
+    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+      <h1 className="text-xl font-semibold text-slate-900">Mon profil</h1>
+
+      {error ? <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p> : null}
+      {success ? <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-700">{success}</p> : null}
+
+      <div className="space-y-1 text-sm text-slate-700">
+        <p><span className="font-medium">Nom:</span> {profile.full_name ?? 'Non renseigné'}</p>
+        <p><span className="font-medium">Email:</span> {profile.email}</p>
+        <p><span className="font-medium">Rôle:</span> {profile.role}</p>
+      </div>
+
+      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+        <p className="font-medium text-slate-900">Intégration Slack</p>
+        <p className="mt-1 text-slate-700">
+          État: {isSlackConnected ? `Connecté (${profile.slack_team_id} / ${profile.slack_user_id})` : 'Non connecté'}
+        </p>
+        {profile.slack_connected_at ? <p className="mt-1 text-xs text-slate-500">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
+        <div className="mt-3 flex gap-2">
+          {!isSlackConnected ? (
+            <button
+              type="button"
+              onClick={handleConnectSlack}
+              disabled={working}
+              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              Connecter Slack
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleDisconnectSlack}
+              disabled={working}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              Déconnecter Slack
+            </button>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
