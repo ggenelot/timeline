@@ -241,7 +241,7 @@ export default function MissionsPage() {
           <div>
             <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
             <p className="mt-1 text-sm text-slate-600">
-              Connecté en tant que <span className="font-medium">{profile?.full_name ?? user?.email}</span> ({profile?.role ?? 'profil incomplet'})
+              Connecté en tant que <span className="font-medium">{profile?.full_name ?? profile?.email ?? 'Utilisateur'}</span> ({profile?.role ?? 'profil incomplet'})
             </p>
             <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
           </div>
