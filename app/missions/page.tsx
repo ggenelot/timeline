@@ -7,7 +7,7 @@ import { User } from '@supabase/supabase-js';
 import { MissionCard } from '@/components/missions/mission-card';
 import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
-import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
+import { SkillCode } from '@/lib/skills';
 import { formatMissionRequirementLabel } from '@/lib/missions';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 
@@ -17,7 +17,6 @@ type MissionWithRequiredSkills = Mission & {
 
 const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
-const VOLUNTEER_STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'proposed'];
 
 function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
   if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
@@ -44,11 +43,7 @@ export default function MissionsPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  const [selectedSector, setSelectedSector] = useState('all');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [selectedRequiredSkillCode, setSelectedRequiredSkillCode] = useState<'all' | SkillCode>('all');
-  const [showOnlyMissionsWithoutResponse, setShowOnlyMissionsWithoutResponse] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
 
   const router = useRouter();
   const pathname = usePathname();
@@ -180,33 +175,37 @@ export default function MissionsPage() {
     [proposals]
   );
 
-  const sectors = useMemo(
-    () => Array.from(new Set(missions.map((mission) => mission.sector).filter((sector): sector is string => Boolean(sector)))).sort(),
-    [missions]
-  );
-
-  const requiredSkills = useMemo(() => {
-    const usedCodes = new Set<SkillCode>();
-
-    missions.forEach((mission) => {
-      const explicitSkillNames = (mission.mission_required_skills ?? [])
-        .map((requiredSkill) => requiredSkill.skill?.name)
-        .filter((skillName): skillName is string => Boolean(skillName));
-
-      buildExpandedSkillSet(explicitSkillNames).forEach((skillCode) => usedCodes.add(skillCode));
-    });
-
-    return Array.from(usedCodes)
-      .sort(compareSkillCodes)
-      .map((skillCode) => ({ code: skillCode, name: getSkillLabel(skillCode) }));
-  }, [missions]);
-
   const effectiveSelectedStatus =
     profile?.role === 'benevole' && selectedStatus !== 'all' && selectedStatus !== 'proposed' ? 'all' : selectedStatus;
+
+  const missionCountsByCategory = useMemo(
+    () =>
+      missions.reduce<Record<MissionCategory, number>>(
+        (counts, mission) => {
+          counts[mission.category] += 1;
+          return counts;
+        },
+        { maraude: 0, garde: 0, formation: 0, vie_antenne: 0, poste_de_secours: 0 }
+      ),
+    [missions]
+  );
 
   const filteredMissions = useMemo(
     () =>
       missions.filter((mission) => {
+        const normalizedSearch = searchQuery.trim().toLocaleLowerCase('fr-FR');
+
+        if (normalizedSearch.length > 0) {
+          const searchableContent = [mission.title, mission.description, mission.location, mission.sector]
+            .filter((value): value is string => Boolean(value))
+            .join(' ')
+            .toLocaleLowerCase('fr-FR');
+
+          if (!searchableContent.includes(normalizedSearch)) {
+            return false;
+          }
+        }
+
         if (selectedCategory !== 'all' && mission.category !== selectedCategory) {
           return false;
         }
@@ -215,53 +214,15 @@ export default function MissionsPage() {
           return false;
         }
 
-        if (selectedSector !== 'all' && mission.sector !== selectedSector) {
-          return false;
-        }
-
-        const missionDate = mission.starts_at.slice(0, 10);
-
-        if (dateFrom && missionDate < dateFrom) {
-          return false;
-        }
-
-        if (dateTo && missionDate > dateTo) {
-          return false;
-        }
-
-        if (selectedRequiredSkillCode !== 'all') {
-          const explicitSkillNames = (mission.mission_required_skills ?? [])
-            .map((requiredSkill) => requiredSkill.skill?.name)
-            .filter((skillName): skillName is string => Boolean(skillName));
-
-          const expandedSkillSet = buildExpandedSkillSet(explicitSkillNames);
-
-          if (!expandedSkillSet.has(selectedRequiredSkillCode)) {
-            return false;
-          }
-        }
-
-        if (profile?.role === 'benevole' && showOnlyMissionsWithoutResponse && proposalByMission.has(mission.id)) {
-          return false;
-        }
-
         return true;
       }),
     [
       missions,
+      searchQuery,
       selectedCategory,
-      effectiveSelectedStatus,
-      selectedSector,
-      dateFrom,
-      dateTo,
-      selectedRequiredSkillCode,
-      profile?.role,
-      showOnlyMissionsWithoutResponse,
-      proposalByMission
+      effectiveSelectedStatus
     ]
   );
-
-  const availableStatusFilters = profile?.role === 'benevole' ? VOLUNTEER_STATUS_FILTER_VALUES : STATUS_FILTER_VALUES;
 
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
@@ -307,11 +268,7 @@ export default function MissionsPage() {
             type="button"
             onClick={() => {
               updateMainFilters('all', 'all');
-              setSelectedSector('all');
-              setDateFrom('');
-              setDateTo('');
-              setSelectedRequiredSkillCode('all');
-              setShowOnlyMissionsWithoutResponse(false);
+              setSearchQuery('');
             }}
             className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
           >
@@ -319,102 +276,41 @@ export default function MissionsPage() {
           </button>
         </div>
 
-        <div className="mt-3 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          <label className="text-sm text-slate-700">
-            Catégorie
-            <select
-              value={selectedCategory}
-              onChange={(event) => updateMainFilters(event.target.value as 'all' | MissionCategory, effectiveSelectedStatus)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+        <div className="mt-3 space-y-3">
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Rechercher une mission"
+            className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+          />
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => updateMainFilters('all', effectiveSelectedStatus)}
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                selectedCategory === 'all'
+                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
             >
-              <option value="all">Toutes</option>
-              {MISSION_CATEGORY_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Statut
-            <select
-              value={effectiveSelectedStatus}
-              onChange={(event) => updateMainFilters(selectedCategory, event.target.value as 'all' | MissionStatus)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="all">Tous</option>
-              {availableStatusFilters.includes('draft') ? <option value="draft">Brouillon</option> : null}
-              {availableStatusFilters.includes('proposed') ? <option value="proposed">Proposée</option> : null}
-              {availableStatusFilters.includes('closed') ? <option value="closed">Clôturée</option> : null}
-              {availableStatusFilters.includes('confirmed') ? <option value="confirmed">Confirmée</option> : null}
-              {availableStatusFilters.includes('cancelled') ? <option value="cancelled">Annulée</option> : null}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Secteur
-            <select
-              value={selectedSector}
-              onChange={(event) => setSelectedSector(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="all">Tous les secteurs</option>
-              {sectors.map((sector) => (
-                <option key={sector} value={sector}>
-                  {sector}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Date début min
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Date début max
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Compétence requise
-            <select
-              value={selectedRequiredSkillCode}
-              onChange={(event) => setSelectedRequiredSkillCode((event.target.value as SkillCode | 'all'))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="all">Toutes</option>
-              {requiredSkills.map((skill) => (
-                <option key={skill.code} value={skill.code}>
-                  {skill.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {profile?.role === 'benevole' ? (
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                checked={showOnlyMissionsWithoutResponse}
-                onChange={(event) => setShowOnlyMissionsWithoutResponse(event.target.checked)}
-                className="h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-500"
-              />
-              Missions sans réponse
-            </label>
-          ) : null}
+              Toutes {missions.length}
+            </button>
+            {MISSION_CATEGORY_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => updateMainFilters(option.value, effectiveSelectedStatus)}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  selectedCategory === option.value
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                {option.label} {missionCountsByCategory[option.value]}
+              </button>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -442,9 +338,7 @@ export default function MissionsPage() {
           </div>
         ) : filteredMissions.length === 0 ? (
           <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-            {profile?.role === 'benevole' && showOnlyMissionsWithoutResponse
-              ? 'Vous avez déjà répondu à toutes les missions affichées.'
-              : 'Aucun résultat avec les filtres sélectionnés.'}
+            Aucun résultat avec les filtres sélectionnés.
           </div>
         ) : null}
       </div>
