@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { User } from '@supabase/supabase-js';
@@ -252,18 +251,20 @@ export default function MissionsPage() {
           </div>
           {profile?.role === 'admin' ? (
             <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/admin/volunteers"
+              <button
+                type="button"
+                onClick={() => router.push('/admin/volunteers')}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Ajouter un bénévole
-              </Link>
-              <Link
-                href="/admin/missions/import"
+              </button>
+              <button
+                type="button"
+                onClick={() => router.push('/admin/missions/import')}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Importer des missions
-              </Link>
+              </button>
               <NewMissionSplitButton />
             </div>
           ) : null}
@@ -273,21 +274,7 @@ export default function MissionsPage() {
       {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
-          <button
-            type="button"
-            onClick={() => {
-              updateMainFilters('all', 'all');
-              setSearchQuery('');
-            }}
-            className="text-xs font-medium text-slate-600 underline hover:text-slate-900"
-          >
-            Réinitialiser les filtres
-          </button>
-        </div>
-
-        <div className="mt-3 space-y-3">
+        <div className="space-y-3">
           <input
             type="search"
             value={searchQuery}
