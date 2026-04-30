@@ -143,7 +143,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
               type="button"
               disabled={disabled || loadingResponse !== null}
               onClick={() => upsertResponse(option.value)}
-              className={`rounded-xl border px-8 py-4 text-3xl font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
+              className={`rounded-xl border px-7 py-3 text-2xl font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${
                 isAvailableOption
                   ? 'border-emerald-400 bg-emerald-400 text-slate-900 hover:bg-emerald-300'
                   : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
@@ -154,7 +154,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
           );
         })}
       </div>
-      {currentResponse ? <p className="text-base text-slate-500">Vous avez répondu : {getProposalResponseLabel(currentResponse)}</p> : null}
+      {currentResponse ? <p className="text-sm text-slate-500">Vous avez répondu : {getProposalResponseLabel(currentResponse)}</p> : null}
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
       {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
     </div>
