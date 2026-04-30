@@ -1,7 +1,6 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { MissionProposalResponse, MissionStatus } from '@/lib/types';
 
@@ -20,9 +19,8 @@ const responseOptions: Array<{ label: string; value: MissionProposalResponse }> 
 
 export function ProposalButton({ missionId, volunteerId, disabled, missionStatus, currentResponse }: ProposalButtonProps) {
   const [loadingResponse, setLoadingResponse] = useState<MissionProposalResponse | null>(null);
+  const [localResponse, setLocalResponse] = useState<MissionProposalResponse | null>(currentResponse);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
-  const router = useRouter();
 
   const missionBlocksResponse = ['cancelled', 'closed', 'confirmed'].includes(missionStatus);
 
@@ -43,7 +41,6 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
   async function upsertResponse(response: MissionProposalResponse) {
     setLoadingResponse(response);
     setError(null);
-    setSuccess(null);
 
     const {
       data: { user },
@@ -96,9 +93,8 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
         return;
       }
 
-      setSuccess('Réponse enregistrée.');
+      setLocalResponse(response);
       setLoadingResponse(null);
-      router.refresh();
       return;
     }
 
@@ -120,9 +116,8 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
       return;
     }
 
-    setSuccess('Réponse enregistrée.');
+    setLocalResponse(response);
     setLoadingResponse(null);
-    router.refresh();
   }
 
   if (missionBlocksResponse) {
@@ -132,19 +127,19 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-3">
-        {currentResponse ? (
+        {localResponse ? (
           <div className="mr-auto flex items-center gap-2 text-sm text-slate-700">
             <p className="text-slate-500">Etat actuel</p>
-            <p className="font-semibold text-slate-900">{currentResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
+            <p className="font-semibold text-slate-900">{localResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
           </div>
         ) : null}
-        {(currentResponse
-          ? responseOptions.filter((option) => (currentResponse === 'available' ? option.value === 'unavailable' : option.value === 'available'))
+        {(localResponse
+          ? responseOptions.filter((option) => (localResponse === 'available' ? option.value === 'unavailable' : option.value === 'available'))
           : responseOptions
         ).map((option) => {
           const isSaving = loadingResponse === option.value;
           const isAvailableOption = option.value === 'available';
-          const isDisengageAction = currentResponse === 'available' && option.value === 'unavailable';
+          const isDisengageAction = localResponse === 'available' && option.value === 'unavailable';
 
           return (
             <button
@@ -166,7 +161,6 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
         })}
       </div>
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
-      {success ? <p className="text-sm text-emerald-700">{success}</p> : null}
     </div>
   );
 }
