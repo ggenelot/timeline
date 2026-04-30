@@ -21,6 +21,15 @@ function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
 }
 
+function normalizeSkillName(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
 function parseMissionRequirements(requirements: MissionRequirementFormState[]): { parsedRequirements: ParsedRequirement[]; error: string | null } {
   const trimmedRequirements = requirements
     .map((requirement) => ({
@@ -117,16 +126,32 @@ export default function AdminCreateMissionPage() {
     }
 
     const template = getEventTemplateById(new URLSearchParams(window.location.search).get('template'));
+    const hasRequirementsToMap = Boolean(template?.requirementDefaults && template.requirementDefaults.length > 0);
+
+    if (hasRequirementsToMap && skills.length === 0) {
+      return;
+    }
 
     if (template) {
       setForm((previousForm) => ({
         ...previousForm,
         ...template.defaults
       }));
+
+      if (hasRequirementsToMap) {
+        setRequirements(
+          template!.requirementDefaults!.map((requirement) => ({
+            skill_id: requirement.skillName
+              ? (skills.find((skill) => normalizeSkillName(skill.name ?? '') === normalizeSkillName(requirement.skillName!))?.id ?? '')
+              : '',
+            quantity: requirement.quantity
+          }))
+        );
+      }
     }
 
     hasInitializedTemplate.current = true;
-  }, []);
+  }, [skills]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
