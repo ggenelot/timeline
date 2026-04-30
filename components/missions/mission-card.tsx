@@ -70,6 +70,8 @@ export function MissionCard({
     return availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === selectedSkillFilter));
   }, [availableVolunteers, selectedSkillFilter]);
 
+  const doStatusLabel = mission.do_status?.trim() || 'Antenne En attente';
+
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
       <div className="p-5">
@@ -83,7 +85,7 @@ export function MissionCard({
             <span className="text-slate-400">|</span>
             <span className="text-slate-500">{MISSION_STATUS_LABELS[mission.status]}</span>
             <span className="text-slate-400">|</span>
-            <span className="text-slate-500">Antenne En attente</span>
+            <span className="text-slate-500">{doStatusLabel}</span>
           </div>
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>
