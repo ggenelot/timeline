@@ -1,12 +1,9 @@
 import Link from 'next/link';
-import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { ProposalButton } from '@/components/missions/proposal-button';
-import { StatusBadge } from '@/components/missions/status-badge';
 import {
   MISSION_CATEGORY_LABELS,
   Mission,
   MissionProposalResponse,
-  MissionProposalStatus,
   MissionRequiredSkill
 } from '@/lib/types';
 
@@ -16,7 +13,6 @@ type MissionCardProps = {
   formatMissionRequirementLabel: (skillName: string | undefined, quantity: number) => string;
   currentUserId: string;
   canPropose: boolean;
-  proposalStatus: MissionProposalStatus | null;
   proposalResponse: MissionProposalResponse | null;
   canEdit: boolean;
   availableVolunteersCount: number;
@@ -38,7 +34,6 @@ export function MissionCard({
   formatMissionRequirementLabel,
   currentUserId,
   canPropose,
-  proposalStatus,
   proposalResponse,
   canEdit,
   availableVolunteersCount,
@@ -64,7 +59,6 @@ export function MissionCard({
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <h2 className="text-2xl font-semibold text-slate-900">{mission.title}</h2>
-          <MissionStatusBadge status={mission.status} />
         </div>
 
         <p className="mt-2 text-sm text-slate-500">
@@ -87,14 +81,7 @@ export function MissionCard({
         ) : null}
 
         <div className="mt-4 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link
-              href={`/missions/${mission.id}`}
-              className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
-            >
-              Voir le détail
-            </Link>
-
+          <div className="flex flex-wrap items-center justify-end gap-3">
             {canEdit ? (
               <Link
                 href={`/admin/missions/${mission.id}/edit`}
@@ -114,8 +101,6 @@ export function MissionCard({
               currentResponse={proposalResponse}
             />
           ) : null}
-
-          {proposalStatus ? <StatusBadge status={proposalStatus} /> : null}
         </div>
       </div>
       <div className="border-t border-slate-200 bg-white px-5 py-3 text-sm text-slate-500">
