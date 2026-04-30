@@ -47,7 +47,7 @@ export function MissionCard({
 }: MissionCardProps) {
   return (
     <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
-      <div className="p-6">
+      <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-2 text-xs font-medium">
             <span className="rounded-full bg-amber-400 px-3 py-1.5 text-slate-900">{MISSION_CATEGORY_LABELS[mission.category]}</span>
@@ -63,10 +63,7 @@ export function MissionCard({
         </div>
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <h2 className="text-4xl font-semibold text-slate-900">{mission.title}</h2>
-          <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">
-            {MISSION_CATEGORY_LABELS[mission.category]}
-          </span>
+          <h2 className="text-2xl font-semibold text-slate-900">{mission.title}</h2>
           <MissionStatusBadge status={mission.status} />
         </div>
 
@@ -75,7 +72,7 @@ export function MissionCard({
           {new Date(mission.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à{' '}
           {new Date(mission.ends_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </p>
-        <p className="mt-2 text-2xl text-slate-500">Lieu : {mission.sector ?? 'N/A'} - {mission.location ?? 'Non défini'}</p>
+        <p className="mt-2 text-xl text-slate-500">Lieu : {mission.sector ?? 'N/A'} - {mission.location ?? 'Non défini'}</p>
 
         <p className="mt-2 text-sm text-slate-700">{mission.description ?? 'Aucune description'}</p>
 
@@ -121,10 +118,9 @@ export function MissionCard({
           {proposalStatus ? <StatusBadge status={proposalStatus} /> : null}
         </div>
       </div>
-      <div className="border-t border-slate-200 bg-white px-6 py-3 text-sm text-slate-500">
+      <div className="border-t border-slate-200 bg-white px-5 py-3 text-sm text-slate-500">
         Personnes disponibles : {availableVolunteerNames.length > 0 ? availableVolunteerNames.join(', ') : '-'}
       </div>
-      <div className="border-t border-slate-200 bg-white px-6 py-3 text-sm text-slate-500">Personnes disponibles : -</div>
     </article>
   );
 }
