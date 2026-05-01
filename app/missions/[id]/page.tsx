@@ -76,6 +76,8 @@ export default function MissionDetailPage() {
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(false);
+  const [isAvailabilityExpanded, setIsAvailabilityExpanded] = useState(false);
+  const [isSlackCardExpanded, setIsSlackCardExpanded] = useState(false);
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -576,41 +578,6 @@ export default function MissionDetailPage() {
     await loadData();
   }
 
-  async function confirmMission() {
-    if (!mission || assignments.length === 0 || mission.status !== 'proposed') {
-      return;
-    }
-
-    const token = await getAccessToken();
-    if (!token) {
-      setError('Session invalide. Reconnectez-vous puis réessayez.');
-      return;
-    }
-
-    setActionLoading('confirm-mission');
-    setError(null);
-    setSuccess(null);
-
-    const response = await fetch(`/api/admin/missions/${mission.id}/confirm`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
-
-    const payload = (await response.json()) as { error?: string; message?: string; slackError?: string };
-
-    if (!response.ok) {
-      setError(payload.error ?? 'Impossible de confirmer la mission.');
-      setActionLoading(null);
-      return;
-    }
-
-    setSuccess(payload.slackError ? `${payload.message} (${payload.slackError})` : payload.message ?? 'Mission confirmée.');
-    setActionLoading(null);
-    await loadData();
-  }
-
   async function syncSlackChannel() {
     if (!mission) {
       return;
@@ -712,34 +679,27 @@ export default function MissionDetailPage() {
       {canManageMission ? (
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Pilotage des disponibilités bénévoles</h2>
+            <h2 className="text-lg font-semibold text-slate-900">Disponibilité des bénévoles</h2>
             <button
               type="button"
-              onClick={confirmMission}
-              disabled={assignments.length === 0 || mission.status !== 'proposed' || actionLoading === 'confirm-mission'}
-              className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm text-white hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+              aria-expanded={isAvailabilityExpanded}
+              aria-controls="mission-availability-content"
+              aria-label={isAvailabilityExpanded ? 'Masquer la disponibilité des bénévoles' : 'Afficher la disponibilité des bénévoles'}
+              onClick={() => setIsAvailabilityExpanded((current) => !current)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
             >
-              {actionLoading === 'confirm-mission' ? 'Validation...' : 'Confirmer la mission'}
+              <span className={`text-base leading-none transition-transform ${isAvailabilityExpanded ? 'rotate-180' : ''}`}>▾</span>
             </button>
           </div>
 
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-            <p>Canal Slack mission : {mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : 'Non créé'}</p>
-            <button
-              type="button"
-              onClick={syncSlackChannel}
-              disabled={actionLoading === 'sync-slack-channel'}
-              className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              {actionLoading === 'sync-slack-channel' ? 'Synchronisation...' : 'Créer / resynchroniser le canal Slack'}
-            </button>
-          </div>
+          {isAvailabilityExpanded ? (
+            <>
 
-          <div className="grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-            <p>Disponibles : <span className="font-semibold text-emerald-700">{proposalsByStatus.available}</span></p>
-            <p>Indisponibles : <span className="font-semibold text-rose-700">{proposalsByStatus.unavailable}</span></p>
-            <p>Sans réponse : <span className="font-semibold text-slate-700">{proposalsByStatus.no_response}</span></p>
-          </div>
+              <div id="mission-availability-content" className="grid gap-2 text-xs text-slate-600 md:grid-cols-3">
+                <p>Disponibles : <span className="font-semibold text-emerald-700">{proposalsByStatus.available}</span></p>
+                <p>Indisponibles : <span className="font-semibold text-rose-700">{proposalsByStatus.unavailable}</span></p>
+                <p>Sans réponse : <span className="font-semibold text-slate-700">{proposalsByStatus.no_response}</span></p>
+              </div>
 
           <div className="max-h-80 overflow-y-auto rounded border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700">
@@ -974,12 +934,14 @@ export default function MissionDetailPage() {
               </div>
             </>
           ) : null}
+            </>
+          ) : null}
         </section>
       ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Compétences des bénévoles</h2>
+          <h2 className="text-lg font-semibold text-slate-900">Sélection de l&apos;équipage</h2>
           <button
             type="button"
             aria-expanded={isSkillsDirectoryExpanded}
@@ -1056,6 +1018,37 @@ export default function MissionDetailPage() {
                 </button>
               </div>
             ) : null}
+          </div>
+        ) : null}
+      </section>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex items-center justify-between gap-3">
+          <h2 className="text-lg font-semibold text-slate-900">Slack</h2>
+          <button
+            type="button"
+            aria-expanded={isSlackCardExpanded}
+            aria-controls="mission-slack-content"
+            aria-label={isSlackCardExpanded ? 'Masquer la carte Slack' : 'Afficher la carte Slack'}
+            onClick={() => setIsSlackCardExpanded((current) => !current)}
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className={`text-base leading-none transition-transform ${isSlackCardExpanded ? 'rotate-180' : ''}`}>▾</span>
+          </button>
+        </div>
+        <p className="mt-1 text-sm text-slate-600">Gestion du canal Slack lié à la mission.</p>
+
+        {isSlackCardExpanded ? (
+          <div id="mission-slack-content" className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+            <p>Canal Slack mission : {mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : 'Non créé'}</p>
+            <button
+              type="button"
+              onClick={syncSlackChannel}
+              disabled={actionLoading === 'sync-slack-channel'}
+              className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
+            >
+              {actionLoading === 'sync-slack-channel' ? 'Synchronisation...' : 'Créer / resynchroniser le canal Slack'}
+            </button>
           </div>
         ) : null}
       </section>
