@@ -63,6 +63,18 @@ const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposa
   { label: 'Indisponible', value: 'unavailable' }
 ];
 
+function getDefaultSlackChannelName(title: string, startsAt: string) {
+  const slug = title
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 20);
+  const date = new Date(startsAt).toISOString().slice(0, 10);
+  return `mission-${slug || 'sans-titre'}-${date}`.slice(0, 80);
+}
+
 export default function MissionDetailPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
@@ -78,6 +90,8 @@ export default function MissionDetailPage() {
   const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(false);
   const [isAvailabilityExpanded, setIsAvailabilityExpanded] = useState(false);
   const [isSlackCardExpanded, setIsSlackCardExpanded] = useState(false);
+  const [slackChannelNameDraft, setSlackChannelNameDraft] = useState('');
+  const [slackMessageDraft, setSlackMessageDraft] = useState('');
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -245,6 +259,15 @@ export default function MissionDetailPage() {
       (mission?.mission_required_skills ?? []).map((requiredSkill) => [requiredSkill.id, requiredSkill.skill?.name ?? 'Sans compétence particulière'])
     );
   }, [mission?.mission_required_skills]);
+
+  const areSkillConstraintsMet = useMemo(
+    () =>
+      requiredSkillsVolunteerDirectory.every(
+        (skillGroup) =>
+          skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length >= skillGroup.requiredCount
+      ),
+    [pendingAssignments, requiredSkillsVolunteerDirectory]
+  );
 
   const activityTypeCounts = useMemo(() => {
     const counts: Record<ActivityLog['action_type'], number> = {
@@ -462,6 +485,16 @@ export default function MissionDetailPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionId, router]);
 
+  useEffect(() => {
+    if (!mission) return;
+    const defaultName = mission.slack_channel_name || getDefaultSlackChannelName(mission.title, mission.starts_at);
+    const defaultMessage = `Bienvenue dans le canal de mission *${mission.title}*.\n📅 ${new Date(mission.starts_at).toLocaleString('fr-FR')} - ${new Date(
+      mission.ends_at
+    ).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}${mission.location ? `\n📍 ${mission.location}` : ''}\nConsultez Timeline pour les détails et mises à jour.`;
+    setSlackChannelNameDraft(defaultName);
+    setSlackMessageDraft(defaultMessage);
+  }, [mission]);
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement du détail mission...</p>;
   }
@@ -623,8 +656,13 @@ export default function MissionDetailPage() {
     const response = await fetch(`/api/admin/missions/${mission.id}/slack-sync`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`
-      }
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channelName: slackChannelNameDraft,
+        welcomeMessage: slackMessageDraft
+      })
     });
 
     const payload = (await response.json()) as { error?: string; message?: string };
@@ -636,6 +674,30 @@ export default function MissionDetailPage() {
     }
 
     setSuccess(payload.message ?? 'Synchronisation Slack terminée.');
+    setActionLoading(null);
+    await loadData();
+  }
+
+  async function confirmCrewSelection() {
+    if (!mission || missionBlocksSelection) return;
+    if (!areSkillConstraintsMet) {
+      setError('Les contraintes de compétences ne sont pas encore atteintes.');
+      return;
+    }
+    await saveCrewSelection();
+    const token = await getAccessToken();
+    if (!token) return;
+    setActionLoading('confirm-selection');
+    const response = await fetch(`/api/admin/missions/${mission.id}/confirm`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
+    const payload = (await response.json()) as { error?: string; message?: string };
+    if (!response.ok) {
+      setError(payload.error ?? 'Confirmation impossible.');
+      setActionLoading(null);
+      return;
+    }
+    setSuccess(payload.message ?? 'Mission confirmée.');
+    setIsSkillsDirectoryExpanded(false);
+    setIsSlackCardExpanded(true);
     setActionLoading(null);
     await loadData();
   }
@@ -1053,11 +1115,15 @@ export default function MissionDetailPage() {
               <div className="sticky bottom-3 flex justify-end">
                 <button
                   type="button"
-                  onClick={saveCrewSelection}
-                  disabled={missionBlocksSelection || actionLoading === 'save-selection'}
-                  className="rounded-full bg-emerald-700 px-4 py-2 text-sm font-medium text-white shadow hover:bg-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={confirmCrewSelection}
+                  disabled={missionBlocksSelection || actionLoading === 'confirm-selection' || actionLoading === 'save-selection'}
+                  className={`rounded-full px-4 py-2 text-sm font-medium text-white shadow ${
+                    areSkillConstraintsMet ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-400 hover:bg-slate-500'
+                  } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
-                  {actionLoading === 'save-selection' ? 'Enregistrement...' : "Confirmer la sélection de l'équipage"}
+                  {actionLoading === 'confirm-selection' || actionLoading === 'save-selection'
+                    ? 'Confirmation...'
+                    : "Confirmer la sélection de l'équipage"}
                 </button>
               </div>
             ) : null}
@@ -1084,13 +1150,31 @@ export default function MissionDetailPage() {
         {isSlackCardExpanded ? (
           <div id="mission-slack-content" className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
             <p>Canal Slack mission : {mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : 'Non créé'}</p>
+            <label className="mt-2 block text-sm">
+              Nom du canal Slack proposé
+              <input
+                type="text"
+                value={slackChannelNameDraft}
+                onChange={(event) => setSlackChannelNameDraft(event.target.value)}
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+              />
+            </label>
+            <label className="mt-2 block text-sm">
+              Message d&apos;accueil proposé
+              <textarea
+                value={slackMessageDraft}
+                onChange={(event) => setSlackMessageDraft(event.target.value)}
+                rows={4}
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+              />
+            </label>
             <button
               type="button"
               onClick={syncSlackChannel}
               disabled={actionLoading === 'sync-slack-channel'}
               className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
             >
-              {actionLoading === 'sync-slack-channel' ? 'Synchronisation...' : 'Créer / resynchroniser le canal Slack'}
+              {actionLoading === 'sync-slack-channel' ? 'Création...' : 'Confirmer la création du canal Slack'}
             </button>
           </div>
         ) : null}
