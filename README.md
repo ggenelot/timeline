@@ -209,3 +209,18 @@ Rollout recommandé:
 2. activer bouton `/login` en interne
 3. monitorer erreurs `slack=state_invalid|auth_failed|magic_invalid`
 4. ouvrir à tous utilisateurs
+
+
+### Audit secrets (historique Git)
+
+Pour vérifier les anciens commits avant ouverture publique du dépôt :
+
+```bash
+./scripts/scan-secrets-history.sh
+```
+
+Le script scanne tout l'historique Git et retourne un code non-zéro en cas de match potentiel à investiguer.
+
+## Licence
+
+Ce projet est publié sous licence MIT. Voir le fichier `LICENSE`.
