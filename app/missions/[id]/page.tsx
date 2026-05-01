@@ -233,6 +233,8 @@ export default function MissionDetailPage() {
       return {
         requiredSkillId: requiredSkill.id,
         requiredSkillName: requiredSkill.name,
+        requiredCount:
+          mission?.mission_required_skills?.find((missionRequiredSkill) => missionRequiredSkill.id === requiredSkill.id)?.quantity ?? 0,
         volunteers: uniqueVolunteers
       };
     });
@@ -989,7 +991,20 @@ export default function MissionDetailPage() {
             ) : (
               requiredSkillsVolunteerDirectory.map((skillGroup) => (
                 <div key={skillGroup.requiredSkillId} className="rounded-md border border-slate-200 p-3">
-                  <h3 className="text-sm font-semibold text-slate-900">{skillGroup.requiredSkillName}</h3>
+                  <div className="flex items-center justify-between gap-3">
+                    <h3 className="text-sm font-semibold text-slate-900">{skillGroup.requiredSkillName}</h3>
+                    <span
+                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                        skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length >=
+                        skillGroup.requiredCount
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-slate-100 text-slate-700'
+                      }`}
+                    >
+                      {skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length}/
+                      {skillGroup.requiredCount}
+                    </span>
+                  </div>
                   {skillGroup.volunteers.length === 0 ? (
                     <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
                   ) : (
@@ -998,7 +1013,8 @@ export default function MissionDetailPage() {
                         const selectedSkillId = pendingAssignments.get(volunteer.id);
                         const isSelectedOnThisSkill = selectedSkillId === skillGroup.requiredSkillId;
                         const isSelectedElsewhere = Boolean(selectedSkillId) && selectedSkillId !== skillGroup.requiredSkillId;
-                        const canToggle = canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id;
+                        const canToggle =
+                          canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id && !isSelectedElsewhere;
 
                         return (
                           <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
@@ -1009,6 +1025,8 @@ export default function MissionDetailPage() {
                               className={`w-full rounded-md p-1 transition ${
                                 isSelectedOnThisSkill
                                   ? 'bg-emerald-50 ring-1 ring-emerald-300'
+                                  : isSelectedElsewhere
+                                    ? 'cursor-not-allowed bg-slate-100 opacity-45'
                                   : 'hover:bg-slate-50'
                               } ${
                                 !canToggle ? 'cursor-not-allowed opacity-45' : ''
@@ -1021,8 +1039,6 @@ export default function MissionDetailPage() {
                             </button>
                             {isSelectedOnThisSkill ? (
                               <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
-                            ) : isSelectedElsewhere ? (
-                              <p className="mt-1 text-[10px] font-medium text-amber-700">Retenu sur une autre compétence</p>
                             ) : null}
                           </li>
                         );
