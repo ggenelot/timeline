@@ -655,19 +655,20 @@ export default function MissionDetailPage() {
       {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
 
-      <article className="rounded-lg border border-slate-200 bg-white p-4">
+      <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
+        <div className="p-5">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-xl font-semibold text-slate-900">{mission.title}</h1>
+          <h1 className="text-2xl font-semibold text-slate-900">{mission.title}</h1>
           <div className="flex items-center gap-2">
             {isAdmin ? (
               <Link
                 href={`/admin/missions/${mission.id}/edit`}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
               >
                 Modifier
               </Link>
             ) : null}
-            <span className="rounded-full border border-blue-200 bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700">{MISSION_CATEGORY_LABELS[mission.category]}</span>
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{MISSION_CATEGORY_LABELS[mission.category]}</span>
             <MissionStatusBadge status={mission.status} />
           </div>
         </div>
@@ -690,9 +691,9 @@ export default function MissionDetailPage() {
         {(mission.mission_required_skills ?? []).length > 0 ? (
           <div className="mt-3 text-sm text-slate-700">
             <p className="font-medium">Compétences requises :</p>
-            <ul className="mt-1 space-y-1">
+            <ul className="mt-2 flex flex-wrap gap-1">
               {(mission.mission_required_skills ?? []).map((requiredSkill) => (
-                <li key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-xs text-slate-700">
+                <li key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700">
                   {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
                 </li>
               ))}
@@ -707,6 +708,7 @@ export default function MissionDetailPage() {
             {!myProposal ? <p className="text-xs text-slate-600">Aucune réponse enregistrée pour cette mission.</p> : null}
           </div>
         ) : null}
+        </div>
       </article>
 
       {canManageMission ? (
