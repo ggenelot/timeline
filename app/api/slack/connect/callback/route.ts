@@ -39,6 +39,10 @@ export async function GET(request: NextRequest) {
       throw new Error('Slack OAuth n\'a pas renvoyé les identifiants utilisateur/équipe.');
     }
 
+    if (config.teamId && slackTeamId !== config.teamId) {
+      throw new Error('Slack workspace non autorisé.');
+    }
+
     const userInfo = await slack.getUserInfo(slackUserId);
     const slackUsername = userInfo.user?.name ?? null;
 
