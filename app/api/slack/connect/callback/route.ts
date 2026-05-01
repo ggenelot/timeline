@@ -33,7 +33,6 @@ export async function GET(request: NextRequest) {
     const oauth = await SlackService.exchangeOAuthCode(code);
     const slackUserId = oauth.authed_user?.id;
     const slackTeamId = oauth.team?.id;
-    const slack = new SlackService();
 
     if (!slackUserId || !slackTeamId) {
       throw new Error('Slack OAuth n\'a pas renvoyé les identifiants utilisateur/équipe.');
@@ -43,8 +42,16 @@ export async function GET(request: NextRequest) {
       throw new Error('Slack workspace non autorisé.');
     }
 
-    const userInfo = await slack.getUserInfo(slackUserId);
-    const slackUsername = userInfo.user?.name ?? null;
+    let slackUsername: string | null = null;
+    try {
+      const slack = new SlackService();
+      const userInfo = await slack.getUserInfo(slackUserId);
+      slackUsername = userInfo.user?.name ?? null;
+    } catch (error) {
+      console.warn('[slack-connect-callback] unable to fetch Slack username, continuing without it', {
+        reason: error instanceof Error ? error.message : 'unknown'
+      });
+    }
 
     const { error: profileError } = await serviceClient
       .from('profiles')
@@ -64,7 +71,10 @@ export async function GET(request: NextRequest) {
 
     redirectTarget.searchParams.set('slack', 'connected');
     return NextResponse.redirect(redirectTarget);
-  } catch {
+  } catch (error) {
+    console.error('[slack-connect-callback] failure', {
+      reason: error instanceof Error ? error.message : 'unknown'
+    });
     redirectTarget.searchParams.set('slack', 'error');
     return NextResponse.redirect(redirectTarget);
   }
