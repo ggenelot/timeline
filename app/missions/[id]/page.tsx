@@ -83,15 +83,13 @@ export default function MissionDetailPage() {
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
   const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
-  const [pendingVolunteerIds, setPendingVolunteerIds] = useState<Set<string>>(new Set());
+  const [pendingAssignments, setPendingAssignments] = useState<Map<string, string | null>>(new Map());
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
-
-  const selectedVolunteerIds = useMemo(() => new Set(assignments.map((assignment) => assignment.volunteer_id)), [assignments]);
 
   const eligibleProposals = useMemo(() => proposals.filter((proposal) => proposal.response === 'available'), [proposals]);
 
@@ -185,7 +183,7 @@ export default function MissionDetailPage() {
   }, [allVolunteers, proposals]);
 
   useEffect(() => {
-    setPendingVolunteerIds(new Set(assignments.map((assignment) => assignment.volunteer_id)));
+    setPendingAssignments(new Map(assignments.map((assignment) => [assignment.volunteer_id, assignment.mission_required_skill_id])));
   }, [assignments]);
 
 
@@ -236,6 +234,12 @@ export default function MissionDetailPage() {
       };
     });
   }, [mission?.mission_required_skills, proposals]);
+
+  const requiredSkillNameById = useMemo(() => {
+    return new Map(
+      (mission?.mission_required_skills ?? []).map((requiredSkill) => [requiredSkill.id, requiredSkill.skill?.name ?? 'Sans compétence particulière'])
+    );
+  }, [mission?.mission_required_skills]);
 
   const activityTypeCounts = useMemo(() => {
     const counts: Record<ActivityLog['action_type'], number> = {
@@ -363,7 +367,7 @@ export default function MissionDetailPage() {
 
     const { data: assignmentData, error: assignmentsError } = await supabase
       .from('mission_assignments')
-      .select('id,mission_id,volunteer_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
+      .select('id,mission_id,volunteer_id,mission_required_skill_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
 
@@ -498,17 +502,17 @@ export default function MissionDetailPage() {
     setSelectedVolunteerIdToAdd('');
   }
 
-  async function toggleSelection(volunteerId: string) {
+  async function toggleSelection(volunteerId: string, requiredSkillId?: string) {
     if (!mission || missionBlocksSelection) {
       return;
     }
 
-    setPendingVolunteerIds((current) => {
-      const next = new Set(current);
+    setPendingAssignments((current) => {
+      const next = new Map(current);
       if (next.has(volunteerId)) {
         next.delete(volunteerId);
       } else {
-        next.add(volunteerId);
+        next.set(volunteerId, requiredSkillId ?? null);
       }
       return next;
     });
@@ -524,8 +528,12 @@ export default function MissionDetailPage() {
     setSuccess(null);
 
     const currentlySelectedIds = new Set(assignments.map((assignment) => assignment.volunteer_id));
-    const toInsert = Array.from(pendingVolunteerIds).filter((volunteerId) => !currentlySelectedIds.has(volunteerId));
-    const toDelete = Array.from(currentlySelectedIds).filter((volunteerId) => !pendingVolunteerIds.has(volunteerId));
+    const pendingSelectedIds = new Set(Array.from(pendingAssignments.keys()));
+    const toInsert = Array.from(pendingSelectedIds).filter((volunteerId) => !currentlySelectedIds.has(volunteerId));
+    const toDelete = Array.from(currentlySelectedIds).filter((volunteerId) => !pendingSelectedIds.has(volunteerId));
+    const toUpdate = assignments.filter(
+      (assignment) => pendingAssignments.get(assignment.volunteer_id) !== assignment.mission_required_skill_id
+    );
 
     if (toDelete.length > 0) {
       const { error: deleteError } = await supabase.from('mission_assignments').delete().eq('mission_id', mission.id).in('volunteer_id', toDelete);
@@ -538,10 +546,26 @@ export default function MissionDetailPage() {
 
     if (toInsert.length > 0) {
       const { error: insertError } = await supabase.from('mission_assignments').insert(
-        toInsert.map((volunteerId) => ({ mission_id: mission.id, volunteer_id: volunteerId, assignment_status: 'selected' }))
+        toInsert.map((volunteerId) => ({
+          mission_id: mission.id,
+          volunteer_id: volunteerId,
+          mission_required_skill_id: pendingAssignments.get(volunteerId) ?? null,
+          assignment_status: 'selected'
+        }))
       );
       if (insertError) {
         setError(`Impossible de mettre à jour la sélection : ${insertError.message}`);
+        setActionLoading(null);
+        return;
+      }
+    }
+    for (const assignment of toUpdate) {
+      const { error: updateError } = await supabase
+        .from('mission_assignments')
+        .update({ mission_required_skill_id: pendingAssignments.get(assignment.volunteer_id) ?? null })
+        .eq('id', assignment.id);
+      if (updateError) {
+        setError(`Impossible de mettre à jour la sélection : ${updateError.message}`);
         setActionLoading(null);
         return;
       }
@@ -759,7 +783,7 @@ export default function MissionDetailPage() {
                         <label className="inline-flex items-center gap-2 text-xs text-slate-700">
                           <input
                             type="checkbox"
-                            checked={pendingVolunteerIds.has(row.volunteerId)}
+                            checked={pendingAssignments.has(row.volunteerId)}
                             onChange={() => toggleSelection(row.volunteerId)}
                             disabled={missionBlocksSelection || actionLoading === row.volunteerId || row.response !== 'available'}
                             className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
@@ -896,7 +920,7 @@ export default function MissionDetailPage() {
 
               <div className="space-y-2">
                 {filteredEligibleProposals.map((proposal) => {
-                  const isSelected = pendingVolunteerIds.has(proposal.volunteer_id);
+                  const isSelected = pendingAssignments.has(proposal.volunteer_id);
                   const isSaving = actionLoading === proposal.volunteer_id;
                   const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
                     .map((profileSkill) => profileSkill.skill?.name)
@@ -940,7 +964,9 @@ export default function MissionDetailPage() {
                   <ul className="mt-2 space-y-1 text-sm text-slate-700">
                     {assignments.map((assignment) => (
                       <li key={assignment.id}>
-                        {assignment.volunteer?.full_name ?? assignment.volunteer?.email ?? assignment.volunteer_id} · {assignment.assignment_status}
+                        {assignment.volunteer?.full_name ?? assignment.volunteer?.email ?? assignment.volunteer_id}
+                        {' · '}
+                        {requiredSkillNameById.get(assignment.mission_required_skill_id ?? '') ?? 'Sans compétence particulière'}
                       </li>
                     ))}
                   </ul>
@@ -980,17 +1006,19 @@ export default function MissionDetailPage() {
                   ) : (
                     <ul className="mt-3 flex flex-wrap gap-4">
                       {skillGroup.volunteers.map((volunteer) => {
-                        const isSelected = pendingVolunteerIds.has(volunteer.id);
+                        const selectedSkillId = pendingAssignments.get(volunteer.id);
+                        const isSelectedOnThisSkill = selectedSkillId === skillGroup.requiredSkillId;
+                        const isSelectedElsewhere = Boolean(selectedSkillId) && selectedSkillId !== skillGroup.requiredSkillId;
                         const canToggle = canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id;
 
                         return (
                           <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
                             <button
                               type="button"
-                              onClick={() => toggleSelection(volunteer.id)}
+                              onClick={() => toggleSelection(volunteer.id, skillGroup.requiredSkillId)}
                               disabled={!canToggle}
                               className={`w-full rounded-md p-1 transition ${
-                                isSelected
+                                isSelectedOnThisSkill
                                   ? 'bg-emerald-50 ring-1 ring-emerald-300'
                                   : 'hover:bg-slate-50'
                               } ${
@@ -1002,8 +1030,10 @@ export default function MissionDetailPage() {
                               </div>
                               <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
                             </button>
-                            {isSelected ? (
+                            {isSelectedOnThisSkill ? (
                               <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
+                            ) : isSelectedElsewhere ? (
+                              <p className="mt-1 text-[10px] font-medium text-amber-700">Retenu sur une autre compétence</p>
                             ) : null}
                           </li>
                         );
