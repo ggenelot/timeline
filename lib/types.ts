@@ -112,6 +112,7 @@ export type MissionAssignment = {
   id: string;
   mission_id: string;
   volunteer_id: string;
+  mission_required_skill_id: string | null;
   assignment_status: MissionAssignmentStatus;
   created_at: string;
 };
