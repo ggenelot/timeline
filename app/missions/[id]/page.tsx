@@ -1068,7 +1068,14 @@ export default function MissionDetailPage() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Sélection de l&apos;équipage</h2>
+          <div className="flex items-center gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Sélection de l&apos;équipage</h2>
+            {mission.status === 'confirmed' ? (
+              <p className="text-sm text-amber-700">
+                L&apos;événement a été confirmé, il n&apos;est plus possible de changer la composition.
+              </p>
+            ) : null}
+          </div>
           <button
             type="button"
             aria-expanded={isSkillsDirectoryExpanded}
