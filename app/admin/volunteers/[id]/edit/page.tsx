@@ -33,6 +33,8 @@ type EditVolunteerForm = {
   sector: string;
   role: 'benevole' | 'responsable';
   skill_ids: string[];
+  password: string;
+  confirmPassword: string;
 };
 
 const INITIAL_FORM: EditVolunteerForm = {
@@ -41,7 +43,9 @@ const INITIAL_FORM: EditVolunteerForm = {
   phone: '',
   sector: '',
   role: 'benevole',
-  skill_ids: []
+  skill_ids: [],
+  password: '',
+  confirmPassword: ''
 };
 
 export default function EditVolunteerPage() {
@@ -125,7 +129,9 @@ export default function EditVolunteerPage() {
         phone: payload.volunteer.phone ?? '',
         sector: payload.volunteer.sector ?? '',
         role: payload.volunteer.role === 'responsable' ? 'responsable' : 'benevole',
-        skill_ids: selectedSkillIds
+        skill_ids: selectedSkillIds,
+        password: '',
+        confirmPassword: ''
       });
       setSkills(payload.skills ?? []);
       setLoading(false);
@@ -188,6 +194,16 @@ export default function EditVolunteerPage() {
       return;
     }
 
+    if (form.password && form.password.length < 10) {
+      setError('Le nouveau mot de passe doit contenir au moins 10 caractères.');
+      return;
+    }
+
+    if (form.password !== form.confirmPassword) {
+      setError('La confirmation du mot de passe ne correspond pas.');
+      return;
+    }
+
     setSubmitting(true);
 
     const { data: sessionData } = await supabase.auth.getSession();
@@ -205,7 +221,15 @@ export default function EditVolunteerPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`
       },
-      body: JSON.stringify(form)
+      body: JSON.stringify({
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone,
+        sector: form.sector,
+        role: form.role,
+        skill_ids: form.skill_ids,
+        password: form.password || undefined
+      })
     });
 
     const payload = (await response.json()) as { error?: string; message?: string };
@@ -306,6 +330,36 @@ export default function EditVolunteerPage() {
               <option value="benevole">bénévole</option>
               <option value="responsable">responsable</option>
             </select>
+          </label>
+        </div>
+
+
+
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block text-sm text-slate-700">
+            Nouveau mot de passe (optionnel)
+            <input
+              type="password"
+              value={form.password}
+              onChange={(event) => setForm((previous) => ({ ...previous, password: event.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={submitting}
+              minLength={10}
+              autoComplete="new-password"
+            />
+          </label>
+
+          <label className="block text-sm text-slate-700">
+            Confirmer le mot de passe
+            <input
+              type="password"
+              value={form.confirmPassword}
+              onChange={(event) => setForm((previous) => ({ ...previous, confirmPassword: event.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={submitting}
+              minLength={10}
+              autoComplete="new-password"
+            />
           </label>
         </div>
 
