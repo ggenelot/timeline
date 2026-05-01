@@ -32,10 +32,11 @@ export async function GET(request: NextRequest) {
   try {
     const oauth = await SlackService.exchangeOAuthCode(code);
     const slackUserId = oauth.authed_user?.id;
+    const userToken = oauth.authed_user?.access_token;
     const slackTeamId = oauth.team?.id;
     const slack = new SlackService();
 
-    if (!slackUserId || !slackTeamId) {
+    if (!slackUserId || !slackTeamId || !userToken) {
       throw new Error('Slack OAuth n\'a pas renvoyé les identifiants utilisateur/équipe.');
     }
 
@@ -43,7 +44,7 @@ export async function GET(request: NextRequest) {
       throw new Error('Slack workspace non autorisé.');
     }
 
-    const userInfo = await slack.getUserInfo(slackUserId);
+    const userInfo = await slack.getUserInfo(slackUserId, userToken);
     const slackUsername = userInfo.user?.name ?? null;
 
     const { error: profileError } = await serviceClient

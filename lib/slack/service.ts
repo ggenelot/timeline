@@ -31,11 +31,11 @@ export class SlackService {
     this.botToken = requireSlackEnv('SLACK_BOT_TOKEN');
   }
 
-  private async callApi<T>(method: string, payload: Record<string, unknown>) {
+  private async callApi<T>(method: string, payload: Record<string, unknown>, accessToken = this.botToken) {
     const response = await fetch(`https://slack.com/api/${method}`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.botToken}`,
+        Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json; charset=utf-8'
       },
       body: JSON.stringify(payload)
@@ -84,10 +84,10 @@ export class SlackService {
 
 
 
-  async getUserInfo(slackUserId: string) {
+  async getUserInfo(slackUserId: string, accessToken?: string) {
     return this.callApi<{ user?: { name?: string } }>('users.info', {
       user: slackUserId
-    });
+    }, accessToken);
   }
 
   async inviteUsersToChannel(channel: string, users: string[]) {
