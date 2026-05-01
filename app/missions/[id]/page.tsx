@@ -1214,7 +1214,6 @@ export default function MissionDetailPage() {
             <span className={`text-base leading-none transition-transform ${isSlackCardExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
         </div>
-        <p className="mt-1 text-sm text-slate-600">Gestion du canal Slack lié à la mission.</p>
 
         {isSlackCardExpanded ? (
           <div id="mission-slack-content" className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
@@ -1255,6 +1254,9 @@ export default function MissionDetailPage() {
                     : 'Confirmer la création du canal Slack'}
               </button>
             </div>
+            {slackCreationState === 'created' ? (
+              <p className="mt-2 text-sm text-emerald-700">Le canal slack a été créé</p>
+            ) : null}
           </div>
         ) : null}
       </section>
