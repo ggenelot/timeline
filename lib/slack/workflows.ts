@@ -11,6 +11,22 @@ type MissionSlackData = {
   slack_channel_name: string | null;
 };
 
+type MissionCrewMember = {
+  mission_required_skill_id: string | null;
+  volunteer: {
+    full_name: string | null;
+    slack_username: string | null;
+  }[] | null;
+};
+
+type MissionRequiredSkill = {
+  id: string;
+  quantity: number;
+  skill: {
+    name: string;
+  }[] | null;
+};
+
 function formatDateTimeRange(startsAt: string, endsAt: string) {
   const start = new Date(startsAt);
   const end = new Date(endsAt);
@@ -51,6 +67,49 @@ async function upsertSlackLog(args: {
     },
     { onConflict: 'dedupe_key' }
   );
+}
+
+async function buildCrewCompositionMessage(missionId: string) {
+  const serviceClient = createServerSupabaseServiceClient();
+
+  const { data: assignments } = await serviceClient
+    .from('mission_assignments')
+    .select('mission_required_skill_id,volunteer:profiles!mission_assignments_volunteer_id_fkey(full_name,slack_username)')
+    .eq('mission_id', missionId)
+    .eq('assignment_status', 'selected');
+
+  const { data: requiredSkills } = await serviceClient
+    .from('mission_required_skills')
+    .select('id,quantity,skill:skills(name)')
+    .eq('mission_id', missionId)
+    .order('created_at', { ascending: true });
+
+  const crewBySkill = new Map<string | null, Array<{ fullName: string | null; slackUsername: string | null }>>();
+  for (const row of (assignments ?? []) as MissionCrewMember[]) {
+    const volunteer = row.volunteer?.[0] ?? null;
+    if (!volunteer) continue;
+    const current = crewBySkill.get(row.mission_required_skill_id) ?? [];
+    current.push({ fullName: volunteer.full_name, slackUsername: volunteer.slack_username });
+    crewBySkill.set(row.mission_required_skill_id, current);
+  }
+
+  const formatVolunteer = (person: { fullName: string | null; slackUsername: string | null }) =>
+    person.slackUsername ? `@${person.slackUsername}` : person.fullName ?? 'Bénévole non renseigné';
+
+  const lines: string[] = [];
+  for (const requiredSkill of (requiredSkills ?? []) as MissionRequiredSkill[]) {
+    const members = crewBySkill.get(requiredSkill.id) ?? [];
+    const roleName = requiredSkill.skill?.[0]?.name ?? 'Rôle';
+    const rendered = members.length > 0 ? members.map(formatVolunteer).join(', ') : 'à compléter';
+    lines.push(`${roleName} : ${rendered}`);
+  }
+
+  const unassigned = crewBySkill.get(null) ?? [];
+  if (unassigned.length > 0) {
+    lines.push(`Sans rôle spécifique : ${unassigned.map(formatVolunteer).join(', ')}`);
+  }
+
+  return lines.length > 0 ? `Composition de l'équipage :\n${lines.join('\n')}` : null;
 }
 
 export async function ensureMissionSlackChannel(
@@ -141,12 +200,14 @@ export async function ensureMissionSlackChannel(
   const { data: welcomeLog } = await serviceClient.from('slack_notification_logs').select('status').eq('dedupe_key', welcomeKey).maybeSingle();
 
   if (welcomeLog?.status !== 'sent') {
+    const crewComposition = await buildCrewCompositionMessage(missionId);
     const text =
       options?.welcomeMessage?.trim() ||
       [
         `Bienvenue dans le canal de mission *${mission.title}*.`,
         `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
         mission.location ? `📍 ${mission.location}` : null,
+        crewComposition,
         'Consultez Timeline pour les détails et mises à jour.'
       ]
         .filter(Boolean)
