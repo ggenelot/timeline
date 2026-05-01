@@ -10,6 +10,7 @@ type UpdateVolunteerPayload = {
   sector?: string;
   role?: 'benevole' | 'responsable';
   skill_ids?: string[];
+  password?: string;
 };
 
 function getBearerToken(request: NextRequest): string {
@@ -109,6 +110,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const sector = payload.sector?.trim() ?? '';
   const role = payload.role ?? 'benevole';
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
+  const password = payload.password?.trim() ?? '';
 
   if (!fullName) {
     return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
@@ -120,6 +122,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
 
   if (!['benevole', 'responsable'].includes(role)) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
+  }
+
+  if (password && password.length < 10) {
+    return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 10 caractères.' }, { status: 400 });
   }
 
   const serviceClient = createServerSupabaseServiceClient();
@@ -161,13 +167,19 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: `Impossible de mettre à jour le profil : ${profileUpdateError.message}` }, { status: 400 });
   }
 
-  const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(volunteerId, {
+  const authUpdatePayload: { email: string; user_metadata: { full_name: string; phone: string | null }; password?: string } = {
     email,
     user_metadata: {
       full_name: fullName,
       phone: phone || null
     }
-  });
+  };
+
+  if (password) {
+    authUpdatePayload.password = password;
+  }
+
+  const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(volunteerId, authUpdatePayload);
 
   if (authUpdateError) {
     return NextResponse.json({ error: `Profil mis à jour, mais email Auth non synchronisé : ${authUpdateError.message}` }, { status: 500 });
