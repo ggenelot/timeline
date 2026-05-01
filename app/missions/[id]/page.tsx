@@ -103,6 +103,7 @@ export default function MissionDetailPage() {
   const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [slackCreationState, setSlackCreationState] = useState<'idle' | 'creating' | 'created'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -650,6 +651,7 @@ export default function MissionDetailPage() {
     }
 
     setActionLoading('sync-slack-channel');
+    setSlackCreationState('creating');
     setError(null);
     setSuccess(null);
 
@@ -670,11 +672,13 @@ export default function MissionDetailPage() {
     if (!response.ok) {
       setError(payload.error ?? 'Synchronisation Slack impossible.');
       setActionLoading(null);
+      setSlackCreationState('idle');
       return;
     }
 
     setSuccess(payload.message ?? 'Synchronisation Slack terminée.');
     setActionLoading(null);
+    setSlackCreationState('created');
     await loadData();
   }
 
@@ -1172,14 +1176,24 @@ export default function MissionDetailPage() {
                 className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
               />
             </label>
-            <button
-              type="button"
-              onClick={syncSlackChannel}
-              disabled={actionLoading === 'sync-slack-channel'}
-              className="mt-2 rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
-              {actionLoading === 'sync-slack-channel' ? 'Création...' : 'Confirmer la création du canal Slack'}
-            </button>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={syncSlackChannel}
+                disabled={slackCreationState === 'creating' || slackCreationState === 'created'}
+                className={`rounded-md border px-3 py-1.5 text-sm ${
+                  slackCreationState === 'idle'
+                    ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
+                    : 'cursor-not-allowed border-slate-300 bg-slate-200 text-slate-500'
+                }`}
+              >
+                {slackCreationState === 'creating'
+                  ? 'Création en cours'
+                  : slackCreationState === 'created'
+                    ? 'Canal créé'
+                    : 'Confirmer la création du canal Slack'}
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
