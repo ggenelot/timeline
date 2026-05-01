@@ -84,6 +84,7 @@ export default function MissionDetailPage() {
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
   const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
   const [pendingAssignments, setPendingAssignments] = useState<Map<string, string | null>>(new Map());
+  const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -365,11 +366,35 @@ export default function MissionDetailPage() {
       return;
     }
 
-    const { data: assignmentData, error: assignmentsError } = await supabase
+    let assignmentData: Array<MissionAssignment & { volunteer: Pick<Profile, 'id' | 'full_name' | 'email'>[] | Pick<Profile, 'id' | 'full_name' | 'email'> | null }> | null = null;
+    let assignmentsError: { message: string } | null = null;
+    let assignmentQuerySupportsSkillReference = true;
+
+    const assignmentsWithRequiredSkill = await supabase
       .from('mission_assignments')
       .select('id,mission_id,volunteer_id,mission_required_skill_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
+
+    if (assignmentsWithRequiredSkill.error?.message.includes('mission_assignments.mission_required_skill_id')) {
+      assignmentQuerySupportsSkillReference = false;
+      const assignmentsWithoutRequiredSkill = await supabase
+        .from('mission_assignments')
+        .select('id,mission_id,volunteer_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
+        .eq('mission_id', missionId)
+        .order('created_at', { ascending: true });
+
+      assignmentData = (assignmentsWithoutRequiredSkill.data ?? []).map((assignment) => ({
+        ...assignment,
+        mission_required_skill_id: null
+      }));
+      assignmentsError = assignmentsWithoutRequiredSkill.error;
+    } else {
+      assignmentData = assignmentsWithRequiredSkill.data as typeof assignmentData;
+      assignmentsError = assignmentsWithRequiredSkill.error;
+    }
+
+    setSupportsMissionRequiredSkillReference(assignmentQuerySupportsSkillReference);
 
     if (assignmentsError) {
       setError(assignmentsError.message);
@@ -531,9 +556,9 @@ export default function MissionDetailPage() {
     const pendingSelectedIds = new Set(Array.from(pendingAssignments.keys()));
     const toInsert = Array.from(pendingSelectedIds).filter((volunteerId) => !currentlySelectedIds.has(volunteerId));
     const toDelete = Array.from(currentlySelectedIds).filter((volunteerId) => !pendingSelectedIds.has(volunteerId));
-    const toUpdate = assignments.filter(
-      (assignment) => pendingAssignments.get(assignment.volunteer_id) !== assignment.mission_required_skill_id
-    );
+    const toUpdate = supportsMissionRequiredSkillReference
+      ? assignments.filter((assignment) => pendingAssignments.get(assignment.volunteer_id) !== assignment.mission_required_skill_id)
+      : [];
 
     if (toDelete.length > 0) {
       const { error: deleteError } = await supabase.from('mission_assignments').delete().eq('mission_id', mission.id).in('volunteer_id', toDelete);
@@ -549,7 +574,7 @@ export default function MissionDetailPage() {
         toInsert.map((volunteerId) => ({
           mission_id: mission.id,
           volunteer_id: volunteerId,
-          mission_required_skill_id: pendingAssignments.get(volunteerId) ?? null,
+          ...(supportsMissionRequiredSkillReference ? { mission_required_skill_id: pendingAssignments.get(volunteerId) ?? null } : {}),
           assignment_status: 'selected'
         }))
       );
