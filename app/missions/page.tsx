@@ -8,7 +8,7 @@ import { NewMissionSplitButton } from '@/components/missions/new-mission-split-b
 import { supabase } from '@/lib/supabase/client';
 import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
-import { formatMissionRequirementLabel } from '@/lib/missions';
+import { formatMissionRequirementLabel, MISSION_STATUS_LABELS } from '@/lib/missions';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
@@ -16,6 +16,7 @@ type MissionWithRequiredSkills = Mission & {
 
 const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
+const STATUS_FILTER_OPTIONS: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
 
 function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
   if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
@@ -218,6 +219,18 @@ export default function MissionsPage() {
     [missions]
   );
 
+  const missionCountsByStatus = useMemo(
+    () =>
+      missions.reduce<Record<MissionStatus, number>>(
+        (counts, mission) => {
+          counts[mission.status] += 1;
+          return counts;
+        },
+        { draft: 0, proposed: 0, confirmed: 0, closed: 0, cancelled: 0 }
+      ),
+    [missions]
+  );
+
   const filteredMissions = useMemo(
     () =>
       missions.filter((mission) => {
@@ -342,6 +355,35 @@ export default function MissionsPage() {
               </button>
             ))}
           </div>
+          {profile?.role === 'admin' ? (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => updateMainFilters(selectedCategory, 'all')}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  effectiveSelectedStatus === 'all'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Tous statuts {missions.length}
+              </button>
+              {STATUS_FILTER_OPTIONS.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => updateMainFilters(selectedCategory, status)}
+                  className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                    effectiveSelectedStatus === status
+                      ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                      : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  }`}
+                >
+                  {MISSION_STATUS_LABELS[status]} {missionCountsByStatus[status]}
+                </button>
+              ))}
+            </div>
+          ) : null}
         </div>
       </section>
 
