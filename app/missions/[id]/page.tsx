@@ -87,7 +87,7 @@ export default function MissionDetailPage() {
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
-  const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(false);
+  const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(true);
   const [isAvailabilityExpanded, setIsAvailabilityExpanded] = useState(false);
   const [isSlackCardExpanded, setIsSlackCardExpanded] = useState(false);
   const [slackChannelNameDraft, setSlackChannelNameDraft] = useState('');
@@ -1044,8 +1044,6 @@ export default function MissionDetailPage() {
             <span className={`text-base leading-none transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
         </div>
-        <p className="mt-1 text-sm text-slate-600">Vue par compétence requise avec les bénévoles correspondants.</p>
-
         {isSkillsDirectoryExpanded ? (
           <div id="mission-skills-directory-content" className="mt-3 space-y-4">
             {requiredSkillsVolunteerDirectory.length === 0 ? (
@@ -1084,7 +1082,7 @@ export default function MissionDetailPage() {
                               type="button"
                               onClick={() => toggleSelection(volunteer.id, skillGroup.requiredSkillId)}
                               disabled={!canToggle}
-                              className={`w-full rounded-md p-1 transition ${
+                              className={`group w-full rounded-md p-1 transition ${
                                 isSelectedOnThisSkill
                                   ? 'bg-emerald-50 ring-1 ring-emerald-300'
                                   : isSelectedElsewhere
@@ -1095,13 +1093,19 @@ export default function MissionDetailPage() {
                               }`}
                             >
                               <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
-                                {volunteer.initials || 'B'}
+                                {isSelectedElsewhere ? (
+                                  <>
+                                    <span className="group-hover:hidden">{volunteer.initials || 'B'}</span>
+                                    <span className="hidden px-1 text-[9px] leading-tight text-center group-hover:block">
+                                      Retenu en tant que {requiredSkillNameById.get(selectedSkillId ?? '') ?? 'autre compétence'}
+                                    </span>
+                                  </>
+                                ) : (
+                                  volunteer.initials || 'B'
+                                )}
                               </div>
                               <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
                             </button>
-                            {isSelectedOnThisSkill ? (
-                              <p className="mt-1 text-[10px] font-medium text-emerald-700">Retenu</p>
-                            ) : null}
                           </li>
                         );
                       })}
