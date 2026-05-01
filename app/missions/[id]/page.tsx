@@ -75,6 +75,20 @@ function getDefaultSlackChannelName(title: string, startsAt: string) {
   return `mission-${slug || 'sans-titre'}-${date}`.slice(0, 80);
 }
 
+function formatElapsedSince(dateIso: string | null): string {
+  if (!dateIso) return 'Aucune activité';
+  const elapsedMs = Date.now() - new Date(dateIso).getTime();
+  if (elapsedMs < 0) return 'À venir';
+  const hours = Math.floor(elapsedMs / (1000 * 60 * 60));
+  if (hours < 24) return `Il y a ${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `Il y a ${days}j`;
+  const weeks = Math.floor(days / 7);
+  if (days < 30) return `Il y a ${weeks} sem.`;
+  const months = Math.floor(days / 30);
+  return `Il y a ${months} mois`;
+}
+
 export default function MissionDetailPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
@@ -101,6 +115,7 @@ export default function MissionDetailPage() {
   const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
   const [pendingAssignments, setPendingAssignments] = useState<Map<string, string | null>>(new Map());
   const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
+  const [volunteerActivityStats, setVolunteerActivityStats] = useState<Record<string, { lastActivityAt: string | null; monthlyCount: number }>>({});
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -472,6 +487,27 @@ export default function MissionDetailPage() {
     setProposals(mappedProposals);
     setAssignments(mappedAssignments);
     setActivityLogs(mappedLogs);
+
+    const since = new Date();
+    since.setMonth(since.getMonth() - 1);
+    const assignmentRows = await Promise.all(
+      mappedProposals
+        .map((proposal) => proposal.volunteer_id)
+        .filter((value, index, list) => list.indexOf(value) === index)
+        .map(async (volunteerId) => {
+          const { data } = await supabase
+            .from('mission_assignments')
+            .select('created_at')
+            .eq('volunteer_id', volunteerId)
+            .order('created_at', { ascending: false })
+            .limit(100);
+
+          const lastActivityAt = data?.[0]?.created_at ?? null;
+          const monthlyCount = (data ?? []).filter((entry) => new Date(entry.created_at) >= since).length;
+          return [volunteerId, { lastActivityAt, monthlyCount }] as const;
+        })
+    );
+    setVolunteerActivityStats(Object.fromEntries(assignmentRows));
 
     if (profileData.role === 'admin') {
       await loadAdminVolunteerDirectory(missionId);
@@ -1077,7 +1113,7 @@ export default function MissionDetailPage() {
                           canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id && !isSelectedElsewhere;
 
                         return (
-                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="w-24 text-center">
+                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="group/volunteer relative w-24 text-center">
                             <button
                               type="button"
                               onClick={() => toggleSelection(volunteer.id, skillGroup.requiredSkillId)}
@@ -1106,6 +1142,24 @@ export default function MissionDetailPage() {
                               </div>
                               <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
                             </button>
+                            <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-2 text-left text-xs text-slate-700 shadow-lg group-hover/volunteer:block">
+                              <p className="font-semibold text-slate-900">Compétences</p>
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {Array.from(
+                                  buildExpandedSkillSet(
+                                    (proposals.find((proposal) => proposal.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? [])
+                                      .map((profileSkill) => profileSkill.skill?.name)
+                                      .filter((skillName): skillName is string => Boolean(skillName))
+                                  )
+                                ).map((skillCode) => (
+                                  <span key={`${volunteer.id}-${skillCode}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                    {getSkillLabel(skillCode)}
+                                  </span>
+                                ))}
+                              </div>
+                              <p className="mt-2">Dernière activité : {formatElapsedSince(volunteerActivityStats[volunteer.id]?.lastActivityAt ?? null)}</p>
+                              <p>Activités (30j) : {volunteerActivityStats[volunteer.id]?.monthlyCount ?? 0}</p>
+                            </div>
                           </li>
                         );
                       })}
