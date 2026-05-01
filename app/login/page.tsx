@@ -1,7 +1,7 @@
 'use client';
 
-import { FormEvent, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { FormEvent, useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 export default function LoginPage() {
@@ -10,8 +10,9 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
-  const slackStatus = useMemo(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('slack') : null), []);
-  const slackReason = useMemo(() => (typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('reason') : null), []);
+  const searchParams = useSearchParams();
+  const slackStatus = searchParams.get('slack');
+  const slackReason = searchParams.get('reason');
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
