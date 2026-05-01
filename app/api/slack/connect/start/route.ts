@@ -41,6 +41,9 @@ export async function POST(request: NextRequest) {
   oauthUrl.searchParams.set('scope', SCOPES.join(','));
   oauthUrl.searchParams.set('user_scope', USER_SCOPES.join(','));
   oauthUrl.searchParams.set('state', state);
+  if (config.teamId) {
+    oauthUrl.searchParams.set('team', config.teamId);
+  }
 
   if (config.redirectUri) {
     oauthUrl.searchParams.set('redirect_uri', config.redirectUri);
