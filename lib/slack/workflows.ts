@@ -53,7 +53,13 @@ async function upsertSlackLog(args: {
   );
 }
 
-export async function ensureMissionSlackChannel(missionId: string) {
+export async function ensureMissionSlackChannel(
+  missionId: string,
+  options?: {
+    channelName?: string;
+    welcomeMessage?: string;
+  }
+) {
   const serviceClient = createServerSupabaseServiceClient();
   const slack = new SlackService();
 
@@ -71,7 +77,8 @@ export async function ensureMissionSlackChannel(missionId: string) {
     return { channelId: mission.slack_channel_id, channelName: mission.slack_channel_name, created: false };
   }
 
-  const targetName = normalizeSlackChannelName(mission);
+  const providedName = options?.channelName?.trim();
+  const targetName = providedName ? providedName : normalizeSlackChannelName(mission);
   let channelId: string | null = null;
   let channelName = targetName;
 
@@ -134,14 +141,16 @@ export async function ensureMissionSlackChannel(missionId: string) {
   const { data: welcomeLog } = await serviceClient.from('slack_notification_logs').select('status').eq('dedupe_key', welcomeKey).maybeSingle();
 
   if (welcomeLog?.status !== 'sent') {
-    const text = [
-      `Bienvenue dans le canal de mission *${mission.title}*.`,
-      `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
-      mission.location ? `📍 ${mission.location}` : null,
-      'Consultez Timeline pour les détails et mises à jour.'
-    ]
-      .filter(Boolean)
-      .join('\n');
+    const text =
+      options?.welcomeMessage?.trim() ||
+      [
+        `Bienvenue dans le canal de mission *${mission.title}*.`,
+        `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
+        mission.location ? `📍 ${mission.location}` : null,
+        'Consultez Timeline pour les détails et mises à jour.'
+      ]
+        .filter(Boolean)
+        .join('\n');
 
     try {
       await slack.postMessage(channelId, text);

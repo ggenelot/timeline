@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
-import { ensureMissionSlackChannel, inviteSelectedVolunteersToMissionChannel } from '@/lib/slack/workflows';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
   const token = getBearerToken(request);
@@ -38,18 +37,5 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: `Impossible de confirmer la mission: ${updateError.message}` }, { status: 400 });
   }
 
-  try {
-    await ensureMissionSlackChannel(missionId);
-    await inviteSelectedVolunteersToMissionChannel(missionId);
-  } catch (error) {
-    return NextResponse.json(
-      {
-        message: 'Mission confirmée, mais synchronisation Slack partielle.',
-        slackError: error instanceof Error ? error.message : 'Erreur inconnue'
-      },
-      { status: 202 }
-    );
-  }
-
-  return NextResponse.json({ message: 'Mission confirmée et canal Slack synchronisé.' });
+  return NextResponse.json({ message: 'Mission confirmée.' });
 }

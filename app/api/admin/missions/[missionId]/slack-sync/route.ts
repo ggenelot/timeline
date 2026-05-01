@@ -25,8 +25,13 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
 
+  const payload = (await request.json().catch(() => ({}))) as { channelName?: string; welcomeMessage?: string };
+
   try {
-    const channel = await ensureMissionSlackChannel(missionId);
+    const channel = await ensureMissionSlackChannel(missionId, {
+      channelName: payload.channelName,
+      welcomeMessage: payload.welcomeMessage
+    });
     await inviteSelectedVolunteersToMissionChannel(missionId);
     return NextResponse.json({ message: 'Synchronisation Slack terminée.', channel });
   } catch (error) {
