@@ -9,6 +9,11 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const base = getSlackConfig().appBaseUrl ?? `${url.protocol}//${url.host}`;
+  console.info('[slack-auth-callback] incoming callback', {
+    hasCode: Boolean(code),
+    hasState: Boolean(state),
+    providerError: url.searchParams.get('error')
+  });
 
   const providerError = url.searchParams.get('error');
   if (providerError) {
@@ -17,6 +22,10 @@ export async function GET(request: NextRequest) {
   }
 
   if (!code || !state || !(await consumeSlackOAuthState(state, 'login'))) {
+    console.warn('[slack-auth-callback] invalid callback payload or state', {
+      hasCode: Boolean(code),
+      hasState: Boolean(state)
+    });
     return NextResponse.redirect(new URL('/login?slack=state_invalid', base));
   }
 
@@ -29,6 +38,11 @@ export async function GET(request: NextRequest) {
     const slackEmail = openIdProfile?.email ?? null;
     const slackName = openIdProfile?.name ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
+    console.info('[slack-auth-callback] resolved Slack identity', {
+      slackTeamId,
+      slackUserId,
+      hasEmail: Boolean(slackEmail)
+    });
 
     const service = createServerSupabaseServiceClient();
     const { data: identity } = await service
@@ -41,6 +55,7 @@ export async function GET(request: NextRequest) {
     let profileId = identity?.profile_id ?? null;
 
     if (!profileId) {
+      console.info('[slack-auth-callback] no identity mapping found, trying legacy profile fields');
       const { data: legacyProfile } = await service
         .from('profiles')
         .select('id')
@@ -49,6 +64,7 @@ export async function GET(request: NextRequest) {
         .maybeSingle<{ id: string }>();
       if (legacyProfile?.id) {
         profileId = legacyProfile.id;
+        console.info('[slack-auth-callback] linked from legacy profile mapping', { profileId });
         await service.from('slack_identities').upsert({
           profile_id: profileId,
           slack_team_id: slackTeamId,
@@ -60,9 +76,11 @@ export async function GET(request: NextRequest) {
     }
 
     if (!profileId && slackEmail) {
+      console.info('[slack-auth-callback] trying email-based profile match');
       const { data: profileByEmail } = await service.from('profiles').select('id').eq('email', slackEmail).maybeSingle<{ id: string }>();
       if (profileByEmail?.id) {
         profileId = profileByEmail.id;
+        console.info('[slack-auth-callback] linked existing profile by email', { profileId });
         await service.from('slack_identities').upsert({
           profile_id: profileId,
           slack_team_id: slackTeamId,
@@ -74,6 +92,7 @@ export async function GET(request: NextRequest) {
     }
 
     if (!profileId) {
+      console.warn('[slack-auth-callback] no profile found, creating synthetic user');
       const syntheticEmail = slackEmail ?? `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
       const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
         email: syntheticEmail,
@@ -86,6 +105,7 @@ export async function GET(request: NextRequest) {
       }
 
       profileId = createdUser.user.id;
+      console.info('[slack-auth-callback] created synthetic user/profile', { profileId });
       await service.from('slack_identities').insert({
         profile_id: profileId,
         slack_team_id: slackTeamId,
@@ -97,6 +117,7 @@ export async function GET(request: NextRequest) {
 
     const { data: profile } = await service.from('profiles').select('email').eq('id', profileId).single<{ email: string }>();
     if (!profile?.email) throw new Error('missing_email');
+    console.info('[slack-auth-callback] generating magic link', { profileId });
 
     await service.from('slack_identities').update({ last_login_at: new Date().toISOString() }).eq('profile_id', profileId).eq('slack_team_id', slackTeamId).eq('slack_user_id', slackUserId);
 
@@ -106,11 +127,15 @@ export async function GET(request: NextRequest) {
       options: { redirectTo: `${base}/missions` }
     });
     if (linkError || !linkData?.properties?.action_link) throw new Error('magic_link_failed');
+    console.info('[slack-auth-callback] auth flow completed', { profileId });
 
     return NextResponse.redirect(linkData.properties.action_link);
   } catch (error) {
     const reason = error instanceof Error ? error.message : 'unknown';
-    console.error('[slack-auth-callback] failure', { reason });
+    console.error('[slack-auth-callback] failure', {
+      reason,
+      stack: error instanceof Error ? error.stack : undefined
+    });
     return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
   }
 }
