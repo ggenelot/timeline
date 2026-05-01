@@ -209,3 +209,7 @@ Rollout recommandé:
 2. activer bouton `/login` en interne
 3. monitorer erreurs `slack=state_invalid|auth_failed|magic_invalid`
 4. ouvrir à tous utilisateurs
+
+## Licence
+
+Ce projet est publié sous licence MIT. Voir le fichier `LICENSE`.
