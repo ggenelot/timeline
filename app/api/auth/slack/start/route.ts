@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createSlackOAuthState } from '@/lib/slack/auth';
-import { getSlackConfig } from '@/lib/slack/config';
+import { getSlackAuthRedirectUri, getSlackConfig } from '@/lib/slack/config';
 
 const OIDC_SCOPES = ['openid', 'profile', 'email'];
 
@@ -17,8 +17,7 @@ export async function POST() {
     return NextResponse.json({ error: 'Configuration Slack OAuth incomplète.' }, { status: 500 });
   }
 
-  const appBaseUrl = config.appBaseUrl;
-  const redirectUri = config.authRedirectUri ?? (appBaseUrl ? `${appBaseUrl}/api/auth/slack/callback` : null);
+  const redirectUri = getSlackAuthRedirectUri();
   if (!redirectUri) {
     console.error('[slack-auth-start] missing Slack auth redirect URI and APP_BASE_URL');
     return NextResponse.json({ error: 'SLACK_AUTH_REDIRECT_URI (ou APP_BASE_URL) manquant.' }, { status: 500 });
