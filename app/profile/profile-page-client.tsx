@@ -11,6 +11,7 @@ export function ProfilePageClient() {
   const [working, setWorking] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [slackConnectError, setSlackConnectError] = useState<string | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -55,26 +56,34 @@ export function ProfilePageClient() {
   async function handleConnectSlack() {
     setWorking(true);
     setError(null);
+    setSlackConnectError(null);
 
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
     if (!token) {
-      setError('Session invalide.');
+      setSlackConnectError('Session invalide.');
       setWorking(false);
       return;
     }
 
-    const response = await fetch('/api/slack/connect/start', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`
-      }
-    });
+    let response: Response;
+    try {
+      response = await fetch('/api/slack/connect/start', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+    } catch {
+      setSlackConnectError('Impossible de joindre Slack pour le moment. Réessayez dans un instant.');
+      setWorking(false);
+      return;
+    }
 
     const payload = (await response.json()) as { oauthUrl?: string; error?: string };
 
     if (!response.ok || !payload.oauthUrl) {
-      setError(payload.error ?? 'Impossible de démarrer la connexion Slack.');
+      setSlackConnectError(payload.error ?? 'Impossible de démarrer la connexion Slack.');
       setWorking(false);
       return;
     }
@@ -154,7 +163,7 @@ export function ProfilePageClient() {
           État: {isSlackConnected ? `Connecté (${profile.slack_username ? `@${profile.slack_username}` : `${profile.slack_team_id} / ${profile.slack_user_id}`})` : 'Non connecté'}
         </p>
         {profile.slack_connected_at ? <p className="mt-1 text-xs text-slate-500">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
-        <div className="mt-3 hidden gap-2">
+        <div className="mt-3 flex gap-2">
           {!isSlackConnected ? (
             <button
               type="button"
@@ -175,6 +184,7 @@ export function ProfilePageClient() {
             </button>
           )}
         </div>
+        {slackConnectError ? <p className="mt-2 text-xs text-red-600">{slackConnectError}</p> : null}
       </div>
     </section>
   );
