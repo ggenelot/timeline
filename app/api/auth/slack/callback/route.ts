@@ -36,7 +36,6 @@ export async function GET(request: NextRequest) {
     const slackUserId = openIdProfile?.sub ?? oauth.authed_user?.id;
     const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? oauth.team?.id;
     const slackEmail = openIdProfile?.email ?? null;
-    const slackName = openIdProfile?.name ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
     console.info('[slack-auth-callback] resolved Slack identity', {
       slackTeamId,
@@ -75,44 +74,12 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (!profileId && slackEmail) {
-      console.info('[slack-auth-callback] trying email-based profile match');
-      const { data: profileByEmail } = await service.from('profiles').select('id').eq('email', slackEmail).maybeSingle<{ id: string }>();
-      if (profileByEmail?.id) {
-        profileId = profileByEmail.id;
-        console.info('[slack-auth-callback] linked existing profile by email', { profileId });
-        await service.from('slack_identities').upsert({
-          profile_id: profileId,
-          slack_team_id: slackTeamId,
-          slack_user_id: slackUserId,
-          is_primary: true,
-          last_login_at: new Date().toISOString()
-        });
-      }
-    }
-
     if (!profileId) {
-      console.warn('[slack-auth-callback] no profile found, creating synthetic user');
-      const syntheticEmail = slackEmail ?? `slack_${slackTeamId}_${slackUserId}@timeline.slack.local`;
-      const { data: createdUser, error: createUserError } = await service.auth.admin.createUser({
-        email: syntheticEmail,
-        email_confirm: true,
-        user_metadata: { full_name: slackName ?? `Slack ${slackUserId}` }
+      console.warn('[slack-auth-callback] no linked Timeline identity for Slack account', {
+        slackTeamId,
+        hasEmail: Boolean(slackEmail)
       });
-
-      if (createUserError || !createdUser.user?.id) {
-        throw new Error(`user_create_failed:${createUserError?.message ?? 'unknown'}`);
-      }
-
-      profileId = createdUser.user.id;
-      console.info('[slack-auth-callback] created synthetic user/profile', { profileId });
-      await service.from('slack_identities').insert({
-        profile_id: profileId,
-        slack_team_id: slackTeamId,
-        slack_user_id: slackUserId,
-        is_primary: true,
-        last_login_at: new Date().toISOString()
-      });
+      return NextResponse.redirect(new URL('/auth/slack/unlinked', base));
     }
 
     const { data: profile } = await service.from('profiles').select('email').eq('id', profileId).single<{ email: string }>();
