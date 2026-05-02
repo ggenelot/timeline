@@ -25,13 +25,13 @@ export async function GET(request: NextRequest) {
   const state = url.searchParams.get('state');
   const base = getSlackConfig().appBaseUrl ?? `${url.protocol}//${url.host}`;
   const endpointAuthorize = 'https://slack.com/openid/connect/authorize';
-  const endpointToken = 'https://slack.com/api/openid.connect.token';
+  const tokenExchangeEndpoint = 'https://slack.com/api/openid.connect.token';
   const scopesRequested = ['openid', 'profile'];
   const redirectUri = `${base}/api/auth/slack/callback`;
   console.info('[slack-auth-callback] incoming callback', {
     flow: 'slack_login',
     endpoint_authorize: endpointAuthorize,
-    endpoint_token: endpointToken,
+    token_exchange_endpoint: tokenExchangeEndpoint,
     scopes_requested: scopesRequested,
     redirect_uri: redirectUri,
     hasCode: Boolean(code),
@@ -182,10 +182,10 @@ export async function GET(request: NextRequest) {
     console.error('[slack-auth-callback] failure', {
       flow: 'slack_login',
       endpoint_authorize: endpointAuthorize,
-      endpoint_token: endpointToken,
+      token_exchange_endpoint: tokenExchangeEndpoint,
       scopes_requested: scopesRequested,
       redirect_uri: redirectUri,
-      reason: safeReason,
+      callback_error: safeReason,
       details: error instanceof Error && 'details' in error ? (error as Error & { details?: unknown }).details : undefined
     });
     return buildAuthFailedRedirect(base, safeReason);
