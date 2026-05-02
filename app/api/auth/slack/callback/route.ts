@@ -4,6 +4,21 @@ import { SlackService } from '@/lib/slack/service';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { getSlackConfig } from '@/lib/slack/config';
 
+type SlackAuthErrorCode =
+  | 'slack_provider_error'
+  | 'missing_code_or_state'
+  | 'invalid_or_expired_state'
+  | 'openid_token_exchange_failed'
+  | 'openid_userinfo_failed'
+  | 'missing_slack_identity'
+  | 'workspace_not_allowed'
+  | 'identity_not_linked'
+  | 'missing_profile_email'
+  | 'magic_link_failed';
+
+const buildAuthFailedRedirect = (base: string, reason: SlackAuthErrorCode) =>
+  NextResponse.redirect(new URL(`/login?slack=auth_failed&reason=${reason}`, base));
+
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
   const code = url.searchParams.get('code');
@@ -17,26 +32,56 @@ export async function GET(request: NextRequest) {
 
   const providerError = url.searchParams.get('error');
   if (providerError) {
-    console.error('[slack-auth-callback] provider error', { providerError });
-    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
+    console.error('[slack-auth-callback] provider error', { code: 'slack_provider_error', providerError });
+    return buildAuthFailedRedirect(base, 'slack_provider_error');
   }
 
-  if (!code || !state || !(await consumeSlackOAuthState(state, 'login'))) {
+  if (!code || !state) {
     console.warn('[slack-auth-callback] invalid callback payload or state', {
+      code: 'missing_code_or_state',
       hasCode: Boolean(code),
       hasState: Boolean(state)
     });
-    return NextResponse.redirect(new URL('/login?slack=state_invalid', base));
+    return buildAuthFailedRedirect(base, 'missing_code_or_state');
   }
 
+  const stateConsumed = await consumeSlackOAuthState(state, 'login');
+  if (!stateConsumed) {
+    console.warn('[slack-auth-callback] state rejected', { code: 'invalid_or_expired_state' });
+    return buildAuthFailedRedirect(base, 'invalid_or_expired_state');
+  }
+  console.info('[slack-auth-callback] state consumed');
+
   try {
-    const oauth = await SlackService.exchangeOAuthCode(code, 'auth');
-    const userToken = oauth.authed_user?.access_token;
-    const openIdProfile = userToken ? await SlackService.getOpenIdUserInfo(userToken) : null;
-    const slackUserId = openIdProfile?.sub ?? oauth.authed_user?.id;
-    const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? oauth.team?.id;
+    let openIdToken: Awaited<ReturnType<typeof SlackService.exchangeOpenIdCode>>;
+    try {
+      openIdToken = await SlackService.exchangeOpenIdCode(code);
+    } catch (error) {
+      console.error('[slack-auth-callback] OpenID token exchange failed', {
+        code: 'openid_token_exchange_failed',
+        details: error instanceof Error && 'details' in error ? (error as Error & { details?: unknown }).details : undefined
+      });
+      throw new Error('openid_token_exchange_failed');
+    }
+    const userToken = openIdToken.access_token;
+    if (!userToken) {
+      throw new Error('openid_token_exchange_failed');
+    }
+    console.info('[slack-auth-callback] OpenID token obtained', { hasAccessToken: Boolean(userToken), tokenType: openIdToken.token_type });
+
+    let openIdProfile: Awaited<ReturnType<typeof SlackService.getOpenIdUserInfo>> | null = null;
+    try {
+      openIdProfile = await SlackService.getOpenIdUserInfo(userToken);
+      console.info('[slack-auth-callback] OpenID userInfo obtained');
+    } catch (error) {
+      console.error('[slack-auth-callback] OpenID userInfo failed', { code: 'openid_userinfo_failed' });
+      throw new Error('openid_userinfo_failed');
+    }
+
+    const slackUserId = openIdProfile?.sub;
+    const slackTeamId = openIdProfile?.['https://slack.com/team_id'];
     const slackEmail = openIdProfile?.email ?? null;
-    if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
+    if (!slackUserId || !slackTeamId) throw new Error('missing_slack_identity');
     const config = getSlackConfig();
     if (config.teamId && slackTeamId !== config.teamId) throw new Error('workspace_not_allowed');
     console.info('[slack-auth-callback] resolved Slack identity', {
@@ -78,14 +123,16 @@ export async function GET(request: NextRequest) {
 
     if (!profileId) {
       console.warn('[slack-auth-callback] no linked Timeline identity for Slack account', {
+        code: 'identity_not_linked',
         slackTeamId,
         hasEmail: Boolean(slackEmail)
       });
-      return NextResponse.redirect(new URL('/auth/slack/unlinked', base));
+      return buildAuthFailedRedirect(base, 'identity_not_linked');
     }
+    console.info('[slack-auth-callback] Timeline mapping found', { profileId });
 
     const { data: profile } = await service.from('profiles').select('email').eq('id', profileId).single<{ email: string }>();
-    if (!profile?.email) throw new Error('missing_email');
+    if (!profile?.email) throw new Error('missing_profile_email');
     console.info('[slack-auth-callback] generating magic link', { profileId });
 
     await service.from('slack_identities').update({ last_login_at: new Date().toISOString() }).eq('profile_id', profileId).eq('slack_team_id', slackTeamId).eq('slack_user_id', slackUserId);
@@ -96,15 +143,26 @@ export async function GET(request: NextRequest) {
       options: { redirectTo: `${base}/missions` }
     });
     if (linkError || !linkData?.properties?.action_link) throw new Error('magic_link_failed');
+    console.info('[slack-auth-callback] magic link generated');
     console.info('[slack-auth-callback] auth flow completed', { profileId });
 
     return NextResponse.redirect(linkData.properties.action_link);
   } catch (error) {
-    const reason = error instanceof Error ? error.message : 'unknown';
+    const reason = error instanceof Error ? error.message : 'unknown_error';
+    const safeReason: SlackAuthErrorCode =
+      reason === 'openid_token_exchange_failed' ||
+      reason === 'openid_userinfo_failed' ||
+      reason === 'missing_slack_identity' ||
+      reason === 'workspace_not_allowed' ||
+      reason === 'identity_not_linked' ||
+      reason === 'missing_profile_email' ||
+      reason === 'magic_link_failed'
+        ? reason
+        : 'slack_provider_error';
     console.error('[slack-auth-callback] failure', {
-      reason,
-      stack: error instanceof Error ? error.stack : undefined
+      reason: safeReason,
+      details: error instanceof Error && 'details' in error ? (error as Error & { details?: unknown }).details : undefined
     });
-    return NextResponse.redirect(new URL('/login?slack=auth_failed', base));
+    return buildAuthFailedRedirect(base, safeReason);
   }
 }
