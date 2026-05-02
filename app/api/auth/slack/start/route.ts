@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { createSlackOAuthState } from '@/lib/slack/auth';
 import { getSlackAuthRedirectUri, getSlackConfig } from '@/lib/slack/config';
 
-const OIDC_SCOPES = ['openid', 'profile', 'email'];
+const OIDC_SCOPES = ['openid', 'profile'];
+const AUTHORIZE_ENDPOINT = '/openid/connect/authorize';
 
 export async function POST() {
   const config = getSlackConfig();
@@ -25,7 +26,7 @@ export async function POST() {
 
   const state = await createSlackOAuthState(null, 'login');
   const slackAuthorizeOrigin = config.teamDomain ? `https://${config.teamDomain}.slack.com` : 'https://slack.com';
-  const oauthUrl = new URL('/openid/connect/authorize', slackAuthorizeOrigin);
+  const oauthUrl = new URL(AUTHORIZE_ENDPOINT, slackAuthorizeOrigin);
   oauthUrl.searchParams.set('client_id', config.clientId);
   oauthUrl.searchParams.set('scope', OIDC_SCOPES.join(' '));
   oauthUrl.searchParams.set('response_type', 'code');
@@ -36,6 +37,9 @@ export async function POST() {
   }
 
   console.info('[slack-auth-start] generated oauth URL', {
+    flow: 'slack_login',
+    endpoint_authorize: `${slackAuthorizeOrigin}${AUTHORIZE_ENDPOINT}`,
+    scopes_requested: OIDC_SCOPES,
     redirectUri,
     hasState: Boolean(state),
     slackAuthorizeOrigin

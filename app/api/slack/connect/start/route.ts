@@ -6,6 +6,7 @@ import { getSlackConfig } from '@/lib/slack/config';
 
 const SCOPES = ['chat:write', 'channels:manage', 'groups:write', 'groups:read', 'im:write'];
 const USER_SCOPES = ['users:read'];
+const AUTHORIZE_ENDPOINT = 'https://slack.com/oauth/v2/authorize';
 
 export async function POST(request: NextRequest) {
   const token = getBearerToken(request);
@@ -36,7 +37,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Impossible de préparer la connexion Slack: ${error.message}` }, { status: 500 });
   }
 
-  const oauthUrl = new URL('https://slack.com/oauth/v2/authorize');
+  const requestedScopes = [...SCOPES, ...USER_SCOPES];
+  const hasOpenIdScopes = requestedScopes.some((scope) => ['openid', 'profile', 'email'].includes(scope));
+  if (hasOpenIdScopes) {
+    console.error('[slack/connect/start] invalid mixed scopes', {
+      flow: 'bot_install',
+      endpoint_authorize: AUTHORIZE_ENDPOINT,
+      scopes_requested: requestedScopes
+    });
+    return NextResponse.json({ error: 'Scopes Slack invalides: mélange OpenID + bot interdit.' }, { status: 500 });
+  }
+
+  const oauthUrl = new URL(AUTHORIZE_ENDPOINT);
   oauthUrl.searchParams.set('client_id', config.clientId);
   oauthUrl.searchParams.set('scope', SCOPES.join(','));
   oauthUrl.searchParams.set('user_scope', USER_SCOPES.join(','));
@@ -48,6 +60,13 @@ export async function POST(request: NextRequest) {
   if (config.redirectUri) {
     oauthUrl.searchParams.set('redirect_uri', config.redirectUri);
   }
+
+  console.info('[slack/connect/start] generated oauth URL', {
+    flow: 'bot_install',
+    endpoint_authorize: AUTHORIZE_ENDPOINT,
+    scopes_requested: requestedScopes,
+    redirect_uri: config.redirectUri ?? null
+  });
 
   return NextResponse.json({ oauthUrl: oauthUrl.toString() });
 }
