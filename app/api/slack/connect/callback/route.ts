@@ -32,11 +32,10 @@ export async function GET(request: NextRequest) {
   try {
     const oauth = await SlackService.exchangeOAuthCode(code);
     const slackUserId = oauth.authed_user?.id;
-    const userToken = oauth.authed_user?.access_token;
     const slackTeamId = oauth.team?.id;
     const slack = new SlackService();
 
-    if (!slackUserId || !slackTeamId || !userToken) {
+    if (!slackUserId || !slackTeamId) {
       throw new Error('Slack OAuth n\'a pas renvoyé les identifiants utilisateur/équipe.');
     }
 
@@ -44,8 +43,17 @@ export async function GET(request: NextRequest) {
       throw new Error('Slack workspace non autorisé.');
     }
 
-    const userInfo = await slack.getUserInfo(slackUserId, userToken);
-    const slackUsername = userInfo.user?.name ?? null;
+    let slackUsername: string | null = null;
+    try {
+      const userInfo = await slack.getUserInfo(slackUserId);
+      slackUsername = userInfo.user?.name ?? null;
+    } catch (error) {
+      console.warn('[slack/connect/callback] users.info failed, continuing without slack username', {
+        state,
+        profileId: stateRow.profile_id,
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
 
     const { error: profileError } = await serviceClient
       .from('profiles')
@@ -78,4 +86,3 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(redirectTarget);
   }
 }
-
