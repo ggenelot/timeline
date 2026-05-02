@@ -1,0 +1,55 @@
+name: Codex Slack SSO E2E
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+
+jobs:
+  slack-sso-e2e:
+    if: ${{ github.event.pull_request.draft == false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      NODE_ENV: test
+      CI: true
+      E2E_BASE_URL: ${{ vars.E2E_BASE_URL }}
+      APP_BASE_URL: ${{ vars.APP_BASE_URL }}
+      SLACK_TEST_EMAIL: ${{ secrets.SLACK_TEST_EMAIL }}
+      SLACK_TEST_PASSWORD: ${{ secrets.SLACK_TEST_PASSWORD }}
+      SLACK_TEST_WORKSPACE_URL: ${{ vars.SLACK_TEST_WORKSPACE_URL }}
+      SLACK_CLIENT_ID: ${{ secrets.SLACK_CLIENT_ID }}
+      SLACK_CLIENT_SECRET: ${{ secrets.SLACK_CLIENT_SECRET }}
+      SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+      SLACK_OAUTH_REDIRECT_URI: ${{ vars.SLACK_OAUTH_REDIRECT_URI }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright browsers
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Tests
+        run: pnpm test
+
+      - name: Diagnose Slack OAuth
+        run: pnpm diagnose:slack-oauth
+
+      - name: Slack SSO E2E
+        run: pnpm test:e2e:slack-sso

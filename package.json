@@ -15,7 +15,8 @@
     "supabase:migration:new": "npx supabase migration new",
     "supabase:db:seed": "npx supabase db seed",
     "test:e2e:slack-sso": "playwright test tests/e2e/slack-sso.spec.ts",
-    "diagnose:slack-oauth": "node scripts/diagnose-slack-oauth.mjs"
+    "diagnose:slack-oauth": "node scripts/diagnose-slack-oauth.mjs",
+    "test": "pnpm typecheck"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
