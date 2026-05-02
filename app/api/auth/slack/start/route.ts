@@ -25,7 +25,8 @@ export async function POST() {
   }
 
   const state = await createSlackOAuthState(null, 'login');
-  const oauthUrl = new URL('https://slack.com/openid/connect/authorize');
+  const slackAuthorizeOrigin = config.teamDomain ? `https://${config.teamDomain}.slack.com` : 'https://slack.com';
+  const oauthUrl = new URL('/openid/connect/authorize', slackAuthorizeOrigin);
   oauthUrl.searchParams.set('client_id', config.clientId);
   oauthUrl.searchParams.set('scope', OIDC_SCOPES.join(' '));
   oauthUrl.searchParams.set('response_type', 'code');
@@ -37,7 +38,8 @@ export async function POST() {
 
   console.info('[slack-auth-start] generated oauth URL', {
     redirectUri,
-    hasState: Boolean(state)
+    hasState: Boolean(state),
+    slackAuthorizeOrigin
   });
 
   return NextResponse.json({ oauthUrl: oauthUrl.toString(), type: 'auth_slack_login_start' });

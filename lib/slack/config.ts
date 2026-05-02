@@ -22,6 +22,7 @@ export function getSlackConfig() {
     redirectUri: optionalEnv('SLACK_OAUTH_REDIRECT_URI'),
     authRedirectUri: optionalEnv('SLACK_AUTH_REDIRECT_URI'),
     appBaseUrl: optionalEnv('APP_BASE_URL'),
-    teamId: optionalEnv('SLACK_TEAM_ID')
+    teamId: optionalEnv('SLACK_TEAM_ID'),
+    teamDomain: optionalEnv('SLACK_TEAM_DOMAIN')
   };
 }
