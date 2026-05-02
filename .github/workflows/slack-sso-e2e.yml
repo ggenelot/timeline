@@ -40,13 +40,92 @@ jobs:
         run: npm exec playwright install --with-deps chromium
 
       - name: Lint
+        id: lint
         run: npm run lint
 
       - name: Tests
-        run: npm test
+        id: tests
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee /tmp/slack-sso-tests.log
 
       - name: Diagnose Slack OAuth
-        run: npm run diagnose:slack-oauth
+        id: diagnose_slack_oauth
+        run: |
+          set -o pipefail
+          npm run diagnose:slack-oauth 2>&1 | tee /tmp/slack-sso-diagnose.log
 
       - name: Slack SSO E2E
-        run: npm run test:e2e:slack-sso
+        id: slack_sso_e2e
+        run: |
+          set -o pipefail
+          npm run test:e2e:slack-sso 2>&1 | tee /tmp/slack-sso-e2e.log
+
+      - name: Comment PR on failure
+        if: ${{ failure() && github.event_name == 'pull_request' }}
+        uses: actions/github-script@v7
+        env:
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          TESTS_OUTCOME: ${{ steps.tests.outcome }}
+          DIAGNOSE_OUTCOME: ${{ steps.diagnose_slack_oauth.outcome }}
+          E2E_OUTCOME: ${{ steps.slack_sso_e2e.outcome }}
+        with:
+          script: |
+            const fs = require('fs');
+
+            const trackedSteps = [
+              { name: 'Lint', outcome: process.env.LINT_OUTCOME, logPath: null },
+              { name: 'Tests', outcome: process.env.TESTS_OUTCOME, logPath: '/tmp/slack-sso-tests.log' },
+              { name: 'Diagnose Slack OAuth', outcome: process.env.DIAGNOSE_OUTCOME, logPath: '/tmp/slack-sso-diagnose.log' },
+              { name: 'Slack SSO E2E', outcome: process.env.E2E_OUTCOME, logPath: '/tmp/slack-sso-e2e.log' },
+            ];
+
+            const failedStep = trackedSteps.find((step) => step.outcome === 'failure');
+            const failedStepName = failedStep?.name ?? 'Inconnue';
+
+            let logTail = 'Log indisponible pour cette étape.';
+            if (failedStep?.logPath && fs.existsSync(failedStep.logPath)) {
+              const lines = fs
+                .readFileSync(failedStep.logPath, 'utf8')
+                .split(/\r?\n/)
+                .filter(Boolean);
+              logTail = lines.slice(-80).join('\n') || 'Log vide.';
+            }
+
+            const artifactsResponse = await github.rest.actions.listWorkflowRunArtifacts({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: context.runId,
+              per_page: 100,
+            });
+
+            const artifacts = artifactsResponse.data.artifacts ?? [];
+            const artifactLines = artifacts.length
+              ? artifacts.map((artifact) => `- ${artifact.name} (${artifact.size_in_bytes} bytes)`)
+              : ['- Aucun artifact disponible'];
+
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+
+            const body = [
+              '⚠️ **Échec du workflow Codex Slack SSO E2E**',
+              '',
+              `- **Étape échouée** : ${failedStepName}`,
+              `- **Run GitHub Actions** : ${runUrl}`,
+              '- **Artifacts Playwright disponibles** :',
+              ...artifactLines,
+              '',
+              '<details>',
+              '<summary>80 dernières lignes du log</summary>',
+              '',
+              '```text',
+              logTail,
+              '```',
+              '</details>',
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
