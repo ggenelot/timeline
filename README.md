@@ -223,3 +223,7 @@ Ce projet est publié sous licence MIT. Voir le fichier `LICENSE`.
 ### Diagnostic admin Slack
 
 - `GET /api/admin/slack/health` : vérifie `auth.test`, retourne workspace, bot user id, scopes détectés et scopes manquants.
+
+## Contribution
+
+- Les PR de maintenance peuvent inclure des changements mineurs de documentation.
