@@ -163,6 +163,7 @@ export class SlackService {
 
     const endpoint = 'https://slack.com/api/oauth.v2.access';
     const flow: SlackFlow = mode === 'connect' ? 'bot_install' : 'slack_login';
+    console.info('[slack-oauth]', { flow, step: 'oauth_v2_exchange_start', endpoint_token: endpoint, redirect_uri: redirectUri ?? null });
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -171,6 +172,7 @@ export class SlackService {
 
     const json = (await response.json()) as SlackApiResponse<SlackOAuthAccessResponse>;
 
+    console.info('[slack-oauth]', { flow, step: 'oauth_v2_exchange_response', status: response.status, slack_ok: Boolean((json as { ok?: boolean }).ok) });
     if (!response.ok || !json.ok) {
       const slackError = 'error' in json ? json.error : 'unknown_error';
       const error = new Error('oauth_exchange_failed');
@@ -206,6 +208,7 @@ export class SlackService {
       redirect_uri: redirectUri
     });
 
+    console.info('[slack-oauth]', { flow: 'slack_login', step: 'openid_token_exchange_start', endpoint_token: endpoint, redirect_uri: redirectUri });
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -214,6 +217,7 @@ export class SlackService {
 
     const json = (await response.json()) as SlackApiResponse<SlackOpenIdTokenResponse>;
 
+    console.info('[slack-oauth]', { flow: 'slack_login', step: 'openid_token_exchange_response', status: response.status, slack_ok: Boolean((json as { ok?: boolean }).ok) });
     if (!response.ok || !json.ok) {
       const slackError = 'error' in json ? json.error : 'unknown_error';
       const error = new Error('openid_token_exchange_failed');
@@ -236,6 +240,7 @@ export class SlackService {
   }
 
   static async getOpenIdUserInfo(userAccessToken: string) {
+    console.info('[slack-oauth]', { flow: 'slack_login', step: 'openid_userinfo_start', endpoint: 'https://slack.com/api/openid.connect.userInfo' });
     const response = await fetch('https://slack.com/api/openid.connect.userInfo', {
       method: 'GET',
       headers: {
@@ -244,6 +249,7 @@ export class SlackService {
     });
 
     const json = (await response.json()) as SlackApiResponse<SlackOpenIdUserInfo>;
+    console.info('[slack-oauth]', { flow: 'slack_login', step: 'openid_userinfo_response', status: response.status, slack_ok: Boolean((json as { ok?: boolean }).ok) });
     if (!response.ok || !json.ok) {
       throw new Error(`Slack OpenID userInfo failed: ${'error' in json ? json.error : `HTTP ${response.status}`}`);
     }
