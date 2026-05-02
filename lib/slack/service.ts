@@ -1,4 +1,4 @@
-import { getSlackConfig, requireSlackEnv } from '@/lib/slack/config';
+import { getSlackAuthRedirectUri, getSlackConfig, requireSlackEnv } from '@/lib/slack/config';
 
 type SlackApiSuccess<T> = { ok: true } & T;
 type SlackApiError = { ok: false; error: string; needed?: string; provided?: string };
@@ -148,7 +148,7 @@ export class SlackService {
       code
     });
 
-    const redirectUri = mode === 'auth' ? config.authRedirectUri : config.redirectUri;
+    const redirectUri = mode === 'auth' ? getSlackAuthRedirectUri() : config.redirectUri;
     if (redirectUri) {
       params.set('redirect_uri', redirectUri);
     }

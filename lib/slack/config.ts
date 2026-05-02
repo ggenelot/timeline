@@ -26,3 +26,9 @@ export function getSlackConfig() {
     teamDomain: optionalEnv('SLACK_TEAM_DOMAIN')
   };
 }
+
+
+export function getSlackAuthRedirectUri() {
+  const config = getSlackConfig();
+  return config.authRedirectUri ?? (config.appBaseUrl ? `${config.appBaseUrl}/api/auth/slack/callback` : null);
+}
