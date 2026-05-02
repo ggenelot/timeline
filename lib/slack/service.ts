@@ -1,7 +1,7 @@
 import { getSlackConfig, requireSlackEnv } from '@/lib/slack/config';
 
 type SlackApiSuccess<T> = { ok: true } & T;
-type SlackApiError = { ok: false; error: string };
+type SlackApiError = { ok: false; error: string; needed?: string; provided?: string };
 
 type SlackApiResponse<T> = SlackApiSuccess<T> | SlackApiError;
 
@@ -24,6 +24,29 @@ export type SlackOpenIdUserInfo = {
   'https://slack.com/team_id'?: string;
 };
 
+
+const SLACK_ERROR_MESSAGES: Record<string, string> = {
+  token_absent: 'Token Slack manquant. Configurez SLACK_BOT_TOKEN côté serveur.',
+  missing_scope: "Le bot Slack n'a pas les permissions nécessaires (scope manquant).",
+  not_in_channel: "Le bot Slack n'est pas membre du canal cible.",
+  name_taken: 'Ce nom de canal Slack est déjà utilisé.',
+  user_not_found: 'Utilisateur Slack introuvable.',
+};
+
+export class SlackApiClientError extends Error {
+  code: string;
+  needed?: string;
+  provided?: string;
+
+  constructor(code: string, method: string, needed?: string, provided?: string) {
+    super(SLACK_ERROR_MESSAGES[code] ?? `Slack API ${method} failed: ${code}`);
+    this.name = 'SlackApiClientError';
+    this.code = code;
+    this.needed = needed;
+    this.provided = provided;
+  }
+}
+
 export class SlackService {
   private botToken: string;
 
@@ -44,7 +67,10 @@ export class SlackService {
     const json = (await response.json()) as SlackApiResponse<T>;
 
     if (!response.ok || !json.ok) {
-      throw new Error(`Slack API ${method} failed: ${'error' in json ? json.error : `HTTP ${response.status}`}`);
+      const code = 'error' in json ? json.error : `http_${response.status}`;
+      const needed = 'needed' in json ? json.needed : undefined;
+      const provided = 'provided' in json ? json.provided : undefined;
+      throw new SlackApiClientError(code, method, needed, provided);
     }
 
     return json;
@@ -88,6 +114,14 @@ export class SlackService {
     return this.callApi<{ user?: { name?: string } }>('users.info', {
       user: slackUserId
     }, accessToken);
+  }
+
+  async authTest() {
+    return this.callApi<{ team?: string; team_id?: string; user_id?: string; bot_id?: string }>('auth.test', {});
+  }
+
+  async listGrantedScopes() {
+    return this.callApi<{ scopes?: { app_home?: string[]; team?: string[]; channel?: string[]; group?: string[]; im?: string[]; mpim?: string[] } }>('apps.permissions.info', {});
   }
 
   async inviteUsersToChannel(channel: string, users: string[]) {

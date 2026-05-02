@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { ensureMissionSlackChannel, inviteSelectedVolunteersToMissionChannel } from '@/lib/slack/workflows';
+import { SlackApiClientError } from '@/lib/slack/service';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
   const token = getBearerToken(request);
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     await inviteSelectedVolunteersToMissionChannel(missionId);
     return NextResponse.json({ message: 'Synchronisation Slack terminée.', channel });
   } catch (error) {
+    if (error instanceof SlackApiClientError) {
+      return NextResponse.json({ error: error.message, code: error.code, needed: error.needed ?? null, provided: error.provided ?? null }, { status: 500 });
+    }
+
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Erreur inconnue' }, { status: 500 });
   }
 }

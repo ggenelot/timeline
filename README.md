@@ -150,27 +150,21 @@ Application : http://localhost:3000
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `APP_BASE_URL`
 - `SLACK_BOT_TOKEN`
-- `SLACK_SIGNING_SECRET`
-- `SLACK_CLIENT_ID`
-- `SLACK_CLIENT_SECRET`
-- `SLACK_OAUTH_REDIRECT_URI` (ex: `http://localhost:3000/api/slack/connect/callback`)
+- `SLACK_SIGNING_SECRET` (uniquement pour slash commands)
+
+Pour les opérations mission Slack (création canal privé, invitations, messages), seule la variable `SLACK_BOT_TOKEN` est requise côté Slack.
 
 ### Scopes Slack requis
 
-Bot scopes:
+Bot scopes (missions):
 - `chat:write`
-- `channels:manage`
 - `groups:write`
 - `groups:read`
 - `im:write`
 
-User scopes (OAuth connect V1):
-- `users:read`
-
-OpenID scopes (login V2):
-- `openid`
-- `profile`
-- `email`
+Scopes additionnels selon usages: 
+- `channels:manage` (si canaux publics)
+- `users:read` (si fonctionnalités OAuth connect conservées)
 
 ### Endpoints Slack ajoutés
 
@@ -224,3 +218,8 @@ Le script scanne tout l'historique Git et retourne un code non-zéro en cas de m
 ## Licence
 
 Ce projet est publié sous licence MIT. Voir le fichier `LICENSE`.
+
+
+### Diagnostic admin Slack
+
+- `GET /api/admin/slack/health` : vérifie `auth.test`, retourne workspace, bot user id, scopes détectés et scopes manquants.
