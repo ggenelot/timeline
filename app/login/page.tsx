@@ -44,10 +44,11 @@ function LoginPageContent() {
       <p className="mb-6 text-sm text-slate-600">Utilisez un compte de test Supabase pour accéder aux missions.</p>
 
       {slackStatus === 'state_invalid' || slackStatus === 'auth_failed' || slackStatus === 'magic_invalid' ? (<p className='mb-4 rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700'>Connexion Slack impossible. Réessayez ou connectez-vous par email.{slackReason ? ` Détail: ${slackReason}` : ''}</p>) : null}
-      <button type='button' onClick={async () => { const response = await fetch('/api/auth/slack/start', { method: 'POST' }); const payload = await response.json(); if (response.ok && payload.oauthUrl) { window.location.href = payload.oauthUrl; } else { setError(payload.error ?? 'Connexion Slack impossible.'); } }} className='mb-4 w-full rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-100'>Se connecter avec Slack</button>
+      <div className="mb-4 rounded border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800">
+        Connexion Slack (OAuth/OTP) expérimentale, masquée pour la stabilisation des opérations mission Slack.
+      </div>
 
-
-      <div className="mb-6 rounded-md border border-slate-200 bg-slate-50 p-4">
+      <div className="mb-6 rounded-md border border-slate-200 bg-slate-50 p-4 hidden">
         <h2 className="mb-1 text-sm font-semibold text-slate-900">Connexion Slack par OTP</h2>
         <p className="mb-3 text-xs text-slate-600">Entrez votre identifiant Slack (ex: @prenom.nom ou U123ABC45). Nous vous envoyons un lien OTP en message privé Slack.</p>
         <div className="flex gap-2">

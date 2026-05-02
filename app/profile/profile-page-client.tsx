@@ -149,12 +149,12 @@ export function ProfilePageClient() {
       </div>
 
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-        <p className="font-medium text-slate-900">Intégration Slack</p>
+        <p className="font-medium text-slate-900">Intégration Slack <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-800">Expérimental</span></p>
         <p className="mt-1 text-slate-700">
           État: {isSlackConnected ? `Connecté (${profile.slack_username ? `@${profile.slack_username}` : `${profile.slack_team_id} / ${profile.slack_user_id}`})` : 'Non connecté'}
         </p>
         {profile.slack_connected_at ? <p className="mt-1 text-xs text-slate-500">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 hidden gap-2">
           {!isSlackConnected ? (
             <button
               type="button"
