@@ -9,10 +9,34 @@ function LoginPageContent() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [slackLoading, setSlackLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const slackStatus = searchParams.get('slack');
   const slackReason = searchParams.get('reason');
+
+
+
+  async function handleSlackLogin() {
+    setSlackLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/auth/slack/start', {
+        method: 'POST'
+      });
+      const payload = (await response.json().catch(() => ({}))) as { oauthUrl?: string; error?: string };
+
+      if (!response.ok || !payload.oauthUrl) {
+        throw new Error(payload.error ?? 'Connexion Slack impossible.');
+      }
+
+      window.location.href = payload.oauthUrl;
+    } catch (slackError) {
+      setError(slackError instanceof Error ? slackError.message : 'Connexion Slack impossible.');
+      setSlackLoading(false);
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -43,6 +67,15 @@ function LoginPageContent() {
       <div className="mb-4 rounded border border-slate-200 bg-slate-50 p-2 text-xs text-slate-700">
         La connexion Slack est limitée aux comptes Timeline déjà liés à une identité Slack.
       </div>
+
+      <button
+        type="button"
+        onClick={handleSlackLogin}
+        disabled={slackLoading}
+        className="mb-4 w-full rounded-md bg-[#4A154B] px-4 py-2 text-sm text-white hover:bg-[#611f69] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {slackLoading ? 'Redirection vers Slack...' : 'Se connecter avec Slack'}
+      </button>
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
