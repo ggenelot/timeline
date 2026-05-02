@@ -1,28 +1,56 @@
 # Test E2E Slack SSO
 
-## Prérequis
-- Déployer l'app avec les secrets Vercel configurés (`SLACK_TEST_EMAIL`, `SLACK_TEST_PASSWORD`, `SLACK_TEST_WORKSPACE_URL`, `SLACK_CLIENT_ID`, `SLACK_CLIENT_SECRET`, `SLACK_BOT_TOKEN`, `SLACK_OAUTH_REDIRECT_URI`, `APP_BASE_URL`).
-- Exporter localement les mêmes variables d'environnement avant de lancer les commandes.
+## Objectif
+Automatiser l'auto-évaluation des PR Codex avec un pipeline GitHub Actions dédié au flux Slack SSO, sans stocker de secrets dans le dépôt.
 
-## Commandes
-- Diagnostic OAuth: `pnpm diagnose:slack-oauth`
-- Test E2E Slack SSO: `pnpm test:e2e:slack-sso`
+## Workflows GitHub Actions
 
-## Ce que vérifie le diagnostic
-1. Présence de la configuration d'environnement Slack/OAuth.
-2. Réponse de `/api/auth/slack/start` et validité du `oauthUrl` (host/path/query/redirect_uri).
-3. Disponibilité de `/api/auth/slack/callback`.
-4. Réponse Slack `auth.test` via `SLACK_BOT_TOKEN`.
-5. Indication de vérification de la liaison Supabase (`slack_identities`).
+### 1) `.github/workflows/slack-sso-e2e.yml`
+Exécuté sur les événements `pull_request` (hors draft), il enchaîne :
+1. `pnpm install --frozen-lockfile`
+2. `pnpm lint`
+3. `pnpm test`
+4. `pnpm diagnose:slack-oauth`
+5. `pnpm test:e2e:slack-sso`
 
-## Ce que vérifie le test E2E
-1. Ouvre `/login`.
-2. Clique sur **Se connecter avec Slack**.
-3. Passe le flux réel Slack OAuth (email/mot de passe + consentement si demandé).
-4. Vérifie le retour sur l'application et la présence d'une session connectée (URL app + cookie Supabase).
+Le workflow installe aussi Chromium pour Playwright.
 
-## Boucle d'auto-évaluation conseillée
-1. `pnpm diagnose:slack-oauth`
-2. `pnpm test:e2e:slack-sso`
-3. Si échec: analyser les logs structurés serveur (`[slack-auth-start]`, `[slack-auth-callback]`, `[slack-oauth-state]`) puis corriger.
-4. Relancer diagnostic + test jusqu'à succès.
+### 2) `.github/workflows/auto-merge.yml` (optionnel)
+Active l'auto-merge (squash) uniquement si :
+- la PR ressemble à une PR Codex (auteur/login/head branch/titre),
+- la PR n'est pas en draft,
+- la PR n'a pas le label `do-not-merge`.
+
+> GitHub n'exécutera le merge automatique qu'une fois les checks obligatoires validés.
+
+## Variables à configurer
+
+Aucune clé n'est commitée dans le repo. Configurer uniquement via **GitHub Actions Secrets/Variables** (et éventuellement synchroniser avec Vercel selon votre déploiement) :
+
+### Secrets GitHub
+- `SLACK_TEST_EMAIL`
+- `SLACK_TEST_PASSWORD`
+- `SLACK_CLIENT_ID`
+- `SLACK_CLIENT_SECRET`
+- `SLACK_BOT_TOKEN`
+
+### Variables GitHub (`vars`)
+- `E2E_BASE_URL`
+- `APP_BASE_URL`
+- `SLACK_TEST_WORKSPACE_URL`
+- `SLACK_OAUTH_REDIRECT_URI`
+
+## Scripts npm attendus
+- `pnpm lint`
+- `pnpm test`
+- `pnpm diagnose:slack-oauth`
+- `pnpm test:e2e:slack-sso`
+
+## Exécution locale
+1. Exporter les mêmes variables/secrets dans votre shell.
+2. Lancer :
+   - `pnpm install`
+   - `pnpm lint`
+   - `pnpm test`
+   - `pnpm diagnose:slack-oauth`
+   - `pnpm test:e2e:slack-sso`
