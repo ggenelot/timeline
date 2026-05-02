@@ -37,6 +37,8 @@ export async function GET(request: NextRequest) {
     const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? oauth.team?.id;
     const slackEmail = openIdProfile?.email ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_identity');
+    const config = getSlackConfig();
+    if (config.teamId && slackTeamId !== config.teamId) throw new Error('workspace_not_allowed');
     console.info('[slack-auth-callback] resolved Slack identity', {
       slackTeamId,
       slackUserId,
