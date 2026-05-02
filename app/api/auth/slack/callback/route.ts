@@ -24,7 +24,16 @@ export async function GET(request: NextRequest) {
   const code = url.searchParams.get('code');
   const state = url.searchParams.get('state');
   const base = getSlackConfig().appBaseUrl ?? `${url.protocol}//${url.host}`;
+  const endpointAuthorize = 'https://slack.com/openid/connect/authorize';
+  const endpointToken = 'https://slack.com/api/openid.connect.token';
+  const scopesRequested = ['openid', 'profile'];
+  const redirectUri = `${base}/api/auth/slack/callback`;
   console.info('[slack-auth-callback] incoming callback', {
+    flow: 'slack_login',
+    endpoint_authorize: endpointAuthorize,
+    endpoint_token: endpointToken,
+    scopes_requested: scopesRequested,
+    redirect_uri: redirectUri,
     hasCode: Boolean(code),
     hasState: Boolean(state),
     providerError: url.searchParams.get('error')
@@ -70,6 +79,17 @@ export async function GET(request: NextRequest) {
     console.info('[slack-auth-callback] OpenID token obtained', { hasAccessToken: Boolean(userToken), tokenType: openIdToken.token_type });
 
     let openIdProfile: Awaited<ReturnType<typeof SlackService.getOpenIdUserInfo>> | null = null;
+    let idTokenPayload: Record<string, unknown> | null = null;
+    if (openIdToken.id_token) {
+      try {
+        const payloadB64 = openIdToken.id_token.split('.')[1];
+        if (payloadB64) {
+          idTokenPayload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString('utf-8')) as Record<string, unknown>;
+        }
+      } catch {
+        idTokenPayload = null;
+      }
+    }
     try {
       openIdProfile = await SlackService.getOpenIdUserInfo(userToken);
       console.info('[slack-auth-callback] OpenID userInfo obtained');
@@ -78,8 +98,8 @@ export async function GET(request: NextRequest) {
       throw new Error('openid_userinfo_failed');
     }
 
-    const slackUserId = openIdProfile?.sub;
-    const slackTeamId = openIdProfile?.['https://slack.com/team_id'];
+    const slackUserId = openIdProfile?.sub ?? (typeof idTokenPayload?.sub === 'string' ? idTokenPayload.sub : undefined);
+    const slackTeamId = openIdProfile?.['https://slack.com/team_id'] ?? (typeof idTokenPayload?.['https://slack.com/team_id'] === 'string' ? idTokenPayload['https://slack.com/team_id'] : undefined);
     const slackEmail = openIdProfile?.email ?? null;
     if (!slackUserId || !slackTeamId) throw new Error('missing_slack_identity');
     const config = getSlackConfig();
@@ -160,6 +180,11 @@ export async function GET(request: NextRequest) {
         ? reason
         : 'slack_provider_error';
     console.error('[slack-auth-callback] failure', {
+      flow: 'slack_login',
+      endpoint_authorize: endpointAuthorize,
+      endpoint_token: endpointToken,
+      scopes_requested: scopesRequested,
+      redirect_uri: redirectUri,
       reason: safeReason,
       details: error instanceof Error && 'details' in error ? (error as Error & { details?: unknown }).details : undefined
     });

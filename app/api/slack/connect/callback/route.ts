@@ -11,6 +11,9 @@ export async function GET(request: NextRequest) {
   const config = getSlackConfig();
   const appBaseUrl = config.appBaseUrl ?? `${url.protocol}//${url.host}`;
   const redirectTarget = new URL('/profile', appBaseUrl);
+  const endpointAuthorize = 'https://slack.com/oauth/v2/authorize';
+  const endpointToken = 'https://slack.com/api/oauth.v2.access';
+  const scopesRequested = ['chat:write', 'channels:manage', 'groups:write', 'groups:read', 'im:write', 'users:read'];
 
   if (!code || !state) {
     redirectTarget.searchParams.set('slack', 'error');
@@ -76,9 +79,15 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erreur inconnue.';
     console.error('[slack/connect/callback] OAuth failed', {
+      flow: 'bot_install',
+      endpoint_authorize: endpointAuthorize,
+      endpoint_token: endpointToken,
+      scopes_requested: scopesRequested,
+      redirect_uri: config.redirectUri ?? null,
       state,
       profileId: stateRow.profile_id,
-      message
+      message,
+      details: error instanceof Error && 'details' in error ? (error as Error & { details?: unknown }).details : undefined
     });
 
     redirectTarget.searchParams.set('slack', 'error');

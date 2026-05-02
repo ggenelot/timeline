@@ -30,6 +30,8 @@ export type SlackOpenIdTokenResponse = {
   token_type?: string;
 };
 
+type SlackFlow = 'bot_install' | 'slack_login';
+
 
 const SLACK_ERROR_MESSAGES: Record<string, string> = {
   token_absent: 'Token Slack manquant. Configurez SLACK_BOT_TOKEN côté serveur.',
@@ -159,7 +161,9 @@ export class SlackService {
       params.set('redirect_uri', redirectUri);
     }
 
-    const response = await fetch('https://slack.com/api/oauth.v2.access', {
+    const endpoint = 'https://slack.com/api/oauth.v2.access';
+    const flow: SlackFlow = mode === 'connect' ? 'bot_install' : 'slack_login';
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params
@@ -168,7 +172,16 @@ export class SlackService {
     const json = (await response.json()) as SlackApiResponse<SlackOAuthAccessResponse>;
 
     if (!response.ok || !json.ok) {
-      throw new Error(`Slack OAuth failed: ${'error' in json ? json.error : `HTTP ${response.status}`}`);
+      const slackError = 'error' in json ? json.error : 'unknown_error';
+      const error = new Error('oauth_exchange_failed');
+      (error as Error & { details?: Record<string, unknown> }).details = {
+        flow,
+        endpoint_token: endpoint,
+        error: slackError,
+        status: response.status,
+        redirect_uri: redirectUri ?? null
+      };
+      throw error;
     }
 
     return json;
@@ -205,11 +218,11 @@ export class SlackService {
       const slackError = 'error' in json ? json.error : 'unknown_error';
       const error = new Error('openid_token_exchange_failed');
       (error as Error & { details?: Record<string, unknown> }).details = {
+        flow: 'slack_login',
         endpoint,
+        endpoint_token: endpoint,
         error: slackError,
         status: response.status,
-        hasClientId: Boolean(config.clientId),
-        hasClientSecret: Boolean(config.clientSecret),
         redirectUri
       };
       throw error;
