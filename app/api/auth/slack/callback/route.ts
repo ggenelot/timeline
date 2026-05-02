@@ -54,12 +54,45 @@ export async function GET(request: NextRequest) {
     return buildAuthFailedRedirect(base, 'missing_code_or_state');
   }
 
+  console.info('[slack-auth-callback] received state from Slack', {
+    flow: 'slack_login',
+    step: 'callback_received',
+    state
+  });
+
   const stateConsumed = await consumeSlackOAuthState(state, 'login');
-  if (!stateConsumed) {
-    console.warn('[slack-auth-callback] state rejected', { code: 'invalid_or_expired_state' });
+  if (stateConsumed.status === 'not_found' || stateConsumed.status === 'expired' || stateConsumed.status === 'intent_mismatch') {
+    console.warn('[slack-auth-callback] state rejected', {
+      code: 'invalid_or_expired_state',
+      reason: stateConsumed.reason,
+      slack_state: state,
+      db_state: stateConsumed.row ? state : null,
+      db_expires_at: stateConsumed.row?.expires_at ?? null,
+      db_consumed_at: stateConsumed.row?.consumed_at ?? null
+    });
     return buildAuthFailedRedirect(base, 'invalid_or_expired_state');
   }
-  console.info('[slack-auth-callback] state consumed');
+
+  if (stateConsumed.status === 'already_used') {
+    console.info('[slack-auth-callback] duplicate callback detected; soft success', {
+      flow: 'slack_login',
+      step: 'consume_state',
+      slack_state: state,
+      db_state: state,
+      status: 'already_used',
+      expires_at: stateConsumed.row?.expires_at ?? null,
+      consumed_at: stateConsumed.row?.consumed_at ?? null
+    });
+    return NextResponse.redirect(new URL('/login?slack=already_processed', base));
+  }
+
+  console.info('[slack-auth-callback] state consumed', {
+    flow: 'slack_login',
+    slack_state: state,
+    db_state: stateConsumed.row?.id ?? null,
+    db_expires_at: stateConsumed.row?.expires_at ?? null,
+    db_consumed_at: stateConsumed.row?.consumed_at ?? null
+  });
 
   try {
     let openIdToken: Awaited<ReturnType<typeof SlackService.exchangeOpenIdCode>>;
