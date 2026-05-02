@@ -3,7 +3,17 @@ import { createSlackOAuthState } from '@/lib/slack/auth';
 import { getSlackAuthRedirectUri, getSlackConfig } from '@/lib/slack/config';
 
 const OIDC_SCOPES = ['openid', 'profile'];
-const AUTHORIZE_ENDPOINT = '/openid/connect/authorize';
+const OIDC_AUTHORIZE_URL = 'https://slack.com/openid/connect/authorize';
+
+function assertSlackOidcAuthorizeUrl(oauthUrl: URL) {
+  const serialized = oauthUrl.toString();
+  if (!oauthUrl.pathname.includes('/openid/connect/authorize')) {
+    throw new Error('Invalid Slack OpenID authorize pathname.');
+  }
+  if (oauthUrl.pathname.includes('/oauth') || serialized.includes('user_scope=') || serialized.includes('openid_connect=1')) {
+    throw new Error('Invalid Slack OpenID authorize parameters.');
+  }
+}
 
 export async function POST() {
   const config = getSlackConfig();
@@ -25,8 +35,7 @@ export async function POST() {
   }
 
   const state = await createSlackOAuthState(null, 'login');
-  const slackAuthorizeOrigin = config.teamDomain ? `https://${config.teamDomain}.slack.com` : 'https://slack.com';
-  const oauthUrl = new URL(AUTHORIZE_ENDPOINT, slackAuthorizeOrigin);
+  const oauthUrl = new URL(OIDC_AUTHORIZE_URL);
   oauthUrl.searchParams.set('client_id', config.clientId);
   oauthUrl.searchParams.set('scope', OIDC_SCOPES.join(' '));
   oauthUrl.searchParams.set('response_type', 'code');
@@ -36,13 +45,15 @@ export async function POST() {
     oauthUrl.searchParams.set('team', config.teamId);
   }
 
+  assertSlackOidcAuthorizeUrl(oauthUrl);
+
   console.info('[slack-auth-start] generated oauth URL', {
-    flow: 'slack_login',
-    endpoint_authorize: `${slackAuthorizeOrigin}${AUTHORIZE_ENDPOINT}`,
-    scopes_requested: OIDC_SCOPES,
-    redirectUri,
-    hasState: Boolean(state),
-    slackAuthorizeOrigin
+    origin: oauthUrl.origin,
+    pathname: oauthUrl.pathname,
+    scope: oauthUrl.searchParams.get('scope'),
+    hasState: Boolean(oauthUrl.searchParams.get('state')),
+    redirectUri: oauthUrl.searchParams.get('redirect_uri'),
+    team: oauthUrl.searchParams.get('team')
   });
 
   return NextResponse.json({ oauthUrl: oauthUrl.toString(), type: 'auth_slack_login_start' });
