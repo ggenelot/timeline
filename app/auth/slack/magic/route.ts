@@ -27,26 +27,10 @@ export async function GET(request: NextRequest) {
   const { data: identity } = await service.from('slack_identities').select('profile_id').eq('slack_team_id', challenge.slack_team_id).eq('slack_user_id', challenge.slack_user_id).maybeSingle<{ profile_id: string | null }>();
   let profileId = identity?.profile_id ?? null;
   if (!profileId) {
-    console.warn('[slack-magic] no identity mapping, creating synthetic user');
-    const syntheticEmail = `slack_${challenge.slack_team_id}_${challenge.slack_user_id}@timeline.slack.local`;
-    const { data: createdUser, error } = await service.auth.admin.createUser({
-      email: syntheticEmail,
-      email_confirm: true,
-      user_metadata: { full_name: `Slack ${challenge.slack_user_id}` }
+    console.warn('[slack-magic] no linked Timeline identity for Slack account', {
+      slackTeamId: challenge.slack_team_id
     });
-    if (error || !createdUser.user?.id) {
-      console.error('[slack-magic] failed to create synthetic user', { error: error?.message });
-      return NextResponse.redirect(new URL('/login?slack=magic_invalid', base));
-    }
-    profileId = createdUser.user.id;
-    console.info('[slack-magic] synthetic user created', { profileId });
-    await service.from('slack_identities').insert({
-      profile_id: profileId,
-      slack_team_id: challenge.slack_team_id,
-      slack_user_id: challenge.slack_user_id,
-      is_primary: true,
-      last_login_at: new Date().toISOString()
-    });
+    return NextResponse.redirect(new URL('/auth/slack/unlinked', base));
   }
 
   const { data: profile } = await service.from('profiles').select('email').eq('id', profileId).single<{ email: string }>();
