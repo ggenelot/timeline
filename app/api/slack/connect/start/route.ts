@@ -4,8 +4,7 @@ import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { getSlackConfig } from '@/lib/slack/config';
 
-const SCOPES = ['chat:write', 'channels:manage', 'groups:write', 'groups:read', 'im:write'];
-const USER_SCOPES = ['users:read'];
+const OPENID_SCOPES = ['openid', 'profile', 'email'];
 
 export async function POST(request: NextRequest) {
   const token = getBearerToken(request);
@@ -36,10 +35,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: `Impossible de préparer la connexion Slack: ${error.message}` }, { status: 500 });
   }
 
-  const oauthUrl = new URL('https://slack.com/oauth/v2/authorize');
+  const oauthUrl = new URL('https://slack.com/openid/connect/authorize');
   oauthUrl.searchParams.set('client_id', config.clientId);
-  oauthUrl.searchParams.set('scope', SCOPES.join(','));
-  oauthUrl.searchParams.set('user_scope', USER_SCOPES.join(','));
+  oauthUrl.searchParams.set('scope', OPENID_SCOPES.join(' '));
+  oauthUrl.searchParams.set('response_type', 'code');
   oauthUrl.searchParams.set('state', state);
   if (config.teamId) {
     oauthUrl.searchParams.set('team', config.teamId);
