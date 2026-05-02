@@ -24,6 +24,12 @@ export type SlackOpenIdUserInfo = {
   'https://slack.com/team_id'?: string;
 };
 
+export type SlackOpenIdTokenResponse = {
+  access_token?: string;
+  id_token?: string;
+  token_type?: string;
+};
+
 
 const SLACK_ERROR_MESSAGES: Record<string, string> = {
   token_absent: 'Token Slack manquant. Configurez SLACK_BOT_TOKEN côté serveur.',
@@ -166,6 +172,54 @@ export class SlackService {
     }
 
     return json;
+  }
+
+  static async exchangeOpenIdCode(code: string) {
+    const config = getSlackConfig();
+    const redirectUri = getSlackAuthRedirectUri();
+    const endpoint = 'https://slack.com/api/openid.connect.token';
+
+    if (!config.clientId || !config.clientSecret) {
+      throw new Error('Missing Slack OAuth client credentials.');
+    }
+    if (!redirectUri) {
+      throw new Error('Missing Slack auth redirect URI.');
+    }
+
+    const params = new URLSearchParams({
+      client_id: config.clientId,
+      client_secret: config.clientSecret,
+      code,
+      redirect_uri: redirectUri
+    });
+
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params
+    });
+
+    const json = (await response.json()) as SlackApiResponse<SlackOpenIdTokenResponse>;
+
+    if (!response.ok || !json.ok) {
+      const slackError = 'error' in json ? json.error : 'unknown_error';
+      const error = new Error('openid_token_exchange_failed');
+      (error as Error & { details?: Record<string, unknown> }).details = {
+        endpoint,
+        error: slackError,
+        status: response.status,
+        hasClientId: Boolean(config.clientId),
+        hasClientSecret: Boolean(config.clientSecret),
+        redirectUri
+      };
+      throw error;
+    }
+
+    return {
+      access_token: json.access_token,
+      id_token: json.id_token,
+      token_type: json.token_type
+    };
   }
 
   static async getOpenIdUserInfo(userAccessToken: string) {
