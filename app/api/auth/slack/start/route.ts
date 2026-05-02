@@ -41,19 +41,21 @@ export async function POST() {
   oauthUrl.searchParams.set('response_type', 'code');
   oauthUrl.searchParams.set('state', state);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);
-  if (config.teamId) {
+  const teamParamPresent = Boolean(config.teamId);
+  const teamParamValid = Boolean(config.teamId && config.teamId.startsWith('T'));
+  if (teamParamValid && config.teamId) {
     oauthUrl.searchParams.set('team', config.teamId);
   }
 
   assertSlackOidcAuthorizeUrl(oauthUrl);
 
   console.info('[slack-auth-start] generated oauth URL', {
-    origin: oauthUrl.origin,
-    pathname: oauthUrl.pathname,
-    scope: oauthUrl.searchParams.get('scope'),
-    hasState: Boolean(oauthUrl.searchParams.get('state')),
-    redirectUri: oauthUrl.searchParams.get('redirect_uri'),
-    team: oauthUrl.searchParams.get('team')
+    initial_authorize_url_origin: oauthUrl.origin,
+    initial_authorize_url_pathname: oauthUrl.pathname,
+    requested_scope: oauthUrl.searchParams.get('scope'),
+    team_param_present: teamParamPresent,
+    team_param_valid: teamParamValid,
+    redirect_uri: oauthUrl.searchParams.get('redirect_uri')
   });
 
   return NextResponse.json({ oauthUrl: oauthUrl.toString(), type: 'auth_slack_login_start' });
