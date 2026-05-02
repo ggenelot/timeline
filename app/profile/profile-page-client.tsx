@@ -42,7 +42,8 @@ export function ProfilePageClient() {
       } else if (slackStatus === 'expired') {
         setError('Lien Slack expiré ou déjà utilisé.');
       } else if (slackStatus === 'error') {
-        setError('Connexion Slack échouée.');
+        const reason = searchParams.get('slack_reason');
+        setError(reason ? `Connexion Slack échouée: ${reason}` : 'Connexion Slack échouée.');
       }
 
       setLoading(false);

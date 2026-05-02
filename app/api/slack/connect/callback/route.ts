@@ -65,8 +65,17 @@ export async function GET(request: NextRequest) {
 
     redirectTarget.searchParams.set('slack', 'connected');
     return NextResponse.redirect(redirectTarget);
-  } catch {
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erreur inconnue.';
+    console.error('[slack/connect/callback] OAuth failed', {
+      state,
+      profileId: stateRow.profile_id,
+      message
+    });
+
     redirectTarget.searchParams.set('slack', 'error');
+    redirectTarget.searchParams.set('slack_reason', message);
     return NextResponse.redirect(redirectTarget);
   }
 }
+
