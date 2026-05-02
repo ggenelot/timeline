@@ -31,6 +31,9 @@ export async function POST() {
   oauthUrl.searchParams.set('response_type', 'code');
   oauthUrl.searchParams.set('state', state);
   oauthUrl.searchParams.set('redirect_uri', redirectUri);
+  if (config.teamId) {
+    oauthUrl.searchParams.set('team', config.teamId);
+  }
 
   console.info('[slack-auth-start] generated oauth URL', {
     redirectUri,
