@@ -55,6 +55,7 @@ type MissionFormProps = {
   onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
   availableSkills?: SkillOption[];
   requirementsError?: string | null;
+  locationSuggestions?: string[];
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitting: boolean;
   submitLabel: string;
@@ -70,6 +71,7 @@ export function MissionForm({
   onRequirementsChange,
   availableSkills = [],
   requirementsError,
+  locationSuggestions = [],
   onSubmit,
   submitting,
   submitLabel,
@@ -115,7 +117,15 @@ export function MissionForm({
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             placeholder="Ex: Maison des associations"
             disabled={submitting}
+            list="mission-location-suggestions"
           />
+          {locationSuggestions.length > 0 ? (
+            <datalist id="mission-location-suggestions">
+              {locationSuggestions.map((suggestion) => (
+                <option key={suggestion} value={suggestion} />
+              ))}
+            </datalist>
+          ) : null}
         </label>
 
         <label className="block text-sm text-slate-700">
