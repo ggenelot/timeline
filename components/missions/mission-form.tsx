@@ -187,23 +187,7 @@ export function MissionForm({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-3">
-        <label className="block text-sm text-slate-700">
-          Bénévoles requis *
-          <input
-            type="number"
-            min={1}
-            step={1}
-            value={form.required_volunteers}
-            onChange={(event) => onChange({ ...form, required_volunteers: event.target.value })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={submitting}
-            required
-          />
-        </label>
-
-
-
+      <div className="grid gap-4 md:grid-cols-2">
         <label className="block text-sm text-slate-700">
           Catégorie *
           <select
@@ -262,7 +246,7 @@ export function MissionForm({
         </label>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-end gap-3">
         <button
           type="submit"
           disabled={submitting}
@@ -270,7 +254,6 @@ export function MissionForm({
         >
           {submitting ? submittingLabel : submitLabel}
         </button>
-
         {footerActions}
       </div>
     </form>
