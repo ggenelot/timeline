@@ -62,9 +62,11 @@ export function Header() {
             <>
               <span className="break-words text-slate-600">Bonjour, {profile?.full_name ?? session.user.email}</span>
               <div className="flex flex-wrap items-center gap-3 sm:ml-auto sm:justify-end sm:gap-4">
-                <Link href="/missions" className="text-slate-700 hover:text-slate-900">
-                  Missions
-                </Link>
+                {role !== 'benevole' ? (
+                  <Link href="/missions" className="text-slate-700 hover:text-slate-900">
+                    Missions
+                  </Link>
+                ) : null}
                 {role === 'admin' ? (
                   <Link href="/admin/volunteers" className="text-slate-700 hover:text-slate-900">
                     Bénévoles
