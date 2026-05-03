@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MissionProposalResponse } from '@/lib/types';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
-import { notifyVolunteerRejected } from '@/lib/slack/workflows';
+import { notifyVolunteerAvailabilityUpdatedByAdmin, notifyVolunteerRejected } from '@/lib/slack/workflows';
 
 type AdminMissionVolunteerPayload = {
   volunteer_id?: string;
@@ -121,6 +121,15 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: 'Mission introuvable.' }, { status: 404 });
   }
 
+  const { data: existingProposal } = await guard.client
+    .from('mission_proposals')
+    .select('response')
+    .eq('mission_id', missionId)
+    .eq('volunteer_id', parsed.volunteerId)
+    .maybeSingle<{ response: MissionProposalResponse }>();
+
+  const previousResponse = existingProposal?.response ?? null;
+
   const upsertPayload = {
     mission_id: missionId,
     volunteer_id: parsed.volunteerId,
@@ -149,18 +158,25 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: `Impossible d'enregistrer le statut : ${upsertError.message}` }, { status: 400 });
   }
 
-  if (parsed.response === 'unavailable') {
-    try {
+  try {
+    await notifyVolunteerAvailabilityUpdatedByAdmin({
+      missionId,
+      profileId: parsed.volunteerId,
+      previousResponse,
+      nextResponse: parsed.response
+    });
+
+    if (parsed.response === 'unavailable') {
       await notifyVolunteerRejected(missionId, parsed.volunteerId);
-    } catch (error) {
-      return NextResponse.json(
-        {
-          message: 'Statut bénévole enregistré, mais échec de notification Slack.',
-          slackError: error instanceof Error ? error.message : 'Erreur inconnue'
-        },
-        { status: 202 }
-      );
     }
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message: 'Statut bénévole enregistré, mais échec de notification Slack.',
+        slackError: error instanceof Error ? error.message : 'Erreur inconnue'
+      },
+      { status: 202 }
+    );
   }
 
   return NextResponse.json({

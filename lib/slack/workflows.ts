@@ -276,6 +276,72 @@ export async function inviteSelectedVolunteersToMissionChannel(missionId: string
   }
 }
 
+
+
+function formatAvailabilityLabel(response: string | null | undefined) {
+  if (response === 'available') return 'disponible';
+  if (response === 'unavailable') return 'indisponible';
+  return 'sans réponse';
+}
+
+export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
+  missionId: string;
+  profileId: string;
+  previousResponse: string | null;
+  nextResponse: 'available' | 'unavailable';
+}) {
+  const { missionId, profileId, previousResponse, nextResponse } = args;
+  const serviceClient = createServerSupabaseServiceClient();
+  const slack = new SlackService();
+
+  const { data: payload } = await serviceClient
+    .from('profiles')
+    .select('id,slack_user_id,full_name,mission_proposals!inner(mission_id,mission:missions!mission_proposals_mission_id_fkey(id,title,starts_at,ends_at))')
+    .eq('id', profileId)
+    .eq('mission_proposals.mission_id', missionId)
+    .maybeSingle();
+
+  const dedupeKey = `mission:${missionId}:profile:${profileId}:admin_availability_updated_dm:${Date.now()}`;
+
+  if (!payload?.slack_user_id) {
+    await upsertSlackLog({ missionId, profileId, type: 'admin_availability_updated_dm', status: 'skipped', dedupeKey, errorMessage: 'Compte Slack non lié.' });
+    return { sent: false, reason: 'no_link' as const };
+  }
+
+  const missionProposal = Array.isArray(payload.mission_proposals) ? payload.mission_proposals[0] : payload.mission_proposals;
+  const mission = missionProposal?.mission ? (Array.isArray(missionProposal.mission) ? missionProposal.mission[0] : missionProposal.mission) : null;
+
+  if (!mission) {
+    throw new Error('Mission introuvable pour notification de disponibilité.');
+  }
+
+  const dmText = [
+    `Bonjour ${payload.full_name ?? 'bénévole'},`,
+    `Un administrateur a modifié votre disponibilité pour l'événement *${mission.title}*.`,
+    `Changement : ${formatAvailabilityLabel(previousResponse)} → ${formatAvailabilityLabel(nextResponse)}.`,
+    `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
+    process.env.APP_BASE_URL ? `Voir l'événement : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  try {
+    const channel = await slack.openDirectMessage(payload.slack_user_id);
+    await slack.postMessage(channel, dmText);
+    await upsertSlackLog({ missionId, profileId, type: 'admin_availability_updated_dm', status: 'sent', dedupeKey });
+    return { sent: true, reason: 'sent' as const };
+  } catch (error) {
+    await upsertSlackLog({
+      missionId,
+      profileId,
+      type: 'admin_availability_updated_dm',
+      status: 'error',
+      dedupeKey,
+      errorMessage: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+    throw error;
+  }
+}
 export async function notifyVolunteerRejected(missionId: string, profileId: string) {
   const serviceClient = createServerSupabaseServiceClient();
   const slack = new SlackService();
