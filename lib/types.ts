@@ -101,6 +101,7 @@ export type MissionProposal = {
   decided_by: string | null;
   updated_by_admin: boolean;
   updated_by: string | null;
+  responded_at?: string | null;
   updated_at: string;
   source: MissionProposalSource;
   created_at: string;
