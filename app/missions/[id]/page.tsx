@@ -911,43 +911,66 @@ export default function MissionDetailPage() {
           {isAvailabilityExpanded ? (
             <>
 
-              <div id="mission-availability-content" className="grid gap-2 text-xs text-slate-600 md:grid-cols-3">
-                <p>Disponibles : <span className="font-semibold text-emerald-700">{proposalsByStatus.available}</span></p>
-                <p>Indisponibles : <span className="font-semibold text-rose-700">{proposalsByStatus.unavailable}</span></p>
-                <p>Sans réponse : <span className="font-semibold text-slate-700">{proposalsByStatus.no_response}</span></p>
-              </div>
-
-          <div className="grid gap-3 rounded border border-slate-200 bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <label className="text-xs text-slate-700">
-              Rechercher un bénévole
-              <input
-                type="search"
-                value={availabilitySearchQuery}
-                onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
-                placeholder="Nom, email, compétence…"
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
-              />
-            </label>
-            <label className="text-xs text-slate-700">
-              Filtrer par disponibilité
-              <select
-                value={availabilityStatusFilter}
-                onChange={(event) => setAvailabilityStatusFilter(event.target.value as 'all' | MissionProposalResponse)}
-                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm md:min-w-48"
+          <div id="mission-availability-content" className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
+            <input
+              type="search"
+              value={availabilitySearchQuery}
+              onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
+              placeholder="Rechercher un bénévole"
+              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+            />
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setAvailabilityStatusFilter('all')}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  availabilityStatusFilter === 'all'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
               >
-                <option value="all">Tous statuts ({proposalsTableRows.length})</option>
-                <option value="available">Disponibles ({proposalsByStatus.available})</option>
-                <option value="unavailable">Indisponibles ({proposalsByStatus.unavailable})</option>
-                <option value="no_response">Sans réponse ({proposalsByStatus.no_response})</option>
-              </select>
-            </label>
+                Tous statuts {proposalsTableRows.length}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvailabilityStatusFilter('available')}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  availabilityStatusFilter === 'available'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Disponibles {proposalsByStatus.available}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvailabilityStatusFilter('unavailable')}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  availabilityStatusFilter === 'unavailable'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Indisponibles {proposalsByStatus.unavailable}
+              </button>
+              <button
+                type="button"
+                onClick={() => setAvailabilityStatusFilter('no_response')}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                  availabilityStatusFilter === 'no_response'
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                }`}
+              >
+                Sans réponse {proposalsByStatus.no_response}
+              </button>
+            </div>
           </div>
 
           <div className="max-h-80 overflow-y-auto rounded border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
-                  <th className="w-12 px-3 py-2 font-medium">#</th>
                   <th className="px-3 py-2 font-medium">Bénévole</th>
                   <th className="px-3 py-2 font-medium">Disponibilité</th>
                   <th className="px-3 py-2 font-medium">Modifié admin</th>
@@ -957,14 +980,13 @@ export default function MissionDetailPage() {
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredProposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={5} className="px-3 py-3 text-slate-500">
+                    <td colSpan={4} className="px-3 py-3 text-slate-500">
                       Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
                 ) : (
-                  filteredProposalsTableRows.map((row, index) => (
+                  filteredProposalsTableRows.map((row) => (
                     <tr key={row.id} className={row.responseRowBackground}>
-                      <td className="px-3 py-2 font-mono text-slate-500">{index + 1}</td>
                       <td className="space-y-1 px-3 py-2">
                         <p>{row.volunteerLabel}</p>
                         {row.matchingRequiredSkills.length > 0 ? (
