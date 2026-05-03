@@ -616,10 +616,14 @@ export default function AdminMissionImportPage() {
               const isImportable = normalizedMission && validation.errors.length === 0;
 
               return (
-                <article key={row.rowId} className="overflow-hidden rounded-2xl border border-slate-200 bg-slate-50/70 text-sm shadow-sm">
-                  <div className="space-y-3 p-4">
-                    <div className="flex items-center justify-between">
-                      <p className="font-medium text-slate-900">Bloc #{row.sourceBlockIndex + 1}</p>
+                <article key={row.rowId} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 text-sm shadow-sm">
+                  <div className="space-y-4 p-5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
+                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 uppercase tracking-wide">Import auto</span>
+                        <span className="text-slate-400">|</span>
+                        <span>Bloc #{row.sourceBlockIndex + 1}</span>
+                      </div>
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -652,11 +656,13 @@ export default function AdminMissionImportPage() {
                       </div>
                     </div>
 
+                    <div className="space-y-1">
+                      <h2 className="text-2xl font-semibold text-slate-900">{row.title || 'Sans intitulé'}</h2>
+                      <p className="text-sm text-slate-500">{row.date || '-'} | {row.startTime || '-'} à {row.endTime || '-'}</p>
+                      <p className="text-xl text-slate-500">Lieu : {row.location || '-'}</p>
+                    </div>
+
                     <div className="grid gap-2 text-slate-700 md:grid-cols-2">
-                      <p><span className="font-medium text-slate-900">Intitulé :</span> {row.title || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Lieu :</span> {row.location || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Date :</span> {row.date || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Début :</span> {row.startTime || '-'} | <span className="font-medium text-slate-900">Fin :</span> {row.endTime || '-'} </p>
                       <p><span className="font-medium text-slate-900">Catégorie :</span> {MISSION_CATEGORY_LABELS[row.category]} </p>
                       <p><span className="font-medium text-slate-900">Etat DO :</span> {row.do_status || '-'} </p>
                       <p><span className="font-medium text-slate-900">Retenue :</span> {row.retained_status || '-'} </p>
@@ -736,7 +742,7 @@ export default function AdminMissionImportPage() {
                   </div> : null}
 
                   {row.issues.length > 0 ? (
-                    <ul className="space-y-1 text-amber-700">
+                    <ul className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-700">
                       {row.issues.map((issue, index) => (
                         <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
                       ))}
@@ -744,13 +750,13 @@ export default function AdminMissionImportPage() {
                   ) : null}
 
                   {validation.errors.length > 0 ? (
-                    <ul className="space-y-1 text-red-700">
+                    <ul className="space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
                       {validation.errors.map((issue, index) => (
                         <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-emerald-700">Ligne valide.</p>
+                    <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">Ligne valide.</p>
                   )}
                   </div>
                 </article>
