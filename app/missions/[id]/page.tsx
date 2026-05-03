@@ -973,13 +973,13 @@ export default function MissionDetailPage() {
                 <tr>
                   <th className="px-3 py-2 font-medium">Bénévole</th>
                   <th className="px-3 py-2 font-medium">Disponibilité</th>
-                  {showAvailabilityManagement ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
+                  {isAdmin ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredProposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={showAvailabilityManagement ? 3 : 2} className="px-3 py-3 text-slate-500">
+                    <td colSpan={isAdmin ? 3 : 2} className="px-3 py-3 text-slate-500">
                       Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
@@ -1006,29 +1006,26 @@ export default function MissionDetailPage() {
                         )}
                       </td>
                       <td className={`px-3 py-2 font-medium ${row.responseTone}`}>{row.responseLabel}</td>
-                      {showAvailabilityManagement ? (
+                      {isAdmin ? (
                         <td className="px-3 py-2">
-                          {isAdmin ? (
+                          <div className="flex flex-wrap gap-1">
                             <button
                               type="button"
-                              onClick={() =>
-                                setVolunteerResponseByAdmin(
-                                  row.volunteerId,
-                                  row.response === 'available' ? 'unavailable' : 'available'
-                                )
-                              }
-                              disabled={actionLoading === `admin-response-${row.volunteerId}`}
-                              className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'available')}
+                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'available'}
+                              className="rounded-md border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
                             >
-                              {actionLoading === `admin-response-${row.volunteerId}`
-                                ? 'Mise à jour...'
-                                : row.response === 'available'
-                                  ? 'Passer indisponible'
-                                  : 'Passer disponible'}
+                              Disponible
                             </button>
-                          ) : (
-                            <span className="text-xs text-slate-400">Réservé admin</span>
-                          )}
+                            <button
+                              type="button"
+                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'unavailable')}
+                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'unavailable'}
+                              className="rounded-md border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Indisponible
+                            </button>
+                          </div>
                         </td>
                       ) : null}
                     </tr>
