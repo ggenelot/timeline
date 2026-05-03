@@ -115,7 +115,6 @@ export default function MissionDetailPage() {
   const [availabilityStatusFilter, setAvailabilityStatusFilter] = useState<'all' | MissionProposalResponse>('all');
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
-  const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
   const [pendingAssignments, setPendingAssignments] = useState<Map<string, string | null>>(new Map());
   const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
   const [volunteerActivityStats, setVolunteerActivityStats] = useState<Record<string, { lastActivityAt: string | null; monthlyCount: number }>>({});
@@ -981,14 +980,13 @@ export default function MissionDetailPage() {
               <thead className="bg-slate-50 text-slate-600">
                 <tr>
                   <th className="px-3 py-2 font-medium">Bénévole</th>
-                  <th className="px-3 py-2 font-medium">Disponibilité</th>
                   {isAdmin ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredProposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 3 : 2} className="px-3 py-3 text-slate-500">
+                    <td colSpan={isAdmin ? 2 : 1} className="px-3 py-3 text-slate-500">
                       Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
@@ -1014,7 +1012,6 @@ export default function MissionDetailPage() {
                           <p className="text-[11px] text-slate-500">Aucune compétence requise identifiée</p>
                         )}
                       </td>
-                      <td className={`px-3 py-2 font-medium ${row.responseTone}`}>{row.responseLabel}</td>
                       {isAdmin ? (
                         <td className="px-3 py-2">
                           <div className="flex flex-wrap gap-1">
@@ -1044,183 +1041,6 @@ export default function MissionDetailPage() {
             </table>
           </div>
 
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={() => setShowAvailabilityManagement((currentValue) => !currentValue)}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              {showAvailabilityManagement ? 'Masquer la gestion des dispos' : 'Gérer les dispos'}
-            </button>
-          </div>
-
-          {showAvailabilityManagement ? (
-            <>
-              {isAdmin ? (
-                <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                  <h3 className="text-sm font-semibold text-slate-900">Ajouter un bénévole à la mission</h3>
-                  <div className="mt-2 flex flex-wrap items-end gap-2">
-                    <label className="text-xs text-slate-700">
-                      Bénévole
-                      <select
-                        value={selectedVolunteerIdToAdd}
-                        onChange={(event) => setSelectedVolunteerIdToAdd(event.target.value)}
-                        className="mt-1 min-w-64 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                      >
-                        <option value="">Sélectionner un bénévole</option>
-                        {availableVolunteersToAdd.map((volunteer) => (
-                          <option key={volunteer.id} value={volunteer.id}>
-                            {volunteer.full_name ?? volunteer.email}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <label className="text-xs text-slate-700">
-                      Statut initial
-                      <select
-                        value={selectedResponseToAdd}
-                        onChange={(event) => setSelectedResponseToAdd(event.target.value as Exclude<MissionProposalResponse, 'no_response'>)}
-                        className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                      >
-                        {adminResponseOptions.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <button
-                      type="button"
-                      onClick={addVolunteerWithStatus}
-                      disabled={!selectedVolunteerIdToAdd || actionLoading === 'admin-add'}
-                      className="rounded-md bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Ajouter
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="space-y-2">
-                {proposals.map((proposal) => {
-                  const adminActionLoadingKey = `admin-response-${proposal.volunteer_id}`;
-                  const isSavingResponse = actionLoading === adminActionLoadingKey;
-                  return (
-                    <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-3 rounded border border-slate-200 p-3 text-sm text-slate-700">
-                      <div>
-                        <p className="font-medium">{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
-                        <p className="text-xs text-slate-500">Statut disponibilité : {getProposalResponseLabel(proposal.response)}</p>
-                        {proposal.updated_by_admin ? (
-                          <p className="mt-1 inline-flex rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-xs text-purple-700">
-                            Modifié par un admin
-                          </p>
-                        ) : null}
-                      </div>
-
-                      {isAdmin ? (
-                        <label className="text-xs text-slate-700">
-                          Changer le statut
-                          <select
-                            value={proposal.response === 'no_response' ? 'available' : proposal.response}
-                            onChange={(event) => setVolunteerResponseByAdmin(proposal.volunteer_id, event.target.value as Exclude<MissionProposalResponse, 'no_response'>)}
-                            disabled={isSavingResponse}
-                            className="mt-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                          >
-                            {adminResponseOptions.map((option) => (
-                              <option key={option.value} value={option.value}>
-                                {option.label}
-                              </option>
-                            ))}
-                          </select>
-                        </label>
-                      ) : null}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-
-          {showAvailabilityManagement ? (
-            <>
-              <div className="mt-3">
-                <label className="text-sm text-slate-700">
-                  Filtrer les bénévoles disponibles par compétence
-                  <select
-                    value={selectedVolunteerSkillCode}
-                    onChange={(event) => setSelectedVolunteerSkillCode((event.target.value as SkillCode | 'all'))}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm md:max-w-sm"
-                  >
-                    <option value="all">Toutes les compétences</option>
-                    {volunteerSkillOptions.map((skill) => (
-                      <option key={skill.code} value={skill.code}>
-                        {skill.name}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-
-              {missionBlocksSelection ? <p className="text-sm text-slate-600">Mission verrouillée : sélection finale indisponible.</p> : null}
-
-              <div className="space-y-2">
-                {filteredEligibleProposals.map((proposal) => {
-                  const isSelected = pendingAssignments.has(proposal.volunteer_id);
-                  const isSaving = actionLoading === proposal.volunteer_id;
-                  const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
-                    .map((profileSkill) => profileSkill.skill?.name)
-                    .filter((skillName): skillName is string => Boolean(skillName));
-
-                  const skillNames = Array.from(buildExpandedSkillSet(explicitSkillNames))
-                    .sort(compareSkillCodes)
-                    .map((skillCode) => getSkillLabel(skillCode));
-
-                  return (
-                    <div key={proposal.id} className="flex flex-wrap items-center justify-between gap-2 rounded border border-slate-200 p-3 text-sm text-slate-700">
-                      <div>
-                        <p className="font-medium">{proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id}</p>
-                        <p className="text-xs text-slate-500">Réponse: {getProposalResponseLabel(proposal.response)}</p>
-                        <p className="text-xs text-slate-500">Compétences: {skillNames.length > 0 ? skillNames.join(', ') : 'Aucune'}</p>
-                      </div>
-                      <button
-                        type="button"
-                        disabled={missionBlocksSelection || isSaving}
-                        onClick={() => toggleSelection(proposal.volunteer_id)}
-                        className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {isSaving ? 'Mise à jour...' : isSelected ? 'Retirer' : 'Retenir'}
-                      </button>
-                    </div>
-                  );
-                })}
-
-                {eligibleProposals.length === 0 ? (
-                  <p className="text-sm text-slate-600">Aucune réponse exploitable (disponible) pour composer l&apos;équipe.</p>
-                ) : filteredEligibleProposals.length === 0 ? (
-                  <p className="text-sm text-slate-600">Aucun résultat avec ce filtre de compétence.</p>
-                ) : null}
-              </div>
-
-              <div className="rounded border border-slate-200 bg-slate-50 p-3">
-                <h3 className="text-sm font-semibold text-slate-900">Bénévoles retenus ({assignments.length})</h3>
-                {assignments.length === 0 ? (
-                  <p className="mt-1 text-sm text-slate-600">Aucun bénévole retenu.</p>
-                ) : (
-                  <ul className="mt-2 space-y-1 text-sm text-slate-700">
-                    {assignments.map((assignment) => (
-                      <li key={assignment.id}>
-                        {assignment.volunteer?.full_name ?? assignment.volunteer?.email ?? assignment.volunteer_id}
-                        {' · '}
-                        {requiredSkillNameById.get(assignment.mission_required_skill_id ?? '') ?? 'Sans compétence particulière'}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </>
-          ) : null}
             </>
           ) : null}
         </section>
