@@ -829,10 +829,6 @@ export default function MissionDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link href="/missions" className="text-sm text-slate-700 underline">
-        ← Retour aux missions
-      </Link>
-
       {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
       {success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
 
