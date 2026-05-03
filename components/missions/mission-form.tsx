@@ -6,7 +6,6 @@ export type MissionFormState = {
   title: string;
   description: string;
   location: string;
-  sector: string;
   starts_at_date: string;
   starts_at_time: string;
   ends_at_date: string;
@@ -20,7 +19,7 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   title: '',
   description: '',
   location: '',
-  sector: '',
+  
   starts_at_date: '',
   starts_at_time: '',
   ends_at_date: '',
@@ -107,7 +106,7 @@ export function MissionForm({
         />
       </label>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-4">
         <label className="block text-sm text-slate-700">
           Lieu
           <input
@@ -128,17 +127,6 @@ export function MissionForm({
           ) : null}
         </label>
 
-        <label className="block text-sm text-slate-700">
-          Secteur
-          <input
-            type="text"
-            value={form.sector}
-            onChange={(event) => onChange({ ...form, sector: event.target.value })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Ex: Nord"
-            disabled={submitting}
-          />
-        </label>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -148,7 +136,7 @@ export function MissionForm({
             <input
               type="date"
               value={form.starts_at_date}
-              onChange={(event) => onChange({ ...form, starts_at_date: event.target.value })}
+              onChange={(event) => onChange({ ...form, starts_at_date: event.target.value, ends_at_date: form.ends_at_date || event.target.value })}
               className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               disabled={submitting}
               required

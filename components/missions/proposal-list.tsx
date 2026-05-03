@@ -17,7 +17,7 @@ export type ProposalListItem = {
     title: string;
     starts_at: string;
     location: string | null;
-    sector: string | null;
+    
     status: MissionStatus;
   } | null;
   volunteer: {
@@ -93,7 +93,6 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
                 <dt className="inline font-medium text-slate-700">Lieu :</dt> {proposal.mission?.location ?? 'Non défini'}
               </div>
               <div>
-                <dt className="inline font-medium text-slate-700">Secteur :</dt> {proposal.mission?.sector ?? 'Non défini'}
               </div>
               <div>
                 <dt className="inline font-medium text-slate-700">Statut mission :</dt>{' '}

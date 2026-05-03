@@ -103,7 +103,7 @@ export default function MissionsPage() {
     let missionQuery = supabase
       .from('missions')
       .select(
-        'id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
       );
 
     if (profileData.role === 'benevole') {
@@ -237,7 +237,7 @@ export default function MissionsPage() {
         const normalizedSearch = searchQuery.trim().toLocaleLowerCase('fr-FR');
 
         if (normalizedSearch.length > 0) {
-          const searchableContent = [mission.title, mission.description, mission.location, mission.sector]
+          const searchableContent = [mission.title, mission.description, mission.location]
             .filter((value): value is string => Boolean(value))
             .join(' ')
             .toLocaleLowerCase('fr-FR');

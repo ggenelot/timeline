@@ -16,7 +16,7 @@ type AssignmentMissionRow = {
     title: string;
     starts_at: string;
     location: string | null;
-    sector: string | null;
+    
     status: 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
   } | null;
 };
@@ -67,7 +67,7 @@ export default function MyMissionsPage() {
 
       let assignmentsQuery = supabase
         .from('mission_assignments')
-        .select('id,assignment_status,created_at,mission:missions(id,title,starts_at,location,sector,status)')
+        .select('id,assignment_status,created_at,mission:missions(id,title,starts_at,location,status)')
         .eq('volunteer_id', authData.user.id)
         .order('created_at', { ascending: false });
 
@@ -144,7 +144,6 @@ export default function MyMissionsPage() {
                 <dt className="inline font-medium text-slate-700">Lieu :</dt> {row.mission?.location ?? 'Non défini'}
               </div>
               <div>
-                <dt className="inline font-medium text-slate-700">Secteur :</dt> {row.mission?.sector ?? 'Non défini'}
               </div>
               <div>
                 <dt className="inline font-medium text-slate-700">Statut mission :</dt>{' '}

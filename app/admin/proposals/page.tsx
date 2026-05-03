@@ -12,7 +12,6 @@ export default function AdminProposalsPage() {
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSector, setSelectedSector] = useState('all');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const router = useRouter();
@@ -54,7 +53,7 @@ export default function AdminProposalsPage() {
           mission_id,
           status,
           created_at,
-          mission:missions(id,title,starts_at,location,sector,status),
+          mission:missions(id,title,starts_at,location,status),
           volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)
         `)
         .order('created_at', { ascending: false });
@@ -78,22 +77,10 @@ export default function AdminProposalsPage() {
     void loadData();
   }, [router]);
 
-  const sectors = useMemo(
-    () =>
-      Array.from(
-        new Set(proposals.map((proposal) => proposal.mission?.sector).filter((sector): sector is string => Boolean(sector)))
-      ).sort(),
-    [proposals]
-  );
-
   const filteredProposals = useMemo(
     () =>
       proposals.filter((proposal) => {
         if (!proposal.mission) {
-          return false;
-        }
-
-        if (selectedSector !== 'all' && proposal.mission.sector !== selectedSector) {
           return false;
         }
 
@@ -109,7 +96,7 @@ export default function AdminProposalsPage() {
 
         return true;
       }),
-    [proposals, selectedSector, dateFrom, dateTo]
+    [proposals, dateFrom, dateTo]
   );
 
   if (loading) {
@@ -151,23 +138,7 @@ export default function AdminProposalsPage() {
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-3">
-          <label className="text-sm text-slate-700">
-            Secteur
-            <select
-              value={selectedSector}
-              onChange={(event) => setSelectedSector(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            >
-              <option value="all">Tous les secteurs</option>
-              {sectors.map((sector) => (
-                <option key={sector} value={sector}>
-                  {sector}
-                </option>
-              ))}
-            </select>
-          </label>
-
+        <div className="mt-3 grid gap-3 md:grid-cols-2">
           <label className="text-sm text-slate-700">
             Date début min
             <input
