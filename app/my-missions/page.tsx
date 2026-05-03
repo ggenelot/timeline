@@ -106,7 +106,7 @@ export default function MyMissionsPage() {
   }
 
   if (profile.role === 'benevole') {
-    return <p className="text-sm text-slate-700">Cette page n'est pas disponible pour les comptes bénévoles.</p>;
+    return <p className="text-sm text-slate-700">Cette page n&apos;est pas disponible pour les comptes bénévoles.</p>;
   }
 
   return (
