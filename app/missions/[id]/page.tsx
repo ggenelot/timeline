@@ -159,14 +159,18 @@ export default function MissionDetailPage() {
 
   const isAdmin = profile?.role === 'admin';
 
-  const proposalsByStatus = useMemo(
-    () => ({
-      available: proposals.filter((proposal) => proposal.response === 'available').length,
-      unavailable: proposals.filter((proposal) => proposal.response === 'unavailable').length,
-      no_response: proposals.filter((proposal) => proposal.response === 'no_response').length
-    }),
-    [proposals]
-  );
+  const proposalsByStatus = useMemo(() => {
+    const available = proposals.filter((proposal) => proposal.response === 'available').length;
+    const unavailable = proposals.filter((proposal) => proposal.response === 'unavailable').length;
+    const explicitNoResponse = proposals.filter((proposal) => proposal.response === 'no_response').length;
+    const volunteersWithoutProposal = Math.max(allVolunteers.length - proposals.length, 0);
+
+    return {
+      available,
+      unavailable,
+      no_response: explicitNoResponse + volunteersWithoutProposal
+    };
+  }, [allVolunteers.length, proposals]);
 
   const requiredSkillCodes = useMemo(() => {
     const skillNames = (mission?.mission_required_skills ?? [])
