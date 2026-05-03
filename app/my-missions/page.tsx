@@ -105,8 +105,8 @@ export default function MyMissionsPage() {
     return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
   }
 
-  if (profile.role !== 'benevole') {
-    return <p className="text-sm text-slate-700">Cette page est réservée aux bénévoles.</p>;
+  if (profile.role === 'benevole') {
+    return <p className="text-sm text-slate-700">Cette page n'est pas disponible pour les comptes bénévoles.</p>;
   }
 
   return (
