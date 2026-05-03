@@ -106,6 +106,7 @@ export default function MissionDetailPage() {
   const [isSlackCardExpanded, setIsSlackCardExpanded] = useState(false);
   const [slackChannelNameDraft, setSlackChannelNameDraft] = useState('');
   const [slackMessageDraft, setSlackMessageDraft] = useState('');
+  const [slackFreeMessageDraft, setSlackFreeMessageDraft] = useState('');
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
@@ -549,6 +550,7 @@ export default function MissionDetailPage() {
 
   const canManageMission = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === user?.id);
   const missionBlocksSelection = mission.status === 'cancelled' || mission.status === 'confirmed';
+  const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
 
   async function setVolunteerResponseByAdmin(volunteerId: string, response: Exclude<MissionProposalResponse, 'no_response'>) {
     if (!isAdmin || !mission) {
@@ -716,6 +718,52 @@ export default function MissionDetailPage() {
     setActionLoading(null);
     setSlackCreationState('created');
     await loadData();
+  }
+
+
+  async function sendSlackFreeMessage() {
+    if (!mission || !mission.slack_channel_id) {
+      setError('Le canal Slack doit être créé avant l’envoi d’un message libre.');
+      return;
+    }
+
+    const token = await getAccessToken();
+    if (!token) {
+      setError('Session invalide. Reconnectez-vous puis réessayez.');
+      return;
+    }
+
+    if (!slackFreeMessageDraft.trim()) {
+      setError('Veuillez saisir un message à envoyer.');
+      return;
+    }
+
+    setActionLoading('send-slack-message');
+    setError(null);
+    setSuccess(null);
+
+    const response = await fetch(`/api/admin/missions/${mission.id}/slack-message`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: slackFreeMessageDraft
+      })
+    });
+
+    const payload = (await response.json()) as { error?: string; message?: string };
+
+    if (!response.ok) {
+      setError(payload.error ?? 'Envoi du message Slack impossible.');
+      setActionLoading(null);
+      return;
+    }
+
+    setSuccess(payload.message ?? 'Message envoyé sur Slack.');
+    setSlackFreeMessageDraft('');
+    setActionLoading(null);
   }
 
   async function confirmCrewSelection() {
@@ -1224,7 +1272,8 @@ export default function MissionDetailPage() {
                 type="text"
                 value={slackChannelNameDraft}
                 onChange={(event) => setSlackChannelNameDraft(event.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                disabled={isSlackChannelCreated}
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
               />
             </label>
             <label className="mt-2 block text-sm">
@@ -1232,15 +1281,16 @@ export default function MissionDetailPage() {
               <textarea
                 value={slackMessageDraft}
                 onChange={(event) => setSlackMessageDraft(event.target.value)}
+                disabled={isSlackChannelCreated}
                 rows={4}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5"
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
               />
             </label>
             <div className="mt-2 flex justify-end">
               <button
                 type="button"
                 onClick={syncSlackChannel}
-                disabled={slackCreationState === 'creating' || slackCreationState === 'created'}
+                disabled={slackCreationState === 'creating' || isSlackChannelCreated}
                 className={`rounded-md border px-3 py-1.5 text-sm ${
                   slackCreationState === 'idle'
                     ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
@@ -1249,14 +1299,36 @@ export default function MissionDetailPage() {
               >
                 {slackCreationState === 'creating'
                   ? 'Création en cours'
-                  : slackCreationState === 'created'
+                  : isSlackChannelCreated
                     ? 'Canal créé'
                     : 'Confirmer la création du canal Slack'}
               </button>
             </div>
-            {slackCreationState === 'created' ? (
+            {isSlackChannelCreated ? (
               <p className="mt-2 text-sm text-emerald-700">Le canal slack a été créé</p>
             ) : null}
+
+            <label className="mt-4 block text-sm">
+              Message libre à envoyer
+              <textarea
+                value={slackFreeMessageDraft}
+                onChange={(event) => setSlackFreeMessageDraft(event.target.value)}
+                rows={3}
+                disabled={!mission.slack_channel_id}
+                placeholder={mission.slack_channel_id ? 'Tapez votre message Slack…' : 'Créez d’abord le canal Slack'}
+                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+              />
+            </label>
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={sendSlackFreeMessage}
+                disabled={!mission.slack_channel_id || actionLoading === 'send-slack-message' || !slackFreeMessageDraft.trim()}
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+              >
+                {actionLoading === 'send-slack-message' ? 'Envoi en cours...' : 'Envoyer le message'}
+              </button>
+            </div>
           </div>
         ) : null}
       </section>
