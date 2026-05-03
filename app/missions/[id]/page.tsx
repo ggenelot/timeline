@@ -616,7 +616,7 @@ export default function MissionDetailPage() {
       })
     });
 
-    const payload = (await request.json()) as { error?: string; message?: string; proposal?: ProposalWithVolunteer };
+    const payload = (await request.json()) as { error?: string; message?: string; proposal?: ProposalWithVolunteer; slackError?: string };
 
     if (!request.ok) {
       setError(payload.error ?? 'Impossible de modifier le statut bénévole.');
@@ -635,6 +635,11 @@ export default function MissionDetailPage() {
         next[existingIndex] = payload.proposal as ProposalWithVolunteer;
         return next;
       });
+    }
+
+    if (request.status === 202) {
+      const slackFailureDetail = payload.slackError ? ` Détail: ${payload.slackError}` : '';
+      setError(`Le statut bénévole a bien été enregistré, mais la notification Slack a échoué.${slackFailureDetail}`);
     }
 
     setSuccess(payload.message ?? 'Statut bénévole mis à jour.');
