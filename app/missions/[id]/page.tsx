@@ -212,7 +212,7 @@ export default function MissionDetailPage() {
         responseLabel: getProposalResponseLabel(response),
         responseTone: response === 'available' ? 'text-emerald-700' : response === 'unavailable' ? 'text-rose-700' : 'text-slate-600',
         responseRowBackground: response === 'available' ? 'bg-emerald-50/50' : response === 'unavailable' ? 'bg-rose-50/50' : 'bg-slate-100/60',
-        updatedByAdminLabel: proposal?.updated_by_admin ? 'Oui' : 'Non',
+        updatedByAdmin: proposal?.updated_by_admin ?? false,
         respondedAt: proposal?.responded_at ?? null,
         statusPriority: responsePriority[response]
       };
@@ -973,14 +973,13 @@ export default function MissionDetailPage() {
                 <tr>
                   <th className="px-3 py-2 font-medium">Bénévole</th>
                   <th className="px-3 py-2 font-medium">Disponibilité</th>
-                  <th className="px-3 py-2 font-medium">Modifié admin</th>
-                  <th className="px-3 py-2 font-medium">Sélectionné</th>
+                  {isAdmin ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
                 {filteredProposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="px-3 py-3 text-slate-500">
+                    <td colSpan={isAdmin ? 3 : 2} className="px-3 py-3 text-slate-500">
                       Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
@@ -989,6 +988,11 @@ export default function MissionDetailPage() {
                     <tr key={row.id} className={row.responseRowBackground}>
                       <td className="space-y-1 px-3 py-2">
                         <p>{row.volunteerLabel}</p>
+                        {row.updatedByAdmin ? (
+                          <p className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] text-purple-700">
+                            Modifié par admin
+                          </p>
+                        ) : null}
                         {row.matchingRequiredSkills.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {row.matchingRequiredSkills.map((skill) => (
@@ -1002,18 +1006,28 @@ export default function MissionDetailPage() {
                         )}
                       </td>
                       <td className={`px-3 py-2 font-medium ${row.responseTone}`}>{row.responseLabel}</td>
-                      <td className="px-3 py-2 text-slate-500">{row.updatedByAdminLabel}</td>
-                      <td className="px-3 py-2">
-                        <label className="inline-flex items-center gap-2 text-xs text-slate-700">
-                          <input
-                            type="checkbox"
-                            checked={pendingAssignments.has(row.volunteerId)}
-                            onChange={() => toggleSelection(row.volunteerId)}
-                            disabled={missionBlocksSelection || actionLoading === row.volunteerId || row.response !== 'available'}
-                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-50"
-                          />
-                        </label>
-                      </td>
+                      {isAdmin ? (
+                        <td className="px-3 py-2">
+                          <div className="flex flex-wrap gap-1">
+                            <button
+                              type="button"
+                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'available')}
+                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'available'}
+                              className="rounded-md border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Disponible
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'unavailable')}
+                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'unavailable'}
+                              className="rounded-md border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              Indisponible
+                            </button>
+                          </div>
+                        </td>
+                      ) : null}
                     </tr>
                   ))
                 )}
