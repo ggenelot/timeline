@@ -436,7 +436,7 @@ export default function MissionDetailPage() {
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
-        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name)))'
+        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name)))'
       )
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
