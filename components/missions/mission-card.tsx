@@ -117,9 +117,9 @@ export function MissionCard({
       }
       actions={
         <>
-          <div className="flex flex-wrap items-center justify-end gap-3">
+          <div className="relative z-10 flex flex-wrap items-center justify-end gap-3">
             {canEdit ? (
-              <Link href={`/missions/${mission.id}`} className="inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
+              <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
                 Gérer
               </Link>
             ) : null}
