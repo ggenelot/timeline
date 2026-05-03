@@ -1265,7 +1265,6 @@ export default function MissionDetailPage() {
 
         {isSlackCardExpanded ? (
           <div id="mission-slack-content" className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
-            <p>Canal Slack mission : {mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : 'Non créé'}</p>
             <label className="mt-2 block text-sm">
               Nom du canal Slack proposé
               <input
@@ -1273,6 +1272,7 @@ export default function MissionDetailPage() {
                 value={slackChannelNameDraft}
                 onChange={(event) => setSlackChannelNameDraft(event.target.value)}
                 disabled={isSlackChannelCreated}
+                title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
                 className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
               />
             </label>
@@ -1291,8 +1291,9 @@ export default function MissionDetailPage() {
                 type="button"
                 onClick={syncSlackChannel}
                 disabled={slackCreationState === 'creating' || isSlackChannelCreated}
+                title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
                 className={`rounded-md border px-3 py-1.5 text-sm ${
-                  slackCreationState === 'idle'
+                  slackCreationState === 'idle' && !isSlackChannelCreated
                     ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
                     : 'cursor-not-allowed border-slate-300 bg-slate-200 text-slate-500'
                 }`}
@@ -1304,10 +1305,6 @@ export default function MissionDetailPage() {
                     : 'Confirmer la création du canal Slack'}
               </button>
             </div>
-            {isSlackChannelCreated ? (
-              <p className="mt-2 text-sm text-emerald-700">Le canal slack a été créé</p>
-            ) : null}
-
             <label className="mt-4 block text-sm">
               Message libre à envoyer
               <textarea
