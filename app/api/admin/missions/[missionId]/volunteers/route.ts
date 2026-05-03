@@ -3,12 +3,18 @@ import { MissionProposalResponse } from '@/lib/types';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { notifyVolunteerAvailabilityUpdatedByAdmin, notifyVolunteerRejected } from '@/lib/slack/workflows';
 
+type AdminAssignableResponse = 'available' | 'unavailable';
+
 type AdminMissionVolunteerPayload = {
   volunteer_id?: string;
   response?: MissionProposalResponse;
 };
 
-const ALLOWED_ADMIN_RESPONSES: MissionProposalResponse[] = ['available', 'unavailable'];
+const ALLOWED_ADMIN_RESPONSES: AdminAssignableResponse[] = ['available', 'unavailable'];
+
+function isAdminAssignableResponse(response: MissionProposalResponse): response is AdminAssignableResponse {
+  return response === 'available' || response === 'unavailable';
+}
 
 async function assertAdmin(token: string) {
   const auth = await requireAuthenticatedUser(token);
@@ -35,7 +41,7 @@ function parsePayload(payload: AdminMissionVolunteerPayload) {
     return { error: 'Le bénévole est obligatoire.', volunteerId: null, response: null };
   }
 
-  if (!payload.response || !ALLOWED_ADMIN_RESPONSES.includes(payload.response)) {
+  if (!payload.response || !isAdminAssignableResponse(payload.response)) {
     return { error: `Statut invalide. Valeurs autorisées: ${ALLOWED_ADMIN_RESPONSES.join(', ')}.`, volunteerId: null, response: null };
   }
 
