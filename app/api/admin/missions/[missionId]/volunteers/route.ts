@@ -133,9 +133,13 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     updated_at: new Date().toISOString()
   };
 
-  const { error: upsertError } = await guard.client.from('mission_proposals').upsert(upsertPayload, {
-    onConflict: 'mission_id,volunteer_id'
-  });
+  const { data: upsertedProposal, error: upsertError } = await guard.client
+    .from('mission_proposals')
+    .upsert(upsertPayload, {
+      onConflict: 'mission_id,volunteer_id'
+    })
+    .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,created_at,updated_by_admin,updated_by,updated_at,source,responded_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email)')
+    .single();
 
   if (upsertError) {
     if (upsertError.message.toLowerCase().includes('row-level security')) {
@@ -159,5 +163,8 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     }
   }
 
-  return NextResponse.json({ message: 'Statut bénévole enregistré par un administrateur.' });
+  return NextResponse.json({
+    message: 'Statut bénévole enregistré par un administrateur.',
+    proposal: upsertedProposal
+  });
 }

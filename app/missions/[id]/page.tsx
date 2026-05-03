@@ -617,12 +617,25 @@ export default function MissionDetailPage() {
       })
     });
 
-    const payload = (await request.json()) as { error?: string; message?: string };
+    const payload = (await request.json()) as { error?: string; message?: string; proposal?: ProposalWithVolunteer };
 
     if (!request.ok) {
       setError(payload.error ?? 'Impossible de modifier le statut bénévole.');
       setActionLoading(null);
       return;
+    }
+
+    if (payload.proposal) {
+      setProposals((current) => {
+        const existingIndex = current.findIndex((proposal) => proposal.volunteer_id === payload.proposal?.volunteer_id);
+        if (existingIndex === -1) {
+          return [...current, payload.proposal as ProposalWithVolunteer];
+        }
+
+        const next = [...current];
+        next[existingIndex] = payload.proposal as ProposalWithVolunteer;
+        return next;
+      });
     }
 
     setSuccess(payload.message ?? 'Statut bénévole mis à jour.');
