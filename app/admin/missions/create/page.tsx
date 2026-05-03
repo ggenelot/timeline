@@ -70,6 +70,7 @@ export default function AdminCreateMissionPage() {
   const [form, setForm] = useState<MissionFormState>(INITIAL_MISSION_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -114,6 +115,27 @@ export default function AdminCreateMissionPage() {
       }
 
       setSkills(skillData ?? []);
+
+      const { data: locationsData, error: locationsError } = await supabase
+        .from('missions')
+        .select('location')
+        .not('location', 'is', null);
+
+      if (locationsError) {
+        setError(`Impossible de charger les suggestions de lieux: ${locationsError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      const suggestions = Array.from(
+        new Set(
+          (locationsData ?? [])
+            .map((row) => row.location?.trim() ?? '')
+            .filter((location) => location.length > 0)
+        )
+      ).sort((a, b) => a.localeCompare(b, 'fr'));
+
+      setLocationSuggestions(suggestions);
       setLoading(false);
     }
 
@@ -296,6 +318,7 @@ export default function AdminCreateMissionPage() {
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
         availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom' }))}
+        locationSuggestions={locationSuggestions}
         onSubmit={handleSubmit}
         submitting={submitting}
         submitLabel="Créer la mission"
