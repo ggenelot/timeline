@@ -1,4 +1,4 @@
-export type SkillCategory = 'formation' | 'operationnel' | 'technique' | 'accso';
+export type SkillCategory = 'formation' | 'operationnel' | 'conduite' | 'accso';
 
 export type SkillCode =
   | 'aide-formateur'
@@ -13,7 +13,7 @@ export type SkillCode =
   | 'conducteur-vl'
   | 'conducteur-cps'
   | '3s'
-  | 'ce2s';
+  | 'ces2';
 
 type SkillDefinition = {
   code: SkillCode;
@@ -33,15 +33,23 @@ export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
     label: 'Formation',
     orderedSkills: [
       { code: 'aide-formateur', label: 'aide-formateur', aliases: ['aide formateur', 'aide_formateur'] },
-      { code: 'formateur-psc', label: 'formateur PSC', aliases: ['formateur psc', 'formateur_psc'] },
+      { code: 'formateur-psc', label: 'formateur PSC1', aliases: ['formateur psc', 'formateur psc1', 'formateur_psc'] },
       { code: 'formateur-ps', label: 'formateur PS', aliases: ['formateur ps', 'formateur_ps'] }
+    ]
+  },
+  {
+    category: 'conduite',
+    label: 'Conduite',
+    orderedSkills: [
+      { code: 'conducteur-vl', label: 'chauffeur VL', aliases: ['conducteur vl', 'conducteur_vl', 'chauffeur vl'] },
+      { code: 'conducteur-cps', label: 'chauffeur CPS', aliases: ['conducteur cps', 'conducteur_cps', 'chauffeur cps', 'chauffeur vps'] }
     ]
   },
   {
     category: 'operationnel',
     label: 'Opérationnel',
     orderedSkills: [
-      { code: 'psc', label: 'PSC', aliases: [] },
+      { code: 'psc', label: 'PSC1', aliases: ['psc'] },
       { code: 'pse1', label: 'PSE1', aliases: [] },
       { code: 'pse2', label: 'PSE2', aliases: [] },
       { code: 'ce', label: 'CE', aliases: [] },
@@ -50,19 +58,11 @@ export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
     ]
   },
   {
-    category: 'technique',
-    label: 'Technique',
-    orderedSkills: [
-      { code: 'conducteur-vl', label: 'conducteur VL', aliases: ['conducteur vl', 'conducteur_vl'] },
-      { code: 'conducteur-cps', label: 'conducteur CPS', aliases: ['conducteur cps', 'conducteur_cps'] }
-    ]
-  },
-  {
     category: 'accso',
     label: 'Accso',
     orderedSkills: [
       { code: '3s', label: '3S', aliases: [] },
-      { code: 'ce2s', label: 'CE2S', aliases: [] }
+      { code: 'ces2', label: 'CES2', aliases: ['ce2s'] }
     ]
   }
 ];
