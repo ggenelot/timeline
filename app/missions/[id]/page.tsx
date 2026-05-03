@@ -111,6 +111,8 @@ export default function MissionDetailPage() {
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
   const [selectedVolunteerSkillCode, setSelectedVolunteerSkillCode] = useState<'all' | SkillCode>('all');
+  const [availabilitySearchQuery, setAvailabilitySearchQuery] = useState('');
+  const [availabilityStatusFilter, setAvailabilityStatusFilter] = useState<'all' | MissionProposalResponse>('all');
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
   const [showAvailabilityManagement, setShowAvailabilityManagement] = useState(false);
@@ -180,40 +182,71 @@ export default function MissionDetailPage() {
     return buildExpandedSkillSet(skillNames);
   }, [mission?.mission_required_skills]);
 
-  const proposalsTableRows = useMemo(
-    () =>
-      proposals.map((proposal) => ({
-        id: proposal.id,
-        volunteerId: proposal.volunteer_id,
-        volunteerLabel: proposal.volunteer?.full_name ?? proposal.volunteer?.email ?? proposal.volunteer_id,
-        matchingRequiredSkills: Array.from(
-          buildExpandedSkillSet(
-            (proposal.volunteer?.profile_skills ?? [])
-              .map((profileSkill) => profileSkill.skill?.name)
-              .filter((skillName): skillName is string => Boolean(skillName))
+  const proposalsTableRows = useMemo(() => {
+    const proposalByVolunteerId = new Map(proposals.map((proposal) => [proposal.volunteer_id, proposal]));
+    const responsePriority: Record<MissionProposalResponse, number> = { available: 0, unavailable: 1, no_response: 2 };
+
+    const rows = allVolunteers.map((volunteer) => {
+      const proposal = proposalByVolunteerId.get(volunteer.id);
+      const response = proposal?.response ?? 'no_response';
+
+      const matchingRequiredSkills = proposal
+        ? Array.from(
+            buildExpandedSkillSet(
+              (proposal.volunteer?.profile_skills ?? [])
+                .map((profileSkill) => profileSkill.skill?.name)
+                .filter((skillName): skillName is string => Boolean(skillName))
+            )
           )
-        )
-          .filter((skillCode) => requiredSkillCodes.has(skillCode))
-          .sort(compareSkillCodes)
-          .map((skillCode) => getSkillLabel(skillCode)),
-        response: proposal.response,
-        responseLabel: getProposalResponseLabel(proposal.response),
-        responseTone:
-          proposal.response === 'available'
-            ? 'text-emerald-700'
-            : proposal.response === 'unavailable'
-              ? 'text-rose-700'
-              : 'text-slate-600',
-        responseRowBackground:
-          proposal.response === 'available'
-            ? 'bg-emerald-50/50'
-            : proposal.response === 'unavailable'
-              ? 'bg-rose-50/50'
-              : 'bg-slate-100/60',
-        updatedByAdminLabel: proposal.updated_by_admin ? 'Oui' : 'Non'
-      })),
-    [proposals, requiredSkillCodes]
-  );
+            .filter((skillCode) => requiredSkillCodes.has(skillCode))
+            .sort(compareSkillCodes)
+            .map((skillCode) => getSkillLabel(skillCode))
+        : [];
+
+      return {
+        id: proposal?.id ?? `unlinked-${volunteer.id}`,
+        volunteerId: volunteer.id,
+        volunteerLabel: volunteer.full_name ?? volunteer.email ?? volunteer.id,
+        matchingRequiredSkills,
+        response,
+        responseLabel: getProposalResponseLabel(response),
+        responseTone: response === 'available' ? 'text-emerald-700' : response === 'unavailable' ? 'text-rose-700' : 'text-slate-600',
+        responseRowBackground: response === 'available' ? 'bg-emerald-50/50' : response === 'unavailable' ? 'bg-rose-50/50' : 'bg-slate-100/60',
+        updatedByAdminLabel: proposal?.updated_by_admin ? 'Oui' : 'Non',
+        respondedAt: proposal?.responded_at ?? null,
+        statusPriority: responsePriority[response]
+      };
+    });
+
+    return rows.sort((rowA, rowB) => {
+      if (rowA.statusPriority !== rowB.statusPriority) return rowA.statusPriority - rowB.statusPriority;
+      if (rowA.response === 'available' && rowB.response === 'available') {
+        const rowATime = rowA.respondedAt ? new Date(rowA.respondedAt).getTime() : Number.POSITIVE_INFINITY;
+        const rowBTime = rowB.respondedAt ? new Date(rowB.respondedAt).getTime() : Number.POSITIVE_INFINITY;
+        if (rowATime !== rowBTime) return rowATime - rowBTime;
+      }
+      return rowA.volunteerLabel.localeCompare(rowB.volunteerLabel, 'fr', { sensitivity: 'base' });
+    });
+  }, [allVolunteers, proposals, requiredSkillCodes]);
+
+  const filteredProposalsTableRows = useMemo(() => {
+    const normalizedSearch = availabilitySearchQuery.trim().toLocaleLowerCase('fr-FR');
+
+    return proposalsTableRows.filter((row) => {
+      if (availabilityStatusFilter !== 'all' && row.response !== availabilityStatusFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const searchableContent = [row.volunteerLabel, ...row.matchingRequiredSkills]
+        .join(' ')
+        .toLocaleLowerCase('fr-FR');
+      return searchableContent.includes(normalizedSearch);
+    });
+  }, [availabilitySearchQuery, availabilityStatusFilter, proposalsTableRows]);
 
   const availableVolunteersToAdd = useMemo(() => {
     const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
@@ -884,6 +917,32 @@ export default function MissionDetailPage() {
                 <p>Sans réponse : <span className="font-semibold text-slate-700">{proposalsByStatus.no_response}</span></p>
               </div>
 
+          <div className="grid gap-3 rounded border border-slate-200 bg-slate-50 p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+            <label className="text-xs text-slate-700">
+              Rechercher un bénévole
+              <input
+                type="search"
+                value={availabilitySearchQuery}
+                onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
+                placeholder="Nom, email, compétence…"
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm"
+              />
+            </label>
+            <label className="text-xs text-slate-700">
+              Filtrer par disponibilité
+              <select
+                value={availabilityStatusFilter}
+                onChange={(event) => setAvailabilityStatusFilter(event.target.value as 'all' | MissionProposalResponse)}
+                className="mt-1 w-full rounded-md border border-slate-300 bg-white px-2 py-1.5 text-sm md:min-w-48"
+              >
+                <option value="all">Tous statuts ({proposalsTableRows.length})</option>
+                <option value="available">Disponibles ({proposalsByStatus.available})</option>
+                <option value="unavailable">Indisponibles ({proposalsByStatus.unavailable})</option>
+                <option value="no_response">Sans réponse ({proposalsByStatus.no_response})</option>
+              </select>
+            </label>
+          </div>
+
           <div className="max-h-80 overflow-y-auto rounded border border-slate-200">
             <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700">
               <thead className="bg-slate-50 text-slate-600">
@@ -896,14 +955,14 @@ export default function MissionDetailPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {proposalsTableRows.length === 0 ? (
+                {filteredProposalsTableRows.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-3 py-3 text-slate-500">
-                      Aucun bénévole lié à cette mission.
+                      Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
                 ) : (
-                  proposalsTableRows.map((row, index) => (
+                  filteredProposalsTableRows.map((row, index) => (
                     <tr key={row.id} className={row.responseRowBackground}>
                       <td className="px-3 py-2 font-mono text-slate-500">{index + 1}</td>
                       <td className="space-y-1 px-3 py-2">
