@@ -81,7 +81,7 @@ function missionToForm(mission: Mission): MissionFormState {
     title: mission.title,
     description: mission.description ?? '',
     location: mission.location ?? '',
-    sector: mission.sector ?? '',
+    
     category: mission.category,
     starts_at_date: startsAt.date,
     starts_at_time: startsAt.time,
@@ -140,7 +140,7 @@ export default function AdminEditMissionPage() {
 
       const { data: missionData, error: missionError } = await supabase
         .from('missions')
-        .select('id,title,description,location,sector,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
+        .select('id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
         .eq('id', missionId)
         .single<MissionEditPayload>();
 
@@ -258,7 +258,7 @@ export default function AdminEditMissionPage() {
         title: form.title.trim(),
         description: form.description.trim() || null,
         location: form.location.trim() || null,
-        sector: form.sector.trim() || null,
+        
         category: form.category,
         starts_at: startsAtIso,
         ends_at: endsAtIso,
@@ -308,7 +308,7 @@ export default function AdminEditMissionPage() {
             title: form.title.trim(),
             description: form.description.trim() || null,
             location: form.location.trim() || null,
-            sector: form.sector.trim() || null,
+            
             category: form.category,
             starts_at: startsAtIso,
             ends_at: endsAtIso,

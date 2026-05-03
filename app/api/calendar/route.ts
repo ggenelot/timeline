@@ -3,7 +3,7 @@ import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseAnonClient } from '@/lib/supabase/server';
 
 type CalendarFilter = 'all' | 'positioned' | 'retained';
-type MissionItem = { id: string; title: string; starts_at: string; ends_at: string | null; location: string | null; sector: string | null; status: string };
+type MissionItem = { id: string; title: string; starts_at: string; ends_at: string | null; location: string | null;  status: string };
 
 const formatUtc = (value: string) => new Date(value).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}Z$/, 'Z');
 const escapeIcs = (value: string) => value.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/,/g, '\\,').replace(/;/g, '\\;');
@@ -13,18 +13,18 @@ async function loadMissions(filter: CalendarFilter, userId: string, token: strin
   const client = createServerSupabaseAnonClient(token);
 
   if (filter === 'retained') {
-    const { data, error } = await client.from('mission_assignments').select('mission:missions(id,title,starts_at,ends_at,location,sector,status)').eq('volunteer_id', userId).in('assignment_status', ['selected', 'confirmed']);
+    const { data, error } = await client.from('mission_assignments').select('mission:missions(id,title,starts_at,ends_at,location,status)').eq('volunteer_id', userId).in('assignment_status', ['selected', 'confirmed']);
     if (error) throw error;
     return (data ?? []).map((row) => (Array.isArray(row.mission) ? row.mission[0] : row.mission)).filter((mission): mission is MissionItem => Boolean(mission));
   }
 
   if (filter === 'positioned') {
-    const { data, error } = await client.from('mission_proposals').select('mission:missions(id,title,starts_at,ends_at,location,sector,status)').eq('volunteer_id', userId).neq('response', 'no_response');
+    const { data, error } = await client.from('mission_proposals').select('mission:missions(id,title,starts_at,ends_at,location,status)').eq('volunteer_id', userId).neq('response', 'no_response');
     if (error) throw error;
     return (data ?? []).map((row) => (Array.isArray(row.mission) ? row.mission[0] : row.mission)).filter((mission): mission is MissionItem => Boolean(mission));
   }
 
-  const { data, error } = await client.from('missions').select('id,title,starts_at,ends_at,location,sector,status').eq('status', 'proposed').order('starts_at', { ascending: true });
+  const { data, error } = await client.from('missions').select('id,title,starts_at,ends_at,location,status').eq('status', 'proposed').order('starts_at', { ascending: true });
   if (error) throw error;
   return data ?? [];
 }
@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
         `DTEND:${formatUtc(endIso)}`,
         `SUMMARY:${escapeIcs(mission.title)}`,
         `LOCATION:${escapeIcs(mission.location ?? 'Non défini')}`,
-        `DESCRIPTION:${escapeIcs(`Secteur: ${mission.sector ?? 'Non défini'} | Statut: ${mission.status}`)}`,
+        `DESCRIPTION:${escapeIcs(`Statut: ${mission.status}`)}`,
         `URL:${request.nextUrl.origin}/missions/${mission.id}`,
         'END:VEVENT'
       ].join('\r\n');

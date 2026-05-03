@@ -6,7 +6,7 @@ export type Profile = {
   email: string;
   role: AppRole;
   phone?: string | null;
-  sector: string | null;
+  
   created_at: string;
   slack_user_id?: string | null;
   slack_team_id?: string | null;
@@ -54,7 +54,7 @@ export type Mission = {
   title: string;
   description: string | null;
   location: string | null;
-  sector: string | null;
+  
   category: MissionCategory;
   starts_at: string;
   ends_at: string;

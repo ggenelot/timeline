@@ -102,7 +102,7 @@ export function MissionCard({
           {new Date(mission.ends_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
         </>
       }
-      location={<>Lieu : {mission.sector ?? 'N/A'} - {mission.location ?? 'Non défini'}</>}
+      location={<>Lieu : {mission.location ?? 'Non défini'}</>}
       description={mission.description ?? 'Aucune description'}
       requirements={
         requiredSkills.length > 0 ? (
