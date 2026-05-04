@@ -10,6 +10,7 @@ import { getEventTemplateById } from '@/lib/event-templates';
 type MissionSkillOption = {
   id: string;
   name: string | null;
+  category: 'formation' | 'operationnel' | 'conduite' | 'accso' | 'technique' | null;
 };
 
 type ParsedRequirement = {
@@ -105,7 +106,7 @@ export default function AdminCreateMissionPage() {
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
-        .select('id,name')
+        .select('id,name,category')
         .order('name', { ascending: true });
 
       if (skillError) {
@@ -317,7 +318,7 @@ export default function AdminCreateMissionPage() {
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
-        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom' }))}
+        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom', category: skill.category }))}
         locationSuggestions={locationSuggestions}
         onSubmit={handleSubmit}
         submitting={submitting}
