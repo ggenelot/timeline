@@ -4,19 +4,25 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, Skill } from '@/lib/types';
+import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 
 type VolunteerFormState = {
   firstName: string;
   lastName: string;
   identifier: string;
+  password: string;
+  selectedSkillByCategory: Record<string, string | null>;
 };
+
+type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
 const INITIAL_FORM: VolunteerFormState = {
   firstName: '',
   lastName: '',
   identifier: '',
-
+  password: '',
+  selectedSkillByCategory: {}
 };
 
 export default function AdminCreateVolunteerPage() {
@@ -26,6 +32,7 @@ export default function AdminCreateVolunteerPage() {
   const [form, setForm] = useState<VolunteerFormState>(INITIAL_FORM);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [skills, setSkills] = useState<SkillOption[]>([]);
   const router = useRouter();
 
   useEffect(() => {
@@ -51,6 +58,15 @@ export default function AdminCreateVolunteerPage() {
       }
 
       setProfile(profileData);
+
+      const { data: skillsData, error: skillsError } = await supabase.from('skills').select('id,name,category').order('name', { ascending: true });
+      if (skillsError) {
+        setError('Impossible de charger les compétences.');
+        setLoading(false);
+        return;
+      }
+
+      setSkills(skillsData ?? []);
       setLoading(false);
     }
 
@@ -75,6 +91,8 @@ export default function AdminCreateVolunteerPage() {
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
     const identifier = form.identifier.trim().toLowerCase();
+    const password = form.password;
+    const skillIds = Object.values(form.selectedSkillByCategory).filter((value): value is string => Boolean(value));
 
     if (!firstName) {
       setError('Le prénom est obligatoire.');
@@ -88,6 +106,11 @@ export default function AdminCreateVolunteerPage() {
 
     if (!identifier) {
       setError('Un identifiant est obligatoire.');
+      return;
+    }
+
+    if (password.length < 10) {
+      setError('Le mot de passe doit contenir au moins 10 caractères.');
       return;
     }
 
@@ -108,7 +131,7 @@ export default function AdminCreateVolunteerPage() {
         'Content-Type': 'application/json',
         Authorization: `Bearer ${accessToken}`
       },
-      body: JSON.stringify(form)
+      body: JSON.stringify({ ...form, password, skill_ids: skillIds })
     });
 
     const payload = (await response.json()) as { error?: string; message?: string };
@@ -196,6 +219,59 @@ export default function AdminCreateVolunteerPage() {
             required
           />
         </label>
+
+        <label className="block text-sm text-slate-700">
+          Mot de passe
+          <input
+            type="password"
+            value={form.password}
+            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={submitting}
+            minLength={10}
+            autoComplete="new-password"
+            required
+          />
+        </label>
+
+        <div className="space-y-3 rounded-md border border-slate-200 p-3">
+          <p className="text-sm font-medium text-slate-900">Compétences</p>
+          {Array.from(new Set(skills.map((skill) => skill.category))).map((category) => {
+            const categorySkills = skills.filter((skill) => skill.category === category);
+            const selectedSkillId = form.selectedSkillByCategory[category] ?? null;
+            const selectedSkillIndex = categorySkills.findIndex((skill) => skill.id === selectedSkillId);
+
+            return (
+              <div key={category} className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category}</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: null } }))}
+                    className={`${getSkillBadgeClass(category)} px-2.5 py-1`}
+                    disabled={submitting}
+                  >
+                    Aucune
+                  </button>
+                  {categorySkills.map((skill, skillIndex) => {
+                    const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
+                    return (
+                      <button
+                        key={skill.id}
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: skill.id } }))}
+                        className={`${shouldUseCategoryColor ? getSkillBadgeClass(category) : 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'} hover:opacity-80`}
+                        disabled={submitting}
+                      >
+                        {skill.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
 
         <button
           type="submit"

@@ -7,6 +7,8 @@ type CreateVolunteerPayload = {
   identifier?: string;
   phone?: string;
   role?: 'benevole';
+  password?: string;
+  skill_ids?: string[];
 };
 
 export async function POST(request: NextRequest) {
@@ -29,6 +31,10 @@ export async function POST(request: NextRequest) {
   const lastName = payload.lastName?.trim() ?? '';
   const identifier = payload.identifier?.trim().toLowerCase() ?? '';
   const phone = payload.phone?.trim() ?? '';
+  const password = payload.password?.trim() ?? '';
+  const skillIds = Array.isArray(payload.skill_ids)
+    ? payload.skill_ids.map((skillId) => skillId.trim()).filter((skillId) => skillId.length > 0)
+    : [];
 
   if (!firstName) {
     return NextResponse.json({ error: 'Le prénom est obligatoire.' }, { status: 400 });
@@ -40,6 +46,14 @@ export async function POST(request: NextRequest) {
 
   if (!identifier) {
     return NextResponse.json({ error: 'Un identifiant est obligatoire.' }, { status: 400 });
+  }
+
+  if (!password) {
+    return NextResponse.json({ error: 'Le mot de passe est obligatoire.' }, { status: 400 });
+  }
+
+  if (password.length < 10) {
+    return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 10 caractères.' }, { status: 400 });
   }
 
   const requesterClient = createServerSupabaseAnonClient(token);
@@ -65,13 +79,12 @@ export async function POST(request: NextRequest) {
 
   const serviceClient = createServerSupabaseServiceClient();
   const fullName = `${firstName} ${lastName}`.trim();
-  const temporaryPassword = `Tmp-${crypto.randomUUID()}-aA1!`;
   const authEmail = `${identifier}@timeline.local`;
 
   const { data: createdUserData, error: createUserError } = await serviceClient.auth.admin.createUser({
     email: authEmail,
     email_confirm: true,
-    password: temporaryPassword,
+    password,
     user_metadata: {
       full_name: fullName,
       phone
@@ -108,6 +121,32 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 }
     );
+  }
+
+  if (skillIds.length > 0) {
+    const { data: existingSkills, error: existingSkillsError } = await serviceClient
+      .from('skills')
+      .select('id')
+      .in('id', skillIds);
+
+    if (existingSkillsError) {
+      return NextResponse.json({ error: `Compte créé mais impossible de vérifier les compétences : ${existingSkillsError.message}` }, { status: 500 });
+    }
+
+    const existingSkillIds = new Set((existingSkills ?? []).map((skill) => skill.id));
+    const invalidSkillId = skillIds.find((skillId) => !existingSkillIds.has(skillId));
+
+    if (invalidSkillId) {
+      return NextResponse.json({ error: 'Compte créé mais certaines compétences sont invalides.' }, { status: 400 });
+    }
+
+    const { error: insertSkillsError } = await serviceClient.from('profile_skills').insert(
+      skillIds.map((skillId) => ({ profile_id: createdUserData.user.id, skill_id: skillId }))
+    );
+
+    if (insertSkillsError) {
+      return NextResponse.json({ error: `Compte créé mais impossible d'attribuer les compétences : ${insertSkillsError.message}` }, { status: 500 });
+    }
   }
 
   return NextResponse.json({
