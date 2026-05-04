@@ -27,7 +27,6 @@ export default function MyMissionsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [calendarLinks, setCalendarLinks] = useState<{ all: string; positioned: string; retained: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -35,20 +34,9 @@ export default function MyMissionsPage() {
       setError(null);
 
       const { data: authData } = await supabase.auth.getUser();
-      const { data: sessionData } = await supabase.auth.getSession();
       if (!authData.user) {
         router.replace('/login');
         return;
-      }
-
-      const token = sessionData.session?.access_token ?? '';
-      if (token) {
-        const origin = window.location.origin;
-        setCalendarLinks({
-          all: `${origin}/api/calendar?filter=all&token=${encodeURIComponent(token)}` ,
-          positioned: `${origin}/api/calendar?filter=positioned&token=${encodeURIComponent(token)}` ,
-          retained: `${origin}/api/calendar?filter=retained&token=${encodeURIComponent(token)}`
-        });
       }
 
       const { data: profileData } = await supabase
@@ -114,13 +102,6 @@ export default function MyMissionsPage() {
       <div className="rounded-lg border border-slate-200 bg-white p-4">
         <h1 className="text-xl font-semibold text-slate-900">Mes missions ({rows.length})</h1>
         <p className="mt-1 text-sm text-slate-600">Missions dans lesquelles vous êtes sélectionné.</p>
-        {calendarLinks ? (
-          <div className="mt-3 flex flex-wrap gap-3 text-sm">
-            <a className="underline" href={calendarLinks.all} target="_blank" rel="noreferrer">Flux calendrier: toutes les missions proposées</a>
-            <a className="underline" href={calendarLinks.positioned} target="_blank" rel="noreferrer">Flux calendrier: missions où je me suis positionné</a>
-            <a className="underline" href={calendarLinks.retained} target="_blank" rel="noreferrer">Flux calendrier: missions où je suis retenu</a>
-          </div>
-        ) : null}
       </div>
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
@@ -12,6 +12,7 @@ export function ProfilePageClient() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [slackConnectError, setSlackConnectError] = useState<string | null>(null);
+  const [calendarLinks, setCalendarLinks] = useState<{ all: string; positioned: string; retained: string } | null>(null);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -23,6 +24,19 @@ export function ProfilePageClient() {
       if (!authData.user) {
         window.location.href = '/login';
         return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token ?? '';
+      if (token) {
+        const origin = window.location.origin;
+        setCalendarLinks({
+          all: `${origin}/api/calendar?filter=all&token=${encodeURIComponent(token)}`,
+          positioned: `${origin}/api/calendar?filter=positioned&token=${encodeURIComponent(token)}`,
+          retained: `${origin}/api/calendar?filter=retained&token=${encodeURIComponent(token)}`
+        });
+      } else {
+        setCalendarLinks(null);
       }
 
       const { data, error: profileError } = await supabase
@@ -143,6 +157,18 @@ export function ProfilePageClient() {
   }
 
   const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
+  const isVolunteer = profile.role === 'benevole';
+  const volunteerCalendarLinks = useMemo(() => {
+    if (!calendarLinks) {
+      return [] as Array<{ href: string; label: string }>;
+    }
+
+    return [
+      { href: calendarLinks.all, label: 'Flux calendrier : toutes les missions proposées' },
+      { href: calendarLinks.positioned, label: 'Flux calendrier : missions où je me suis positionné' },
+      { href: calendarLinks.retained, label: 'Flux calendrier : missions où je suis retenu' }
+    ];
+  }, [calendarLinks]);
 
   return (
     <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
@@ -156,6 +182,24 @@ export function ProfilePageClient() {
         <p><span className="font-medium">Email:</span> {profile.email}</p>
         <p><span className="font-medium">Rôle:</span> {profile.role}</p>
       </div>
+
+      {isVolunteer ? (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-medium text-slate-900">Calendriers personnalisés</p>
+          <p className="mt-1 text-slate-700">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
+          {volunteerCalendarLinks.length > 0 ? (
+            <div className="mt-3 flex flex-col gap-2">
+              {volunteerCalendarLinks.map((link) => (
+                <a key={link.href} className="underline" href={link.href} target="_blank" rel="noreferrer">
+                  {link.label}
+                </a>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">Session invalide : impossible de générer les URL de calendrier.</p>
+          )}
+        </div>
+      ) : null}
 
       <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
         <p className="font-medium text-slate-900">Intégration Slack <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-800">Expérimental</span></p>
