@@ -64,7 +64,7 @@ export function ProfilePageClient() {
             const rawCategory = (skill.category ?? '').toLowerCase();
             const key = rawCategory === 'technique' ? 'conduite' : rawCategory;
             if (!['formation', 'accso', 'operationnel', 'conduite'].includes(key)) {
-              continue;
+              return acc;
             }
             if (!acc[key]) acc[key] = [];
             acc[key].push(skill);
