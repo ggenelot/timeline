@@ -16,7 +16,9 @@
     "supabase:db:seed": "npx supabase db seed",
     "test:e2e:slack-sso": "playwright test tests/e2e/slack-sso.spec.ts",
     "diagnose:slack-oauth": "node scripts/diagnose-slack-oauth.mjs",
-    "test": "npm run typecheck"
+    "test": "npm run typecheck && npm run test:e2e:p0",
+    "test:e2e:p0": "playwright test tests/e2e/p0-regression.spec.ts",
+    "test:e2e": "npm run test:e2e:p0"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.49.8",
