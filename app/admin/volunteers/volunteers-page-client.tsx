@@ -131,15 +131,41 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       groups.set(categoryKey, current);
     }
 
-    const categoryOrder = ['formation', 'operationnel', 'conduite', 'accso', 'autres'];
+    const categoryOrder = ['technique', 'formation', 'operationnel', 'accso', 'autres'];
+    const categoryLabels: Record<string, string> = {
+      technique: 'TECHNIQUE',
+      formation: 'FORMATION',
+      operationnel: 'OPERATIONNEL',
+      accso: 'ACCSO',
+      autres: 'AUTRES'
+    };
 
     return Array.from(groups.entries())
-      .sort((a, b) => categoryOrder.indexOf(a[0]) - categoryOrder.indexOf(b[0]))
+      .sort((a, b) => {
+        const indexA = categoryOrder.indexOf(a[0]);
+        const indexB = categoryOrder.indexOf(b[0]);
+        if (indexA === -1 && indexB === -1) return a[0].localeCompare(b[0], 'fr', { sensitivity: 'base' });
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+      })
       .map(([category, skills]) => ({
         category,
+        label: categoryLabels[category] ?? category.toLocaleUpperCase('fr'),
         skills: skills.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
       }));
   }, [availableSkills]);
+
+  const skillCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const { skills } of volunteersWithSkills) {
+      const uniqueIds = new Set(skills.map((skill) => skill.id));
+      for (const id of uniqueIds) {
+        counts.set(id, (counts.get(id) ?? 0) + 1);
+      }
+    }
+    return counts;
+  }, [volunteersWithSkills]);
 
   const filteredVolunteers = useMemo(() => {
     return volunteersWithSkills.filter(({ volunteer, skills }) => {
@@ -242,15 +268,26 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               <div className="space-y-3">
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-slate-700">Filtrer par compétence</span>
-                  <span className="rounded-full border border-slate-700 bg-slate-700 px-2.5 py-1 text-xs font-medium text-white">Toutes</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSkillIds([])}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      selectedSkillIds.length === 0
+                        ? 'border-slate-700 bg-slate-700 text-white'
+                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    Toutes {volunteers.length}
+                  </button>
                 </div>
 
-                {availableSkillsByCategory.map(({ category, skills }) => (
+                {availableSkillsByCategory.map(({ category, label, skills }) => (
                   <div key={category} className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
                     <div className="flex flex-wrap gap-2">
                       {skills.map((skill) => {
                         const isSelected = selectedSkillIds.includes(skill.id);
+                        const count = skillCounts.get(skill.id) ?? 0;
 
                         return (
                           <button
@@ -259,7 +296,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                             onClick={() => toggleSkillFilter(skill.id)}
                             className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
                           >
-                            {skill.name}
+                            {skill.name} {count}
                           </button>
                         );
                       })}
