@@ -1,8 +1,10 @@
 import { MissionRequirementFormState } from '@/components/missions/mission-form';
+import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 
 type SkillOption = {
   id: string;
   name: string;
+  category?: 'formation' | 'operationnel' | 'conduite' | 'accso' | 'technique' | null;
 };
 
 type MissionRequirementsEditorProps = {
@@ -36,6 +38,12 @@ export function MissionRequirementsEditor({
     onRequirementsChange([...requirements, { skill_id: '', quantity: '1' }]);
   }
 
+  function updateQuantity(index: number, nextQuantity: number) {
+    updateRequirement(index, { quantity: String(Math.max(1, nextQuantity)) });
+  }
+
+  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-sm text-slate-700';
+
   return (
     <section className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
       <div className="flex items-center justify-between gap-2">
@@ -59,45 +67,50 @@ export function MissionRequirementsEditor({
             const usedSkillIdsByOtherRows = new Set(selectedSkillIds.filter((skillId, selectedIndex) => selectedIndex !== index));
 
             return (
-              <div key={`${index}-${requirement.skill_id || 'generic'}`} className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-[minmax(0,1fr)_120px_auto]">
-                <label className="text-xs text-slate-700">
-                  Compétence
-                  <select
-                    value={requirement.skill_id}
-                    onChange={(event) => updateRequirement(index, { skill_id: event.target.value })}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                    disabled={submitting}
+              <div key={`${index}-${requirement.skill_id || 'generic'}`} className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => updateRequirement(index, { skill_id: '' })}
+                    disabled={submitting || usedSkillIdsByOtherRows.has('')}
+                    className={`${requirement.skill_id === '' ? getSkillBadgeClass('technique') : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
-                    <option value="" disabled={usedSkillIdsByOtherRows.has('')}>
-                      {GENERIC_VOLUNTEER_LABEL}
-                    </option>
-                    {availableSkills.map((skill) => {
-                      const isUsedInAnotherRow = usedSkillIdsByOtherRows.has(skill.id);
+                    {GENERIC_VOLUNTEER_LABEL}
+                  </button>
+                  {availableSkills.map((skill) => {
+                    const isUsedInAnotherRow = usedSkillIdsByOtherRows.has(skill.id);
+                    const isSelected = requirement.skill_id === skill.id;
 
-                      return (
-                        <option key={skill.id} value={skill.id} disabled={isUsedInAnotherRow}>
-                          {skill.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </label>
+                    return (
+                      <button
+                        key={skill.id}
+                        type="button"
+                        onClick={() => updateRequirement(index, { skill_id: skill.id })}
+                        disabled={submitting || isUsedInAnotherRow}
+                        className={`${isSelected ? getSkillBadgeClass(skill.category ?? null) : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        {skill.name}
+                      </button>
+                    );
+                  })}
+                </div>
 
-                <label className="text-xs text-slate-700">
-                  Quantité
-                  <input
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={requirement.quantity}
-                    onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
-                    className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                    disabled={submitting}
-                    required
-                  />
-                </label>
+                <div className="flex items-center justify-between">
+                  <div className="inline-flex items-center overflow-hidden rounded-full border border-slate-300">
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) - 1)} disabled={submitting} className="px-2 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">-</button>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={requirement.quantity}
+                      onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
+                      className="w-12 border-x border-slate-300 px-1 py-1 text-center text-sm"
+                      disabled={submitting}
+                      required
+                    />
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) + 1)} disabled={submitting} className="px-2 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">+</button>
+                  </div>
 
-                <div className="flex items-end">
                   <button
                     type="button"
                     onClick={() => removeRequirement(index)}
