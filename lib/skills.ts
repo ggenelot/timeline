@@ -11,9 +11,9 @@ export type SkillCode =
   | 'cp'
   | 'ceps'
   | 'conducteur-vl'
-  | 'conducteur-cps'
+  | 'conducteur-vps'
   | '3s'
-  | 'ces2';
+  | 'ce2s';
 
 type SkillDefinition = {
   code: SkillCode;
@@ -42,7 +42,7 @@ export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
     label: 'Conduite',
     orderedSkills: [
       { code: 'conducteur-vl', label: 'chauffeur VL', aliases: ['conducteur vl', 'conducteur_vl', 'chauffeur vl'] },
-      { code: 'conducteur-cps', label: 'chauffeur CPS', aliases: ['conducteur cps', 'conducteur_cps', 'chauffeur cps', 'chauffeur vps'] }
+      { code: 'conducteur-vps', label: 'conducteur VPS', aliases: ['conducteur cps', 'conducteur_cps', 'chauffeur cps', 'chauffeur vps', 'conducteur vps', 'conducteur_vps', 'chauffeur vl/vps'] }
     ]
   },
   {
@@ -62,7 +62,7 @@ export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
     label: 'Accso',
     orderedSkills: [
       { code: '3s', label: '3S', aliases: [] },
-      { code: 'ces2', label: 'CES2', aliases: ['ce2s'] }
+      { code: 'ce2s', label: 'CE2S', aliases: ['ces2'] }
     ]
   }
 ];
