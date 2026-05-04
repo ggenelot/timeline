@@ -26,7 +26,7 @@ type VolunteersPageClientProps = {
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
-  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [selectedSkillByCategory, setSelectedSkillByCategory] = useState<Record<string, string | null>>({});
   const [skillsDirectory, setSkillsDirectory] = useState<SkillOption[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
@@ -181,20 +181,20 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         return false;
       }
 
-      if (selectedSkillIds.length === 0) {
+      const activeSkillIds = Object.values(selectedSkillByCategory).filter((id): id is string => Boolean(id));
+      if (activeSkillIds.length === 0) {
         return true;
       }
 
-      return selectedSkillIds.every((selectedSkillId) => skills.some((skill) => skill.id === selectedSkillId));
+      return activeSkillIds.every((selectedSkillId) => skills.some((skill) => skill.id === selectedSkillId));
     });
-  }, [searchQuery, selectedSkillIds, volunteersWithSkills]);
+  }, [searchQuery, selectedSkillByCategory, volunteersWithSkills]);
 
-  const toggleSkillFilter = (skillId: string) => {
-    setSelectedSkillIds((current) =>
-      current.includes(skillId)
-        ? current.filter((existingSkillId) => existingSkillId !== skillId)
-        : [...current, skillId]
-    );
+  const toggleSkillFilter = (category: string, skillId: string | null) => {
+    setSelectedSkillByCategory((current) => ({
+      ...current,
+      [category]: current[category] === skillId ? null : skillId
+    }));
   };
 
   const volunteerCountLabel = useMemo(() => {
@@ -253,56 +253,55 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         <>
           <div className="rounded-lg border border-slate-200 bg-white p-4">
             <div className="space-y-4">
-              <label className="flex flex-col gap-1 text-sm text-slate-700" htmlFor="volunteer-search">
-                <span className="font-medium">Rechercher</span>
+              <label className="block" htmlFor="volunteer-search">
                 <input
                   id="volunteer-search"
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Nom, email ou compétence"
-                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                  className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
                 />
               </label>
 
               <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-medium text-slate-700">Filtrer par compétence</span>
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSkillIds([])}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-                      selectedSkillIds.length === 0
-                        ? 'border-slate-700 bg-slate-700 text-white'
-                        : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    Toutes {volunteers.length}
-                  </button>
-                </div>
+                {availableSkillsByCategory.map(({ category, label, skills }) => {
+                  const selectedSkillId = selectedSkillByCategory[category] ?? null;
 
-                {availableSkillsByCategory.map(({ category, label, skills }) => (
-                  <div key={category} className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                    <div className="flex flex-wrap gap-2">
-                      {skills.map((skill) => {
-                        const isSelected = selectedSkillIds.includes(skill.id);
-                        const count = skillCounts.get(skill.id) ?? 0;
+                  return (
+                    <div key={category} className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleSkillFilter(category, null)}
+                          className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                            selectedSkillId === null
+                              ? 'border-slate-700 bg-slate-700 text-white'
+                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                          }`}
+                        >
+                          Toutes
+                        </button>
+                        {skills.map((skill) => {
+                          const isSelected = selectedSkillId === skill.id;
+                          const count = skillCounts.get(skill.id) ?? 0;
 
-                        return (
-                          <button
-                            key={skill.id}
-                            type="button"
-                            onClick={() => toggleSkillFilter(skill.id)}
-                            className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
-                          >
-                            {skill.name} {count}
-                          </button>
-                        );
-                      })}
+                          return (
+                            <button
+                              key={skill.id}
+                              type="button"
+                              onClick={() => toggleSkillFilter(category, skill.id)}
+                              className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
+                            >
+                              {skill.name} {count}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
