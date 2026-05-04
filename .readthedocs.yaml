@@ -1,0 +1,13 @@
+version: 2
+
+build:
+  os: ubuntu-24.04
+  tools:
+    nodejs: "20"
+  jobs:
+    build:
+      html:
+        - ./scripts/build_rtd.sh
+
+sphinx:
+  configuration: docs/conf.py
