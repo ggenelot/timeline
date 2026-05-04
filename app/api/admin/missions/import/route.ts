@@ -377,10 +377,9 @@ export async function GET(request: NextRequest) {
   }
 
   const content = await response.text();
-  const first11Lines = content.split(/\r?\n/).slice(0, 11).join('\n');
 
   return NextResponse.json({
     fileName: 'google-sheet-public.csv',
-    content: first11Lines
+    content
   });
 }

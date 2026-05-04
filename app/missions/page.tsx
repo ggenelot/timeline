@@ -299,13 +299,6 @@ export default function MissionsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
-                onClick={() => router.push('/admin/volunteers')}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Ajouter un bénévole
-              </button>
-              <button
-                type="button"
                 onClick={() => router.push('/admin/missions/import')}
                 className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
