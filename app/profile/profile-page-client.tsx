@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, Skill } from '@/lib/types';
+import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 
 export function ProfilePageClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -13,6 +14,8 @@ export function ProfilePageClient() {
   const [success, setSuccess] = useState<string | null>(null);
   const [slackConnectError, setSlackConnectError] = useState<string | null>(null);
   const [calendarLinks, setCalendarLinks] = useState<{ all: string; positioned: string; retained: string } | null>(null);
+  const [skillsByCategory, setSkillsByCategory] = useState<Record<string, Skill[]>>({});
+  const [acquiredSkillIds, setAcquiredSkillIds] = useState<Set<string>>(new Set());
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -49,6 +52,23 @@ export function ProfilePageClient() {
         setError('Impossible de charger votre profil.');
       } else {
         setProfile(data);
+
+        if (data.role === 'benevole') {
+          const [{ data: skillsData }, { data: profileSkillsData }] = await Promise.all([
+            supabase.from('skills').select('id,name,category,level,created_at').order('category', { ascending: true }).order('level', { ascending: true }).order('name', { ascending: true }),
+            supabase.from('profile_skills').select('skill_id').eq('profile_id', data.id)
+          ]);
+
+          const grouped = (skillsData ?? []).reduce<Record<string, Skill[]>>((acc, skill) => {
+            const key = skill.category ?? 'autre';
+            if (!acc[key]) acc[key] = [];
+            acc[key].push(skill);
+            return acc;
+          }, {});
+
+          setSkillsByCategory(grouped);
+          setAcquiredSkillIds(new Set((profileSkillsData ?? []).map((row) => row.skill_id)));
+        }
       }
 
       const slackStatus = searchParams.get('slack');
@@ -166,6 +186,15 @@ export function ProfilePageClient() {
 
   const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
   const isVolunteer = profile.role === 'benevole';
+  const categoryLabels: Record<string, string> = {
+    formation: 'Formation',
+    accso: 'ACCSO',
+    operationnel: 'Opérationnel',
+    conduite: 'Conduite',
+    technique: 'Technique',
+    autre: 'Autres compétences'
+  };
+  const neutralBadgeClass = 'inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500';
 
   return (
     <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
@@ -181,7 +210,29 @@ export function ProfilePageClient() {
       </div>
 
       {isVolunteer ? (
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+          <div>
+            <p className="font-medium text-slate-900">Mes compétences</p>
+            <div className="mt-3 space-y-3">
+              {Object.entries(skillsByCategory).map(([category, skills]) => (
+                <div key={category} className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{categoryLabels[category] ?? category}</p>
+                  <div className="flex flex-wrap gap-2">
+                    {skills.map((skill) => {
+                      const isAcquired = acquiredSkillIds.has(skill.id);
+                      return (
+                        <span key={skill.id} className={isAcquired ? getSkillBadgeClass(skill.category) : neutralBadgeClass}>
+                          {skill.name}
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
           <p className="font-medium text-slate-900">Calendriers personnalisés</p>
           <p className="mt-1 text-slate-700">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
           {volunteerCalendarLinks.length > 0 ? (
@@ -195,6 +246,7 @@ export function ProfilePageClient() {
           ) : (
             <p className="mt-2 text-xs text-slate-500">Session invalide : impossible de générer les URL de calendrier.</p>
           )}
+          </div>
         </div>
       ) : null}
 
