@@ -55,18 +55,41 @@ async function upsertSlackLog(args: {
   errorMessage?: string | null;
 }) {
   const serviceClient = createServerSupabaseServiceClient();
-  await serviceClient.from('slack_notification_logs').upsert(
-    {
-      mission_id: args.missionId,
-      profile_id: args.profileId,
+
+  try {
+    const { error } = await serviceClient.from('slack_notification_logs').upsert(
+      {
+        mission_id: args.missionId,
+        profile_id: args.profileId,
+        type: args.type,
+        status: args.status,
+        error_message: args.errorMessage ?? null,
+        sent_at: args.status === 'sent' ? new Date().toISOString() : null,
+        dedupe_key: args.dedupeKey
+      },
+      { onConflict: 'dedupe_key' }
+    );
+
+    if (error) {
+      console.error('Slack log upsert failed', {
+        missionId: args.missionId,
+        profileId: args.profileId,
+        type: args.type,
+        status: args.status,
+        dedupeKey: args.dedupeKey,
+        error: error.message
+      });
+    }
+  } catch (error) {
+    console.error('Slack log upsert threw unexpectedly', {
+      missionId: args.missionId,
+      profileId: args.profileId,
       type: args.type,
       status: args.status,
-      error_message: args.errorMessage ?? null,
-      sent_at: args.status === 'sent' ? new Date().toISOString() : null,
-      dedupe_key: args.dedupeKey
-    },
-    { onConflict: 'dedupe_key' }
-  );
+      dedupeKey: args.dedupeKey,
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
 }
 
 async function buildCrewCompositionMessage(missionId: string) {
@@ -407,11 +430,21 @@ export async function notifyVolunteerRoleUpdatedByAdmin(args: {
   nextRole: 'benevole' | 'responsable';
 }) {
   const { profileId, fullName, slackUserId, previousRole, nextRole } = args;
+  const slack = new SlackService();
+  const dedupeKey = `profile:${profileId}:admin_role_updated_dm:${Date.now()}`;
+
   if (!slackUserId || previousRole === nextRole) {
+    await upsertSlackLog({
+      missionId: null,
+      profileId,
+      type: 'admin_role_updated_dm',
+      status: 'skipped',
+      dedupeKey,
+      errorMessage: !slackUserId ? 'Compte Slack non lié.' : 'Aucun changement de rôle.'
+    });
     return { sent: false, reason: 'skipped' as const };
   }
 
-  const slack = new SlackService();
   const formatRole = (role: 'benevole' | 'responsable') => (role === 'responsable' ? 'responsable' : 'bénévole');
   const dmText = [
     `Bonjour ${fullName ?? 'bénévole'},`,
@@ -419,7 +452,20 @@ export async function notifyVolunteerRoleUpdatedByAdmin(args: {
     `Changement : ${formatRole(previousRole)} → ${formatRole(nextRole)}.`
   ].join('\n');
 
-  const channel = await slack.openDirectMessage(slackUserId);
-  await slack.postMessage(channel, dmText);
-  return { sent: true, reason: 'sent' as const, profileId };
+  try {
+    const channel = await slack.openDirectMessage(slackUserId);
+    await slack.postMessage(channel, dmText);
+    await upsertSlackLog({ missionId: null, profileId, type: 'admin_role_updated_dm', status: 'sent', dedupeKey });
+    return { sent: true, reason: 'sent' as const, profileId };
+  } catch (error) {
+    await upsertSlackLog({
+      missionId: null,
+      profileId,
+      type: 'admin_role_updated_dm',
+      status: 'error',
+      dedupeKey,
+      errorMessage: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+    throw error;
+  }
 }
