@@ -42,4 +42,27 @@ export function runImportMissionsParsingTests() {
   const categoryPreview = buildMissionsPreview(parseCsvContent(categoryCsv));
   const importedCategory = categoryPreview.items[0]?.normalized?.category;
   assert(importedCategory === 'poste_de_secours', 'Le type DPS doit être importé en catégorie poste_de_secours.');
+
+  const quotedCommaCsv = `Intitulé,Date,Horaires,Lieu\n"Mission, test",30/04/26,09h00 - 10h00,"Paris, 15e"`;
+  const quotedPreview = buildMissionsPreview(parseCsvContent(quotedCommaCsv));
+  assert(quotedPreview.totalValid === 1, 'Le parser CSV doit préserver les champs quotés avec virgules.');
+  assert(
+    quotedPreview.items[0]?.normalized?.title === 'Mission, test',
+    'Le titre contenant une virgule doit être importé sans être tronqué.'
+  );
+
+  const overnightCsv = `Intitulé;Date;Horaires\nNuit test;30/04/26;23h30 - 01h15`;
+  const overnightPreview = buildMissionsPreview(parseCsvContent(overnightCsv));
+  const overnight = overnightPreview.items[0]?.normalized;
+  assert(Boolean(overnight), 'Une mission de nuit doit être normalisée.');
+  const overnightStart = overnight ? new Date(overnight.starts_at).getTime() : 0;
+  const overnightEnd = overnight ? new Date(overnight.ends_at).getTime() : 0;
+  assert(overnightEnd > overnightStart, "L'heure de fin d'une mission de nuit doit être au jour suivant.");
+
+  const warningOnlyCsv = `Intitulé;Date;Horaires;Validation;Réversion\nMission warning;30/04/26;08h00 - 10h00;date invalide;abc`;
+  const warningPreview = buildMissionsPreview(parseCsvContent(warningOnlyCsv));
+  assert(warningPreview.totalValid === 1, 'Les warnings ne doivent pas invalider une mission importable.');
+  const warningCodes = warningPreview.items[0]?.issues.map((issue) => issue.code) ?? [];
+  assert(warningCodes.includes('invalid_validation_date'), 'La validation invalide doit remonter un warning dédié.');
+  assert(warningCodes.includes('invalid_reversion_expected'), 'La réversion invalide doit remonter un warning dédié.');
 }
