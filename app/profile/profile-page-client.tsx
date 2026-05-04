@@ -61,7 +61,11 @@ export function ProfilePageClient() {
           ]);
 
           const grouped = (skillsData ?? []).reduce<Record<string, Skill[]>>((acc, skill) => {
-            const key = skill.category ?? 'autre';
+            const rawCategory = (skill.category ?? '').toLowerCase();
+            const key = rawCategory === 'technique' ? 'conduite' : rawCategory;
+            if (!['formation', 'accso', 'operationnel', 'conduite'].includes(key)) {
+              continue;
+            }
             if (!acc[key]) acc[key] = [];
             acc[key].push(skill);
             return acc;
@@ -203,9 +207,7 @@ export function ProfilePageClient() {
     formation: 'Formation',
     accso: 'ACCSO',
     operationnel: 'Opérationnel',
-    conduite: 'Conduite',
-    technique: 'Technique',
-    autre: 'Autres compétences'
+    conduite: 'Conduite'
   };
   const neutralBadgeClass = 'inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500';
 

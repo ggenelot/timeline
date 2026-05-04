@@ -25,7 +25,7 @@ type VolunteersPageClientProps = {
 };
 
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
-  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700';
+  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600';
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
@@ -176,19 +176,22 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
     const groups = new Map<string, SkillOption[]>();
 
     for (const skill of availableSkills) {
-      const categoryKey = skill.category ?? 'autres';
+      const rawCategory = (skill.category ?? '').toLowerCase();
+      const categoryKey = rawCategory === 'technique' ? 'conduite' : rawCategory;
+      if (!['conduite', 'formation', 'operationnel', 'accso'].includes(categoryKey)) {
+        continue;
+      }
       const current = groups.get(categoryKey) ?? [];
       current.push(skill);
       groups.set(categoryKey, current);
     }
 
-    const categoryOrder = ['technique', 'formation', 'operationnel', 'accso', 'autres'];
+    const categoryOrder = ['conduite', 'formation', 'operationnel', 'accso'];
     const categoryLabels: Record<string, string> = {
-      technique: 'TECHNIQUE',
+      conduite: 'CONDUITE',
       formation: 'FORMATION',
       operationnel: 'OPERATIONNEL',
       accso: 'ACCSO',
-      autres: 'AUTRES'
     };
 
     return Array.from(groups.entries())

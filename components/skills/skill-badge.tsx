@@ -16,9 +16,9 @@ function getSkillBadgeClass(skillCategory: Skill['category']): string {
     case 'operationnel':
       return `${baseClass} border-amber-300 bg-amber-50 text-amber-900`;
     case 'conduite':
-      return `${baseClass} border-emerald-300 bg-emerald-50 text-emerald-900`;
+      return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
     case 'technique':
-      return `${baseClass} border-slate-300 bg-slate-100 text-slate-900`;
+      return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
     default:
       return `${baseClass} border-slate-300 bg-slate-100 text-slate-900`;
   }
