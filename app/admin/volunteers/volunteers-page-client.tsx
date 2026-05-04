@@ -26,7 +26,8 @@ type VolunteersPageClientProps = {
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
-  const [selectedSkillId, setSelectedSkillId] = useState<string>('all');
+  const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [skillsDirectory, setSkillsDirectory] = useState<SkillOption[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +76,19 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         return;
       }
 
+      const { data: skillsData, error: skillsError } = await supabase
+        .from('skills')
+        .select('id,name,category')
+        .order('name', { ascending: true });
+
+      if (skillsError) {
+        setError(skillsError.message);
+        setLoading(false);
+        return;
+      }
+
       setVolunteers(volunteersData ?? []);
+      setSkillsDirectory(skillsData ?? []);
       setLoading(false);
     }
 
@@ -103,17 +116,10 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
     [volunteers]
   );
 
-  const availableSkills = useMemo(() => {
-    const uniqueSkills = new Map<string, SkillOption>();
-
-    volunteersWithSkills.forEach(({ skills }) => {
-      skills.forEach((skill) => {
-        uniqueSkills.set(skill.id, skill);
-      });
-    });
-
-    return Array.from(uniqueSkills.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
-  }, [volunteersWithSkills]);
+  const availableSkills = useMemo(
+    () => [...skillsDirectory].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
+    [skillsDirectory]
+  );
 
   const availableSkillsByCategory = useMemo(() => {
     const groups = new Map<string, SkillOption[]>();
@@ -149,13 +155,21 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         return false;
       }
 
-      if (selectedSkillId === 'all') {
+      if (selectedSkillIds.length === 0) {
         return true;
       }
 
-      return skills.some((skill) => skill.id === selectedSkillId);
+      return selectedSkillIds.every((selectedSkillId) => skills.some((skill) => skill.id === selectedSkillId));
     });
-  }, [searchQuery, selectedSkillId, volunteersWithSkills]);
+  }, [searchQuery, selectedSkillIds, volunteersWithSkills]);
+
+  const toggleSkillFilter = (skillId: string) => {
+    setSelectedSkillIds((current) =>
+      current.includes(skillId)
+        ? current.filter((existingSkillId) => existingSkillId !== skillId)
+        : [...current, skillId]
+    );
+  };
 
   const volunteerCountLabel = useMemo(() => {
     const count = filteredVolunteers.length;
@@ -226,32 +240,9 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               </label>
 
               <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
                   <span className="text-sm font-medium text-slate-700">Filtrer par compétence</span>
-                  {(selectedSkillId !== 'all' || searchQuery.trim().length > 0) ? (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedSkillId('all');
-                        setSearchQuery('');
-                      }}
-                      className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                    >
-                      Réinitialiser
-                    </button>
-                  ) : null}
-                </div>
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setSelectedSkillId('all')}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-                      selectedSkillId === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
-                    }`}
-                  >
-                    Toutes
-                  </button>
+                  <span className="rounded-full border border-slate-700 bg-slate-700 px-2.5 py-1 text-xs font-medium text-white">Toutes</span>
                 </div>
 
                 {availableSkillsByCategory.map(({ category, skills }) => (
@@ -259,13 +250,13 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category}</p>
                     <div className="flex flex-wrap gap-2">
                       {skills.map((skill) => {
-                        const isSelected = selectedSkillId === skill.id;
+                        const isSelected = selectedSkillIds.includes(skill.id);
 
                         return (
                           <button
                             key={skill.id}
                             type="button"
-                            onClick={() => setSelectedSkillId(skill.id)}
+                            onClick={() => toggleSkillFilter(skill.id)}
                             className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
                           >
                             {skill.name}
