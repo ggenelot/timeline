@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill } from '@/lib/types';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import { getSkillBadgeClass } from '@/components/skills/skill-badge';
+import { compareSkillCodes, expandSkills, getSkillLabel, resolveSkillCode, SkillCode } from '@/lib/skills';
 
 type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
@@ -33,6 +34,21 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  const normalizedSkillsDirectory = useMemo(() =>
+    skillsDirectory.map((skill) => ({ ...skill, code: resolveSkillCode(skill.name) })),
+    [skillsDirectory]
+  );
+
+  const codeToSkillId = useMemo(() => {
+    const map = new Map<SkillCode, string>();
+    for (const skill of normalizedSkillsDirectory) {
+      if (skill.code) {
+        map.set(skill.code, skill.id);
+      }
+    }
+    return map;
+  }, [normalizedSkillsDirectory]);
 
   const router = useRouter();
 
@@ -100,7 +116,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
   const volunteersWithSkills = useMemo(
     () =>
       volunteers.map((volunteer) => {
-        const skills = (volunteer.profile_skills ?? [])
+        const explicitSkills = (volunteer.profile_skills ?? [])
           .flatMap((profileSkill) => {
             if (!profileSkill.skill) {
               return [];
@@ -110,18 +126,51 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
           })
           .filter((skill): skill is SkillOption => Boolean(skill));
 
+        const explicitCodes = explicitSkills
+          .map((skill) => resolveSkillCode(skill.name))
+          .filter((skillCode): skillCode is SkillCode => skillCode !== null);
+
+        const expandedCodes = expandSkills(explicitCodes);
+
+        const expandedSkills = expandedCodes
+          .map((skillCode) => {
+            const skillId = codeToSkillId.get(skillCode);
+            if (!skillId) {
+              return null;
+            }
+
+            const existing = explicitSkills.find((skill) => skill.id === skillId);
+            if (existing) {
+              return existing;
+            }
+
+            return {
+              id: skillId,
+              name: getSkillLabel(skillCode),
+              category: normalizedSkillsDirectory.find((skill) => skill.id === skillId)?.category ?? null
+            };
+          })
+          .filter((skill): skill is SkillOption => Boolean(skill));
+
         return {
           volunteer,
-          skills
+          explicitSkills,
+          skills: expandedSkills
         };
       }),
-    [volunteers]
+    [codeToSkillId, normalizedSkillsDirectory, volunteers]
   );
 
-  const availableSkills = useMemo(
-    () => [...skillsDirectory].sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
-    [skillsDirectory]
-  );
+  const availableSkills = useMemo(() => {
+    return [...normalizedSkillsDirectory].sort((a, b) => {
+      if (a.code && b.code) {
+        return compareSkillCodes(a.code, b.code);
+      }
+      if (a.code) return -1;
+      if (b.code) return 1;
+      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+    });
+  }, [normalizedSkillsDirectory]);
 
   const availableSkillsByCategory = useMemo(() => {
     const groups = new Map<string, SkillOption[]>();
@@ -154,7 +203,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       .map(([category, skills]) => ({
         category,
         label: categoryLabels[category] ?? category.toLocaleUpperCase('fr'),
-        skills: skills.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+        skills
       }));
   }, [availableSkills]);
 
@@ -317,7 +366,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredVolunteers.map(({ volunteer, skills }) => (
+                {filteredVolunteers.map(({ volunteer, explicitSkills }) => (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
@@ -338,11 +387,11 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       )}
                     </td>
                     <td className="px-4 py-2 text-slate-700">
-                      {skills.length === 0 ? (
+                      {explicitSkills.length === 0 ? (
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {skills.map((skill) => (
+                          {explicitSkills.map((skill) => (
                             <SkillBadge key={`${volunteer.id}-${skill.id}`} name={skill.name} category={skill.category} />
                           ))}
                         </div>
