@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill } from '@/lib/types';
 import { SkillBadge } from '@/components/skills/skill-badge';
+import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 
 type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
@@ -26,6 +27,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [selectedSkillId, setSelectedSkillId] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -113,13 +115,47 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
     return Array.from(uniqueSkills.values()).sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   }, [volunteersWithSkills]);
 
-  const filteredVolunteers = useMemo(() => {
-    if (selectedSkillId === 'all') {
-      return volunteersWithSkills;
+  const availableSkillsByCategory = useMemo(() => {
+    const groups = new Map<string, SkillOption[]>();
+
+    for (const skill of availableSkills) {
+      const categoryKey = skill.category ?? 'autres';
+      const current = groups.get(categoryKey) ?? [];
+      current.push(skill);
+      groups.set(categoryKey, current);
     }
 
-    return volunteersWithSkills.filter(({ skills }) => skills.some((skill) => skill.id === selectedSkillId));
-  }, [selectedSkillId, volunteersWithSkills]);
+    const categoryOrder = ['formation', 'operationnel', 'conduite', 'accso', 'autres'];
+
+    return Array.from(groups.entries())
+      .sort((a, b) => categoryOrder.indexOf(a[0]) - categoryOrder.indexOf(b[0]))
+      .map(([category, skills]) => ({
+        category,
+        skills: skills.sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+      }));
+  }, [availableSkills]);
+
+  const filteredVolunteers = useMemo(() => {
+    return volunteersWithSkills.filter(({ volunteer, skills }) => {
+      const searchTerm = searchQuery.trim().toLocaleLowerCase('fr');
+      const matchesSearch =
+        searchTerm.length === 0 ||
+        [volunteer.full_name ?? '', volunteer.email, ...skills.map((skill) => skill.name)]
+          .join(' ')
+          .toLocaleLowerCase('fr')
+          .includes(searchTerm);
+
+      if (!matchesSearch) {
+        return false;
+      }
+
+      if (selectedSkillId === 'all') {
+        return true;
+      }
+
+      return skills.some((skill) => skill.id === selectedSkillId);
+    });
+  }, [searchQuery, selectedSkillId, volunteersWithSkills]);
 
   const volunteerCountLabel = useMemo(() => {
     const count = filteredVolunteers.length;
@@ -176,33 +212,70 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       ) : (
         <>
           <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="flex flex-wrap items-end gap-3">
-              <label className="flex min-w-[240px] flex-col gap-1 text-sm text-slate-700" htmlFor="skill-filter">
-                <span className="font-medium">Filtrer par compétence</span>
-                <select
-                  id="skill-filter"
-                  value={selectedSkillId}
-                  onChange={(event) => setSelectedSkillId(event.target.value)}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
-                >
-                  <option value="all">Toutes les compétences</option>
-                  {availableSkills.map((skill) => (
-                    <option key={skill.id} value={skill.id}>
-                      {skill.name}
-                    </option>
-                  ))}
-                </select>
+            <div className="space-y-4">
+              <label className="flex flex-col gap-1 text-sm text-slate-700" htmlFor="volunteer-search">
+                <span className="font-medium">Rechercher</span>
+                <input
+                  id="volunteer-search"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder="Nom, email ou compétence"
+                  className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:border-slate-400 focus:outline-none"
+                />
               </label>
 
-              {selectedSkillId !== 'all' ? (
-                <button
-                  type="button"
-                  onClick={() => setSelectedSkillId('all')}
-                  className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  Réinitialiser
-                </button>
-              ) : null}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-sm font-medium text-slate-700">Filtrer par compétence</span>
+                  {(selectedSkillId !== 'all' || searchQuery.trim().length > 0) ? (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedSkillId('all');
+                        setSearchQuery('');
+                      }}
+                      className="rounded-md border border-slate-300 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                    >
+                      Réinitialiser
+                    </button>
+                  ) : null}
+                </div>
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSkillId('all')}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      selectedSkillId === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
+                    }`}
+                  >
+                    Toutes
+                  </button>
+                </div>
+
+                {availableSkillsByCategory.map(({ category, skills }) => (
+                  <div key={category} className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {skills.map((skill) => {
+                        const isSelected = selectedSkillId === skill.id;
+
+                        return (
+                          <button
+                            key={skill.id}
+                            type="button"
+                            onClick={() => setSelectedSkillId(skill.id)}
+                            className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
+                          >
+                            {skill.name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
