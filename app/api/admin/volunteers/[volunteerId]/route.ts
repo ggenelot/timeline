@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { notifyVolunteerRoleUpdatedByAdmin } from '@/lib/slack/workflows';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -132,7 +133,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
 
   const { data: existingVolunteer, error: existingVolunteerError } = await serviceClient
     .from('profiles')
-    .select('id')
+    .select('id,full_name,role,slack_user_id')
     .eq('id', volunteerId)
     .single();
 
@@ -202,6 +203,24 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     if (insertSkillsError) {
       return NextResponse.json({ error: `Impossible d'enregistrer les compétences : ${insertSkillsError.message}` }, { status: 400 });
     }
+  }
+
+  try {
+    await notifyVolunteerRoleUpdatedByAdmin({
+      profileId: volunteerId,
+      fullName,
+      slackUserId: existingVolunteer.slack_user_id,
+      previousRole: existingVolunteer.role,
+      nextRole: role
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        message: 'Bénévole modifié avec succès, mais échec de notification Slack.',
+        slackError: error instanceof Error ? error.message : 'Erreur inconnue'
+      },
+      { status: 202 }
+    );
   }
 
   return NextResponse.json({ message: 'Bénévole modifié avec succès.' });
