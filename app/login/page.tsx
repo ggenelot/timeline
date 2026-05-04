@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 
 function LoginPageContent() {
-  const [email, setEmail] = useState('');
+  const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -16,8 +16,14 @@ function LoginPageContent() {
     setLoading(true);
     setError(null);
 
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email')
+      .eq('identifier', identifier.trim().toLowerCase())
+      .maybeSingle<{ email: string }>();
+
     const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
+      email: profile?.email ?? '',
       password
     });
 
@@ -38,15 +44,15 @@ function LoginPageContent() {
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label htmlFor="email" className="mb-1 block text-sm font-medium text-slate-700">
-            Email
+          <label htmlFor="identifier" className="mb-1 block text-sm font-medium text-slate-700">
+            Identifiant
           </label>
           <input
-            id="email"
-            type="email"
+            id="identifier"
+            type="text"
             required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            value={identifier}
+            onChange={(event) => setIdentifier(event.target.value)}
             className="w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-slate-300 focus:ring"
           />
         </div>

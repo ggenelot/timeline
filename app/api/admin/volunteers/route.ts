@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 type CreateVolunteerPayload = {
   firstName?: string;
   lastName?: string;
-  email?: string;
+  identifier?: string;
   phone?: string;
   role?: 'benevole';
 };
@@ -29,7 +27,7 @@ export async function POST(request: NextRequest) {
 
   const firstName = payload.firstName?.trim() ?? '';
   const lastName = payload.lastName?.trim() ?? '';
-  const email = payload.email?.trim().toLowerCase() ?? '';
+  const identifier = payload.identifier?.trim().toLowerCase() ?? '';
   const phone = payload.phone?.trim() ?? '';
 
   if (!firstName) {
@@ -40,8 +38,8 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
   }
 
-  if (!email || !EMAIL_REGEX.test(email)) {
-    return NextResponse.json({ error: 'Un email valide est obligatoire.' }, { status: 400 });
+  if (!identifier) {
+    return NextResponse.json({ error: 'Un identifiant est obligatoire.' }, { status: 400 });
   }
 
   const requesterClient = createServerSupabaseAnonClient(token);
@@ -68,9 +66,10 @@ export async function POST(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const fullName = `${firstName} ${lastName}`.trim();
   const temporaryPassword = `Tmp-${crypto.randomUUID()}-aA1!`;
+  const authEmail = `${identifier}@timeline.local`;
 
   const { data: createdUserData, error: createUserError } = await serviceClient.auth.admin.createUser({
-    email,
+    email: authEmail,
     email_confirm: true,
     password: temporaryPassword,
     user_metadata: {
@@ -84,7 +83,7 @@ export async function POST(request: NextRequest) {
     const isDuplicateError = createUserError?.message?.toLowerCase().includes('already');
     return NextResponse.json(
       {
-        error: isDuplicateError ? 'Un utilisateur avec cet email existe déjà.' : createUserError?.message ?? genericError
+        error: isDuplicateError ? 'Un utilisateur avec cet identifiant existe déjà.' : createUserError?.message ?? genericError
       },
       { status: 400 }
     );
@@ -94,7 +93,8 @@ export async function POST(request: NextRequest) {
     {
       id: createdUserData.user.id,
       full_name: fullName,
-      email,
+      email: authEmail,
+      identifier,
       phone: phone || null,
       role: 'benevole'
     },
@@ -116,7 +116,8 @@ export async function POST(request: NextRequest) {
       id: createdUserData.user.id,
       firstName,
       lastName,
-      email,
+      email: authEmail,
+      identifier,
       phone,
       role: 'benevole'
     }
