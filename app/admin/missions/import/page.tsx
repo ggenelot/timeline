@@ -561,28 +561,22 @@ export default function AdminMissionImportPage() {
   return (
     <section className="space-y-5 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
       <header className="space-y-2">
-        <div className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium uppercase tracking-wide text-slate-500">
-          Import automatique
-        </div>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Importer des missions</h1>
-        <p className="max-w-2xl text-sm leading-relaxed text-slate-600">Les horaires importés sont interprétés en timezone Europe/Paris.</p>
       </header>
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm font-medium text-slate-700">
-          Fichier (.csv, .xlsx, .xls)
+        <label className="block text-sm font-medium text-slate-700">Fichier (.csv, .xlsx, .xls)</label>
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           <input
             type="file"
             accept=".csv,.xlsx,.xls"
             onChange={handleFileChange}
             disabled={analyzing || importing}
-            className="mt-2 block w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
+            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
           />
-        </label>
-        <div className="mt-3 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={handleImportFromGoogleSheet}
@@ -591,8 +585,8 @@ export default function AdminMissionImportPage() {
           >
             {loadingFromGoogleSheet ? 'Chargement du Google Sheet...' : 'Importer depuis Google Sheet public'}
           </button>
-          {fileName ? <p className="text-xs text-slate-500">Fichier sélectionné : <span className="font-medium text-slate-700">{fileName}</span></p> : null}
         </div>
+        {fileName ? <p className="mt-2 text-xs text-slate-500">Fichier sélectionné : <span className="font-medium text-slate-700">{fileName}</span></p> : null}
       </div>
 
       {rows.length > 0 ? (
