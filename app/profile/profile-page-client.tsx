@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
@@ -148,6 +148,14 @@ export function ProfilePageClient() {
     setWorking(false);
   }
 
+  const volunteerCalendarLinks = calendarLinks
+    ? [
+        { href: calendarLinks.all, label: 'Flux calendrier : toutes les missions proposées' },
+        { href: calendarLinks.positioned, label: 'Flux calendrier : missions où je me suis positionné' },
+        { href: calendarLinks.retained, label: 'Flux calendrier : missions où je suis retenu' }
+      ]
+    : [];
+
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement...</p>;
   }
@@ -158,17 +166,6 @@ export function ProfilePageClient() {
 
   const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
   const isVolunteer = profile.role === 'benevole';
-  const volunteerCalendarLinks = useMemo(() => {
-    if (!calendarLinks) {
-      return [] as Array<{ href: string; label: string }>;
-    }
-
-    return [
-      { href: calendarLinks.all, label: 'Flux calendrier : toutes les missions proposées' },
-      { href: calendarLinks.positioned, label: 'Flux calendrier : missions où je me suis positionné' },
-      { href: calendarLinks.retained, label: 'Flux calendrier : missions où je suis retenu' }
-    ];
-  }, [calendarLinks]);
 
   return (
     <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
