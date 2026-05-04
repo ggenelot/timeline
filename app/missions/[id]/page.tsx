@@ -273,7 +273,7 @@ export default function MissionDetailPage() {
       quantity: requiredSkill.quantity ?? 0
     }));
 
-    const allVolunteers = proposals
+    const availableVolunteers = eligibleProposals
       .map((proposal) => {
         if (!proposal.volunteer) return null;
         return {
@@ -292,7 +292,7 @@ export default function MissionDetailPage() {
     const skillGroups = requiredSkills.map((requiredSkill) => {
       const requiredSkillCode = requiredSkill.name ? buildExpandedSkillSet([requiredSkill.name]) : buildExpandedSkillSet([]);
 
-      const volunteers = proposals
+      const volunteers = eligibleProposals
         .map((proposal) => {
           const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
             .map((profileSkill) => profileSkill.skill?.name)
@@ -329,12 +329,12 @@ export default function MissionDetailPage() {
       };
     });
 
-    const hasUnassignedPool = allVolunteers.length > 0;
+    const hasUnassignedPool = availableVolunteers.length > 0;
     if (!hasUnassignedPool) {
       return skillGroups;
     }
 
-    const fallbackVolunteers = allVolunteers;
+    const fallbackVolunteers = availableVolunteers;
 
     return [
       ...skillGroups,
@@ -345,7 +345,7 @@ export default function MissionDetailPage() {
         volunteers: fallbackVolunteers
       }
     ];
-  }, [mission?.mission_required_skills, proposals]);
+  }, [eligibleProposals, mission?.mission_required_skills]);
 
   const requiredSkillNameById = useMemo(() => {
     return new Map(
