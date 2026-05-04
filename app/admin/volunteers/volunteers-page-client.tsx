@@ -24,6 +24,8 @@ type VolunteersPageClientProps = {
 };
 
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
+  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700';
+
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [selectedSkillByCategory, setSelectedSkillByCategory] = useState<Record<string, string | null>>({});
@@ -267,6 +269,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               <div className="space-y-3">
                 {availableSkillsByCategory.map(({ category, label, skills }) => {
                   const selectedSkillId = selectedSkillByCategory[category] ?? null;
+                  const selectedSkillIndex = skills.findIndex((skill) => skill.id === selectedSkillId);
 
                   return (
                     <div key={category} className="space-y-1">
@@ -275,24 +278,23 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                         <button
                           type="button"
                           onClick={() => toggleSkillFilter(category, null)}
-                          className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
-                            selectedSkillId === null
-                              ? 'border-slate-700 bg-slate-700 text-white'
-                              : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
-                          }`}
+                          className={`${getSkillBadgeClass(category)} px-2.5 py-1`}
                         >
                           Toutes
                         </button>
-                        {skills.map((skill) => {
+                        {skills.map((skill, skillIndex) => {
                           const isSelected = selectedSkillId === skill.id;
                           const count = skillCounts.get(skill.id) ?? 0;
+                          const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
 
                           return (
                             <button
                               key={skill.id}
                               type="button"
                               onClick={() => toggleSkillFilter(category, skill.id)}
-                              className={`${getSkillBadgeClass(skill.category)} ${isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'}`}
+                              className={`${shouldUseCategoryColor ? getSkillBadgeClass(skill.category) : neutralSkillBadgeClass} ${
+                                isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'
+                              }`}
                             >
                               {skill.name} {count}
                             </button>
