@@ -52,24 +52,69 @@ export function MissionCard({
   unavailableVolunteersCount,
   availableVolunteers
 }: MissionCardProps) {
-  const [selectedSkillFilter, setSelectedSkillFilter] = useState<string>('all');
+  const [selectedSkillFiltersByCategory, setSelectedSkillFiltersByCategory] = useState<Record<string, string>>({});
 
-  const requiredSkillOptions = useMemo(
-    () =>
-      requiredSkills
-        .map((requiredSkill) => requiredSkill.skill?.name?.trim() ?? '')
-        .filter((skillName): skillName is string => Boolean(skillName))
-        .filter((skillName, index, array) => array.indexOf(skillName) === index),
-    [requiredSkills]
-  );
+  const skillCategoryLabels: Record<string, string> = {
+    formation: 'Formation',
+    accso: 'ACCSO',
+    operationnel: 'Opérationnel',
+    conduite: 'Conduite',
+    technique: 'Technique',
+    autre: 'Autres compétences'
+  };
+  const orderedSkillCategories = ['formation', 'accso', 'operationnel', 'conduite', 'technique', 'autre'];
+
+  const skillFiltersByCategory = useMemo(() => {
+    const countsByCategory = new Map<string, Map<string, number>>();
+
+    availableVolunteers.forEach((volunteer) => {
+      volunteer.skills.forEach((skill) => {
+        const skillName = skill.name.trim();
+        if (!skillName) return;
+
+        const category = (skill.category ?? 'autre').trim() || 'autre';
+        if (!countsByCategory.has(category)) {
+          countsByCategory.set(category, new Map());
+        }
+
+        const skillCounts = countsByCategory.get(category)!;
+        skillCounts.set(skillName, (skillCounts.get(skillName) ?? 0) + 1);
+      });
+    });
+
+    const categories = Array.from(countsByCategory.entries())
+      .map(([category, skillsMap]) => ({
+        category,
+        label: skillCategoryLabels[category] ?? category,
+        allCount: availableVolunteers.filter((volunteer) =>
+          volunteer.skills.some((skill) => ((skill.category ?? 'autre').trim() || 'autre') === category)
+        ).length,
+        skills: Array.from(skillsMap.entries())
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }))
+      }))
+      .sort((a, b) => {
+        const indexA = orderedSkillCategories.indexOf(a.category);
+        const indexB = orderedSkillCategories.indexOf(b.category);
+        if (indexA === -1 && indexB === -1) return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+        if (indexA === -1) return 1;
+        if (indexB === -1) return -1;
+        return indexA - indexB;
+      });
+
+    return categories;
+  }, [availableVolunteers]);
 
   const filteredAvailableVolunteers = useMemo(() => {
-    if (selectedSkillFilter === 'all') {
-      return availableVolunteers;
-    }
+    const activeFilters = Object.entries(selectedSkillFiltersByCategory).filter(([, skill]) => skill !== 'all');
+    if (activeFilters.length === 0) return availableVolunteers;
 
-    return availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === selectedSkillFilter));
-  }, [availableVolunteers, selectedSkillFilter]);
+    return availableVolunteers.filter((volunteer) =>
+      activeFilters.every(([category, skillName]) =>
+        volunteer.skills.some((skill) => (((skill.category ?? 'autre').trim() || 'autre') === category) && skill.name === skillName)
+      )
+    );
+  }, [availableVolunteers, selectedSkillFiltersByCategory]);
 
   const doStatusLabel = mission.do_status?.trim() || 'Antenne En attente';
 
@@ -132,30 +177,38 @@ export function MissionCard({
       }
       footer={
         <>
-          {requiredSkillOptions.length > 0 ? (
-            <div className="mb-2 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-slate-500">Filtrer par compétence requise :</span>
-              <button
-                type="button"
-                onClick={() => setSelectedSkillFilter('all')}
-                className={`rounded-full border px-2 py-0.5 text-xs ${
-                  selectedSkillFilter === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
-                }`}
-              >
-                Toutes
-              </button>
-              {requiredSkillOptions.map((skillName) => (
-                <button
-                  key={skillName}
-                  type="button"
-                  onClick={() => setSelectedSkillFilter(skillName)}
-                  className={`rounded-full border px-2 py-0.5 text-xs ${
-                    selectedSkillFilter === skillName ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700'
-                  }`}
-                >
-                  {skillName}
-                </button>
-              ))}
+          {skillFiltersByCategory.length > 0 ? (
+            <div className="mb-3 space-y-2">
+              {skillFiltersByCategory.map((categoryFilters) => {
+                const selectedSkill = selectedSkillFiltersByCategory[categoryFilters.category] ?? 'all';
+
+                return (
+                  <div key={categoryFilters.category} className="flex flex-wrap items-center gap-2">
+                    <span className="text-xs font-medium text-slate-600">{categoryFilters.label} :</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSkillFiltersByCategory((prev) => ({ ...prev, [categoryFilters.category]: 'all' }))}
+                      className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                        selectedSkill === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      Toutes {categoryFilters.allCount}
+                    </button>
+                    {categoryFilters.skills.map((skill) => (
+                      <button
+                        key={`${categoryFilters.category}-${skill.name}`}
+                        type="button"
+                        onClick={() => setSelectedSkillFiltersByCategory((prev) => ({ ...prev, [categoryFilters.category]: skill.name }))}
+                        className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                          selectedSkill === skill.name ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {skill.name} {skill.count}
+                      </button>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
           ) : null}
           Personnes disponibles :{' '}
