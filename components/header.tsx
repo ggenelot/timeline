@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { AppRole, Profile } from '@/lib/types';
@@ -46,6 +46,15 @@ export function Header() {
     };
   }, []);
 
+  const greetingName = useMemo(() => {
+    const fullName = profile?.full_name?.trim();
+    if (fullName) {
+      return fullName.split(/\s+/)[0];
+    }
+
+    return session?.user.email;
+  }, [profile?.full_name, session?.user.email]);
+
   async function handleSignOut() {
     await supabase.auth.signOut();
     window.location.href = '/login';
@@ -60,7 +69,7 @@ export function Header() {
         <nav className="flex min-w-max flex-1 items-center gap-4 text-sm">
           {session ? (
             <>
-              <span className="whitespace-nowrap text-slate-600">Bonjour, {profile?.full_name ?? session.user.email}</span>
+              <span className="whitespace-nowrap text-slate-600">Bonjour, {greetingName}</span>
               <div className="ml-auto flex items-center gap-4 whitespace-nowrap">
                 {role === 'admin' ? (
                   <Link href="/admin/volunteers" className="text-slate-700 hover:text-slate-900">
