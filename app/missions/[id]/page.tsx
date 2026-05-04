@@ -62,6 +62,7 @@ const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposa
   { label: 'Disponible', value: 'available' },
   { label: 'Indisponible', value: 'unavailable' }
 ];
+const NO_SKILL_SELECTION_ID = '__no_skill_selection__';
 
 function getDefaultSlackChannelName(title: string, startsAt: string) {
   const slug = title
@@ -115,7 +116,7 @@ export default function MissionDetailPage() {
   const [availabilityStatusFilter, setAvailabilityStatusFilter] = useState<'all' | MissionProposalResponse>('all');
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
   const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
-  const [pendingAssignments, setPendingAssignments] = useState<Map<string, string | null>>(new Map());
+  const [pendingAssignments, setPendingAssignments] = useState<Map<string, string>>(new Map());
   const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
   const [volunteerActivityStats, setVolunteerActivityStats] = useState<Record<string, { lastActivityAt: string | null; monthlyCount: number }>>({});
   const [loading, setLoading] = useState(true);
@@ -253,7 +254,14 @@ export default function MissionDetailPage() {
   }, [allVolunteers, proposals]);
 
   useEffect(() => {
-    setPendingAssignments(new Map(assignments.map((assignment) => [assignment.volunteer_id, assignment.mission_required_skill_id])));
+    setPendingAssignments(
+      new Map(
+        assignments.map((assignment) => [
+          assignment.volunteer_id,
+          assignment.mission_required_skill_id ?? NO_SKILL_SELECTION_ID
+        ])
+      )
+    );
   }, [assignments]);
 
 
@@ -331,7 +339,7 @@ export default function MissionDetailPage() {
     return [
       ...skillGroups,
       {
-        requiredSkillId: undefined,
+        requiredSkillId: NO_SKILL_SELECTION_ID,
         requiredSkillName: 'Sans compétence particulière',
         requiredCount: 0,
         volunteers: fallbackVolunteers
@@ -689,7 +697,7 @@ export default function MissionDetailPage() {
     setSelectedVolunteerIdToAdd('');
   }
 
-  async function toggleSelection(volunteerId: string, requiredSkillId?: string) {
+  async function toggleSelection(volunteerId: string, requiredSkillId: string) {
     if (!mission || missionBlocksSelection) {
       return;
     }
@@ -699,7 +707,7 @@ export default function MissionDetailPage() {
       if (next.has(volunteerId)) {
         next.delete(volunteerId);
       } else {
-        next.set(volunteerId, requiredSkillId ?? null);
+        next.set(volunteerId, requiredSkillId);
       }
       return next;
     });
@@ -736,7 +744,12 @@ export default function MissionDetailPage() {
         toInsert.map((volunteerId) => ({
           mission_id: mission.id,
           volunteer_id: volunteerId,
-          ...(supportsMissionRequiredSkillReference ? { mission_required_skill_id: pendingAssignments.get(volunteerId) ?? null } : {}),
+          ...(supportsMissionRequiredSkillReference
+            ? {
+                mission_required_skill_id:
+                  pendingAssignments.get(volunteerId) === NO_SKILL_SELECTION_ID ? null : pendingAssignments.get(volunteerId) ?? null
+              }
+            : {}),
           assignment_status: 'selected'
         }))
       );
@@ -749,7 +762,12 @@ export default function MissionDetailPage() {
     for (const assignment of toUpdate) {
       const { error: updateError } = await supabase
         .from('mission_assignments')
-        .update({ mission_required_skill_id: pendingAssignments.get(assignment.volunteer_id) ?? null })
+        .update({
+          mission_required_skill_id:
+            pendingAssignments.get(assignment.volunteer_id) === NO_SKILL_SELECTION_ID
+              ? null
+              : pendingAssignments.get(assignment.volunteer_id) ?? null
+        })
         .eq('id', assignment.id);
       if (updateError) {
         setError(`Impossible de mettre à jour la sélection : ${updateError.message}`);
