@@ -283,7 +283,6 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                           Toutes
                         </button>
                         {skills.map((skill, skillIndex) => {
-                          const isSelected = selectedSkillId === skill.id;
                           const count = skillCounts.get(skill.id) ?? 0;
                           const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
 
@@ -292,9 +291,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                               key={skill.id}
                               type="button"
                               onClick={() => toggleSkillFilter(category, skill.id)}
-                              className={`${shouldUseCategoryColor ? getSkillBadgeClass(skill.category) : neutralSkillBadgeClass} ${
-                                isSelected ? 'ring-2 ring-slate-400 ring-offset-1' : 'hover:opacity-80'
-                              }`}
+                              className={`${shouldUseCategoryColor ? getSkillBadgeClass(skill.category) : neutralSkillBadgeClass} hover:opacity-80`}
                             >
                               {skill.name} {count}
                             </button>
