@@ -10,16 +10,13 @@ type VolunteerFormState = {
   firstName: string;
   lastName: string;
   identifier: string;
-  phone: string;
-  role: 'benevole';
 };
 
 const INITIAL_FORM: VolunteerFormState = {
   firstName: '',
   lastName: '',
   identifier: '',
-  phone: '',
-  role: 'benevole'
+
 };
 
 export default function AdminCreateVolunteerPage() {
@@ -197,29 +194,6 @@ export default function AdminCreateVolunteerPage() {
             placeholder="prenom.nom"
             disabled={submitting}
             required
-          />
-        </label>
-
-        <label className="block text-sm text-slate-700">
-          Téléphone
-          <input
-            type="tel"
-            value={form.phone}
-            onChange={(event) => setForm((prev) => ({ ...prev, phone: event.target.value }))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="06 12 34 56 78"
-            disabled={submitting}
-          />
-        </label>
-
-        <label className="block text-sm text-slate-700">
-          Rôle
-          <input
-            type="text"
-            value="benevole"
-            className="mt-1 w-full rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600"
-            disabled
-            readOnly
           />
         </label>
 
