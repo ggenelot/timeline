@@ -14,6 +14,7 @@ export function ProfilePageClient() {
   const [success, setSuccess] = useState<string | null>(null);
   const [slackConnectError, setSlackConnectError] = useState<string | null>(null);
   const [calendarLinks, setCalendarLinks] = useState<{ all: string; positioned: string; retained: string } | null>(null);
+  const [copiedCalendarUrl, setCopiedCalendarUrl] = useState<string | null>(null);
   const [skillsByCategory, setSkillsByCategory] = useState<Record<string, Skill[]>>({});
   const [acquiredSkillIds, setAcquiredSkillIds] = useState<Set<string>>(new Set());
   const searchParams = useSearchParams();
@@ -168,6 +169,18 @@ export function ProfilePageClient() {
     setWorking(false);
   }
 
+  async function handleCopyCalendarUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedCalendarUrl(url);
+      window.setTimeout(() => {
+        setCopiedCalendarUrl((current) => (current === url ? null : current));
+      }, 2000);
+    } catch {
+      setError("Impossible de copier l'URL. Veuillez réessayer.");
+    }
+  }
+
   const volunteerCalendarLinks = calendarLinks
     ? [
         { href: calendarLinks.all, label: 'Flux calendrier : toutes les missions proposées' },
@@ -210,7 +223,33 @@ export function ProfilePageClient() {
       </div>
 
       {isVolunteer ? (
-        <div className="space-y-4 rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+        <div className="space-y-4 text-sm">
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+          <p className="font-medium text-slate-900">Calendriers personnalisés</p>
+          <p className="mt-1 text-slate-700">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
+          {volunteerCalendarLinks.length > 0 ? (
+            <div className="mt-3 space-y-3">
+              {volunteerCalendarLinks.map((link) => (
+                <div key={link.href} className="space-y-1">
+                  <p className="text-xs text-slate-600">{link.label}</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyCalendarUrl(link.href)}
+                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 transition hover:bg-slate-100"
+                    title="Cliquer pour copier le lien"
+                  >
+                    {link.href}
+                  </button>
+                  {copiedCalendarUrl === link.href ? <p className="text-xs text-emerald-700">Lien copié.</p> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-xs text-slate-500">Session invalide : impossible de générer les URL de calendrier.</p>
+          )}
+          </div>
+
+          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <div>
             <p className="font-medium text-slate-900">Mes compétences</p>
             <div className="mt-3 space-y-3">
@@ -231,21 +270,6 @@ export function ProfilePageClient() {
               ))}
             </div>
           </div>
-
-          <div>
-          <p className="font-medium text-slate-900">Calendriers personnalisés</p>
-          <p className="mt-1 text-slate-700">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
-          {volunteerCalendarLinks.length > 0 ? (
-            <div className="mt-3 flex flex-col gap-2">
-              {volunteerCalendarLinks.map((link) => (
-                <a key={link.href} className="underline" href={link.href} target="_blank" rel="noreferrer">
-                  {link.label}
-                </a>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-xs text-slate-500">Session invalide : impossible de générer les URL de calendrier.</p>
-          )}
           </div>
         </div>
       ) : null}
