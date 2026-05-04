@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { expandSkillNames } from '@/lib/skills';
 import { notifyVolunteerRoleUpdatedByAdmin } from '@/lib/slack/workflows';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -111,6 +112,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const sector = payload.sector?.trim() ?? '';
   const role = payload.role ?? 'benevole';
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
+  let expandedSkillIds = skillIds;
   const password = payload.password?.trim() ?? '';
 
   if (!fullName) {
@@ -141,16 +143,37 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: 'Bénévole introuvable.' }, { status: 404 });
   }
 
-  if (skillIds.length > 0) {
-    const { data: validSkills, error: validSkillsError } = await serviceClient.from('skills').select('id').in('id', skillIds);
 
-    if (validSkillsError) {
-      return NextResponse.json({ error: `Impossible de vérifier les compétences : ${validSkillsError.message}` }, { status: 500 });
+  if (skillIds.length > 0) {
+    const { data: selectedSkills, error: selectedSkillsError } = await serviceClient.from('skills').select('id,name').in('id', skillIds);
+
+    if (selectedSkillsError) {
+      return NextResponse.json({ error: `Impossible de vérifier les compétences : ${selectedSkillsError.message}` }, { status: 500 });
     }
 
-    if ((validSkills ?? []).length !== skillIds.length) {
+    if ((selectedSkills ?? []).length !== skillIds.length) {
       return NextResponse.json({ error: 'Une ou plusieurs compétences sélectionnées sont invalides.' }, { status: 400 });
     }
+
+    const expandedSkillNames = expandSkillNames((selectedSkills ?? []).map((skill) => skill.name));
+
+    const { data: allSkills, error: allSkillsError } = await serviceClient.from('skills').select('id,name');
+
+    if (allSkillsError) {
+      return NextResponse.json({ error: `Impossible de charger le référentiel de compétences : ${allSkillsError.message}` }, { status: 500 });
+    }
+
+    const normalizedNameToId = new Map(
+      (allSkills ?? []).map((skill) => [skill.name.trim().toLocaleLowerCase('fr-FR'), skill.id])
+    );
+
+    expandedSkillIds = Array.from(
+      new Set(
+        expandedSkillNames
+          .map((skillName) => normalizedNameToId.get(skillName.trim().toLocaleLowerCase('fr-FR')))
+          .filter((skillId): skillId is string => Boolean(skillId))
+      )
+    );
   }
 
   const { error: profileUpdateError } = await serviceClient
@@ -192,9 +215,9 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: `Impossible de mettre à jour les compétences : ${deleteSkillsError.message}` }, { status: 400 });
   }
 
-  if (skillIds.length > 0) {
+  if (expandedSkillIds.length > 0) {
     const { error: insertSkillsError } = await serviceClient.from('profile_skills').insert(
-      skillIds.map((skillId) => ({
+      expandedSkillIds.map((skillId) => ({
         profile_id: volunteerId,
         skill_id: skillId
       }))
