@@ -259,15 +259,14 @@ export default function MissionDetailPage() {
 
 
   const requiredSkillsVolunteerDirectory = useMemo(() => {
-    const requiredSkills = (mission?.mission_required_skills ?? [])
-      .map((requiredSkill) => ({
-        id: requiredSkill.id,
-        name: requiredSkill.skill?.name ?? null
-      }))
-      .filter((requiredSkill): requiredSkill is { id: string; name: string } => Boolean(requiredSkill.name));
+    const requiredSkills = (mission?.mission_required_skills ?? []).map((requiredSkill) => ({
+      id: requiredSkill.id,
+      name: requiredSkill.skill?.name ?? null,
+      quantity: requiredSkill.quantity ?? 0
+    }));
 
     return requiredSkills.map((requiredSkill) => {
-      const requiredSkillCode = buildExpandedSkillSet([requiredSkill.name]);
+      const requiredSkillCode = requiredSkill.name ? buildExpandedSkillSet([requiredSkill.name]) : buildExpandedSkillSet([]);
 
       const volunteers = proposals
         .map((proposal) => {
@@ -276,7 +275,8 @@ export default function MissionDetailPage() {
             .filter((skillName): skillName is string => Boolean(skillName));
 
           const volunteerSkillCodes = buildExpandedSkillSet(explicitSkillNames);
-          const matchesRequiredSkill = Array.from(requiredSkillCode).some((skillCode) => volunteerSkillCodes.has(skillCode));
+          const matchesRequiredSkill =
+            requiredSkillCode.size === 0 || Array.from(requiredSkillCode).some((skillCode) => volunteerSkillCodes.has(skillCode));
 
           if (!matchesRequiredSkill || !proposal.volunteer) {
             return null;
@@ -297,14 +297,13 @@ export default function MissionDetailPage() {
 
       const uniqueVolunteers = volunteers.filter((volunteer, index, list) => list.findIndex((entry) => entry.id === volunteer.id) === index);
 
-      return {
-        requiredSkillId: requiredSkill.id,
-        requiredSkillName: requiredSkill.name,
-        requiredCount:
-          mission?.mission_required_skills?.find((missionRequiredSkill) => missionRequiredSkill.id === requiredSkill.id)?.quantity ?? 0,
-        volunteers: uniqueVolunteers
-      };
-    });
+        return {
+          requiredSkillId: requiredSkill.id,
+          requiredSkillName: requiredSkill.name ?? 'Sans compétence particulière (bénévole)',
+          requiredCount: requiredSkill.quantity,
+          volunteers: uniqueVolunteers
+        };
+      });
   }, [mission?.mission_required_skills, proposals]);
 
   const requiredSkillNameById = useMemo(() => {
