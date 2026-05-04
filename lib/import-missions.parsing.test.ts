@@ -65,4 +65,29 @@ export function runImportMissionsParsingTests() {
   const warningCodes = warningPreview.items[0]?.issues.map((issue) => issue.code) ?? [];
   assert(warningCodes.includes('invalid_validation_date'), 'La validation invalide doit remonter un warning dédié.');
   assert(warningCodes.includes('invalid_reversion_expected'), 'La réversion invalide doit remonter un warning dédié.');
+
+  const tourAutoCsv = `Etat DO;;RETENUE;NOUVEAU
+Intitulé;;Tour Auto;Mission B
+Date;;30/04/26;01/05/26
+Horaires;;08h00 - 18h00;09h00 - 12h00
+Lieu;;Grand Palais - 75008;Paris
+Nombre de secouristes;;"4 SR
+dont 1 CP";2
+Matériel spécifique;;1 lot A;-
+Réversion;;1194;100
+Réversion réelle;;955,2;80
+Type;;Soirée/Weekend;DPS
+Validation;;14/04/2026;15/04/2026`;
+
+  const tourAutoPreview = buildMissionsPreview(parseCsvContent(tourAutoCsv));
+  const tourAuto = tourAutoPreview.items.find((item) => item.normalized?.title === 'Tour Auto')?.normalized;
+  assert(Boolean(tourAuto), 'La mission Tour Auto doit être détectée.');
+  assert(tourAuto?.do_status === 'RETENUE', 'Tour Auto: Etat DO doit être RETENUE.');
+  assert(tourAuto?.location === 'Grand Palais - 75008', 'Tour Auto: lieu importé incorrect.');
+  assert(tourAuto?.requirements_notes === '4 SR dont 1 CP', 'Tour Auto: nombre de secouristes doit conserver le retour ligne.');
+  assert(tourAuto?.equipment_notes === '1 lot A', 'Tour Auto: matériel spécifique importé incorrect.');
+  assert(tourAuto?.reversion_expected === 1194, 'Tour Auto: réversion attendue importée incorrectement.');
+  assert(tourAuto?.reversion_actual === 955.2, 'Tour Auto: réversion réelle importée incorrectement.');
+  assert(tourAuto?.source_type_label === 'Soirée/Weekend', 'Tour Auto: type source importé incorrect.');
+  assert(tourAuto?.validation_date === '2026-04-14', 'Tour Auto: date de validation importée incorrectement.');
 }

@@ -222,10 +222,52 @@ function parseDelimitedLine(line: string, delimiter: ';' | ',' | '\t'): string[]
 
 export function parseCsvContent(content: string): string[][] {
   const delimiter = detectCsvDelimiter(content);
+  const rows: string[][] = [];
+  let currentRow: string[] = [];
+  let currentCell = '';
+  let insideQuotes = false;
 
-  return content
-    .split(/\r?\n/)
-    .map((line) => parseDelimitedLine(line, delimiter).map((cell) => normalizeCell(cell)));
+  for (let i = 0; i < content.length; i += 1) {
+    const char = content[i];
+    const nextChar = content[i + 1];
+
+    if (char === '"') {
+      if (insideQuotes && nextChar === '"') {
+        currentCell += '"';
+        i += 1;
+      } else {
+        insideQuotes = !insideQuotes;
+      }
+      continue;
+    }
+
+    if (!insideQuotes && char === delimiter) {
+      currentRow.push(normalizeCell(currentCell));
+      currentCell = '';
+      continue;
+    }
+
+    if (!insideQuotes && (char === '\n' || char === '\r')) {
+      if (char === '\r' && nextChar === '\n') {
+        i += 1;
+      }
+      currentRow.push(normalizeCell(currentCell));
+      rows.push(currentRow);
+      currentRow = [];
+      currentCell = '';
+      continue;
+    }
+
+    currentCell += char;
+  }
+
+  const hasRemainingData = currentCell.length > 0 || currentRow.length > 0;
+  if (hasRemainingData) {
+    currentRow.push(normalizeCell(currentCell));
+    rows.push(currentRow);
+  }
+
+  return rows;
 }
 
 function isRowEmpty(row: string[]) {

@@ -66,6 +66,20 @@ function parseDateFallback(value: string | null | undefined) {
   return `${year}-${month}-${day}`;
 }
 
+function inferRequiredVolunteersFromNotes(value: string | null | undefined) {
+  if (!value) {
+    return 1;
+  }
+
+  const match = value.match(/\d+/);
+  if (!match) {
+    return 1;
+  }
+
+  const parsed = Number.parseInt(match[0], 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+}
+
 function normalizeEditableRow(item: MissionImportPreviewItem, index: number): EditableImportRow {
   const rawPayload = item.block.rawPairs.reduce<Record<string, string | null>>((acc, pair) => {
     acc[pair.label] = pair.value || null;
@@ -202,7 +216,7 @@ function validateAndNormalizeRow(row: EditableImportRow): { normalized: Normaliz
       location: row.location.trim() || null,
       starts_at: startsAtIso,
       ends_at: endsAtIso,
-      required_volunteers: 1,
+      required_volunteers: inferRequiredVolunteersFromNotes(row.requirements_notes),
       category: row.category,
       do_status: row.do_status.trim() || null,
       retained_status: row.retained_status.trim() || null,
@@ -502,7 +516,7 @@ export default function AdminMissionImportPage() {
       const preview = buildMissionsPreview(parsedRows);
       setRows(preview.items.map((item, index) => normalizeEditableRow(item, index)));
       setFileName(payload.fileName ?? 'google-sheet-public.csv');
-      setSuccess('Import depuis Google Sheet chargé (11 premières lignes seulement).');
+      setSuccess('Import depuis Google Sheet chargé.');
     } finally {
       setLoadingFromGoogleSheet(false);
     }
