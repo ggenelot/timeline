@@ -9,7 +9,7 @@ import { Profile } from '@/lib/types';
 type VolunteerFormState = {
   firstName: string;
   lastName: string;
-  email: string;
+  identifier: string;
   phone: string;
   role: 'benevole';
 };
@@ -17,12 +17,10 @@ type VolunteerFormState = {
 const INITIAL_FORM: VolunteerFormState = {
   firstName: '',
   lastName: '',
-  email: '',
+  identifier: '',
   phone: '',
   role: 'benevole'
 };
-
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export default function AdminCreateVolunteerPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -45,7 +43,7 @@ export default function AdminCreateVolunteerPage() {
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,phone,role,sector,created_at')
+        .select('id,full_name,email,identifier,phone,role,sector,created_at')
         .eq('id', authData.user.id)
         .single();
 
@@ -79,7 +77,7 @@ export default function AdminCreateVolunteerPage() {
 
     const firstName = form.firstName.trim();
     const lastName = form.lastName.trim();
-    const email = form.email.trim().toLowerCase();
+    const identifier = form.identifier.trim().toLowerCase();
 
     if (!firstName) {
       setError('Le prénom est obligatoire.');
@@ -91,8 +89,8 @@ export default function AdminCreateVolunteerPage() {
       return;
     }
 
-    if (!email || !EMAIL_REGEX.test(email)) {
-      setError('Un email valide est obligatoire.');
+    if (!identifier) {
+      setError('Un identifiant est obligatoire.');
       return;
     }
 
@@ -190,13 +188,13 @@ export default function AdminCreateVolunteerPage() {
         </div>
 
         <label className="block text-sm text-slate-700">
-          Email
+          Identifiant
           <input
-            type="email"
-            value={form.email}
-            onChange={(event) => setForm((prev) => ({ ...prev, email: event.target.value }))}
+            type="text"
+            value={form.identifier}
+            onChange={(event) => setForm((prev) => ({ ...prev, identifier: event.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="prenom.nom@example.org"
+            placeholder="prenom.nom"
             disabled={submitting}
             required
           />
