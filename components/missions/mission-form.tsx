@@ -176,39 +176,49 @@ export function MissionForm({
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <label className="block text-sm text-slate-700">
-          Catégorie *
-          <select
-            value={form.category}
-            onChange={(event) => onChange({ ...form, category: event.target.value as MissionCategory })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={submitting}
-            required
-          >
+        <div className="space-y-2">
+          <p className="text-sm text-slate-700">Catégorie *</p>
+          <div className="flex flex-wrap gap-2">
             {MISSION_CATEGORY_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onChange({ ...form, category: option.value })}
+                disabled={submitting}
+                aria-pressed={form.category === option.value}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                  form.category === option.value
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
                 {option.label}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
 
-        <label className="block text-sm text-slate-700">
-          Statut *
-          <select
-            value={form.status}
-            onChange={(event) => onChange({ ...form, status: event.target.value as MissionStatus })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={submitting}
-            required
-          >
+        <div className="space-y-2">
+          <p className="text-sm text-slate-700">Statut *</p>
+          <div className="flex flex-wrap gap-2">
             {MISSION_STATUS_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => onChange({ ...form, status: option.value })}
+                disabled={submitting}
+                aria-pressed={form.status === option.value}
+                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                  form.status === option.value
+                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+              >
                 {option.label}
-              </option>
+              </button>
             ))}
-          </select>
-        </label>
+          </div>
+        </div>
       </div>
 
       {canManageRequirements ? (
