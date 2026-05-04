@@ -265,7 +265,23 @@ export default function MissionDetailPage() {
       quantity: requiredSkill.quantity ?? 0
     }));
 
-    return requiredSkills.map((requiredSkill) => {
+    const allVolunteers = proposals
+      .map((proposal) => {
+        if (!proposal.volunteer) return null;
+        return {
+          id: proposal.volunteer.id,
+          fullName: proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole',
+          initials: (proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'B')
+            .split(/\s+/)
+            .filter(Boolean)
+            .slice(0, 2)
+            .map((part) => part[0]?.toUpperCase() ?? '')
+            .join('')
+        };
+      })
+      .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
+
+    const skillGroups = requiredSkills.map((requiredSkill) => {
       const requiredSkillCode = requiredSkill.name ? buildExpandedSkillSet([requiredSkill.name]) : buildExpandedSkillSet([]);
 
       const volunteers = proposals
@@ -297,13 +313,30 @@ export default function MissionDetailPage() {
 
       const uniqueVolunteers = volunteers.filter((volunteer, index, list) => list.findIndex((entry) => entry.id === volunteer.id) === index);
 
-        return {
-          requiredSkillId: requiredSkill.id,
-          requiredSkillName: requiredSkill.name ?? 'Sans compétence particulière (bénévole)',
-          requiredCount: requiredSkill.quantity,
-          volunteers: uniqueVolunteers
-        };
-      });
+      return {
+        requiredSkillId: requiredSkill.id,
+        requiredSkillName: requiredSkill.name ?? 'Sans compétence particulière (bénévole)',
+        requiredCount: requiredSkill.quantity,
+        volunteers: uniqueVolunteers
+      };
+    });
+
+    const hasUnassignedPool = allVolunteers.length > 0;
+    if (!hasUnassignedPool) {
+      return skillGroups;
+    }
+
+    const fallbackVolunteers = allVolunteers;
+
+    return [
+      ...skillGroups,
+      {
+        requiredSkillId: undefined,
+        requiredSkillName: 'Sans compétence particulière',
+        requiredCount: 0,
+        volunteers: fallbackVolunteers
+      }
+    ];
   }, [mission?.mission_required_skills, proposals]);
 
   const requiredSkillNameById = useMemo(() => {
