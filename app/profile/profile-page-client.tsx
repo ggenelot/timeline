@@ -235,7 +235,7 @@ export function ProfilePageClient() {
                   <button
                     type="button"
                     onClick={() => void handleCopyCalendarUrl(link.href)}
-                    className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 transition hover:bg-slate-100"
+                    className="w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 transition hover:bg-slate-100"
                     title="Cliquer pour copier le lien"
                   >
                     {link.href}
