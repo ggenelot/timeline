@@ -398,3 +398,28 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     throw error;
   }
 }
+
+export async function notifyVolunteerRoleUpdatedByAdmin(args: {
+  profileId: string;
+  fullName: string | null;
+  slackUserId: string | null;
+  previousRole: 'benevole' | 'responsable';
+  nextRole: 'benevole' | 'responsable';
+}) {
+  const { profileId, fullName, slackUserId, previousRole, nextRole } = args;
+  if (!slackUserId || previousRole === nextRole) {
+    return { sent: false, reason: 'skipped' as const };
+  }
+
+  const slack = new SlackService();
+  const formatRole = (role: 'benevole' | 'responsable') => (role === 'responsable' ? 'responsable' : 'bénévole');
+  const dmText = [
+    `Bonjour ${fullName ?? 'bénévole'},`,
+    "Un administrateur a modifié votre statut sur Timeline.",
+    `Changement : ${formatRole(previousRole)} → ${formatRole(nextRole)}.`
+  ].join('\n');
+
+  const channel = await slack.openDirectMessage(slackUserId);
+  await slack.postMessage(channel, dmText);
+  return { sent: true, reason: 'sent' as const, profileId };
+}
