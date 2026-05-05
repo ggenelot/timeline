@@ -26,22 +26,23 @@ function LoginPageContent() {
 
     let signInError: Error | null = null;
 
-    if (normalizedIdentifier.includes('@')) {
+    const resolveResponse = await fetch('/api/auth/resolve-identifier', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier: normalizedIdentifier })
+    });
+
+    const resolvePayload = (await resolveResponse.json()) as { email?: string | null };
+    const resolvedEmail = typeof resolvePayload.email === 'string' ? resolvePayload.email : null;
+
+    if (resolvedEmail) {
+      const { error } = await trySignIn(resolvedEmail);
+      signInError = error;
+    } else if (normalizedIdentifier.includes('@')) {
       const { error } = await trySignIn(normalizedIdentifier);
       signInError = error;
     } else {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('email')
-        .eq('identifier', normalizedIdentifier)
-        .maybeSingle<{ email: string }>();
-
-      if (profile?.email) {
-        const { error } = await trySignIn(profile.email);
-        signInError = error;
-      } else {
-        signInError = new Error('Profile not found');
-      }
+      signInError = new Error('Profile not found');
     }
 
     setLoading(false);
