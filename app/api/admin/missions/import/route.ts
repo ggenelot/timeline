@@ -395,6 +395,11 @@ export async function PATCH(request: NextRequest) {
   let failed = 0;
 
   for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') {
+      failed += 1;
+      continue;
+    }
+
     const { id, mission } = entry;
 
     if (!id || !mission) {

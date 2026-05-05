@@ -361,7 +361,7 @@ export default function AdminMissionImportPage() {
       (data ?? []).forEach((mission) => {
         const missionDate = getMissionDateForDedupFromStartsAt(mission.starts_at);
         const key = buildMissionDedupKey({ title: mission.title ?? '', missionDate });
-        if (key) {
+        if (key && !map.has(key)) {
           map.set(key, { id: mission.id, ends_at: mission.ends_at, location: mission.location ?? null });
         }
       });
