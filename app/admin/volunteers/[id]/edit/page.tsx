@@ -186,11 +186,6 @@ export default function EditVolunteerPage() {
       return;
     }
 
-    if (!lastName) {
-      setError('Le nom est obligatoire.');
-      return;
-    }
-
     if (form.password && form.password.length < 10) {
       setError('Le nouveau mot de passe doit contenir au moins 10 caractères.');
       return;
@@ -216,7 +211,7 @@ export default function EditVolunteerPage() {
         Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        full_name: `${firstName} ${lastName}`,
+        full_name: lastName ? `${firstName} ${lastName}` : firstName,
         email: form.email,
         skill_ids: skillIds,
         password: form.password || undefined
@@ -290,7 +285,6 @@ export default function EditVolunteerPage() {
               onChange={(event) => setForm((prev) => ({ ...prev, lastName: event.target.value }))}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               disabled={submitting}
-              required
             />
           </label>
         </div>
