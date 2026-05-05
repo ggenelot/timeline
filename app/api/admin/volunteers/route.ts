@@ -113,8 +113,14 @@ export async function POST(request: NextRequest) {
   };
 
   let { error: profileUpsertError } = await serviceClient.from('profiles').upsert(profilePayload, { onConflict: 'id' });
+  const isMissingIdentifierSchemaCacheError =
+    profileUpsertError?.message &&
+    /could not find/i.test(profileUpsertError.message) &&
+    /identifier/i.test(profileUpsertError.message) &&
+    /profiles/i.test(profileUpsertError.message) &&
+    /schema cache/i.test(profileUpsertError.message);
 
-  if (profileUpsertError?.message?.includes("identifier column of 'profiles' in the schema cache")) {
+  if (isMissingIdentifierSchemaCacheError) {
     const { identifier: _, ...fallbackPayload } = profilePayload;
     const fallbackResult = await serviceClient.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
     profileUpsertError = fallbackResult.error;
