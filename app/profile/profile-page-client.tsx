@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill } from '@/lib/types';
@@ -17,6 +17,8 @@ export function ProfilePageClient() {
   const [copiedCalendarUrl, setCopiedCalendarUrl] = useState<string | null>(null);
   const [skillsByCategory, setSkillsByCategory] = useState<Record<string, Skill[]>>({});
   const [acquiredSkillIds, setAcquiredSkillIds] = useState<Set<string>>(new Set());
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -173,6 +175,36 @@ export function ProfilePageClient() {
     setWorking(false);
   }
 
+  async function handleChangePassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setSuccess(null);
+
+    if (newPassword.length < 8) {
+      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Les deux mots de passe ne correspondent pas.');
+      return;
+    }
+
+    setWorking(true);
+    const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+
+    if (updateError) {
+      setError(updateError.message || 'Impossible de modifier le mot de passe.');
+      setWorking(false);
+      return;
+    }
+
+    setSuccess('Votre mot de passe a bien été mis à jour.');
+    setNewPassword('');
+    setConfirmPassword('');
+    setWorking(false);
+  }
+
   async function handleCopyCalendarUrl(url: string) {
     try {
       await navigator.clipboard.writeText(url);
@@ -273,6 +305,42 @@ export function ProfilePageClient() {
             </div>
           </div>
           </div>
+
+          <form onSubmit={handleChangePassword} className="rounded-md border border-slate-200 bg-slate-50 p-3">
+            <p className="font-medium text-slate-900">Sécurité</p>
+            <p className="mt-1 text-slate-700">Changer mon mot de passe</p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              <label className="text-xs text-slate-700">
+                Nouveau mot de passe
+                <input
+                  type="password"
+                  value={newPassword}
+                  onChange={(event) => setNewPassword(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+              <label className="text-xs text-slate-700">
+                Confirmer le mot de passe
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(event) => setConfirmPassword(event.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  autoComplete="new-password"
+                  required
+                />
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={working}
+              className="mt-3 rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              Mettre à jour le mot de passe
+            </button>
+          </form>
         </div>
       ) : null}
 
