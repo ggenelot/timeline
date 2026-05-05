@@ -532,7 +532,7 @@ export default function AdminMissionImportPage() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ missions: dedupAnalysis.readyMissions })
+        body: JSON.stringify({ missions: dedupAnalysis.readyMissions, importStatus })
       });
 
       const payload = (await response.json()) as {
