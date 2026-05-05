@@ -343,6 +343,126 @@ export async function POST(request: NextRequest) {
   });
 }
 
+type UpdateMissionEntry = {
+  id: string;
+  mission: ImportMissionPayload;
+};
+
+type UpdateRequestBody = {
+  missions?: UpdateMissionEntry[];
+};
+
+export async function PATCH(request: NextRequest) {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const requesterClient = createServerSupabaseAnonClient(token);
+  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
+
+  if (userError || !userData.user) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const { data: requesterProfile, error: requesterProfileError } = await requesterClient
+    .from('profiles')
+    .select('role')
+    .eq('id', userData.user.id)
+    .single();
+
+  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
+    return NextResponse.json({ error: 'Accès refusé : seuls les admins peuvent modifier des missions.' }, { status: 403 });
+  }
+
+  let body: UpdateRequestBody;
+
+  try {
+    body = (await request.json()) as UpdateRequestBody;
+  } catch {
+    return NextResponse.json({ error: 'Le corps de la requête est invalide.' }, { status: 400 });
+  }
+
+  const entries = body.missions ?? [];
+
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return NextResponse.json({ error: 'Aucune mission à mettre à jour.' }, { status: 400 });
+  }
+
+  const serviceClient = createServerSupabaseServiceClient();
+  let updated = 0;
+  let failed = 0;
+
+  for (const entry of entries) {
+    const { id, mission } = entry;
+
+    if (!id || !mission) {
+      failed += 1;
+      continue;
+    }
+
+    const validationError = validateMissionPayload(mission);
+    if (validationError) {
+      failed += 1;
+      continue;
+    }
+
+    const updatePayload: Record<string, unknown> = {
+      title: mission.title.trim(),
+      location: mission.location,
+      starts_at: mission.starts_at,
+      ends_at: mission.ends_at,
+      required_volunteers: mission.required_volunteers,
+      category: normalizeCategory(mission.category),
+      do_status: mission.do_status,
+      retained_status: mission.retained_status,
+      requirements_notes: mission.requirements_notes,
+      equipment_notes: mission.equipment_notes,
+      source_type_label: mission.source_type_label,
+      reversion_expected: mission.reversion_expected,
+      reversion_actual: mission.reversion_actual,
+      validation_date: mission.validation_date,
+      raw_import_payload: mission.raw_import_payload
+    };
+
+    let candidatePayload = updatePayload;
+    const removedColumns = new Set<string>();
+    let updateError: { message: string } | null = null;
+
+    while (true) {
+      const result = await serviceClient.from('missions').update(candidatePayload).eq('id', id);
+      updateError = result.error;
+
+      if (!updateError) {
+        break;
+      }
+
+      const missingColumn = getMissingColumnFromError(updateError.message);
+
+      if (!missingColumn || !OPTIONAL_IMPORT_COLUMNS.includes(missingColumn as (typeof OPTIONAL_IMPORT_COLUMNS)[number])) {
+        break;
+      }
+
+      if (removedColumns.has(missingColumn)) {
+        break;
+      }
+
+      removedColumns.add(missingColumn);
+      const { [missingColumn]: _ignored, ...rest } = candidatePayload;
+      candidatePayload = rest;
+    }
+
+    if (updateError) {
+      failed += 1;
+    } else {
+      updated += 1;
+    }
+  }
+
+  return NextResponse.json({ updated, failed });
+}
+
 export async function GET(request: NextRequest) {
   const token = getBearerToken(request);
 
