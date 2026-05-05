@@ -21,6 +21,7 @@ type MissionCardProps = {
   availableVolunteersCount: number;
   unavailableVolunteersCount: number;
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+  onPublishDraft?: (missionId: string) => Promise<void>;
 };
 
 
@@ -50,7 +51,8 @@ export function MissionCard({
   canEdit,
   availableVolunteersCount,
   unavailableVolunteersCount,
-  availableVolunteers
+  availableVolunteers,
+  onPublishDraft
 }: MissionCardProps) {
   const [selectedSkillFilter, setSelectedSkillFilter] = useState('all');
 
@@ -122,9 +124,20 @@ export function MissionCard({
         <>
           <div className="relative z-10 flex flex-wrap items-center justify-end gap-3">
             {canEdit ? (
-              <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
-                Gérer
-              </Link>
+              <>
+                {mission.status === 'draft' && onPublishDraft ? (
+                  <button
+                    type="button"
+                    onClick={() => void onPublishDraft(mission.id)}
+                    className="pointer-events-auto inline-flex rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Passer en proposé
+                  </button>
+                ) : null}
+                <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
+                  Gérer
+                </Link>
+              </>
             ) : null}
           </div>
 

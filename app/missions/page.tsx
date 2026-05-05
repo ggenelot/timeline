@@ -194,6 +194,19 @@ export default function MissionsPage() {
     setLoading(false);
   }
 
+  async function publishDraftMission(missionId: string) {
+    setError(null);
+
+    const { error: updateError } = await supabase.from('missions').update({ status: 'proposed' }).eq('id', missionId).eq('status', 'draft');
+
+    if (updateError) {
+      setError(`Impossible de passer la mission en proposé : ${updateError.message}`);
+      return;
+    }
+
+    await loadData();
+  }
+
   useEffect(() => {
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -397,6 +410,7 @@ export default function MissionsPage() {
                   availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
                   unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
                   availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
+                  onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
                 />
               </div>
             ))}
@@ -416,6 +430,7 @@ export default function MissionsPage() {
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
               unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
               availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
+              onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
             />
           </div>
         ))}
