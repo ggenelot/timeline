@@ -24,6 +24,7 @@ type ImportMissionPayload = {
 
 type ImportRequestBody = {
   missions?: ImportMissionPayload[];
+  importStatus?: 'draft' | 'proposed';
 };
 
 function buildPublicGoogleSheetCsvUrl(url: string): string | null {
@@ -180,6 +181,7 @@ export async function POST(request: NextRequest) {
   }
 
   const missions = body.missions ?? [];
+  const importStatus = body.importStatus === 'proposed' ? 'proposed' : 'draft';
 
   if (!Array.isArray(missions) || missions.length === 0) {
     return NextResponse.json({ error: 'Aucune mission valide à importer.' }, { status: 400 });
@@ -277,7 +279,7 @@ export async function POST(request: NextRequest) {
     ends_at: mission.ends_at,
     required_volunteers: mission.required_volunteers,
     category: normalizeCategory(mission.category),
-    status: 'draft',
+    status: importStatus,
     created_by: userData.user.id,
     do_status: mission.do_status,
     retained_status: mission.retained_status,

@@ -12,7 +12,7 @@ import {
   parseParisLocalToUtcIso,
   utcIsoToParisParts
 } from '@/lib/import-missions';
-import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, Profile } from '@/lib/types';
+import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus, Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 
 type EditableImportRow = {
@@ -247,6 +247,7 @@ export default function AdminMissionImportPage() {
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [loadingFromGoogleSheet, setLoadingFromGoogleSheet] = useState(false);
+  const [importStatus, setImportStatus] = useState<Extract<MissionStatus, 'draft' | 'proposed'>>('draft');
 
   useEffect(() => {
     async function loadProfile() {
@@ -536,7 +537,7 @@ export default function AdminMissionImportPage() {
       const response = await fetch('/api/admin/missions/import', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
-        body: JSON.stringify({ missions: [mission] })
+        body: JSON.stringify({ missions: [mission], importStatus })
       });
       const payload = (await response.json()) as { error?: string; imported?: number; ignoredDuplicates?: number };
       if (!response.ok) {
@@ -608,6 +609,27 @@ export default function AdminMissionImportPage() {
             >
               {importing ? 'Import en cours...' : `Importer toutes les missions (${dedupAnalysis.readyMissions.length})`}
             </button>
+            <div className="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
+              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Statut import</span>
+              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setImportStatus('draft')}
+                  disabled={importing}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${importStatus === 'draft' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Brouillon
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setImportStatus('proposed')}
+                  disabled={importing}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${importStatus === 'proposed' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                >
+                  Proposé
+                </button>
+              </div>
+            </div>
             {rows.map((row) => {
               if (row.deleted) {
                 return null;
