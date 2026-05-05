@@ -14,6 +14,38 @@ import {
 } from '@/lib/import-missions';
 import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus, Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
+import { MissionCardShell } from '@/components/missions/mission-card-shell';
+
+type ImportFilter = 'nouveau' | 'modifié' | 'doublon' | 'invalide';
+
+const IMPORT_STATUS_LABELS: Record<ImportFilter, string> = {
+  nouveau: 'Nouveau',
+  modifié: 'Modifié',
+  doublon: 'Doublon',
+  invalide: 'Invalide'
+};
+
+const IMPORT_STATUS_BADGE: Record<ImportFilter, string> = {
+  nouveau: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200',
+  modifié: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200',
+  doublon: 'bg-slate-200 text-slate-700 ring-1 ring-inset ring-slate-300',
+  invalide: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200'
+};
+
+const IMPORT_STATUS_CARD: Record<ImportFilter, string> = {
+  nouveau: '',
+  modifié: 'border-amber-200 bg-amber-50/60',
+  doublon: 'border-slate-300 bg-slate-100/70',
+  invalide: 'border-rose-200 bg-rose-50/65'
+};
+
+const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
+  poste_de_secours: 'bg-orange-400 text-slate-900',
+  garde: 'bg-red-500 text-white',
+  formation: 'bg-blue-900 text-white',
+  maraude: 'bg-violet-500 text-white',
+  vie_antenne: 'bg-sky-400 text-slate-900'
+};
 
 type EditableImportRow = {
   rowId: string;
@@ -193,7 +225,7 @@ function validateAndNormalizeRow(row: EditableImportRow): { normalized: Normaliz
     });
 
     if (!endsAtIso) {
-      return { normalized: null, errors: ['Impossible de calculer l’heure de fin après minuit.'] };
+      return { normalized: null, errors: ["Impossible de calculer l'heure de fin après minuit."] };
     }
   }
 
@@ -242,12 +274,14 @@ export default function AdminMissionImportPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [existingMissionKeys, setExistingMissionKeys] = useState<Set<string>>(new Set());
+  const [existingMissionsMap, setExistingMissionsMap] = useState<Map<string, { id: string; ends_at: string; location: string | null }>>(new Map());
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [loadingFromGoogleSheet, setLoadingFromGoogleSheet] = useState(false);
   const [importStatus, setImportStatus] = useState<Extract<MissionStatus, 'draft' | 'proposed'>>('draft');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeFilter, setActiveFilter] = useState<ImportFilter>('nouveau');
 
   useEffect(() => {
     async function loadProfile() {
@@ -292,7 +326,7 @@ export default function AdminMissionImportPage() {
 
   useEffect(() => {
     if (validMissionEntries.length === 0) {
-      setExistingMissionKeys(new Set());
+      setExistingMissionsMap(new Map());
       setDuplicateCheckError(null);
       setCheckingDuplicates(false);
       return;
@@ -309,7 +343,7 @@ export default function AdminMissionImportPage() {
 
       const { data, error: queryError } = await supabase
         .from('missions')
-        .select('title,starts_at')
+        .select('id,title,starts_at,ends_at,location')
         .gte('starts_at', rangeStart)
         .lte('starts_at', rangeEnd);
 
@@ -323,16 +357,16 @@ export default function AdminMissionImportPage() {
         return;
       }
 
-      const keys = new Set<string>();
+      const map = new Map<string, { id: string; ends_at: string; location: string | null }>();
       (data ?? []).forEach((mission) => {
         const missionDate = getMissionDateForDedupFromStartsAt(mission.starts_at);
         const key = buildMissionDedupKey({ title: mission.title ?? '', missionDate });
-        if (key) {
-          keys.add(key);
+        if (key && !map.has(key)) {
+          map.set(key, { id: mission.id, ends_at: mission.ends_at, location: mission.location ?? null });
         }
       });
 
-      setExistingMissionKeys(keys);
+      setExistingMissionsMap(map);
       setCheckingDuplicates(false);
     }
 
@@ -345,48 +379,91 @@ export default function AdminMissionImportPage() {
 
   const dedupAnalysis = useMemo(() => {
     const duplicateInFile = new Set<string>();
-    const duplicateInDatabase = new Set<string>();
     const seenInFile = new Set<string>();
     const readyMissions: NormalizedMissionImport[] = [];
+    const modifiedMissions: Array<{ id: string; mission: NormalizedMissionImport }> = [];
+    const dedupRowStatuses = new Map<string, ImportFilter>();
 
     validMissionEntries.forEach(({ row, mission }) => {
       const key = buildMissionDedupKey({
         title: mission.title,
         missionDate: getMissionDateForDedupFromStartsAt(mission.starts_at)
       });
-
-      if (!key) {
-        return;
-      }
-
-      const isFileDuplicate = seenInFile.has(key);
-      if (isFileDuplicate) {
+      if (!key) return;
+      if (seenInFile.has(key)) {
         duplicateInFile.add(row.rowId);
       } else {
         seenInFile.add(key);
       }
+    });
 
-      const isDatabaseDuplicate = existingMissionKeys.has(key);
-      if (isDatabaseDuplicate) {
-        duplicateInDatabase.add(row.rowId);
+    validMissionEntries.forEach(({ row, mission }) => {
+      const key = buildMissionDedupKey({
+        title: mission.title,
+        missionDate: getMissionDateForDedupFromStartsAt(mission.starts_at)
+      });
+      if (!key) return;
+
+      if (duplicateInFile.has(row.rowId)) {
+        dedupRowStatuses.set(row.rowId, 'doublon');
+        return;
       }
 
-      if (!isFileDuplicate && !isDatabaseDuplicate) {
+      const existingMission = existingMissionsMap.get(key);
+      if (existingMission) {
+        const endsAtMatch = new Date(existingMission.ends_at).getTime() === new Date(mission.ends_at).getTime();
+        const locationMatch = (existingMission.location?.trim() ?? '') === (mission.location?.trim() ?? '');
+        if (endsAtMatch && locationMatch) {
+          dedupRowStatuses.set(row.rowId, 'doublon');
+        } else {
+          dedupRowStatuses.set(row.rowId, 'modifié');
+          modifiedMissions.push({ id: existingMission.id, mission });
+        }
+      } else {
         readyMissions.push(mission);
+        dedupRowStatuses.set(row.rowId, 'nouveau');
       }
     });
 
-    return {
-      duplicateInFile,
-      duplicateInDatabase,
-      readyMissions,
-      ignoredAsDuplicateCount: new Set([...duplicateInFile, ...duplicateInDatabase]).size
-    };
-  }, [existingMissionKeys, validMissionEntries]);
+    const ignoredAsDuplicateCount = validMissionEntries.filter(({ row }) => {
+      const s = dedupRowStatuses.get(row.rowId);
+      return s === 'doublon' || s === 'modifié';
+    }).length;
 
-  const previewInvalidCount = useMemo(() => {
-    return rows.filter((row) => !row.deleted).length - dedupAnalysis.readyMissions.length - dedupAnalysis.ignoredAsDuplicateCount;
-  }, [dedupAnalysis.ignoredAsDuplicateCount, dedupAnalysis.readyMissions.length, rows]);
+    return { duplicateInFile, readyMissions, modifiedMissions, ignoredAsDuplicateCount, dedupRowStatuses };
+  }, [existingMissionsMap, validMissionEntries]);
+
+  const rowStatuses = useMemo((): Map<string, ImportFilter> => {
+    const statuses = new Map<string, ImportFilter>(dedupAnalysis.dedupRowStatuses);
+    normalizedRows.forEach(({ row, result }) => {
+      if (result.errors.length > 0) {
+        statuses.set(row.rowId, 'invalide');
+      }
+    });
+    return statuses;
+  }, [dedupAnalysis.dedupRowStatuses, normalizedRows]);
+
+  const filterCounts = useMemo(() => {
+    const c: Record<ImportFilter, number> = { nouveau: 0, modifié: 0, doublon: 0, invalide: 0 };
+    for (const status of rowStatuses.values()) {
+      c[status]++;
+    }
+    return c;
+  }, [rowStatuses]);
+
+  const visibleRows = useMemo(() => {
+    return rows.filter((row) => {
+      if (row.deleted) return false;
+      const status = rowStatuses.get(row.rowId);
+      if (status !== activeFilter) return false;
+      if (searchQuery.trim()) {
+        const q = searchQuery.trim().toLowerCase();
+        const searchable = [row.title, row.location].filter(Boolean).join(' ').toLowerCase();
+        if (!searchable.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [rows, rowStatuses, activeFilter, searchQuery]);
 
   function updateRow(rowId: string, patch: Partial<EditableImportRow>) {
     setRows((previous) => previous.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
@@ -419,6 +496,8 @@ export default function AdminMissionImportPage() {
     const preview = buildMissionsPreview(parsedRows);
 
     setRows(preview.items.map((item, index) => normalizeEditableRow(item, index)));
+    setActiveFilter('nouveau');
+    setSearchQuery('');
     setAnalyzing(false);
   }
 
@@ -485,6 +564,57 @@ export default function AdminMissionImportPage() {
     }
   }
 
+  async function handleUpdateModified() {
+    setError(null);
+    setSuccess(null);
+
+    if (!profile || profile.role !== 'admin') {
+      setError('Accès refusé : seuls les admins peuvent mettre à jour des missions.');
+      return;
+    }
+
+    if (dedupAnalysis.modifiedMissions.length === 0) {
+      setError('Aucune mission modifiée à mettre à jour.');
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      return;
+    }
+
+    setImporting(true);
+
+    try {
+      const response = await fetch('/api/admin/missions/import', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ missions: dedupAnalysis.modifiedMissions })
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        updated?: number;
+        failed?: number;
+      };
+
+      if (!response.ok) {
+        setError(payload.error ?? 'Mise à jour impossible.');
+        return;
+      }
+
+      setSuccess(`Mise à jour terminée : ${payload.updated ?? 0} mission(s) mise(s) à jour, ${payload.failed ?? 0} en échec.`);
+    } finally {
+      setImporting(false);
+    }
+  }
+
   async function fetchAccessToken() {
     const { data: sessionData } = await supabase.auth.getSession();
     return sessionData.session?.access_token ?? null;
@@ -517,6 +647,8 @@ export default function AdminMissionImportPage() {
       const preview = buildMissionsPreview(parsedRows);
       setRows(preview.items.map((item, index) => normalizeEditableRow(item, index)));
       setFileName(payload.fileName ?? 'google-sheet-public.csv');
+      setActiveFilter('nouveau');
+      setSearchQuery('');
       setSuccess('Import depuis Google Sheet chargé.');
     } finally {
       setLoadingFromGoogleSheet(false);
@@ -591,23 +723,53 @@ export default function AdminMissionImportPage() {
       </div>
 
       {rows.length > 0 ? (
-        <div className="space-y-3">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm text-slate-700">
-            <p>{dedupAnalysis.readyMissions.length} lignes prêtes à être importées</p>
-            <p>{dedupAnalysis.ignoredAsDuplicateCount} lignes ignorées (déjà existantes ou dupliquées dans le fichier)</p>
-            <p>{previewInvalidCount} lignes invalides à corriger</p>
-            {checkingDuplicates ? <p>Vérification des doublons en base en cours...</p> : null}
-            {duplicateCheckError ? <p className="text-amber-700">{duplicateCheckError}</p> : null}
-          </div>
+        <div className="space-y-4">
+          <section className="rounded-lg border border-slate-200 bg-white p-4">
+            <div className="space-y-3">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Rechercher une mission"
+                className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+              />
+              <div className="flex flex-wrap gap-2">
+                {(['nouveau', 'modifié', 'doublon', 'invalide'] as ImportFilter[]).map((filter) => (
+                  <button
+                    key={filter}
+                    type="button"
+                    onClick={() => setActiveFilter(filter)}
+                    className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                      activeFilter === filter
+                        ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                        : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    }`}
+                  >
+                    {IMPORT_STATUS_LABELS[filter]} {filterCounts[filter]}
+                  </button>
+                ))}
+              </div>
+              {checkingDuplicates ? <p className="text-xs text-slate-500">Vérification des doublons en base en cours...</p> : null}
+              {duplicateCheckError ? <p className="text-xs text-amber-700">{duplicateCheckError}</p> : null}
+            </div>
+          </section>
 
-          <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleImport}
               disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              {importing ? 'Import en cours...' : `Importer toutes les missions (${dedupAnalysis.readyMissions.length})`}
+              {importing ? 'Import en cours...' : `Importer toutes les nouvelles missions (${dedupAnalysis.readyMissions.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={handleUpdateModified}
+              disabled={importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates}
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {importing ? 'Mise à jour en cours...' : `Mettre à jour les missions modifiées (${dedupAnalysis.modifiedMissions.length})`}
             </button>
             <div className="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Statut import</span>
@@ -630,47 +792,69 @@ export default function AdminMissionImportPage() {
                 </button>
               </div>
             </div>
-            {rows.map((row) => {
-              if (row.deleted) {
-                return null;
-              }
+          </div>
 
+          <div className="space-y-3">
+            {visibleRows.map((row) => {
               const validation = validateAndNormalizeRow(row);
-              const isDuplicateInFile = dedupAnalysis.duplicateInFile.has(row.rowId);
-              const isDuplicateInDatabase = dedupAnalysis.duplicateInDatabase.has(row.rowId);
-              const isDuplicate = isDuplicateInFile || isDuplicateInDatabase;
-              if (isDuplicate) {
-                return null;
-              }
+              const rowStatus = rowStatuses.get(row.rowId) ?? 'invalide';
               const normalizedMission = validation.normalized;
-              const isImportable = normalizedMission && validation.errors.length === 0;
+              const isImportable = rowStatus === 'nouveau' && normalizedMission && validation.errors.length === 0;
 
               return (
-                <article key={row.rowId} className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 text-sm shadow-sm">
-                  <div className="space-y-4 p-5">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2 text-xs font-medium text-slate-500">
-                        <span className="rounded-full border border-slate-200 bg-white px-3 py-1 uppercase tracking-wide">Import auto</span>
-                        <span className="text-slate-400">|</span>
-                        <span>Bloc #{row.sourceBlockIndex + 1}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                          onClick={() => setEditingRowId((current) => (current === row.rowId ? null : row.rowId))}
-                          disabled={importing}
-                        >
-                          {editingRowId === row.rowId ? 'Fermer' : 'Éditer'}
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-                          onClick={() => updateRow(row.rowId, { deleted: true })}
-                          disabled={importing}
-                        >
-                          Supprimer
-                        </button>
+                <MissionCardShell
+                  key={row.rowId}
+                  className={IMPORT_STATUS_CARD[rowStatus]}
+                  headerLeft={
+                    <>
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${IMPORT_STATUS_BADGE[rowStatus]}`}>
+                        {IMPORT_STATUS_LABELS[rowStatus]}
+                      </span>
+                      <span className="text-slate-400">|</span>
+                      <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[row.category] ?? 'bg-amber-400 text-slate-900'}`}>
+                        {MISSION_CATEGORY_LABELS[row.category]}
+                      </span>
+                    </>
+                  }
+                  headerRight={
+                    <span className="text-xs text-slate-400">Bloc #{row.sourceBlockIndex + 1}</span>
+                  }
+                  title={row.title || 'Sans intitulé'}
+                  metadata={
+                    <>{row.date || '-'} | {row.startTime || '-'} à {row.endTime || '-'}</>
+                  }
+                  location={<>Lieu : {row.location || '-'}</>}
+                  description={
+                    <div className="grid gap-x-4 gap-y-1 text-slate-700 md:grid-cols-2">
+                      <p><span className="font-medium text-slate-900">Etat DO :</span> {row.do_status || '-'}</p>
+                      <p><span className="font-medium text-slate-900">Retenue :</span> {row.retained_status || '-'}</p>
+                      <p><span className="font-medium text-slate-900">Type source :</span> {row.source_type_label || '-'}</p>
+                      <p><span className="font-medium text-slate-900">Réversion :</span> {row.reversion_expected || '-'}</p>
+                      <p><span className="font-medium text-slate-900">Réversion réelle :</span> {row.reversion_actual || '-'}</p>
+                      <p><span className="font-medium text-slate-900">Validation :</span> {row.validation_date || '-'}</p>
+                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {row.requirements_notes || '-'}</p>
+                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {row.equipment_notes || '-'}</p>
+                    </div>
+                  }
+                  actions={
+                    <div className="flex flex-wrap items-center justify-end gap-2">
+                      <button
+                        type="button"
+                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
+                        onClick={() => setEditingRowId((current) => (current === row.rowId ? null : row.rowId))}
+                        disabled={importing}
+                      >
+                        {editingRowId === row.rowId ? 'Fermer' : 'Éditer'}
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+                        onClick={() => updateRow(row.rowId, { deleted: true })}
+                        disabled={importing}
+                      >
+                        Supprimer
+                      </button>
+                      {rowStatus === 'nouveau' ? (
                         <button
                           type="button"
                           className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
@@ -683,115 +867,109 @@ export default function AdminMissionImportPage() {
                         >
                           Importer
                         </button>
-                      </div>
+                      ) : null}
                     </div>
+                  }
+                  footer={
+                    <>
+                      {editingRowId === row.rowId ? (
+                        <div className="grid gap-2 md:grid-cols-2">
+                          <label className="text-slate-700">
+                            Intitulé *
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.title} onChange={(e) => updateRow(row.rowId, { title: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Lieu
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.location} onChange={(e) => updateRow(row.rowId, { location: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Date *
+                            <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.date} onChange={(e) => updateRow(row.rowId, { date: e.target.value })} />
+                          </label>
+                          <div className="grid grid-cols-2 gap-2">
+                            <label className="text-slate-700">
+                              Début *
+                              <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.startTime} onChange={(e) => updateRow(row.rowId, { startTime: e.target.value })} />
+                            </label>
+                            <label className="text-slate-700">
+                              Fin *
+                              <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.endTime} onChange={(e) => updateRow(row.rowId, { endTime: e.target.value })} />
+                            </label>
+                          </div>
+                          <label className="text-slate-700">
+                            Catégorie
+                            <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.category} onChange={(e) => updateRow(row.rowId, { category: e.target.value as MissionCategory })}>
+                              {MISSION_CATEGORY_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-slate-700">
+                            Etat DO
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.do_status} onChange={(e) => updateRow(row.rowId, { do_status: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Retenue
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.retained_status} onChange={(e) => updateRow(row.rowId, { retained_status: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Type source
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.source_type_label} onChange={(e) => updateRow(row.rowId, { source_type_label: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Réversion
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.reversion_expected} onChange={(e) => updateRow(row.rowId, { reversion_expected: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Réversion réelle
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.reversion_actual} onChange={(e) => updateRow(row.rowId, { reversion_actual: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700">
+                            Validation
+                            <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.validation_date} onChange={(e) => updateRow(row.rowId, { validation_date: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700 md:col-span-2">
+                            Nombre de secouristes
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.requirements_notes} onChange={(e) => updateRow(row.rowId, { requirements_notes: e.target.value })} />
+                          </label>
+                          <label className="text-slate-700 md:col-span-2">
+                            Matériel spécifique
+                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.equipment_notes} onChange={(e) => updateRow(row.rowId, { equipment_notes: e.target.value })} />
+                          </label>
+                        </div>
+                      ) : null}
 
-                    <div className="space-y-1">
-                      <h2 className="text-2xl font-semibold text-slate-900">{row.title || 'Sans intitulé'}</h2>
-                      <p className="text-sm text-slate-500">{row.date || '-'} | {row.startTime || '-'} à {row.endTime || '-'}</p>
-                      <p className="text-xl text-slate-500">Lieu : {row.location || '-'}</p>
-                    </div>
+                      {row.issues.length > 0 ? (
+                        <ul className={`space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 ${editingRowId === row.rowId ? 'mt-3' : ''}`}>
+                          {row.issues.map((issue, index) => (
+                            <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
+                          ))}
+                        </ul>
+                      ) : null}
 
-                    <div className="grid gap-2 text-slate-700 md:grid-cols-2">
-                      <p><span className="font-medium text-slate-900">Catégorie :</span> {MISSION_CATEGORY_LABELS[row.category]} </p>
-                      <p><span className="font-medium text-slate-900">Etat DO :</span> {row.do_status || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Retenue :</span> {row.retained_status || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Type source :</span> {row.source_type_label || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Réversion :</span> {row.reversion_expected || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Réversion réelle :</span> {row.reversion_actual || '-'} </p>
-                      <p><span className="font-medium text-slate-900">Validation :</span> {row.validation_date || '-'} </p>
-                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {row.requirements_notes || '-'} </p>
-                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {row.equipment_notes || '-'} </p>
-                    </div>
-
-                    {editingRowId === row.rowId ? <div className="grid gap-2 rounded-md border border-slate-200 bg-white p-3 md:grid-cols-2">
-                    <label className="text-slate-700">
-                      Intitulé *
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.title} onChange={(e) => updateRow(row.rowId, { title: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Lieu
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.location} onChange={(e) => updateRow(row.rowId, { location: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Date *
-                      <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.date} onChange={(e) => updateRow(row.rowId, { date: e.target.value })} />
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <label className="text-slate-700">
-                        Début *
-                        <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.startTime} onChange={(e) => updateRow(row.rowId, { startTime: e.target.value })} />
-                      </label>
-                      <label className="text-slate-700">
-                        Fin *
-                        <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.endTime} onChange={(e) => updateRow(row.rowId, { endTime: e.target.value })} />
-                      </label>
-                    </div>
-                    <label className="text-slate-700">
-                      Catégorie
-                      <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.category} onChange={(e) => updateRow(row.rowId, { category: e.target.value as MissionCategory })}>
-                        {MISSION_CATEGORY_OPTIONS.map((option) => (
-                          <option key={option.value} value={option.value}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <label className="text-slate-700">
-                      Etat DO
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.do_status} onChange={(e) => updateRow(row.rowId, { do_status: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Retenue
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.retained_status} onChange={(e) => updateRow(row.rowId, { retained_status: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Type source
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.source_type_label} onChange={(e) => updateRow(row.rowId, { source_type_label: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Réversion
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.reversion_expected} onChange={(e) => updateRow(row.rowId, { reversion_expected: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Réversion réelle
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.reversion_actual} onChange={(e) => updateRow(row.rowId, { reversion_actual: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700">
-                      Validation
-                      <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.validation_date} onChange={(e) => updateRow(row.rowId, { validation_date: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700 md:col-span-2">
-                      Nombre de secouristes
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.requirements_notes} onChange={(e) => updateRow(row.rowId, { requirements_notes: e.target.value })} />
-                    </label>
-                    <label className="text-slate-700 md:col-span-2">
-                      Matériel spécifique
-                      <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1" value={row.equipment_notes} onChange={(e) => updateRow(row.rowId, { equipment_notes: e.target.value })} />
-                    </label>
-                  </div> : null}
-
-                  {row.issues.length > 0 ? (
-                    <ul className="space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-amber-700">
-                      {row.issues.map((issue, index) => (
-                        <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
-                      ))}
-                    </ul>
-                  ) : null}
-
-                  {validation.errors.length > 0 ? (
-                    <ul className="space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-red-700">
-                      {validation.errors.map((issue, index) => (
-                        <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
-                      ))}
-                    </ul>
-                  ) : (
-                    <p className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-emerald-700">Ligne valide.</p>
-                  )}
-                  </div>
-                </article>
+                      {validation.errors.length > 0 ? (
+                        <ul className={`space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 ${editingRowId === row.rowId || row.issues.length > 0 ? 'mt-3' : ''}`}>
+                          {validation.errors.map((issue, index) => (
+                            <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
+                          ))}
+                        </ul>
+                      ) : rowStatus === 'nouveau' && !editingRowId ? (
+                        <p className="text-xs text-emerald-700">Ligne valide.</p>
+                      ) : null}
+                    </>
+                  }
+                />
               );
             })}
+
+            {visibleRows.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+                Aucune mission avec le filtre &quot;{IMPORT_STATUS_LABELS[activeFilter]}&quot;
+                {searchQuery.trim() ? ` et la recherche "${searchQuery}"` : ''}.
+              </div>
+            ) : null}
           </div>
 
           <div className="flex items-center gap-2">
@@ -802,6 +980,8 @@ export default function AdminMissionImportPage() {
                 setFileName(null);
                 setError(null);
                 setSuccess(null);
+                setSearchQuery('');
+                setActiveFilter('nouveau');
               }}
               disabled={importing}
               className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"

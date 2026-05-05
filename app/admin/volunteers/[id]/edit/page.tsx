@@ -230,8 +230,16 @@ export default function EditVolunteerPage() {
     return <p className="text-sm text-slate-600">Chargement...</p>;
   }
 
-  if (!profile || profile.role !== 'admin') {
+  if (!profile) {
     return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+  }
+
+  if (profile.role !== 'admin') {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Accès refusé : cette page est réservée aux administrateurs.
+      </div>
+    );
   }
 
   return (
