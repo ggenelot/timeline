@@ -8,6 +8,14 @@ import { AppRole, Profile, Skill } from '@/lib/types';
 import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 import { compareSkillCodes, resolveSkillCode } from '@/lib/skills';
 
+type EditVolunteerForm = {
+  firstName: string;
+  lastName: string;
+  identifier: string;
+  password: string;
+  selectedSkillByCategory: Record<string, string | null>;
+};
+
 type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
 const SKILL_CATEGORIES = ['conduite', 'formation', 'operationnel', 'accso'] as const;
@@ -29,40 +37,26 @@ function normalizeSkillCategory(category: string | null | undefined): (typeof SK
 }
 
 type VolunteerPayload = {
-  id: string;
   full_name: string | null;
   email: string;
-  phone: string | null;
-  sector: string | null;
   role: AppRole;
-  created_at: string;
 };
 
 type VolunteerSkill = {
   skill_id: string;
-  skill: SkillOption | SkillOption[] | null;
-};
-
-type EditVolunteerForm = {
-  full_name: string;
-  email: string;
-  selectedSkillByCategory: Record<string, string | null>;
-  password: string;
-  confirmPassword: string;
 };
 
 const INITIAL_FORM: EditVolunteerForm = {
-  full_name: '',
-  email: '',
-  selectedSkillByCategory: {},
+  firstName: '',
+  lastName: '',
+  identifier: '',
   password: '',
-  confirmPassword: ''
+  selectedSkillByCategory: {}
 };
 
 export default function EditVolunteerPage() {
   const params = useParams<{ id: string }>();
   const volunteerId = params.id;
-
   const router = useRouter();
 
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -71,7 +65,6 @@ export default function EditVolunteerPage() {
   const [form, setForm] = useState<EditVolunteerForm>(INITIAL_FORM);
   const [skills, setSkills] = useState<SkillOption[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -131,22 +124,26 @@ export default function EditVolunteerPage() {
         return;
       }
 
+      const fullName = payload.volunteer.full_name?.trim() ?? '';
+      const nameParts = fullName.split(/\s+/).filter(Boolean);
+      const firstName = nameParts.shift() ?? '';
+      const lastName = nameParts.join(' ');
+      const identifier = payload.volunteer.email.split('@')[0] ?? '';
+
       const selectedSkillIds = (payload.profileSkills ?? []).map((profileSkill) => profileSkill.skill_id);
       const selectedSkillByCategory = (payload.skills ?? []).reduce<Record<string, string | null>>((acc, skill) => {
         if (!selectedSkillIds.includes(skill.id)) return acc;
         const category = normalizeSkillCategory(skill.category);
-        if (category) {
-          acc[category] = skill.id;
-        }
+        if (category) acc[category] = skill.id;
         return acc;
       }, {});
 
       setForm({
-        full_name: payload.volunteer.full_name ?? '',
-        email: payload.volunteer.email,
-        selectedSkillByCategory,
+        firstName,
+        lastName,
+        identifier,
         password: '',
-        confirmPassword: ''
+        selectedSkillByCategory
       });
       setSkills(payload.skills ?? []);
       setLoading(false);
@@ -157,34 +154,36 @@ export default function EditVolunteerPage() {
     }
   }, [router, volunteerId]);
 
-
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
-    setSuccess(null);
 
     if (!profile || profile.role !== 'admin') {
       setError('Accès refusé : seuls les administrateurs peuvent modifier un bénévole.');
       return;
     }
 
-    if (!form.full_name.trim()) {
-      setError('Le nom complet est obligatoire.');
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    const identifier = form.identifier.trim().toLowerCase();
+
+    if (!firstName) {
+      setError('Le prénom est obligatoire.');
       return;
     }
 
-    if (!form.email.trim()) {
-      setError('Un email valide est obligatoire.');
+    if (!lastName) {
+      setError('Le nom est obligatoire.');
+      return;
+    }
+
+    if (!identifier) {
+      setError('Un identifiant est obligatoire.');
       return;
     }
 
     if (form.password && form.password.length < 10) {
-      setError('Le nouveau mot de passe doit contenir au moins 10 caractères.');
-      return;
-    }
-
-    if (form.password !== form.confirmPassword) {
-      setError('La confirmation du mot de passe ne correspond pas.');
+      setError('Le mot de passe doit contenir au moins 10 caractères.');
       return;
     }
 
@@ -208,24 +207,22 @@ export default function EditVolunteerPage() {
         Authorization: `Bearer ${accessToken}`
       },
       body: JSON.stringify({
-        full_name: form.full_name,
-        email: form.email,
+        full_name: `${firstName} ${lastName}`.trim(),
+        email: `${identifier}@benevoles.protection-civile.local`,
         skill_ids: skillIds,
         password: form.password || undefined
       })
     });
 
-    const payload = (await response.json()) as { error?: string; message?: string };
+    const payload = (await response.json()) as { error?: string };
 
     if (!response.ok) {
-      setError(payload.error ?? "La mise à jour du bénévole a échoué.");
+      setError(payload.error ?? 'La mise à jour du bénévole a échoué.');
       setSubmitting(false);
       return;
     }
 
-    setSuccess(payload.message ?? 'Bénévole modifié avec succès.');
     setSubmitting(false);
-
     router.push('/admin/volunteers?edited=1');
   }
 
@@ -242,7 +239,7 @@ export default function EditVolunteerPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Modifier un bénévole</h1>
-          <p className="mt-1 text-sm text-slate-600">Mettez à jour le profil et les compétences du bénévole.</p>
+          <p className="mt-1 text-sm text-slate-600">Mettez à jour un compte bénévole avec le même formulaire que la création.</p>
         </div>
         <Link href="/admin/volunteers" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
           Retour à la liste
@@ -250,50 +247,59 @@ export default function EditVolunteerPage() {
       </div>
 
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="block text-sm text-slate-700">
+            Prénom
+            <input
+              type="text"
+              value={form.firstName}
+              onChange={(event) => setForm((prev) => ({ ...prev, firstName: event.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={submitting}
+              required
+            />
+          </label>
+
+          <label className="block text-sm text-slate-700">
+            Nom
+            <input
+              type="text"
+              value={form.lastName}
+              onChange={(event) => setForm((prev) => ({ ...prev, lastName: event.target.value }))}
+              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              disabled={submitting}
+              required
+            />
+          </label>
+        </div>
+
         <label className="block text-sm text-slate-700">
-          Nom complet
+          Identifiant
           <input
             type="text"
-            value={form.full_name}
-            onChange={(event) => setForm((previous) => ({ ...previous, full_name: event.target.value }))}
+            value={form.identifier}
+            onChange={(event) => setForm((prev) => ({ ...prev, identifier: event.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            placeholder="prenom.nom"
             disabled={submitting}
             required
           />
         </label>
 
-
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm text-slate-700">
-            Nouveau mot de passe (optionnel)
-            <input
-              type="password"
-              value={form.password}
-              onChange={(event) => setForm((previous) => ({ ...previous, password: event.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-              minLength={10}
-              autoComplete="new-password"
-            />
-          </label>
-
-          <label className="block text-sm text-slate-700">
-            Confirmer le mot de passe
-            <input
-              type="password"
-              value={form.confirmPassword}
-              onChange={(event) => setForm((previous) => ({ ...previous, confirmPassword: event.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-              minLength={10}
-              autoComplete="new-password"
-            />
-          </label>
-        </div>
+        <label className="block text-sm text-slate-700">
+          Mot de passe
+          <input
+            type="password"
+            value={form.password}
+            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            disabled={submitting}
+            minLength={10}
+            autoComplete="new-password"
+          />
+        </label>
 
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
@@ -303,17 +309,13 @@ export default function EditVolunteerPage() {
               .sort((a, b) => {
                 const codeA = resolveSkillCode(a.name);
                 const codeB = resolveSkillCode(b.name);
-
                 if (codeA && codeB) return compareSkillCodes(codeA, codeB);
                 if (codeA) return -1;
                 if (codeB) return 1;
-
                 return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
               });
 
-            if (categorySkills.length === 0) {
-              return null;
-            }
+            if (categorySkills.length === 0) return null;
 
             const selectedSkillId = form.selectedSkillByCategory[category] ?? null;
             const selectedSkillIndex = categorySkills.findIndex((skill) => skill.id === selectedSkillId);
@@ -355,7 +357,7 @@ export default function EditVolunteerPage() {
           disabled={submitting}
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
-          {submitting ? 'Enregistrement en cours...' : 'Enregistrer les modifications'}
+          {submitting ? 'Mise à jour en cours...' : 'Mettre à jour le bénévole'}
         </button>
       </form>
     </section>
