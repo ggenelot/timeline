@@ -102,17 +102,22 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { error: profileUpsertError } = await serviceClient.from('profiles').upsert(
-    {
-      id: createdUserData.user.id,
-      full_name: fullName,
-      email: authEmail,
-      identifier,
-      phone: phone || null,
-      role: 'benevole'
-    },
-    { onConflict: 'id' }
-  );
+  const profilePayload = {
+    id: createdUserData.user.id,
+    full_name: fullName,
+    email: authEmail,
+    identifier,
+    phone: phone || null,
+    role: 'benevole' as const
+  };
+
+  let { error: profileUpsertError } = await serviceClient.from('profiles').upsert(profilePayload, { onConflict: 'id' });
+
+  if (profileUpsertError?.message?.includes("identifier column of 'profiles' in the schema cache")) {
+    const { identifier: _, ...fallbackPayload } = profilePayload;
+    const fallbackResult = await serviceClient.from('profiles').upsert(fallbackPayload, { onConflict: 'id' });
+    profileUpsertError = fallbackResult.error;
+  }
 
   if (profileUpsertError) {
     return NextResponse.json(
