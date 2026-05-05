@@ -16,16 +16,33 @@ function LoginPageContent() {
     setLoading(true);
     setError(null);
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('email')
-      .eq('identifier', identifier.trim().toLowerCase())
-      .maybeSingle<{ email: string }>();
+    const normalizedIdentifier = identifier.trim().toLowerCase();
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email: profile?.email ?? '',
-      password
-    });
+    const trySignIn = async (email: string) =>
+      supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+
+    let signInError: Error | null = null;
+
+    if (normalizedIdentifier.includes('@')) {
+      const { error } = await trySignIn(normalizedIdentifier);
+      signInError = error;
+    } else {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email')
+        .eq('identifier', normalizedIdentifier)
+        .maybeSingle<{ email: string }>();
+
+      if (profile?.email) {
+        const { error } = await trySignIn(profile.email);
+        signInError = error;
+      } else {
+        signInError = new Error('Profile not found');
+      }
+    }
 
     setLoading(false);
 
