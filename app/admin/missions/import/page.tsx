@@ -410,7 +410,7 @@ export default function AdminMissionImportPage() {
 
       const existingMission = existingMissionsMap.get(key);
       if (existingMission) {
-        const endsAtMatch = existingMission.ends_at === mission.ends_at;
+        const endsAtMatch = new Date(existingMission.ends_at).getTime() === new Date(mission.ends_at).getTime();
         const locationMatch = (existingMission.location?.trim() ?? '') === (mission.location?.trim() ?? '');
         if (endsAtMatch && locationMatch) {
           dedupRowStatuses.set(row.rowId, 'doublon');
