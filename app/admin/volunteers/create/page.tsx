@@ -230,10 +230,14 @@ export default function AdminCreateVolunteerPage() {
           Identifiant
           <input
             type="text"
+            name="identifier"
             value={form.identifier}
             onChange={(event) => setForm((prev) => ({ ...prev, identifier: event.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             placeholder="prenom.nom"
+            autoComplete="off"
+            autoCapitalize="none"
+            spellCheck={false}
             disabled={submitting}
             required
           />
@@ -243,12 +247,13 @@ export default function AdminCreateVolunteerPage() {
           Mot de passe
           <input
             type="password"
+            name="password"
             value={form.password}
             onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             disabled={submitting}
             minLength={10}
-            autoComplete="new-password"
+            autoComplete="off"
             required
           />
         </label>
