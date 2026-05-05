@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { expandSkillNames } from '@/lib/skills';
 
 type CreateVolunteerPayload = {
   firstName?: string;
@@ -129,24 +130,38 @@ export async function POST(request: NextRequest) {
   }
 
   if (skillIds.length > 0) {
-    const { data: existingSkills, error: existingSkillsError } = await serviceClient
+    const { data: selectedSkills, error: selectedSkillsError } = await serviceClient
       .from('skills')
-      .select('id')
+      .select('id,name')
       .in('id', skillIds);
 
-    if (existingSkillsError) {
-      return NextResponse.json({ error: `Compte créé mais impossible de vérifier les compétences : ${existingSkillsError.message}` }, { status: 500 });
+    if (selectedSkillsError) {
+      return NextResponse.json({ error: `Compte créé mais impossible de vérifier les compétences : ${selectedSkillsError.message}` }, { status: 500 });
     }
 
-    const existingSkillIds = new Set((existingSkills ?? []).map((skill) => skill.id));
-    const invalidSkillId = skillIds.find((skillId) => !existingSkillIds.has(skillId));
-
-    if (invalidSkillId) {
+    if ((selectedSkills ?? []).length !== skillIds.length) {
       return NextResponse.json({ error: 'Compte créé mais certaines compétences sont invalides.' }, { status: 400 });
     }
 
+    const expandedSkillNames = expandSkillNames((selectedSkills ?? []).map((skill) => skill.name));
+    const { data: allSkills, error: allSkillsError } = await serviceClient.from('skills').select('id,name');
+
+    if (allSkillsError) {
+      return NextResponse.json({ error: `Compte créé mais impossible de charger le référentiel de compétences : ${allSkillsError.message}` }, { status: 500 });
+    }
+
+    const normalizedNameToId = new Map((allSkills ?? []).map((skill) => [skill.name.trim().toLocaleLowerCase('fr-FR'), skill.id]));
+
+    const expandedSkillIds = Array.from(
+      new Set(
+        expandedSkillNames
+          .map((skillName) => normalizedNameToId.get(skillName.trim().toLocaleLowerCase('fr-FR')))
+          .filter((skillId): skillId is string => Boolean(skillId))
+      )
+    );
+
     const { error: insertSkillsError } = await serviceClient.from('profile_skills').insert(
-      skillIds.map((skillId) => ({ profile_id: createdUserData.user.id, skill_id: skillId }))
+      expandedSkillIds.map((skillId) => ({ profile_id: createdUserData.user.id, skill_id: skillId }))
     );
 
     if (insertSkillsError) {

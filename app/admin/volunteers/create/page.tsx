@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill } from '@/lib/types';
 import { getSkillBadgeClass } from '@/components/skills/skill-badge';
+import { compareSkillCodes, resolveSkillCode } from '@/lib/skills';
 
 type VolunteerFormState = {
   firstName: string;
@@ -237,7 +238,21 @@ export default function AdminCreateVolunteerPage() {
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
           {(['conduite', 'formation', 'operationnel', 'accso'] as const).map((category) => {
-            const categorySkills = skills.filter((skill) => (skill.category ?? '').toLowerCase() === category);
+            const categorySkills = skills
+              .filter((skill) => (skill.category ?? '').toLowerCase() === category)
+              .sort((a, b) => {
+                const codeA = resolveSkillCode(a.name);
+                const codeB = resolveSkillCode(b.name);
+
+                if (codeA && codeB) {
+                  return compareSkillCodes(codeA, codeB);
+                }
+
+                if (codeA) return -1;
+                if (codeB) return 1;
+
+                return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+              });
 
             if (categorySkills.length === 0) {
               return null;
