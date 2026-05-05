@@ -61,7 +61,7 @@ export function Header() {
   }
 
   return (
-    <header className="border-b border-slate-200 bg-white">
+    <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="mx-auto flex w-full max-w-4xl items-center gap-4 overflow-x-auto px-4 py-3">
         <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
           Timeline
