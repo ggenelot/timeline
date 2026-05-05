@@ -1,16 +1,25 @@
 'use client';
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 
 export default function SlackSignupPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    const token = new URLSearchParams(window.location.search).get('slack_invite_token');
+    if (!token) return;
+    fetch(`/api/auth/slack/invite?token=${encodeURIComponent(token)}`).then(async (r) => {
+      const p = await r.json();
+      if (r.ok && p.email) setEmail(p.email);
+    }).catch(() => undefined);
+  }, []);
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
     const params = new URLSearchParams(window.location.search);
-    const response = await fetch('/api/auth/slack/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, slackTeamId: params.get('team'), slackUserId: params.get('user') }) });
+    const response = await fetch('/api/auth/slack/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, slackTeamId: params.get('team'), slackUserId: params.get('user'), inviteToken: params.get('slack_invite_token') }) });
     const payload = await response.json();
     if (!response.ok) return setError(payload.error ?? 'Création impossible');
     window.location.href = payload.next ?? '/login';

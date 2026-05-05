@@ -1,0 +1,49 @@
+// @ts-nocheck
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
+const STATUS_TO_INVITE = new Set(['timeline_account_unlinked', 'missing_timeline_account']);
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  try {
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+    const { data: me } = await supabase.from('profiles').select('id,role').eq('id', user.id).single();
+    if (me?.role !== 'admin') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+
+    const slackResp = await fetch('https://slack.com/api/users.list', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
+    const slackData = await slackResp.json();
+    const members = (slackData.members ?? []).filter((m: any) => !m.is_bot && !m.deleted && !m.is_app_user && m.id !== 'USLACKBOT');
+
+    const teamId = Deno.env.get('SLACK_TEAM_ID') ?? null;
+    const { data: profiles } = await supabase.from('profiles').select('id,email,slack_user_id,slack_team_id');
+    const { data: identities } = await supabase.from('slack_identities').select('profile_id,slack_user_id,slack_team_id');
+
+    const bySlack = new Map<string, any>();
+    for (const p of profiles ?? []) if (p.slack_user_id && p.slack_team_id) bySlack.set(`${p.slack_team_id}:${p.slack_user_id}`, { profileId: p.id });
+    for (const i of identities ?? []) bySlack.set(`${i.slack_team_id}:${i.slack_user_id}`, { profileId: i.profile_id });
+    const byEmail = new Map<string, any>();
+    for (const p of profiles ?? []) if (p.email) byEmail.set(p.email.toLowerCase(), p);
+
+    const results: any[] = [];
+    for (const m of members) {
+      const slackTeamId = teamId ?? m.team_id ?? '';
+      const key = `${slackTeamId}:${m.id}`;
+      const email = m.profile?.email?.toLowerCase?.() ?? null;
+      const linked = bySlack.get(key);
+      const emailMatch = email ? byEmail.get(email) : null;
+      const timelineStatus = linked ? 'linked' : emailMatch ? 'timeline_account_unlinked' : 'missing_timeline_account';
+      const row = { slack_user_id: m.id, slack_team_id: slackTeamId, slack_email: email, slack_name: m.real_name ?? m.name ?? null, matched_profile_id: linked?.profileId ?? emailMatch?.id ?? null, status: timelineStatus === 'timeline_account_unlinked' || timelineStatus === 'missing_timeline_account' ? 'pending' : 'skipped', created_by: me.id };
+      results.push({ ...row, timeline_status: timelineStatus });
+      if (STATUS_TO_INVITE.has(timelineStatus)) {
+        const invite_token = crypto.randomUUID();
+        await supabase.from('slack_invitations').upsert({ ...row, invite_token }, { onConflict: 'slack_team_id,slack_user_id', ignoreDuplicates: false }).neq('status', 'accepted');
+      }
+    }
+
+    return new Response(JSON.stringify({ results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
+  }
+});
