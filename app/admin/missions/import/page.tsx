@@ -274,7 +274,7 @@ export default function AdminMissionImportPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [analyzing, setAnalyzing] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [existingMissionsMap, setExistingMissionsMap] = useState<Map<string, { ends_at: string; location: string | null }>>(new Map());
+  const [existingMissionsMap, setExistingMissionsMap] = useState<Map<string, { id: string; ends_at: string; location: string | null }>>(new Map());
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
   const [editingRowId, setEditingRowId] = useState<string | null>(null);
@@ -343,7 +343,7 @@ export default function AdminMissionImportPage() {
 
       const { data, error: queryError } = await supabase
         .from('missions')
-        .select('title,starts_at,ends_at,location')
+        .select('id,title,starts_at,ends_at,location')
         .gte('starts_at', rangeStart)
         .lte('starts_at', rangeEnd);
 
@@ -357,12 +357,12 @@ export default function AdminMissionImportPage() {
         return;
       }
 
-      const map = new Map<string, { ends_at: string; location: string | null }>();
+      const map = new Map<string, { id: string; ends_at: string; location: string | null }>();
       (data ?? []).forEach((mission) => {
         const missionDate = getMissionDateForDedupFromStartsAt(mission.starts_at);
         const key = buildMissionDedupKey({ title: mission.title ?? '', missionDate });
-        if (key) {
-          map.set(key, { ends_at: mission.ends_at, location: mission.location ?? null });
+        if (key && !map.has(key)) {
+          map.set(key, { id: mission.id, ends_at: mission.ends_at, location: mission.location ?? null });
         }
       });
 
@@ -381,6 +381,7 @@ export default function AdminMissionImportPage() {
     const duplicateInFile = new Set<string>();
     const seenInFile = new Set<string>();
     const readyMissions: NormalizedMissionImport[] = [];
+    const modifiedMissions: Array<{ id: string; mission: NormalizedMissionImport }> = [];
     const dedupRowStatuses = new Map<string, ImportFilter>();
 
     validMissionEntries.forEach(({ row, mission }) => {
@@ -416,6 +417,7 @@ export default function AdminMissionImportPage() {
           dedupRowStatuses.set(row.rowId, 'doublon');
         } else {
           dedupRowStatuses.set(row.rowId, 'modifié');
+          modifiedMissions.push({ id: existingMission.id, mission });
         }
       } else {
         readyMissions.push(mission);
@@ -428,7 +430,7 @@ export default function AdminMissionImportPage() {
       return s === 'doublon' || s === 'modifié';
     }).length;
 
-    return { duplicateInFile, readyMissions, ignoredAsDuplicateCount, dedupRowStatuses };
+    return { duplicateInFile, readyMissions, modifiedMissions, ignoredAsDuplicateCount, dedupRowStatuses };
   }, [existingMissionsMap, validMissionEntries]);
 
   const rowStatuses = useMemo((): Map<string, ImportFilter> => {
@@ -557,6 +559,57 @@ export default function AdminMissionImportPage() {
       if (payload.warning) {
         setError(payload.warning);
       }
+    } finally {
+      setImporting(false);
+    }
+  }
+
+  async function handleUpdateModified() {
+    setError(null);
+    setSuccess(null);
+
+    if (!profile || profile.role !== 'admin') {
+      setError('Accès refusé : seuls les admins peuvent mettre à jour des missions.');
+      return;
+    }
+
+    if (dedupAnalysis.modifiedMissions.length === 0) {
+      setError('Aucune mission modifiée à mettre à jour.');
+      return;
+    }
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    const accessToken = sessionData.session?.access_token;
+
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      return;
+    }
+
+    setImporting(true);
+
+    try {
+      const response = await fetch('/api/admin/missions/import', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
+        body: JSON.stringify({ missions: dedupAnalysis.modifiedMissions })
+      });
+
+      const payload = (await response.json()) as {
+        error?: string;
+        updated?: number;
+        failed?: number;
+      };
+
+      if (!response.ok) {
+        setError(payload.error ?? 'Mise à jour impossible.');
+        return;
+      }
+
+      setSuccess(`Mise à jour terminée : ${payload.updated ?? 0} mission(s) mise(s) à jour, ${payload.failed ?? 0} en échec.`);
     } finally {
       setImporting(false);
     }
@@ -709,6 +762,14 @@ export default function AdminMissionImportPage() {
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {importing ? 'Import en cours...' : `Importer toutes les nouvelles missions (${dedupAnalysis.readyMissions.length})`}
+            </button>
+            <button
+              type="button"
+              onClick={handleUpdateModified}
+              disabled={importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates}
+              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {importing ? 'Mise à jour en cours...' : `Mettre à jour les missions modifiées (${dedupAnalysis.modifiedMissions.length})`}
             </button>
             <div className="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
               <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Statut import</span>
