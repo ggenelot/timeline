@@ -236,8 +236,13 @@ export default function AdminCreateVolunteerPage() {
 
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
-          {Array.from(new Set(skills.map((skill) => skill.category ?? 'Sans catégorie'))).map((category) => {
-            const categorySkills = skills.filter((skill) => (skill.category ?? 'Sans catégorie') === category);
+          {(['conduite', 'formation', 'operationnel', 'accso'] as const).map((category) => {
+            const categorySkills = skills.filter((skill) => (skill.category ?? '').toLowerCase() === category);
+
+            if (categorySkills.length === 0) {
+              return null;
+            }
+
             const selectedSkillId = form.selectedSkillByCategory[category] ?? null;
             const selectedSkillIndex = categorySkills.findIndex((skill) => skill.id === selectedSkillId);
 
