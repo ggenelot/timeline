@@ -18,6 +18,24 @@ type VolunteerFormState = {
 
 type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
 
+const SKILL_CATEGORIES = ['conduite', 'formation', 'operationnel', 'accso'] as const;
+
+const SKILL_CATEGORY_LABELS: Record<(typeof SKILL_CATEGORIES)[number], string> = {
+  conduite: 'TECHNIQUE',
+  formation: 'FORMATION',
+  operationnel: 'OPERATIONNEL',
+  accso: 'ACCSO'
+};
+
+function normalizeSkillCategory(category: string | null | undefined): (typeof SKILL_CATEGORIES)[number] | null {
+  const normalized = (category ?? '').toLowerCase();
+  const key = normalized === 'technique' ? 'conduite' : normalized;
+
+  return SKILL_CATEGORIES.includes(key as (typeof SKILL_CATEGORIES)[number])
+    ? (key as (typeof SKILL_CATEGORIES)[number])
+    : null;
+}
+
 const INITIAL_FORM: VolunteerFormState = {
   firstName: '',
   lastName: '',
@@ -237,9 +255,9 @@ export default function AdminCreateVolunteerPage() {
 
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
-          {(['conduite', 'formation', 'operationnel', 'accso'] as const).map((category) => {
+          {SKILL_CATEGORIES.map((category) => {
             const categorySkills = skills
-              .filter((skill) => (skill.category ?? '').toLowerCase() === category)
+              .filter((skill) => normalizeSkillCategory(skill.category) === category)
               .sort((a, b) => {
                 const codeA = resolveSkillCode(a.name);
                 const codeB = resolveSkillCode(b.name);
@@ -263,7 +281,7 @@ export default function AdminCreateVolunteerPage() {
 
             return (
               <div key={category} className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category}</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{SKILL_CATEGORY_LABELS[category]}</p>
                 <div className="flex flex-wrap gap-2">
                   <button
                     type="button"

@@ -21,6 +21,7 @@ type MissionCardProps = {
   availableVolunteersCount: number;
   unavailableVolunteersCount: number;
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+  onPublishDraft?: (missionId: string) => Promise<void>;
 };
 
 
@@ -40,6 +41,30 @@ const MISSION_STATUS_LABELS = {
   cancelled: 'Annulé'
 } as const;
 
+
+const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; statusBadgeClassName: string }> = {
+  draft: {
+    cardClassName: 'border-amber-200 bg-amber-50/60',
+    statusBadgeClassName: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200'
+  },
+  proposed: {
+    cardClassName: 'border-sky-200 bg-sky-50/55',
+    statusBadgeClassName: 'bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-200'
+  },
+  confirmed: {
+    cardClassName: 'border-emerald-200 bg-emerald-50/55',
+    statusBadgeClassName: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200'
+  },
+  closed: {
+    cardClassName: 'border-slate-300 bg-slate-100/70',
+    statusBadgeClassName: 'bg-slate-200 text-slate-700 ring-1 ring-inset ring-slate-300'
+  },
+  cancelled: {
+    cardClassName: 'border-rose-200 bg-rose-50/65',
+    statusBadgeClassName: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200'
+  }
+};
+
 export function MissionCard({
   mission,
   requiredSkills,
@@ -50,7 +75,8 @@ export function MissionCard({
   canEdit,
   availableVolunteersCount,
   unavailableVolunteersCount,
-  availableVolunteers
+  availableVolunteers,
+  onPublishDraft
 }: MissionCardProps) {
   const [selectedSkillFilter, setSelectedSkillFilter] = useState('all');
 
@@ -75,6 +101,7 @@ export function MissionCard({
   }, [availableVolunteers, selectedSkillFilter]);
 
   const doStatusLabel = mission.do_status?.trim() || 'Antenne En attente';
+  const missionStatusStyle = MISSION_STATUS_STYLES[mission.status];
 
   return (
     <MissionCardShell
@@ -86,11 +113,14 @@ export function MissionCard({
             {MISSION_CATEGORY_LABELS[mission.category]}
           </span>
           <span className="text-slate-400">|</span>
-          <span className="text-slate-500">{MISSION_STATUS_LABELS[mission.status]}</span>
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>
+            {MISSION_STATUS_LABELS[mission.status]}
+          </span>
           <span className="text-slate-400">|</span>
           <span className="text-slate-500">{doStatusLabel}</span>
         </>
       )}
+      className={missionStatusStyle.cardClassName}
       headerRight={(
         <>
           <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>
@@ -122,9 +152,20 @@ export function MissionCard({
         <>
           <div className="relative z-10 flex flex-wrap items-center justify-end gap-3">
             {canEdit ? (
-              <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
-                Gérer
-              </Link>
+              <>
+                {mission.status === 'draft' && onPublishDraft ? (
+                  <button
+                    type="button"
+                    onClick={() => void onPublishDraft(mission.id)}
+                    className="pointer-events-auto inline-flex rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 hover:bg-emerald-100"
+                  >
+                    Passer en proposé
+                  </button>
+                ) : null}
+                <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
+                  Gérer
+                </Link>
+              </>
             ) : null}
           </div>
 

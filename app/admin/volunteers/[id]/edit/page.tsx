@@ -1,15 +1,32 @@
 'use client';
 
 import Link from 'next/link';
-import { FormEvent, useEffect, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { AppRole, Profile } from '@/lib/types';
+import { AppRole, Profile, Skill } from '@/lib/types';
+import { getSkillBadgeClass } from '@/components/skills/skill-badge';
+import { compareSkillCodes, resolveSkillCode } from '@/lib/skills';
 
-type SkillOption = {
-  id: string;
-  name: string;
+type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
+
+const SKILL_CATEGORIES = ['conduite', 'formation', 'operationnel', 'accso'] as const;
+
+const SKILL_CATEGORY_LABELS: Record<(typeof SKILL_CATEGORIES)[number], string> = {
+  conduite: 'TECHNIQUE',
+  formation: 'FORMATION',
+  operationnel: 'OPERATIONNEL',
+  accso: 'ACCSO'
 };
+
+function normalizeSkillCategory(category: string | null | undefined): (typeof SKILL_CATEGORIES)[number] | null {
+  const normalized = (category ?? '').toLowerCase();
+  const key = normalized === 'technique' ? 'conduite' : normalized;
+
+  return SKILL_CATEGORIES.includes(key as (typeof SKILL_CATEGORIES)[number])
+    ? (key as (typeof SKILL_CATEGORIES)[number])
+    : null;
+}
 
 type VolunteerPayload = {
   id: string;
@@ -29,10 +46,7 @@ type VolunteerSkill = {
 type EditVolunteerForm = {
   full_name: string;
   email: string;
-  phone: string;
-  sector: string;
-  role: 'benevole' | 'responsable';
-  skill_ids: string[];
+  selectedSkillByCategory: Record<string, string | null>;
   password: string;
   confirmPassword: string;
 };
@@ -40,10 +54,7 @@ type EditVolunteerForm = {
 const INITIAL_FORM: EditVolunteerForm = {
   full_name: '',
   email: '',
-  phone: '',
-  sector: '',
-  role: 'benevole',
-  skill_ids: [],
+  selectedSkillByCategory: {},
   password: '',
   confirmPassword: ''
 };
@@ -59,7 +70,6 @@ export default function EditVolunteerPage() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<EditVolunteerForm>(INITIAL_FORM);
   const [skills, setSkills] = useState<SkillOption[]>([]);
-  const [skillToAdd, setSkillToAdd] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -122,14 +132,19 @@ export default function EditVolunteerPage() {
       }
 
       const selectedSkillIds = (payload.profileSkills ?? []).map((profileSkill) => profileSkill.skill_id);
+      const selectedSkillByCategory = (payload.skills ?? []).reduce<Record<string, string | null>>((acc, skill) => {
+        if (!selectedSkillIds.includes(skill.id)) return acc;
+        const category = normalizeSkillCategory(skill.category);
+        if (category) {
+          acc[category] = skill.id;
+        }
+        return acc;
+      }, {});
 
       setForm({
         full_name: payload.volunteer.full_name ?? '',
         email: payload.volunteer.email,
-        phone: payload.volunteer.phone ?? '',
-        sector: payload.volunteer.sector ?? '',
-        role: payload.volunteer.role === 'responsable' ? 'responsable' : 'benevole',
-        skill_ids: selectedSkillIds,
+        selectedSkillByCategory,
         password: '',
         confirmPassword: ''
       });
@@ -142,37 +157,6 @@ export default function EditVolunteerPage() {
     }
   }, [router, volunteerId]);
 
-  const selectedSkillOptions = useMemo(
-    () =>
-      form.skill_ids
-        .map((skillId) => skills.find((skill) => skill.id === skillId))
-        .filter((skill): skill is SkillOption => Boolean(skill)),
-    [form.skill_ids, skills]
-  );
-
-  const availableSkillOptions = useMemo(
-    () => skills.filter((skill) => !form.skill_ids.includes(skill.id)),
-    [form.skill_ids, skills]
-  );
-
-  function handleAddSkill() {
-    if (!skillToAdd || form.skill_ids.includes(skillToAdd)) {
-      return;
-    }
-
-    setForm((previous) => ({
-      ...previous,
-      skill_ids: [...previous.skill_ids, skillToAdd]
-    }));
-    setSkillToAdd('');
-  }
-
-  function handleRemoveSkill(skillId: string) {
-    setForm((previous) => ({
-      ...previous,
-      skill_ids: previous.skill_ids.filter((id) => id !== skillId)
-    }));
-  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -215,6 +199,8 @@ export default function EditVolunteerPage() {
       return;
     }
 
+    const skillIds = Object.values(form.selectedSkillByCategory).filter((value): value is string => Boolean(value));
+
     const response = await fetch(`/api/admin/volunteers/${volunteerId}`, {
       method: 'PATCH',
       headers: {
@@ -224,10 +210,7 @@ export default function EditVolunteerPage() {
       body: JSON.stringify({
         full_name: form.full_name,
         email: form.email,
-        phone: form.phone,
-        sector: form.sector,
-        role: form.role,
-        skill_ids: form.skill_ids,
+        skill_ids: skillIds,
         password: form.password || undefined
       })
     });
@@ -282,57 +265,6 @@ export default function EditVolunteerPage() {
           />
         </label>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm text-slate-700">
-            Email
-            <input
-              type="email"
-              value={form.email}
-              onChange={(event) => setForm((previous) => ({ ...previous, email: event.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-              required
-            />
-          </label>
-
-          <label className="block text-sm text-slate-700">
-            Téléphone
-            <input
-              type="tel"
-              value={form.phone}
-              onChange={(event) => setForm((previous) => ({ ...previous, phone: event.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-            />
-          </label>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm text-slate-700">
-            Secteur
-            <input
-              type="text"
-              value={form.sector}
-              onChange={(event) => setForm((previous) => ({ ...previous, sector: event.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-            />
-          </label>
-
-          <label className="block text-sm text-slate-700">
-            Rôle
-            <select
-              value={form.role}
-              onChange={(event) => setForm((previous) => ({ ...previous, role: event.target.value as 'benevole' | 'responsable' }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-              disabled={submitting}
-            >
-              <option value="benevole">bénévole</option>
-              <option value="responsable">responsable</option>
-            </select>
-          </label>
-        </div>
-
 
 
         <div className="grid gap-4 md:grid-cols-2">
@@ -365,62 +297,57 @@ export default function EditVolunteerPage() {
 
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
+          {SKILL_CATEGORIES.map((category) => {
+            const categorySkills = skills
+              .filter((skill) => normalizeSkillCategory(skill.category) === category)
+              .sort((a, b) => {
+                const codeA = resolveSkillCode(a.name);
+                const codeB = resolveSkillCode(b.name);
 
-          {selectedSkillOptions.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune compétence attribuée.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2">
-              {selectedSkillOptions.map((skill) => (
-                <span key={skill.id} className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-800">
-                  {skill.name}
+                if (codeA && codeB) return compareSkillCodes(codeA, codeB);
+                if (codeA) return -1;
+                if (codeB) return 1;
+
+                return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
+              });
+
+            if (categorySkills.length === 0) {
+              return null;
+            }
+
+            const selectedSkillId = form.selectedSkillByCategory[category] ?? null;
+            const selectedSkillIndex = categorySkills.findIndex((skill) => skill.id === selectedSkillId);
+
+            return (
+              <div key={category} className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{SKILL_CATEGORY_LABELS[category]}</p>
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => handleRemoveSkill(skill.id)}
-                    className="font-bold text-slate-500 hover:text-slate-900"
+                    onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: null } }))}
+                    className={`${getSkillBadgeClass(category)} px-2.5 py-1`}
                     disabled={submitting}
                   >
-                    ×
+                    Aucune
                   </button>
-                </span>
-              ))}
-            </div>
-          )}
-
-          {skills.length === 0 ? (
-            <p className="text-sm text-amber-700">
-              Aucune compétence disponible dans le référentiel. Ajoutez des lignes dans la table <code>skills</code> pour activer le menu.
-            </p>
-          ) : null}
-
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="block min-w-64 flex-1 text-sm text-slate-700">
-              Ajouter une compétence
-              <select
-                value={skillToAdd}
-                onChange={(event) => setSkillToAdd(event.target.value)}
-                className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-                disabled={submitting || availableSkillOptions.length === 0}
-              >
-                <option value="">
-                  {availableSkillOptions.length === 0 ? 'Aucune compétence disponible' : 'Sélectionner...'}
-                </option>
-                {availableSkillOptions.map((skill) => (
-                  <option key={skill.id} value={skill.id}>
-                    {skill.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <button
-              type="button"
-              onClick={handleAddSkill}
-              disabled={submitting || !skillToAdd}
-              className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Ajouter
-            </button>
-          </div>
+                  {categorySkills.map((skill, skillIndex) => {
+                    const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
+                    return (
+                      <button
+                        key={skill.id}
+                        type="button"
+                        onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: skill.id } }))}
+                        className={`${shouldUseCategoryColor ? getSkillBadgeClass(category) : 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'} hover:opacity-80`}
+                        disabled={submitting}
+                      >
+                        {skill.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
         </div>
 
         <button
