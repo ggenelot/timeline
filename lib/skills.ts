@@ -1,19 +1,56 @@
-export type SkillCategory = 'formation' | 'operationnel' | 'conduite' | 'accso';
+export type SkillCategory = 'formation' | 'operationnel' | 'conduite' | 'accso' | 'sps' | 'complements' | 'vss';
+
+export type SheetSkillStatus = 'valide' | 'a_faire' | 'interesse' | 'exempte';
 
 export type SkillCode =
+  // Legacy (kept for backward compat with existing DB data)
   | 'aide-formateur'
   | 'formateur-psc'
   | 'formateur-ps'
   | 'psc'
+  | 'conducteur-vl'
+  | 'conducteur-vps'
+  // Opérationnel
   | 'pse1'
   | 'pse2'
+  | 'fc-pse'
   | 'ce'
   | 'cp'
   | 'ceps'
-  | 'conducteur-vl'
-  | 'conducteur-vps'
+  | 'ars'
+  | 'bnssa'
+  | 'ssa'
+  | 'bord-terrain'
+  // ACCSO
   | '3s'
-  | 'ce2s';
+  | 'ce2s'
+  | 'fc-ce2s'
+  | 'aep1'
+  | 'aep2'
+  // Formation
+  | 'pic-f'
+  | 'f-psc'
+  | 'f-ps'
+  | 'f-f-psc-ps'
+  | 'fc-f-psc-ps'
+  // SPS
+  | 'osps'
+  | 'tsps'
+  | 'tronconnage'
+  | 'travail-hauteur'
+  // Conduite
+  | 'ch-vps'
+  | 'ch-vtp'
+  | 'ch-pl'
+  // Compléments
+  | 'epi'
+  | 'ecg'
+  | 'argos-efibi'
+  | 'radio'
+  | 'cardiopompe'
+  | 'portage'
+  // VSS
+  | 'sensibilisation-vss';
 
 type SkillDefinition = {
   code: SkillCode;
@@ -29,12 +66,55 @@ type SkillCategoryDefinition = {
 
 export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
   {
+    category: 'operationnel',
+    label: 'Opérationnel',
+    orderedSkills: [
+      { code: 'psc', label: 'PSC1', aliases: ['psc'] },
+      { code: 'pse1', label: 'PSE1', aliases: [] },
+      { code: 'pse2', label: 'PSE2', aliases: [] },
+      { code: 'fc-pse', label: 'FC PSE', aliases: ['fc pse'] },
+      { code: 'ce', label: 'CE', aliases: [] },
+      { code: 'cp', label: 'CP', aliases: [] },
+      { code: 'ceps', label: 'CEPS', aliases: [] },
+      { code: 'ars', label: 'ARS', aliases: [] },
+      { code: 'bnssa', label: 'BNSSA', aliases: [] },
+      { code: 'ssa', label: 'SSA', aliases: [] },
+      { code: 'bord-terrain', label: 'BORD DE TERRAIN', aliases: ['bord de terrain'] }
+    ]
+  },
+  {
+    category: 'accso',
+    label: 'ACCSO',
+    orderedSkills: [
+      { code: '3s', label: '3S', aliases: [] },
+      { code: 'ce2s', label: 'CE2S', aliases: ['ces2'] },
+      { code: 'fc-ce2s', label: 'FC CE2S', aliases: ['fc ce2s'] },
+      { code: 'aep1', label: 'AEP1', aliases: [] },
+      { code: 'aep2', label: 'AEP2', aliases: [] }
+    ]
+  },
+  {
     category: 'formation',
     label: 'Formation',
     orderedSkills: [
       { code: 'aide-formateur', label: 'aide-formateur', aliases: ['aide formateur', 'aide_formateur'] },
+      { code: 'pic-f', label: 'PIC F', aliases: ['pic f'] },
       { code: 'formateur-psc', label: 'formateur PSC1', aliases: ['formateur psc', 'formateur psc1', 'formateur_psc'] },
-      { code: 'formateur-ps', label: 'formateur PS', aliases: ['formateur ps', 'formateur_ps'] }
+      { code: 'f-psc', label: 'F PSC', aliases: ['f psc'] },
+      { code: 'formateur-ps', label: 'formateur PS', aliases: ['formateur ps', 'formateur_ps'] },
+      { code: 'f-ps', label: 'F PS', aliases: ['f ps'] },
+      { code: 'f-f-psc-ps', label: 'F F PSC/PS', aliases: ['f f psc ps', 'f f psc/ps'] },
+      { code: 'fc-f-psc-ps', label: 'FC F PSC/PS', aliases: ['fc f psc ps', 'fc f psc/ps'] }
+    ]
+  },
+  {
+    category: 'sps',
+    label: 'SPS',
+    orderedSkills: [
+      { code: 'osps', label: 'OSPS', aliases: [] },
+      { code: 'tsps', label: 'TSPS', aliases: [] },
+      { code: 'tronconnage', label: 'TRONCONNAGE', aliases: [] },
+      { code: 'travail-hauteur', label: 'TRAVAIL EN HAUTEUR', aliases: ['travail en hauteur'] }
     ]
   },
   {
@@ -42,27 +122,29 @@ export const SKILL_REFERENTIAL: SkillCategoryDefinition[] = [
     label: 'Conduite',
     orderedSkills: [
       { code: 'conducteur-vl', label: 'chauffeur VL', aliases: ['conducteur vl', 'conducteur_vl', 'chauffeur vl'] },
-      { code: 'conducteur-vps', label: 'conducteur VPS', aliases: ['conducteur cps', 'conducteur_cps', 'chauffeur cps', 'chauffeur vps', 'conducteur vps', 'conducteur_vps', 'chauffeur vl/vps'] }
+      { code: 'conducteur-vps', label: 'conducteur VPS', aliases: ['conducteur cps', 'conducteur_cps', 'chauffeur cps', 'chauffeur vps', 'conducteur vps', 'conducteur_vps', 'chauffeur vl/vps'] },
+      { code: 'ch-vps', label: 'CH VPS', aliases: ['ch vps'] },
+      { code: 'ch-vtp', label: 'CH VTP', aliases: ['ch vtp'] },
+      { code: 'ch-pl', label: 'CH PL', aliases: ['ch pl'] }
     ]
   },
   {
-    category: 'operationnel',
-    label: 'Opérationnel',
+    category: 'complements',
+    label: 'Compléments',
     orderedSkills: [
-      { code: 'psc', label: 'PSC1', aliases: ['psc'] },
-      { code: 'pse1', label: 'PSE1', aliases: [] },
-      { code: 'pse2', label: 'PSE2', aliases: [] },
-      { code: 'ce', label: 'CE', aliases: [] },
-      { code: 'cp', label: 'CP', aliases: [] },
-      { code: 'ceps', label: 'CEPS', aliases: [] }
+      { code: 'epi', label: 'EPI', aliases: [] },
+      { code: 'ecg', label: 'ECG', aliases: [] },
+      { code: 'argos-efibi', label: 'Argos / eFIBI', aliases: ['argos efibi', 'argos/efibi'] },
+      { code: 'radio', label: 'Radio', aliases: [] },
+      { code: 'cardiopompe', label: 'CardioPompe', aliases: ['cardiopompe'] },
+      { code: 'portage', label: 'PORTAGE', aliases: [] }
     ]
   },
   {
-    category: 'accso',
-    label: 'Accso',
+    category: 'vss',
+    label: 'VSS',
     orderedSkills: [
-      { code: '3s', label: '3S', aliases: [] },
-      { code: 'ce2s', label: 'CE2S', aliases: ['ces2'] }
+      { code: 'sensibilisation-vss', label: 'Sensibilisation VSS', aliases: ['sensibilisation vss'] }
     ]
   }
 ];

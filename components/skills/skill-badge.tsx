@@ -19,6 +19,12 @@ function getSkillBadgeClass(skillCategory: Skill['category']): string {
       return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
     case 'technique':
       return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
+    case 'sps':
+      return `${baseClass} border-emerald-300 bg-emerald-50 text-emerald-900`;
+    case 'complements':
+      return `${baseClass} border-pink-300 bg-pink-50 text-pink-900`;
+    case 'vss':
+      return `${baseClass} border-rose-300 bg-rose-50 text-rose-900`;
     default:
       return `${baseClass} border-slate-300 bg-slate-100 text-slate-900`;
   }
