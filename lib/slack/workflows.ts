@@ -528,7 +528,7 @@ export async function notifyMissionProposerOnStatusChange(missionId: string, new
   const statusLabel = newStatus === 'confirmed' ? 'confirmée ✅' : 'annulée ❌';
   const dmText = [
     `Bonjour ${profile.full_name ?? 'bénévole'},`,
-    `Votre mission *${mission.title}* a été ${statusLabel} par un administrateur.`,
+    `Votre mission *${mission.title}* a été ${statusLabel}.`,
     `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
     process.env.APP_BASE_URL ? `Voir la mission : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
   ]

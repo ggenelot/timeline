@@ -36,9 +36,19 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: 'Une mission confirmée ne peut pas être annulée.' }, { status: 400 });
   }
 
-  const { error: updateError } = await auth.client.from('missions').update({ status: 'cancelled' }).eq('id', missionId);
+  const { data: updated, error: updateError } = await auth.client
+    .from('missions')
+    .update({ status: 'cancelled' })
+    .eq('id', missionId)
+    .not('status', 'in', '("confirmed","cancelled")')
+    .select('id');
+
   if (updateError) {
     return NextResponse.json({ error: `Impossible d'annuler la mission: ${updateError.message}` }, { status: 400 });
+  }
+
+  if (!updated?.length) {
+    return NextResponse.json({ error: 'La mission ne peut plus être annulée (statut modifié concurremment).' }, { status: 409 });
   }
 
   notifyMissionProposerOnStatusChange(missionId, 'cancelled').catch((err) =>
