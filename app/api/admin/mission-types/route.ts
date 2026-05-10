@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { ALLOWED_MISSION_TYPE_NAMES, MISSION_TYPE_NAME_TO_CATEGORY } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   const token = getBearerToken(request);
@@ -38,15 +39,19 @@ export async function POST(request: NextRequest) {
     default_end_time?: string | null;
   };
 
-  if (!body.name?.trim()) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
+  const trimmedName = body.name?.trim() ?? '';
+  if (!trimmedName) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
+  if (!ALLOWED_MISSION_TYPE_NAMES.includes(trimmedName)) {
+    return NextResponse.json({ error: `Type de mission non reconnu. Valeurs autorisées : ${ALLOWED_MISSION_TYPE_NAMES.join(', ')}.` }, { status: 400 });
+  }
 
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('mission_types')
     .insert({
-      name: body.name.trim(),
+      name: trimmedName,
       description: body.description?.trim() || null,
-      category: body.category || null,
+      category: MISSION_TYPE_NAME_TO_CATEGORY[trimmedName],
       default_required_volunteers: body.default_required_volunteers ?? 1,
       default_start_time: body.default_start_time || null,
       default_end_time: body.default_end_time || null,

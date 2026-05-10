@@ -43,12 +43,22 @@ export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: st
 ];
 
 export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
-  maraude: 'Maraude',
-  garde: 'Garde',
-  formation: 'Formation',
+  maraude: ‘Maraude’,
+  garde: ‘Garde’,
+  formation: ‘Formation’,
   vie_antenne: "Vie de l’antenne",
-  poste_de_secours: 'Poste de secours'
+  poste_de_secours: ‘Poste de secours’
 };
+
+export const MISSION_TYPE_NAME_TO_CATEGORY: Record<string, MissionCategory> = {
+  ‘Maraude’: ‘maraude’,
+  ‘Garde’: ‘garde’,
+  ‘Formation’: ‘formation’,
+  "Vie de l’antenne": ‘vie_antenne’,
+  ‘Poste de secours’: ‘poste_de_secours’,
+};
+
+export const ALLOWED_MISSION_TYPE_NAMES = Object.keys(MISSION_TYPE_NAME_TO_CATEGORY);
 
 export type Mission = {
   id: string;
