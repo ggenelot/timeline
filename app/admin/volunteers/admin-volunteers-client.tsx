@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'created_at'>;
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'created_at'>;
 
 type AdminVolunteersClientProps = {
   created: boolean;
@@ -52,7 +52,7 @@ export function AdminVolunteersClient({ created }: AdminVolunteersClientProps) {
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,created_at')
+        .select('id,full_name,identifier,created_at')
         .eq('role', 'benevole')
         .order('created_at', { ascending: false });
 
@@ -121,7 +121,7 @@ export function AdminVolunteersClient({ created }: AdminVolunteersClientProps) {
             <thead className="bg-slate-50 text-left text-slate-700">
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
-                <th className="px-4 py-2 font-medium">Email</th>
+                <th className="px-4 py-2 font-medium">Identifiant</th>
                 <th className="px-4 py-2 font-medium">Créé le</th>
               </tr>
             </thead>
@@ -129,7 +129,7 @@ export function AdminVolunteersClient({ created }: AdminVolunteersClientProps) {
               {volunteers.map((volunteer) => (
                 <tr key={volunteer.id}>
                   <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                  <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
                   <td className="px-4 py-2 text-slate-700">{new Date(volunteer.created_at).toLocaleString('fr-FR')}</td>
                 </tr>
               ))}
