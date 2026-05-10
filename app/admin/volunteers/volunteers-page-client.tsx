@@ -15,7 +15,7 @@ type VolunteerSkill = {
   skill: SkillOption | SkillOption[] | null;
 };
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'email' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at'> & {
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at'> & {
   profile_skills: VolunteerSkill[] | null;
 };
 
@@ -84,7 +84,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
       const { data: volunteersData, error: volunteersError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill:skills(id,name,category))')
+        .select('id,full_name,identifier,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill:skills(id,name,category))')
         .eq('role', 'benevole')
         .order('full_name', { ascending: true });
 
@@ -226,7 +226,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       const searchTerm = searchQuery.trim().toLocaleLowerCase('fr');
       const matchesSearch =
         searchTerm.length === 0 ||
-        [volunteer.full_name ?? '', volunteer.email, ...skills.map((skill) => skill.name)]
+        [volunteer.full_name ?? '', volunteer.identifier ?? '', ...skills.map((skill) => skill.name)]
           .join(' ')
           .toLocaleLowerCase('fr')
           .includes(searchTerm);
@@ -313,7 +313,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Nom, email ou compétence"
+                  placeholder="Nom, identifiant ou compétence"
                   className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
                 />
               </label>
@@ -362,7 +362,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               <thead className="bg-slate-50 text-left text-slate-700">
                 <tr>
                   <th className="px-4 py-2 font-medium">Nom</th>
-                  <th className="px-4 py-2 font-medium">Email</th>
+                  <th className="px-4 py-2 font-medium">Identifiant</th>
                   <th className="px-4 py-2 font-medium">Compte Slack</th>
                   <th className="px-4 py-2 font-medium">Compétences</th>
                   <th className="px-4 py-2 font-medium">Actions</th>
@@ -372,7 +372,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 {filteredVolunteers.map(({ volunteer, explicitSkills }) => (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-700">{volunteer.email}</td>
+                    <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-700">
                       {volunteer.slack_user_id && volunteer.slack_team_id ? (
                         <div className="space-y-1">
