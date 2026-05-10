@@ -496,6 +496,62 @@ export async function notifyNonSelectedVolunteersOnCrewConfirmed(missionId: stri
   await Promise.allSettled(nonSelectedIds.map((profileId: string) => notifyVolunteerRejected(missionId, profileId)));
 }
 
+export async function notifyMissionProposerOnStatusChange(missionId: string, newStatus: 'confirmed' | 'cancelled') {
+  const serviceClient = createServerSupabaseServiceClient();
+  const slack = new SlackService();
+
+  const { data: mission } = await serviceClient
+    .from('missions')
+    .select('id,title,starts_at,ends_at,created_by')
+    .eq('id', missionId)
+    .maybeSingle<{ id: string; title: string; starts_at: string; ends_at: string; created_by: string }>();
+
+  if (!mission?.created_by) return;
+
+  const notifType = newStatus === 'confirmed' ? 'mission_confirmed_dm' : 'mission_cancelled_dm';
+  const dedupeKey = `mission:${missionId}:proposer:${notifType}`;
+
+  const { data: existing } = await serviceClient.from('slack_notification_logs').select('status').eq('dedupe_key', dedupeKey).maybeSingle();
+  if (existing?.status === 'sent') return;
+
+  const { data: profile } = await serviceClient
+    .from('profiles')
+    .select('id,slack_user_id,full_name')
+    .eq('id', mission.created_by)
+    .maybeSingle<{ id: string; slack_user_id: string | null; full_name: string | null }>();
+
+  if (!profile?.slack_user_id) {
+    await upsertSlackLog({ missionId, profileId: mission.created_by, type: notifType, status: 'skipped', dedupeKey, errorMessage: 'Compte Slack non lié.' });
+    return;
+  }
+
+  const statusLabel = newStatus === 'confirmed' ? 'confirmée ✅' : 'annulée ❌';
+  const dmText = [
+    `Bonjour ${profile.full_name ?? 'bénévole'},`,
+    `Votre mission *${mission.title}* a été ${statusLabel}.`,
+    `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
+    process.env.APP_BASE_URL ? `Voir la mission : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+  ]
+    .filter(Boolean)
+    .join('\n');
+
+  try {
+    const channel = await slack.openDirectMessage(profile.slack_user_id);
+    await slack.postMessage(channel, dmText);
+    await upsertSlackLog({ missionId, profileId: profile.id, type: notifType, status: 'sent', dedupeKey });
+  } catch (error) {
+    await upsertSlackLog({
+      missionId,
+      profileId: profile.id,
+      type: notifType,
+      status: 'error',
+      dedupeKey,
+      errorMessage: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+    throw error;
+  }
+}
+
 export async function notifyVolunteerRoleUpdatedByAdmin(args: {
   profileId: string;
   fullName: string | null;
