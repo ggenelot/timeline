@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const members = (slackData.members ?? []).filter((m: any) => !m.is_bot && !m.deleted && !m.is_app_user && m.id !== 'USLACKBOT');
 
     const teamId = Deno.env.get('SLACK_TEAM_ID') ?? null;
-    const { data: profiles } = await supabase.from('profiles').select('id,email,slack_user_id,slack_team_id');
+    const { data: profiles } = await supabase.from('profiles').select('id,full_name,email,slack_user_id,slack_team_id');
     const { data: identities } = await supabase.from('slack_identities').select('profile_id,slack_user_id,slack_team_id');
 
     const bySlack = new Map<string, any>();
@@ -42,7 +42,15 @@ Deno.serve(async (req) => {
       }
     }
 
-    return new Response(JSON.stringify({ results }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    const timelineAccounts = (profiles ?? []).map((profile: any) => ({
+      id: profile.id,
+      full_name: profile.full_name ?? null,
+      email: profile.email ?? null,
+      slack_user_id: profile.slack_user_id ?? null,
+      slack_team_id: profile.slack_team_id ?? null
+    }));
+
+    return new Response(JSON.stringify({ results, timeline_accounts: timelineAccounts }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: corsHeaders });
   }
