@@ -1,6 +1,6 @@
 'use client';
 
-import { ChangeEvent, useEffect, useMemo, useState } from 'react';
+import { ChangeEvent, memo, useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   buildMissionDedupKey,
@@ -264,6 +264,210 @@ function validateAndNormalizeRow(row: EditableImportRow): { normalized: Normaliz
   };
 }
 
+const PAGE_SIZE = 25;
+
+type MissionImportRowProps = {
+  row: EditableImportRow;
+  rowStatus: ImportFilter;
+  importing: boolean;
+  checkingDuplicates: boolean;
+  onCommitEdit: (rowId: string, patch: Partial<EditableImportRow>) => void;
+  onDelete: (rowId: string) => void;
+  onImportSingle: (mission: NormalizedMissionImport) => void;
+};
+
+// Each card manages its own edit draft so typing doesn't trigger parent re-renders or global revalidation.
+const MissionImportRow = memo(function MissionImportRow({
+  row,
+  rowStatus,
+  importing,
+  checkingDuplicates,
+  onCommitEdit,
+  onDelete,
+  onImportSingle,
+}: MissionImportRowProps) {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draft, setDraft] = useState<Partial<EditableImportRow>>({});
+
+  const liveRow = useMemo(() => ({ ...row, ...draft }), [row, draft]);
+  const liveValidation = useMemo(() => validateAndNormalizeRow(liveRow), [liveRow]);
+  const normalizedMission = liveValidation.normalized;
+  const isImportable = rowStatus === 'nouveau' && normalizedMission !== null && liveValidation.errors.length === 0;
+
+  function handleToggleEdit() {
+    if (isEditing && Object.keys(draft).length > 0) {
+      onCommitEdit(row.rowId, draft);
+      setDraft({});
+    }
+    setIsEditing((prev: boolean) => !prev);
+  }
+
+  function updateDraft(patch: Partial<EditableImportRow>) {
+    setDraft((prev: Partial<EditableImportRow>) => ({ ...prev, ...patch }));
+  }
+
+  return (
+    <MissionCardShell
+      className={IMPORT_STATUS_CARD[rowStatus]}
+      headerLeft={
+        <>
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${IMPORT_STATUS_BADGE[rowStatus]}`}>
+            {IMPORT_STATUS_LABELS[rowStatus]}
+          </span>
+          <span className="text-slate-400">|</span>
+          <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[liveRow.category] ?? 'bg-amber-400 text-slate-900'}`}>
+            {MISSION_CATEGORY_LABELS[liveRow.category]}
+          </span>
+        </>
+      }
+      headerRight={
+        <span className="text-xs text-slate-400">Bloc #{row.sourceBlockIndex + 1}</span>
+      }
+      title={liveRow.title || 'Sans intitulé'}
+      metadata={
+        <>{liveRow.date || '-'} | {liveRow.startTime || '-'} à {liveRow.endTime || '-'}</>
+      }
+      location={<>Lieu : {liveRow.location || '-'}</>}
+      description={
+        <div className="grid gap-x-4 gap-y-1 text-slate-700 md:grid-cols-2">
+          <p><span className="font-medium text-slate-900">Etat DO :</span> {liveRow.do_status || '-'}</p>
+          <p><span className="font-medium text-slate-900">Retenue :</span> {liveRow.retained_status || '-'}</p>
+          <p><span className="font-medium text-slate-900">Type source :</span> {liveRow.source_type_label || '-'}</p>
+          <p><span className="font-medium text-slate-900">Réversion :</span> {liveRow.reversion_expected || '-'}</p>
+          <p><span className="font-medium text-slate-900">Réversion réelle :</span> {liveRow.reversion_actual || '-'}</p>
+          <p><span className="font-medium text-slate-900">Validation :</span> {liveRow.validation_date || '-'}</p>
+          <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {liveRow.requirements_notes || '-'}</p>
+          <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {liveRow.equipment_notes || '-'}</p>
+        </div>
+      }
+      actions={
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
+            onClick={handleToggleEdit}
+            disabled={importing}
+          >
+            {isEditing ? 'Fermer' : 'Éditer'}
+          </button>
+          <button
+            type="button"
+            className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+            onClick={() => onDelete(row.rowId)}
+            disabled={importing}
+          >
+            Supprimer
+          </button>
+          {rowStatus === 'nouveau' ? (
+            <button
+              type="button"
+              className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+              onClick={() => {
+                if (normalizedMission) {
+                  onImportSingle(normalizedMission);
+                }
+              }}
+              disabled={importing || checkingDuplicates || !isImportable}
+            >
+              Importer
+            </button>
+          ) : null}
+        </div>
+      }
+      footer={
+        <>
+          {isEditing ? (
+            <div className="grid gap-2 md:grid-cols-2">
+              <label className="text-slate-700">
+                Intitulé *
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.title} onChange={(e) => updateDraft({ title: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Lieu
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.location} onChange={(e) => updateDraft({ location: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Date *
+                <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.date} onChange={(e) => updateDraft({ date: e.target.value })} />
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <label className="text-slate-700">
+                  Début *
+                  <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.startTime} onChange={(e) => updateDraft({ startTime: e.target.value })} />
+                </label>
+                <label className="text-slate-700">
+                  Fin *
+                  <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.endTime} onChange={(e) => updateDraft({ endTime: e.target.value })} />
+                </label>
+              </div>
+              <label className="text-slate-700">
+                Catégorie
+                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.category} onChange={(e) => updateDraft({ category: e.target.value as MissionCategory })}>
+                  {MISSION_CATEGORY_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="text-slate-700">
+                Etat DO
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.do_status} onChange={(e) => updateDraft({ do_status: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Retenue
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.retained_status} onChange={(e) => updateDraft({ retained_status: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Type source
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.source_type_label} onChange={(e) => updateDraft({ source_type_label: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Réversion
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.reversion_expected} onChange={(e) => updateDraft({ reversion_expected: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Réversion réelle
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.reversion_actual} onChange={(e) => updateDraft({ reversion_actual: e.target.value })} />
+              </label>
+              <label className="text-slate-700">
+                Validation
+                <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.validation_date} onChange={(e) => updateDraft({ validation_date: e.target.value })} />
+              </label>
+              <label className="text-slate-700 md:col-span-2">
+                Nombre de secouristes
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.requirements_notes} onChange={(e) => updateDraft({ requirements_notes: e.target.value })} />
+              </label>
+              <label className="text-slate-700 md:col-span-2">
+                Matériel spécifique
+                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.equipment_notes} onChange={(e) => updateDraft({ equipment_notes: e.target.value })} />
+              </label>
+            </div>
+          ) : null}
+
+          {liveRow.issues.length > 0 ? (
+            <ul className={`space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 ${isEditing ? 'mt-3' : ''}`}>
+              {liveRow.issues.map((issue, index) => (
+                <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
+              ))}
+            </ul>
+          ) : null}
+
+          {liveValidation.errors.length > 0 ? (
+            <ul className={`space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 ${isEditing || liveRow.issues.length > 0 ? 'mt-3' : ''}`}>
+              {liveValidation.errors.map((issue, index) => (
+                <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
+              ))}
+            </ul>
+          ) : rowStatus === 'nouveau' && !isEditing ? (
+            <p className="text-xs text-emerald-700">Ligne valide.</p>
+          ) : null}
+        </>
+      }
+    />
+  );
+});
+
 export default function AdminMissionImportPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -277,11 +481,11 @@ export default function AdminMissionImportPage() {
   const [existingMissionsMap, setExistingMissionsMap] = useState<Map<string, { id: string; ends_at: string; location: string | null }>>(new Map());
   const [checkingDuplicates, setCheckingDuplicates] = useState(false);
   const [duplicateCheckError, setDuplicateCheckError] = useState<string | null>(null);
-  const [editingRowId, setEditingRowId] = useState<string | null>(null);
   const [loadingFromGoogleSheet, setLoadingFromGoogleSheet] = useState(false);
   const [importStatus, setImportStatus] = useState<Extract<MissionStatus, 'draft' | 'proposed'>>('draft');
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<ImportFilter>('nouveau');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     async function loadProfile() {
@@ -311,6 +515,11 @@ export default function AdminMissionImportPage() {
     void loadProfile();
   }, [router]);
 
+  // Reset pagination when filter or search changes
+  useEffect(() => {
+    setPage(0);
+  }, [activeFilter, searchQuery]);
+
   const normalizedRows = useMemo(
     () =>
       rows
@@ -324,17 +533,25 @@ export default function AdminMissionImportPage() {
     [normalizedRows]
   );
 
+  // Derive stable primitive range strings so the DB query only re-fires when dates change,
+  // not on every field edit (title, location, etc.).
+  const [missionsRangeStart, missionsRangeEnd] = useMemo(() => {
+    if (validMissionEntries.length === 0) return [null, null] as const;
+    const starts = validMissionEntries.map((e) => e.mission.starts_at);
+    return [
+      starts.reduce((min, s) => (s < min ? s : min), starts[0]),
+      starts.reduce((max, s) => (s > max ? s : max), starts[0]),
+    ] as const;
+  }, [validMissionEntries]);
+
   useEffect(() => {
-    if (validMissionEntries.length === 0) {
+    if (!missionsRangeStart || !missionsRangeEnd) {
       setExistingMissionsMap(new Map());
       setDuplicateCheckError(null);
       setCheckingDuplicates(false);
       return;
     }
 
-    const startsAtValues = validMissionEntries.map((entry) => entry.mission.starts_at);
-    const rangeStart = startsAtValues.reduce((min, current) => (current < min ? current : min), startsAtValues[0]);
-    const rangeEnd = startsAtValues.reduce((max, current) => (current > max ? current : max), startsAtValues[0]);
     let cancelled = false;
 
     async function loadExistingMissions() {
@@ -344,8 +561,8 @@ export default function AdminMissionImportPage() {
       const { data, error: queryError } = await supabase
         .from('missions')
         .select('id,title,starts_at,ends_at,location')
-        .gte('starts_at', rangeStart)
-        .lte('starts_at', rangeEnd);
+        .gte('starts_at', missionsRangeStart!)
+        .lte('starts_at', missionsRangeEnd!);
 
       if (cancelled) {
         return;
@@ -375,7 +592,7 @@ export default function AdminMissionImportPage() {
     return () => {
       cancelled = true;
     };
-  }, [validMissionEntries]);
+  }, [missionsRangeStart, missionsRangeEnd]);
 
   const dedupAnalysis = useMemo(() => {
     const duplicateInFile = new Set<string>();
@@ -465,9 +682,16 @@ export default function AdminMissionImportPage() {
     });
   }, [rows, rowStatuses, activeFilter, searchQuery]);
 
-  function updateRow(rowId: string, patch: Partial<EditableImportRow>) {
+  const totalPages = Math.ceil(visibleRows.length / PAGE_SIZE);
+  const paginatedRows = useMemo(() => visibleRows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE), [visibleRows, page]);
+
+  const handleCommitEdit = useCallback((rowId: string, patch: Partial<EditableImportRow>) => {
     setRows((previous) => previous.map((row) => (row.rowId === rowId ? { ...row, ...patch } : row)));
-  }
+  }, []);
+
+  const handleDeleteRow = useCallback((rowId: string) => {
+    setRows((previous) => previous.map((row) => (row.rowId === rowId ? { ...row, deleted: true } : row)));
+  }, []);
 
   async function handleFileChange(event: ChangeEvent<HTMLInputElement>) {
     setError(null);
@@ -498,6 +722,7 @@ export default function AdminMissionImportPage() {
     setRows(preview.items.map((item, index) => normalizeEditableRow(item, index)));
     setActiveFilter('nouveau');
     setSearchQuery('');
+    setPage(0);
     setAnalyzing(false);
   }
 
@@ -649,13 +874,14 @@ export default function AdminMissionImportPage() {
       setFileName(payload.fileName ?? 'google-sheet-public.csv');
       setActiveFilter('nouveau');
       setSearchQuery('');
+      setPage(0);
       setSuccess('Import depuis Google Sheet chargé.');
     } finally {
       setLoadingFromGoogleSheet(false);
     }
   }
 
-  async function importSingleMission(mission: NormalizedMissionImport) {
+  const importSingleMission = useCallback(async (mission: NormalizedMissionImport) => {
     setError(null);
     setSuccess(null);
     const accessToken = await fetchAccessToken();
@@ -681,7 +907,7 @@ export default function AdminMissionImportPage() {
     } finally {
       setImporting(false);
     }
-  }
+  }, [importStatus]);
 
   if (loadingProfile) {
     return <p className="text-sm text-slate-600">Chargement...</p>;
@@ -795,171 +1021,18 @@ export default function AdminMissionImportPage() {
           </div>
 
           <div className="space-y-3">
-            {visibleRows.map((row) => {
-              const validation = validateAndNormalizeRow(row);
+            {paginatedRows.map((row) => {
               const rowStatus = rowStatuses.get(row.rowId) ?? 'invalide';
-              const normalizedMission = validation.normalized;
-              const isImportable = rowStatus === 'nouveau' && normalizedMission && validation.errors.length === 0;
-
               return (
-                <MissionCardShell
+                <MissionImportRow
                   key={row.rowId}
-                  className={IMPORT_STATUS_CARD[rowStatus]}
-                  headerLeft={
-                    <>
-                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${IMPORT_STATUS_BADGE[rowStatus]}`}>
-                        {IMPORT_STATUS_LABELS[rowStatus]}
-                      </span>
-                      <span className="text-slate-400">|</span>
-                      <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[row.category] ?? 'bg-amber-400 text-slate-900'}`}>
-                        {MISSION_CATEGORY_LABELS[row.category]}
-                      </span>
-                    </>
-                  }
-                  headerRight={
-                    <span className="text-xs text-slate-400">Bloc #{row.sourceBlockIndex + 1}</span>
-                  }
-                  title={row.title || 'Sans intitulé'}
-                  metadata={
-                    <>{row.date || '-'} | {row.startTime || '-'} à {row.endTime || '-'}</>
-                  }
-                  location={<>Lieu : {row.location || '-'}</>}
-                  description={
-                    <div className="grid gap-x-4 gap-y-1 text-slate-700 md:grid-cols-2">
-                      <p><span className="font-medium text-slate-900">Etat DO :</span> {row.do_status || '-'}</p>
-                      <p><span className="font-medium text-slate-900">Retenue :</span> {row.retained_status || '-'}</p>
-                      <p><span className="font-medium text-slate-900">Type source :</span> {row.source_type_label || '-'}</p>
-                      <p><span className="font-medium text-slate-900">Réversion :</span> {row.reversion_expected || '-'}</p>
-                      <p><span className="font-medium text-slate-900">Réversion réelle :</span> {row.reversion_actual || '-'}</p>
-                      <p><span className="font-medium text-slate-900">Validation :</span> {row.validation_date || '-'}</p>
-                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {row.requirements_notes || '-'}</p>
-                      <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {row.equipment_notes || '-'}</p>
-                    </div>
-                  }
-                  actions={
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                      <button
-                        type="button"
-                        className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
-                        onClick={() => setEditingRowId((current) => (current === row.rowId ? null : row.rowId))}
-                        disabled={importing}
-                      >
-                        {editingRowId === row.rowId ? 'Fermer' : 'Éditer'}
-                      </button>
-                      <button
-                        type="button"
-                        className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
-                        onClick={() => updateRow(row.rowId, { deleted: true })}
-                        disabled={importing}
-                      >
-                        Supprimer
-                      </button>
-                      {rowStatus === 'nouveau' ? (
-                        <button
-                          type="button"
-                          className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
-                          onClick={() => {
-                            if (normalizedMission) {
-                              void importSingleMission(normalizedMission);
-                            }
-                          }}
-                          disabled={importing || checkingDuplicates || !isImportable}
-                        >
-                          Importer
-                        </button>
-                      ) : null}
-                    </div>
-                  }
-                  footer={
-                    <>
-                      {editingRowId === row.rowId ? (
-                        <div className="grid gap-2 md:grid-cols-2">
-                          <label className="text-slate-700">
-                            Intitulé *
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.title} onChange={(e) => updateRow(row.rowId, { title: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Lieu
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.location} onChange={(e) => updateRow(row.rowId, { location: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Date *
-                            <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.date} onChange={(e) => updateRow(row.rowId, { date: e.target.value })} />
-                          </label>
-                          <div className="grid grid-cols-2 gap-2">
-                            <label className="text-slate-700">
-                              Début *
-                              <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.startTime} onChange={(e) => updateRow(row.rowId, { startTime: e.target.value })} />
-                            </label>
-                            <label className="text-slate-700">
-                              Fin *
-                              <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.endTime} onChange={(e) => updateRow(row.rowId, { endTime: e.target.value })} />
-                            </label>
-                          </div>
-                          <label className="text-slate-700">
-                            Catégorie
-                            <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.category} onChange={(e) => updateRow(row.rowId, { category: e.target.value as MissionCategory })}>
-                              {MISSION_CATEGORY_OPTIONS.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          </label>
-                          <label className="text-slate-700">
-                            Etat DO
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.do_status} onChange={(e) => updateRow(row.rowId, { do_status: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Retenue
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.retained_status} onChange={(e) => updateRow(row.rowId, { retained_status: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Type source
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.source_type_label} onChange={(e) => updateRow(row.rowId, { source_type_label: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Réversion
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.reversion_expected} onChange={(e) => updateRow(row.rowId, { reversion_expected: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Réversion réelle
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.reversion_actual} onChange={(e) => updateRow(row.rowId, { reversion_actual: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700">
-                            Validation
-                            <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.validation_date} onChange={(e) => updateRow(row.rowId, { validation_date: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700 md:col-span-2">
-                            Nombre de secouristes
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.requirements_notes} onChange={(e) => updateRow(row.rowId, { requirements_notes: e.target.value })} />
-                          </label>
-                          <label className="text-slate-700 md:col-span-2">
-                            Matériel spécifique
-                            <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={row.equipment_notes} onChange={(e) => updateRow(row.rowId, { equipment_notes: e.target.value })} />
-                          </label>
-                        </div>
-                      ) : null}
-
-                      {row.issues.length > 0 ? (
-                        <ul className={`space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 ${editingRowId === row.rowId ? 'mt-3' : ''}`}>
-                          {row.issues.map((issue, index) => (
-                            <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
-                          ))}
-                        </ul>
-                      ) : null}
-
-                      {validation.errors.length > 0 ? (
-                        <ul className={`space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 ${editingRowId === row.rowId || row.issues.length > 0 ? 'mt-3' : ''}`}>
-                          {validation.errors.map((issue, index) => (
-                            <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
-                          ))}
-                        </ul>
-                      ) : rowStatus === 'nouveau' && !editingRowId ? (
-                        <p className="text-xs text-emerald-700">Ligne valide.</p>
-                      ) : null}
-                    </>
-                  }
+                  row={row}
+                  rowStatus={rowStatus}
+                  importing={importing}
+                  checkingDuplicates={checkingDuplicates}
+                  onCommitEdit={handleCommitEdit}
+                  onDelete={handleDeleteRow}
+                  onImportSingle={importSingleMission}
                 />
               );
             })}
@@ -968,6 +1041,30 @@ export default function AdminMissionImportPage() {
               <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
                 Aucune mission avec le filtre &quot;{IMPORT_STATUS_LABELS[activeFilter]}&quot;
                 {searchQuery.trim() ? ` et la recherche "${searchQuery}"` : ''}.
+              </div>
+            ) : null}
+
+            {totalPages > 1 ? (
+              <div className="flex items-center justify-center gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  disabled={page === 0}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  ← Précédent
+                </button>
+                <span className="text-sm text-slate-500">
+                  Page {page + 1} / {totalPages} ({visibleRows.length} missions)
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                  disabled={page >= totalPages - 1}
+                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Suivant →
+                </button>
               </div>
             ) : null}
           </div>
@@ -982,6 +1079,7 @@ export default function AdminMissionImportPage() {
                 setSuccess(null);
                 setSearchQuery('');
                 setActiveFilter('nouveau');
+                setPage(0);
               }}
               disabled={importing}
               className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
