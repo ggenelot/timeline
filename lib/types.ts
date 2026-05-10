@@ -161,6 +161,17 @@ export type ProfileAptitude = {
   created_at: string;
 };
 
+export type MissionType = {
+  id: string;
+  name: string;
+  description: string | null;
+  category: MissionCategory | null;
+  default_required_volunteers: number;
+  default_start_time: string | null;
+  default_end_time: string | null;
+  created_at: string;
+};
+
 export type Responsibility = {
   id: string;
   name: string;
