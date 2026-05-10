@@ -121,10 +121,21 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: 'Le profil sélectionné doit être un bénévole existant.' }, { status: 400 });
   }
 
-  const { data: mission, error: missionError } = await guard.client.from('missions').select('id').eq('id', missionId).single();
+  const { data: mission, error: missionError } = await guard.client
+    .from('missions')
+    .select('id,status')
+    .eq('id', missionId)
+    .single<{ id: string; status: string }>();
 
   if (missionError || !mission) {
     return NextResponse.json({ error: 'Mission introuvable.' }, { status: 404 });
+  }
+
+  if (mission.status !== 'proposed') {
+    return NextResponse.json(
+      { error: "Impossible de modifier la disponibilité : l'activité doit être au statut « Proposée » pour accepter des réponses." },
+      { status: 403 }
+    );
   }
 
   const { data: existingProposal } = await guard.client
