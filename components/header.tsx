@@ -76,6 +76,9 @@ export function Header() {
                     <Link href="/admin/volunteers" className="text-slate-700 hover:text-slate-900">
                       Bénévoles
                     </Link>
+                    <Link href="/admin/aptitudes" className="text-slate-700 hover:text-slate-900">
+                      Aptitudes
+                    </Link>
                     <Link href="/admin/responsabilites" className="text-slate-700 hover:text-slate-900">
                       Responsabilités
                     </Link>

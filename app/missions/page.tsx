@@ -36,6 +36,7 @@ export default function MissionsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
+  const [canCreateCategories, setCanCreateCategories] = useState<MissionCategory[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
     Map<
       string,
@@ -100,6 +101,18 @@ export default function MissionsPage() {
 
     setProfile(profileData);
 
+    // For benevoles, fetch aptitudes to know if they can propose missions
+    if (profileData.role === 'benevole') {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const tok = sessionData.session?.access_token ?? '';
+      const aptRes = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
+      if (aptRes.ok) {
+        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_categories: MissionCategory[] }> };
+        const cats = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_categories)));
+        setCanCreateCategories(cats);
+      }
+    }
+
     let missionQuery = supabase
       .from('missions')
       .select(
@@ -107,7 +120,7 @@ export default function MissionsPage() {
       );
 
     if (profileData.role === 'benevole') {
-      missionQuery = missionQuery.eq('status', 'proposed');
+      // RLS already filters: proposed missions + own drafts — no extra filter needed
     }
 
     const { data: missionData, error: missionError } = await missionQuery.order('starts_at', { ascending: true });
@@ -319,6 +332,14 @@ export default function MissionsPage() {
               </button>
               <NewMissionSplitButton />
             </div>
+          ) : profile?.role === 'benevole' && canCreateCategories.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => router.push('/missions/create')}
+              className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+            >
+              Proposer une mission
+            </button>
           ) : null}
         </div>
       </div>
@@ -394,6 +415,31 @@ export default function MissionsPage() {
       </section>
 
       <div className="space-y-3">
+        {/* Draft missions created by this volunteer — awaiting admin validation */}
+        {profile?.role === 'benevole' && missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).length > 0 ? (
+          <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+            <h2 className="text-sm font-semibold text-amber-900">
+              Mes propositions en attente de validation ({missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).length})
+            </h2>
+            {missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).map((mission) => (
+              <div key={mission.id}>
+                <MissionCard
+                  mission={mission}
+                  requiredSkills={mission.mission_required_skills ?? []}
+                  formatMissionRequirementLabel={formatMissionRequirementLabel}
+                  currentUserId={profile.id}
+                  canPropose={false}
+                  proposalResponse={null}
+                  canEdit={false}
+                  availableVolunteersCount={0}
+                  unavailableVolunteersCount={0}
+                  availableVolunteers={[]}
+                />
+              </div>
+            ))}
+          </section>
+        ) : null}
+
         {profile?.role === 'benevole' && prioritizedMissions.pendingResponse.length > 0 ? (
           <section className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
             <h2 className="text-sm font-semibold text-emerald-900">Nouvelles missions ({prioritizedMissions.pendingResponse.length})</h2>
