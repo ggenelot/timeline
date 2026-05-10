@@ -49,6 +49,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Un identifiant est obligatoire.' }, { status: 400 });
   }
 
+  if (!/^[a-z0-9._-]+$/.test(identifier)) {
+    return NextResponse.json({ error: "L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores." }, { status: 400 });
+  }
+
   if (!password) {
     return NextResponse.json({ error: 'Le mot de passe est obligatoire.' }, { status: 400 });
   }

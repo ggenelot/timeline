@@ -119,6 +119,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: "L'identifiant est obligatoire." }, { status: 400 });
   }
 
+  if (!/^[a-z0-9._-]+$/.test(identifier)) {
+    return NextResponse.json({ error: "L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores." }, { status: 400 });
+  }
+
   if (!['benevole', 'responsable'].includes(role)) {
     return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
   }
