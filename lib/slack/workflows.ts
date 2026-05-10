@@ -370,27 +370,22 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     return { sent: false, reason: 'already_sent' as const };
   }
 
-  const { data: payload } = await serviceClient
-    .from('profiles')
-    .select('id,slack_user_id,slack_team_id,full_name,mission_proposals!inner(mission_id,response,mission:missions!mission_proposals_mission_id_fkey(id,title,starts_at,ends_at))')
-    .eq('id', profileId)
-    .eq('mission_proposals.mission_id', missionId)
-    .maybeSingle();
+  const [{ data: profile }, { data: mission }] = await Promise.all([
+    serviceClient.from('profiles').select('id,slack_user_id,full_name').eq('id', profileId).maybeSingle(),
+    serviceClient.from('missions').select('id,title,starts_at,ends_at').eq('id', missionId).maybeSingle()
+  ]);
 
-  if (!payload?.slack_user_id) {
+  if (!profile?.slack_user_id) {
     await upsertSlackLog({ missionId, profileId, type: 'volunteer_rejected_dm', status: 'skipped', dedupeKey, errorMessage: 'Compte Slack non lié.' });
     return { sent: false, reason: 'no_link' as const };
   }
-
-  const missionProposal = Array.isArray(payload.mission_proposals) ? payload.mission_proposals[0] : payload.mission_proposals;
-  const mission = missionProposal?.mission ? (Array.isArray(missionProposal.mission) ? missionProposal.mission[0] : missionProposal.mission) : null;
 
   if (!mission) {
     throw new Error('Mission introuvable pour notification de refus.');
   }
 
   const dmText = [
-    `Bonjour ${payload.full_name ?? 'bénévole'},`,
+    `Bonjour ${profile.full_name ?? 'bénévole'},`,
     `Merci pour votre disponibilité pour la mission *${mission.title}*.`,
     `Vous n'avez pas été retenu·e pour cette mission.`,
     `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
@@ -400,7 +395,7 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     .join('\n');
 
   try {
-    const channel = await slack.openDirectMessage(payload.slack_user_id);
+    const channel = await slack.openDirectMessage(profile.slack_user_id);
     await slack.postMessage(channel, dmText);
     await upsertSlackLog({ missionId, profileId, type: 'volunteer_rejected_dm', status: 'sent', dedupeKey });
     return { sent: true, reason: 'sent' as const };
@@ -415,6 +410,31 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     });
     throw error;
   }
+}
+
+export async function notifyNonSelectedVolunteersOnCrewConfirmed(missionId: string) {
+  const serviceClient = createServerSupabaseServiceClient();
+
+  const [{ data: availableProposals }, { data: assignments }] = await Promise.all([
+    serviceClient
+      .from('mission_proposals')
+      .select('volunteer_id')
+      .eq('mission_id', missionId)
+      .eq('response', 'available'),
+    serviceClient
+      .from('mission_assignments')
+      .select('volunteer_id')
+      .eq('mission_id', missionId)
+  ]);
+
+  if (!availableProposals?.length) return;
+
+  const assignedIds = new Set((assignments ?? []).map((a: { volunteer_id: string }) => a.volunteer_id));
+  const nonSelectedIds = availableProposals
+    .map((p: { volunteer_id: string }) => p.volunteer_id)
+    .filter((id: string) => !assignedIds.has(id));
+
+  await Promise.allSettled(nonSelectedIds.map((profileId: string) => notifyVolunteerRejected(missionId, profileId)));
 }
 
 export async function notifyVolunteerRoleUpdatedByAdmin(args: {
