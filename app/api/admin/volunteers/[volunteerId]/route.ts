@@ -2,11 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { notifyVolunteerRoleUpdatedByAdmin } from '@/lib/slack/workflows';
 
-const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 type UpdateVolunteerPayload = {
   full_name?: string;
-  email?: string;
+  identifier?: string;
   phone?: string;
   sector?: string;
   role?: 'benevole' | 'responsable';
@@ -59,7 +57,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: volunteer, error: volunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,email,phone,sector,role,created_at')
+    .select('id,full_name,identifier,phone,sector,role,created_at')
     .eq('id', volunteerId)
     .single();
 
@@ -106,7 +104,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
 
   const volunteerId = params.volunteerId;
   const fullName = payload.full_name?.trim() ?? '';
-  const email = payload.email?.trim().toLowerCase() ?? '';
+  const identifier = payload.identifier?.trim().toLowerCase() ?? '';
   const phone = payload.phone?.trim() ?? '';
   const sector = payload.sector?.trim() ?? '';
   const role = payload.role ?? 'benevole';
@@ -117,8 +115,12 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
   }
 
-  if (!email || !EMAIL_REGEX.test(email)) {
-    return NextResponse.json({ error: 'Un email valide est obligatoire.' }, { status: 400 });
+  if (!identifier) {
+    return NextResponse.json({ error: "L'identifiant est obligatoire." }, { status: 400 });
+  }
+
+  if (!/^[a-z0-9._-]+$/.test(identifier)) {
+    return NextResponse.json({ error: "L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores." }, { status: 400 });
   }
 
   if (!['benevole', 'responsable'].includes(role)) {
@@ -155,11 +157,14 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   }
 
 
+  const authEmail = `${identifier}@timeline.local`;
+
   const { error: profileUpdateError } = await serviceClient
     .from('profiles')
     .update({
       full_name: fullName,
-      email,
+      identifier,
+      email: authEmail,
       phone: phone || null,
       sector: sector || null,
       role
@@ -171,7 +176,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   }
 
   const authUpdatePayload: { email: string; user_metadata: { full_name: string; phone: string | null }; password?: string } = {
-    email,
+    email: authEmail,
     user_metadata: {
       full_name: fullName,
       phone: phone || null

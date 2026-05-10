@@ -38,7 +38,7 @@ function normalizeSkillCategory(category: string | null | undefined): (typeof SK
 
 type VolunteerPayload = {
   full_name: string | null;
-  email: string;
+  identifier: string | null;
   role: AppRole;
 };
 
@@ -128,7 +128,7 @@ export default function EditVolunteerPage() {
       const nameParts = fullName.split(/\s+/).filter(Boolean);
       const firstName = nameParts.shift() ?? '';
       const lastName = nameParts.join(' ');
-      const identifier = payload.volunteer.email.split('@')[0] ?? '';
+      const identifier = payload.volunteer.identifier?.trim() ?? '';
 
       const selectedSkillIds = (payload.profileSkills ?? []).map((profileSkill) => profileSkill.skill_id);
       const selectedSkillByCategory = (payload.skills ?? []).reduce<Record<string, string | null>>((acc, skill) => {
@@ -208,7 +208,7 @@ export default function EditVolunteerPage() {
       },
       body: JSON.stringify({
         full_name: `${firstName} ${lastName}`.trim(),
-        email: `${identifier}@benevoles.protection-civile.local`,
+        identifier,
         skill_ids: skillIds,
         password: form.password || undefined
       })
