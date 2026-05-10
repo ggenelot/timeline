@@ -1,5 +1,6 @@
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { SlackService } from '@/lib/slack/service';
+import { applyTemplate, getTemplateText } from '@/lib/slack/templates';
 
 type MissionSlackData = {
   id: string;
@@ -224,17 +225,15 @@ export async function ensureMissionSlackChannel(
 
   if (welcomeLog?.status !== 'sent') {
     const crewComposition = await buildCrewCompositionMessage(missionId);
+    const templateText = await getTemplateText('mission_channel_welcome');
     const text =
       options?.welcomeMessage?.trim() ||
-      [
-        `Bienvenue dans le canal de mission *${mission.title}*.`,
-        `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
-        mission.location ? `📍 ${mission.location}` : null,
-        crewComposition,
-        'Consultez Timeline pour les détails et mises à jour.'
-      ]
-        .filter(Boolean)
-        .join('\n');
+      applyTemplate(templateText, {
+        mission_title: mission.title,
+        datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
+        location: mission.location,
+        crew_composition: crewComposition
+      });
 
     try {
       await slack.postMessage(channelId, text);
@@ -392,15 +391,15 @@ export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
     throw new Error('Mission introuvable pour notification de disponibilité.');
   }
 
-  const dmText = [
-    `Bonjour ${profile.full_name ?? 'bénévole'},`,
-    `Un administrateur a modifié votre disponibilité pour l'événement *${mission.title}*.`,
-    `Changement : ${formatAvailabilityLabel(previousResponse)} → ${formatAvailabilityLabel(nextResponse)}.`,
-    `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
-    process.env.APP_BASE_URL ? `Voir l'événement : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const templateText = await getTemplateText('admin_availability_updated_dm');
+  const dmText = applyTemplate(templateText, {
+    volunteer_name: profile.full_name ?? 'bénévole',
+    mission_title: mission.title,
+    previous_availability: formatAvailabilityLabel(previousResponse),
+    next_availability: formatAvailabilityLabel(nextResponse),
+    datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
+    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+  });
 
   try {
     const channel = await slack.openDirectMessage(profile.slack_user_id);
@@ -443,15 +442,13 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     throw new Error('Mission introuvable pour notification de refus.');
   }
 
-  const dmText = [
-    `Bonjour ${profile.full_name ?? 'bénévole'},`,
-    `Merci pour votre disponibilité pour la mission *${mission.title}*.`,
-    `Vous n'avez pas été retenu·e pour cette mission.`,
-    `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
-    process.env.APP_BASE_URL ? `Voir Timeline : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const templateText = await getTemplateText('volunteer_rejected_dm');
+  const dmText = applyTemplate(templateText, {
+    volunteer_name: profile.full_name ?? 'bénévole',
+    mission_title: mission.title,
+    datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
+    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+  });
 
   try {
     const channel = await slack.openDirectMessage(profile.slack_user_id);
@@ -525,15 +522,13 @@ export async function notifyMissionProposerOnStatusChange(missionId: string, new
     return;
   }
 
-  const statusLabel = newStatus === 'confirmed' ? 'confirmée ✅' : 'annulée ❌';
-  const dmText = [
-    `Bonjour ${profile.full_name ?? 'bénévole'},`,
-    `Votre mission *${mission.title}* a été ${statusLabel}.`,
-    `📅 ${formatDateTimeRange(mission.starts_at, mission.ends_at)}`,
-    process.env.APP_BASE_URL ? `Voir la mission : ${process.env.APP_BASE_URL}/missions/${mission.id}` : null
-  ]
-    .filter(Boolean)
-    .join('\n');
+  const templateText = await getTemplateText(notifType);
+  const dmText = applyTemplate(templateText, {
+    volunteer_name: profile.full_name ?? 'bénévole',
+    mission_title: mission.title,
+    datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
+    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+  });
 
   try {
     const channel = await slack.openDirectMessage(profile.slack_user_id);
@@ -576,11 +571,12 @@ export async function notifyVolunteerRoleUpdatedByAdmin(args: {
   }
 
   const formatRole = (role: 'benevole' | 'responsable') => (role === 'responsable' ? 'responsable' : 'bénévole');
-  const dmText = [
-    `Bonjour ${fullName ?? 'bénévole'},`,
-    "Un administrateur a modifié votre statut sur Timeline.",
-    `Changement : ${formatRole(previousRole)} → ${formatRole(nextRole)}.`
-  ].join('\n');
+  const templateText = await getTemplateText('admin_role_updated_dm');
+  const dmText = applyTemplate(templateText, {
+    volunteer_name: fullName ?? 'bénévole',
+    previous_role: formatRole(previousRole),
+    next_role: formatRole(nextRole)
+  });
 
   try {
     const channel = await slack.openDirectMessage(slackUserId);
