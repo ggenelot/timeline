@@ -102,10 +102,6 @@ export function MissionCard({
 
   const doStatusLabel = mission.do_status?.trim() || 'Antenne En attente';
   const missionStatusStyle = MISSION_STATUS_STYLES[mission.status];
-  const reversionActualLabel = mission.reversion_actual !== null && mission.reversion_actual !== undefined
-    ? new Intl.NumberFormat('fr-FR', { maximumFractionDigits: 2 }).format(mission.reversion_actual)
-    : '-';
-
   return (
     <MissionCardShell
       headerLeft={(
@@ -130,7 +126,6 @@ export function MissionCard({
           <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>
           <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-400">{unavailableVolunteersCount} INDISPONIBLES</span>
           </div>
-          <span className="text-xs text-slate-600">Réversion réelle : {reversionActualLabel}</span>
         </div>
       )}
       title={mission.title}
