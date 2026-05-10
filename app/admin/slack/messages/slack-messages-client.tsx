@@ -182,17 +182,13 @@ export function SlackMessagesClient() {
   return (
     <div className="space-y-6 p-6">
       <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Messages Slack par défaut</h1>
+        <h1 className="text-2xl font-semibold text-slate-900">Admin Slack</h1>
         <p className="mt-1 text-sm text-slate-500">
           Personnalisez les messages envoyés automatiquement par le bot Slack.
           Utilisez les variables <code className="rounded bg-slate-100 px-1 font-mono text-xs">{'{{variable}}'}</code> pour insérer des valeurs dynamiques.
           Une ligne contenant une variable sans valeur est automatiquement supprimée du message.
         </p>
       </div>
-
-      <a href="/admin/slack" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        ← Retour à l&apos;admin Slack
-      </a>
 
       {loading && <p className="text-sm text-slate-500">Chargement des templates…</p>}
       {error && <p className="text-sm text-red-600">{error}</p>}
