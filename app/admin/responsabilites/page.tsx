@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { MissionCategory, MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, Profile } from '@/lib/types';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Responsibility = {
   id: string;
@@ -387,25 +388,16 @@ export default function AdminResponsabilitesPage() {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
                         {/* Holder picker */}
-                        <select
+                        <SearchableSelect
                           value={holder?.id ?? ''}
-                          onChange={(e) => {
-                            const val = e.target.value;
-                            if (val === '') {
-                              void handleRemoveHolder(r.id);
-                            } else {
-                              void handleSetHolder(r.id, val);
-                            }
+                          options={volunteers.map((v) => ({ value: v.id, label: v.full_name ?? v.email }))}
+                          onChange={(val) => {
+                            if (val === '') void handleRemoveHolder(r.id);
+                            else void handleSetHolder(r.id, val);
                           }}
-                          className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
-                        >
-                          <option value="">— Aucun titulaire —</option>
-                          {volunteers.map((v) => (
-                            <option key={v.id} value={v.id}>
-                              {v.full_name ?? v.email}
-                            </option>
-                          ))}
-                        </select>
+                          emptyLabel="— Aucun titulaire —"
+                          className="w-48"
+                        />
 
                         {holder ? (
                           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-medium text-emerald-800">
@@ -456,29 +448,19 @@ export default function AdminResponsabilitesPage() {
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm font-medium text-slate-700">Ajouter une association</p>
           <div className="flex flex-col gap-3 sm:flex-row">
-            <select
+            <SearchableSelect
               value={mapCategory}
-              onChange={(e) => setMapCategory(e.target.value as MissionCategory)}
-              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
-            >
-              {MISSION_CATEGORY_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-            <select
+              options={MISSION_CATEGORY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+              onChange={(val) => setMapCategory(val as MissionCategory)}
+              className="w-48"
+            />
+            <SearchableSelect
               value={mapResponsibilityId}
-              onChange={(e) => setMapResponsibilityId(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
-            >
-              <option value="">— Choisir une responsabilité —</option>
-              {data.responsibilities.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
+              options={data.responsibilities.map((r) => ({ value: r.id, label: r.name }))}
+              onChange={setMapResponsibilityId}
+              emptyLabel="— Choisir une responsabilité —"
+              className="flex-1"
+            />
             <button
               type="button"
               onClick={handleAddMapping}

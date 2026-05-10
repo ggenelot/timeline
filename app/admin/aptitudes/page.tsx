@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { MissionCategory, MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, Profile } from '@/lib/types';
+import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Aptitude = {
   id: string;
@@ -444,29 +445,23 @@ export default function AdminAptitudesPage() {
 
         <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-col gap-3 sm:flex-row">
-            <select
+            <SearchableSelect
               value={assignAptitudeId}
-              onChange={(e) => { setAssignAptitudeId(e.target.value); setAssignProfileId(''); }}
-              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
-            >
-              <option value="">— Choisir une aptitude —</option>
-              {data.aptitudes.map((apt) => (
-                <option key={apt.id} value={apt.id}>{apt.name}</option>
-              ))}
-            </select>
-            <select
+              options={data.aptitudes.map((apt) => ({ value: apt.id, label: apt.name }))}
+              onChange={(val) => { setAssignAptitudeId(val); setAssignProfileId(''); }}
+              emptyLabel="— Choisir une aptitude —"
+              className="flex-1"
+            />
+            <SearchableSelect
               value={assignProfileId}
-              onChange={(e) => setAssignProfileId(e.target.value)}
-              disabled={!assignAptitudeId}
-              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300 disabled:opacity-50"
-            >
-              <option value="">— Choisir un bénévole —</option>
-              {volunteers
+              options={volunteers
                 .filter((v) => !assignedProfileIds.has(v.id))
-                .map((v) => (
-                  <option key={v.id} value={v.id}>{v.full_name ?? v.email}</option>
-                ))}
-            </select>
+                .map((v) => ({ value: v.id, label: v.full_name ?? v.email }))}
+              onChange={setAssignProfileId}
+              emptyLabel="— Choisir un bénévole —"
+              disabled={!assignAptitudeId}
+              className="flex-1"
+            />
             <button
               type="button"
               onClick={handleAssignVolunteer}
