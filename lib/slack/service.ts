@@ -175,7 +175,7 @@ export class SlackService {
     console.info('[slack-oauth]', { flow, step: 'oauth_v2_exchange_response', status: response.status, slack_ok: Boolean((json as { ok?: boolean }).ok) });
     if (!response.ok || !json.ok) {
       const slackError = 'error' in json ? json.error : 'unknown_error';
-      const error = new Error('oauth_exchange_failed');
+      const error = new Error(`oauth_exchange_failed:${slackError}`);
       (error as Error & { details?: Record<string, unknown> }).details = {
         flow,
         endpoint_token: endpoint,
