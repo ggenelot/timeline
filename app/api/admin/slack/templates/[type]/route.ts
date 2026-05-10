@@ -1,0 +1,59 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { DEFAULT_TEMPLATES } from '@/lib/slack/templates';
+
+export async function PUT(request: NextRequest, { params }: { params: { type: string } }) {
+  const token = getBearerToken(request);
+  const auth = await requireAuthenticatedUser(token);
+  if (auth.errorResponse) return auth.errorResponse;
+  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès réservé aux administrateurs.' }, { status: 403 });
+
+  const { type } = params;
+  if (!(type in DEFAULT_TEMPLATES)) {
+    return NextResponse.json({ error: 'Type de template inconnu.' }, { status: 400 });
+  }
+
+  const payload = (await request.json().catch(() => ({}))) as { template?: string };
+  const template = payload.template;
+  if (typeof template !== 'string' || template.trim() === '') {
+    return NextResponse.json({ error: 'Le template ne peut pas être vide.' }, { status: 400 });
+  }
+
+  const serviceClient = createServerSupabaseServiceClient();
+  const { error } = await serviceClient
+    .from('slack_message_templates')
+    .update({ template: template.trim(), updated_by: auth.profile.id, updated_at: new Date().toISOString() })
+    .eq('type', type);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true });
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { type: string } }) {
+  const token = getBearerToken(request);
+  const auth = await requireAuthenticatedUser(token);
+  if (auth.errorResponse) return auth.errorResponse;
+  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès réservé aux administrateurs.' }, { status: 403 });
+
+  const { type } = params;
+  if (!(type in DEFAULT_TEMPLATES)) {
+    return NextResponse.json({ error: 'Type de template inconnu.' }, { status: 400 });
+  }
+
+  const defaultTemplate = DEFAULT_TEMPLATES[type];
+  const serviceClient = createServerSupabaseServiceClient();
+  const { error } = await serviceClient
+    .from('slack_message_templates')
+    .update({ template: defaultTemplate, updated_by: auth.profile.id, updated_at: new Date().toISOString() })
+    .eq('type', type);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ success: true, template: defaultTemplate });
+}
