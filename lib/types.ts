@@ -146,6 +146,21 @@ export type Event = {
   created_at: string;
 };
 
+export type Aptitude = {
+  id: string;
+  name: string;
+  description: string | null;
+  allowed_categories: MissionCategory[];
+  created_at: string;
+};
+
+export type ProfileAptitude = {
+  id: string;
+  profile_id: string;
+  aptitude_id: string;
+  created_at: string;
+};
+
 export type Responsibility = {
   id: string;
   name: string;
