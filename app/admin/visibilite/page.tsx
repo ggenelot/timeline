@@ -11,9 +11,22 @@ type VisibilityRule = {
   description: string | null;
   criterion_type: 'skill' | 'aptitude';
   criterion_id: string;
+  required_status: string | null;
   is_active: boolean;
   created_at: string;
 };
+
+const STATUS_OPTIONS: { value: string | null; label: string }[] = [
+  { value: null,        label: 'Tous les statuts' },
+  { value: 'proposed',  label: 'Proposé' },
+  { value: 'closed',    label: 'Clôturé' },
+  { value: 'confirmed', label: 'Confirmé' },
+  { value: 'cancelled', label: 'Annulé' },
+];
+
+function getStatusLabel(status: string | null): string {
+  return STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status ?? 'Tous les statuts';
+}
 
 type SkillOption = { id: string; name: string; category: string | null };
 type AptitudeOption = { id: string; name: string };
@@ -41,6 +54,7 @@ export default function AdminVisibilitePage() {
   const [newDescription, setNewDescription] = useState('');
   const [newCriterionType, setNewCriterionType] = useState<'skill' | 'aptitude'>('skill');
   const [newCriterionId, setNewCriterionId] = useState('');
+  const [newRequiredStatus, setNewRequiredStatus] = useState<string | null>(null);
   const [newIsActive, setNewIsActive] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -50,6 +64,7 @@ export default function AdminVisibilitePage() {
   const [editDescription, setEditDescription] = useState('');
   const [editCriterionType, setEditCriterionType] = useState<'skill' | 'aptitude'>('skill');
   const [editCriterionId, setEditCriterionId] = useState('');
+  const [editRequiredStatus, setEditRequiredStatus] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -120,11 +135,12 @@ export default function AdminVisibilitePage() {
         description: newDescription.trim() || null,
         criterion_type: newCriterionType,
         criterion_id: newCriterionId,
+        required_status: newRequiredStatus,
         is_active: newIsActive
       })
     });
     if (res.ok) {
-      setNewName(''); setNewDescription(''); setNewCriterionId(''); setNewIsActive(true);
+      setNewName(''); setNewDescription(''); setNewCriterionId(''); setNewRequiredStatus(null); setNewIsActive(true);
       await fetchData(token);
       flash('Règle créée.');
     } else {
@@ -145,7 +161,8 @@ export default function AdminVisibilitePage() {
         name: editName.trim(),
         description: editDescription.trim() || null,
         criterion_type: editCriterionType,
-        criterion_id: editCriterionId
+        criterion_id: editCriterionId,
+        required_status: editRequiredStatus
       })
     });
     if (res.ok) {
@@ -274,6 +291,22 @@ export default function AdminVisibilitePage() {
             <CriterionSelect type={newCriterionType} value={newCriterionId} onChange={setNewCriterionId} />
           </div>
 
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span className="shrink-0 text-sm font-medium text-slate-700">Statut requis :</span>
+            <select
+              value={newRequiredStatus ?? ''}
+              onChange={(e) => setNewRequiredStatus(e.target.value || null)}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              {STATUS_OPTIONS.map((o) => (
+                <option key={o.value ?? '__all'} value={o.value ?? ''}>{o.label}</option>
+              ))}
+            </select>
+            <span className="text-xs text-slate-400">
+              Le groupe voit les missions avec ce statut (et les non-membres les voient si un membre est disponible).
+            </span>
+          </div>
+
           <div className="flex items-center gap-2">
             <input
               type="checkbox"
@@ -339,6 +372,19 @@ export default function AdminVisibilitePage() {
                         </select>
                         <CriterionSelect type={editCriterionType} value={editCriterionId} onChange={setEditCriterionId} />
                       </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <span className="shrink-0 text-sm font-medium text-slate-700">Statut requis :</span>
+                        <select
+                          value={editRequiredStatus ?? ''}
+                          onChange={(e) => setEditRequiredStatus(e.target.value || null)}
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        >
+                          {STATUS_OPTIONS.map((o) => (
+                            <option key={o.value ?? '__all'} value={o.value ?? ''}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -380,6 +426,16 @@ export default function AdminVisibilitePage() {
                             {getCriterionLabel(rule)}
                           </span>
                         </p>
+                        <p className="text-sm text-slate-600">
+                          <span className="font-medium">Statut visible :</span>{' '}
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            rule.required_status
+                              ? 'bg-violet-100 text-violet-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {getStatusLabel(rule.required_status)}
+                          </span>
+                        </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <button
@@ -401,6 +457,7 @@ export default function AdminVisibilitePage() {
                             setEditDescription(rule.description ?? '');
                             setEditCriterionType(rule.criterion_type);
                             setEditCriterionId(rule.criterion_id);
+                            setEditRequiredStatus(rule.required_status);
                           }}
                           className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
                         >
@@ -429,16 +486,25 @@ export default function AdminVisibilitePage() {
         <ul className="space-y-2 text-sm text-slate-600">
           <li>
             <strong>Groupe privilégié</strong> : bénévoles ayant la compétence ou l&apos;aptitude spécifiée.
-            Ils voient toutes les missions (hors brouillons qui ne leur appartiennent pas).
+            Ils voient toutes les missions dont le statut correspond au filtre défini (ou toutes les missions
+            non-brouillon si aucun filtre n&apos;est configuré).
           </li>
           <li>
-            <strong>Autres bénévoles</strong> : voient uniquement les missions sur lesquelles un membre
-            du groupe privilégié a répondu <em>disponible</em>.
+            <strong>Statut requis</strong> : si une règle a un filtre de statut (ex. <em>Proposé</em>),
+            le groupe ne voit que les missions ayant ce statut. Sans filtre, ils voient toutes les missions
+            non-brouillon.
           </li>
           <li>
-            <strong>Plusieurs règles actives</strong> : un bénévole est privilégié s&apos;il correspond
-            à <em>au moins une</em> règle. Une mission est visible si <em>au moins un</em> privilégié
-            (toutes règles confondues) est disponible.
+            <strong>Autres bénévoles</strong> : voient uniquement les missions couvertes par une règle active
+            (statut correspondant) sur lesquelles un membre du groupe privilégié a répondu <em>disponible</em>.
+          </li>
+          <li>
+            <strong>Exemple</strong> : règle &laquo; CP &raquo; avec statut <em>Proposé</em> — les CP voient
+            toutes les missions proposées ; les non-CP voient les missions proposées où au moins un CP est disponible.
+          </li>
+          <li>
+            <strong>Plusieurs règles actives</strong> : chaque règle est évaluée indépendamment. Une mission
+            est visible dès qu&apos;une règle l&apos;autorise.
           </li>
           <li>
             <strong>Aucune règle active</strong> : les bénévoles ne voient que les missions pour
