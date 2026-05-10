@@ -82,6 +82,9 @@ export function Header() {
                     <Link href="/admin/responsabilites" className="text-slate-700 hover:text-slate-900">
                       Responsabilités
                     </Link>
+                    <Link href="/admin/visibilite" className="text-slate-700 hover:text-slate-900">
+                      Visibilité
+                    </Link>
                   </>
                 ) : null}
                 <Link href="/profile" className="text-slate-700 hover:text-slate-900">
