@@ -307,6 +307,65 @@ function formatAvailabilityLabel(response: string | null | undefined) {
   return 'sans réponse';
 }
 
+export async function inviteResponsibilityHoldersToMissionChannel(missionId: string) {
+  const serviceClient = createServerSupabaseServiceClient();
+  const slack = new SlackService();
+
+  const { data: mission } = await serviceClient
+    .from('missions')
+    .select('id,category,slack_channel_id')
+    .eq('id', missionId)
+    .single<{ id: string; category: string; slack_channel_id: string | null }>();
+
+  if (!mission?.slack_channel_id || !mission.category) {
+    return;
+  }
+
+  const { data: mappings } = await serviceClient
+    .from('mission_category_responsibilities')
+    .select('responsibility_id')
+    .eq('category', mission.category);
+
+  if (!mappings?.length) return;
+
+  const responsibilityIds = mappings.map((m: { responsibility_id: string }) => m.responsibility_id);
+
+  const { data: holders } = await serviceClient
+    .from('responsibility_holders')
+    .select('profile_id,profile:profiles!responsibility_holders_profile_id_fkey(id,slack_user_id)')
+    .in('responsibility_id', responsibilityIds);
+
+  const invitees = (holders ?? [])
+    .map((row: { profile_id: string; profile: { id: string; slack_user_id: string | null } | { id: string; slack_user_id: string | null }[] | null }) => {
+      const profile = Array.isArray(row.profile) ? row.profile[0] : row.profile;
+      return profile?.slack_user_id ? { profileId: profile.id, slackUserId: profile.slack_user_id } : null;
+    })
+    .filter((row): row is { profileId: string; slackUserId: string } => Boolean(row));
+
+  for (const invitee of invitees) {
+    const dedupeKey = `mission:${missionId}:profile:${invitee.profileId}:responsibility_invite`;
+    const { data: existing } = await serviceClient
+      .from('slack_notification_logs')
+      .select('status')
+      .eq('dedupe_key', dedupeKey)
+      .maybeSingle();
+
+    if (existing?.status === 'sent') continue;
+
+    try {
+      await slack.inviteUsersToChannel(mission.slack_channel_id, [invitee.slackUserId]);
+      await upsertSlackLog({ missionId, profileId: invitee.profileId, type: 'responsibility_holder_invite', status: 'sent', dedupeKey });
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Erreur inconnue';
+      if (errorMessage.includes('already_in_channel')) {
+        await upsertSlackLog({ missionId, profileId: invitee.profileId, type: 'responsibility_holder_invite', status: 'sent', dedupeKey });
+      } else {
+        await upsertSlackLog({ missionId, profileId: invitee.profileId, type: 'responsibility_holder_invite', status: 'error', dedupeKey, errorMessage });
+      }
+    }
+  }
+}
+
 export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
   missionId: string;
   profileId: string;

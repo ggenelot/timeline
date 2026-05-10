@@ -145,3 +145,24 @@ export type Event = {
   created_by: string;
   created_at: string;
 };
+
+export type Responsibility = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+export type ResponsibilityHolder = {
+  id: string;
+  responsibility_id: string;
+  profile_id: string;
+  created_at: string;
+};
+
+export type MissionCategoryResponsibility = {
+  id: string;
+  category: MissionCategory;
+  responsibility_id: string;
+  created_at: string;
+};
