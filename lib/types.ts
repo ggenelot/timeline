@@ -50,15 +50,6 @@ export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
   poste_de_secours: 'Poste de secours'
 };
 
-export const MISSION_TYPE_NAME_TO_CATEGORY: Record<string, MissionCategory> = {
-  'Maraude': 'maraude',
-  'Garde': 'garde',
-  'Formation': 'formation',
-  "Vie de l'antenne": 'vie_antenne',
-  'Poste de secours': 'poste_de_secours',
-};
-
-export const ALLOWED_MISSION_TYPE_NAMES = Object.keys(MISSION_TYPE_NAME_TO_CATEGORY);
 
 export type Mission = {
   id: string;
@@ -171,6 +162,15 @@ export type ProfileAptitude = {
   created_at: string;
 };
 
+export type MissionTypeRequiredSkill = {
+  id: string;
+  mission_type_id: string;
+  skill_id: string;
+  quantity: number;
+  created_at: string;
+  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
+};
+
 export type MissionType = {
   id: string;
   name: string;
@@ -180,6 +180,7 @@ export type MissionType = {
   default_start_time: string | null;
   default_end_time: string | null;
   created_at: string;
+  required_skills?: MissionTypeRequiredSkill[];
 };
 
 export type Responsibility = {
