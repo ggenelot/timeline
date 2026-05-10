@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { notifyNonSelectedVolunteersOnCrewConfirmed } from '@/lib/slack/workflows';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
   const token = getBearerToken(request);
@@ -36,6 +37,10 @@ export async function POST(request: NextRequest, { params }: { params: { mission
   if (updateError) {
     return NextResponse.json({ error: `Impossible de confirmer la mission: ${updateError.message}` }, { status: 400 });
   }
+
+  notifyNonSelectedVolunteersOnCrewConfirmed(missionId).catch((err) =>
+    console.error('[confirm] Slack notifications failed', { missionId, error: err instanceof Error ? err.message : err })
+  );
 
   return NextResponse.json({ message: 'Mission confirmée.' });
 }
