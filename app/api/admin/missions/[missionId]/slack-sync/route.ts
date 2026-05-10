@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
-import { ensureMissionSlackChannel, inviteSelectedVolunteersToMissionChannel } from '@/lib/slack/workflows';
+import { ensureMissionSlackChannel, inviteSelectedVolunteersToMissionChannel, inviteResponsibilityHoldersToMissionChannel } from '@/lib/slack/workflows';
 import { SlackApiClientError } from '@/lib/slack/service';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
@@ -34,6 +34,7 @@ export async function POST(request: NextRequest, { params }: { params: { mission
       welcomeMessage: payload.welcomeMessage
     });
     await inviteSelectedVolunteersToMissionChannel(missionId);
+    await inviteResponsibilityHoldersToMissionChannel(missionId);
     return NextResponse.json({ message: 'Synchronisation Slack terminée.', channel });
   } catch (error) {
     if (error instanceof SlackApiClientError) {
