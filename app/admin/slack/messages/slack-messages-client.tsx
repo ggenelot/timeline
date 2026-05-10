@@ -191,7 +191,7 @@ export function SlackMessagesClient() {
       </div>
 
       <a href="/admin/slack" className="inline-flex items-center gap-1 text-sm text-slate-500 hover:text-slate-800">
-        ← Retour à l'admin Slack
+        ← Retour à l&apos;admin Slack
       </a>
 
       {loading && <p className="text-sm text-slate-500">Chargement des templates…</p>}
