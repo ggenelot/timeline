@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { ALLOWED_MISSION_TYPE_NAMES, MISSION_TYPE_NAME_TO_CATEGORY } from '@/lib/types';
+import { MissionCategory, MISSION_CATEGORY_OPTIONS } from '@/lib/types';
+
+const VALID_CATEGORIES = MISSION_CATEGORY_OPTIONS.map((o) => o.value);
 
 export async function GET(request: NextRequest) {
   const token = getBearerToken(request);
@@ -14,7 +16,10 @@ export async function GET(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('mission_types')
-    .select('id,name,description,category,default_required_volunteers,default_start_time,default_end_time,created_at')
+    .select(`
+      id,name,description,category,default_required_volunteers,default_start_time,default_end_time,created_at,
+      required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
+    `)
     .order('name', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -37,12 +42,15 @@ export async function POST(request: NextRequest) {
     default_required_volunteers?: number;
     default_start_time?: string | null;
     default_end_time?: string | null;
+    required_skills?: Array<{ skill_id: string; quantity: number }>;
   };
 
   const trimmedName = body.name?.trim() ?? '';
   if (!trimmedName) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
-  if (!ALLOWED_MISSION_TYPE_NAMES.includes(trimmedName)) {
-    return NextResponse.json({ error: `Type de mission non reconnu. Valeurs autorisées : ${ALLOWED_MISSION_TYPE_NAMES.join(', ')}.` }, { status: 400 });
+
+  const category = body.category ?? null;
+  if (category && !VALID_CATEGORIES.includes(category as MissionCategory)) {
+    return NextResponse.json({ error: 'Catégorie invalide.' }, { status: 400 });
   }
 
   const serviceClient = createServerSupabaseServiceClient();
@@ -51,15 +59,39 @@ export async function POST(request: NextRequest) {
     .insert({
       name: trimmedName,
       description: body.description?.trim() || null,
-      category: MISSION_TYPE_NAME_TO_CATEGORY[trimmedName],
+      category: category || null,
       default_required_volunteers: body.default_required_volunteers ?? 1,
       default_start_time: body.default_start_time || null,
       default_end_time: body.default_end_time || null,
     })
-    .select('id,name,description,category,default_required_volunteers,default_start_time,default_end_time,created_at')
+    .select('id')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ missionType: data }, { status: 201 });
+  if (body.required_skills && body.required_skills.length > 0) {
+    const skillRows = body.required_skills
+      .filter((s) => s.skill_id && s.quantity >= 1)
+      .map((s) => ({ mission_type_id: data.id, skill_id: s.skill_id, quantity: s.quantity }));
+    if (skillRows.length > 0) {
+      const { error: skillError } = await serviceClient.from('mission_type_required_skills').insert(skillRows);
+      if (skillError) {
+        await serviceClient.from('mission_types').delete().eq('id', data.id);
+        return NextResponse.json({ error: skillError.message }, { status: 500 });
+      }
+    }
+  }
+
+  const { data: full, error: fetchError } = await serviceClient
+    .from('mission_types')
+    .select(`
+      id,name,description,category,default_required_volunteers,default_start_time,default_end_time,created_at,
+      required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
+    `)
+    .eq('id', data.id)
+    .single();
+
+  if (fetchError) return NextResponse.json({ error: fetchError.message }, { status: 500 });
+
+  return NextResponse.json({ missionType: full }, { status: 201 });
 }
