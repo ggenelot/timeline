@@ -75,7 +75,10 @@ export async function POST(request: NextRequest) {
       .map((s) => ({ mission_type_id: data.id, skill_id: s.skill_id, quantity: s.quantity }));
     if (skillRows.length > 0) {
       const { error: skillError } = await serviceClient.from('mission_type_required_skills').insert(skillRows);
-      if (skillError) return NextResponse.json({ error: skillError.message }, { status: 500 });
+      if (skillError) {
+        await serviceClient.from('mission_types').delete().eq('id', data.id);
+        return NextResponse.json({ error: skillError.message }, { status: 500 });
+      }
     }
   }
 

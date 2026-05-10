@@ -47,18 +47,32 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 });
 
   if (body.required_skills !== undefined) {
-    const { error: deleteError } = await serviceClient
-      .from('mission_type_required_skills')
-      .delete()
-      .eq('mission_type_id', params.id);
-    if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
-
     const skillRows = body.required_skills
       .filter((s) => s.skill_id && s.quantity >= 1)
       .map((s) => ({ mission_type_id: params.id, skill_id: s.skill_id, quantity: s.quantity }));
+
     if (skillRows.length > 0) {
-      const { error: skillError } = await serviceClient.from('mission_type_required_skills').insert(skillRows);
-      if (skillError) return NextResponse.json({ error: skillError.message }, { status: 500 });
+      // Upsert new/updated skills first so there is never a window with missing skills
+      const { error: upsertError } = await serviceClient
+        .from('mission_type_required_skills')
+        .upsert(skillRows, { onConflict: 'mission_type_id,skill_id' });
+      if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
+
+      // Then prune skills that are no longer in the list
+      const keepIds = skillRows.map((s) => s.skill_id);
+      const { error: pruneError } = await serviceClient
+        .from('mission_type_required_skills')
+        .delete()
+        .eq('mission_type_id', params.id)
+        .not('skill_id', 'in', `(${keepIds.join(',')})`);
+      if (pruneError) return NextResponse.json({ error: pruneError.message }, { status: 500 });
+    } else {
+      // No skills in new list: remove all
+      const { error: deleteError } = await serviceClient
+        .from('mission_type_required_skills')
+        .delete()
+        .eq('mission_type_id', params.id);
+      if (deleteError) return NextResponse.json({ error: deleteError.message }, { status: 500 });
     }
   }
 
