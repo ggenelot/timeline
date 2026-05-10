@@ -3,6 +3,11 @@ import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { DEFAULT_TEMPLATES } from '@/lib/slack/templates';
 
+async function requireTemplateRow(serviceClient: ReturnType<typeof createServerSupabaseServiceClient>, type: string) {
+  const { data } = await serviceClient.from('slack_message_templates').select('id').eq('type', type).maybeSingle();
+  return data;
+}
+
 export async function PUT(request: NextRequest, { params }: { params: { type: string } }) {
   const token = getBearerToken(request);
   const auth = await requireAuthenticatedUser(token);
@@ -21,6 +26,12 @@ export async function PUT(request: NextRequest, { params }: { params: { type: st
   }
 
   const serviceClient = createServerSupabaseServiceClient();
+
+  const existing = await requireTemplateRow(serviceClient, type);
+  if (!existing) {
+    return NextResponse.json({ error: 'Template introuvable en base. La migration a-t-elle été appliquée ?' }, { status: 404 });
+  }
+
   const { error } = await serviceClient
     .from('slack_message_templates')
     .update({ template: template.trim(), updated_by: auth.profile.id, updated_at: new Date().toISOString() })
@@ -44,8 +55,14 @@ export async function DELETE(request: NextRequest, { params }: { params: { type:
     return NextResponse.json({ error: 'Type de template inconnu.' }, { status: 400 });
   }
 
-  const defaultTemplate = DEFAULT_TEMPLATES[type];
   const serviceClient = createServerSupabaseServiceClient();
+
+  const existing = await requireTemplateRow(serviceClient, type);
+  if (!existing) {
+    return NextResponse.json({ error: 'Template introuvable en base. La migration a-t-elle été appliquée ?' }, { status: 404 });
+  }
+
+  const defaultTemplate = DEFAULT_TEMPLATES[type];
   const { error } = await serviceClient
     .from('slack_message_templates')
     .update({ template: defaultTemplate, updated_by: auth.profile.id, updated_at: new Date().toISOString() })
