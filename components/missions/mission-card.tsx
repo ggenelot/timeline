@@ -4,7 +4,6 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 import {
-  MISSION_CATEGORY_LABELS,
   Mission,
   MissionProposalResponse,
   MissionRequiredSkill
@@ -26,12 +25,17 @@ type MissionCardProps = {
 };
 
 
-const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
-  poste_de_secours: 'bg-orange-400 text-slate-900',
-  garde: 'bg-red-500 text-white',
-  formation: 'bg-blue-900 text-white',
-  maraude: 'bg-violet-500 text-white',
-  vie_antenne: 'bg-sky-400 text-slate-900'
+const MISSION_TYPE_COLOR_CLASSES: Record<string, string> = {
+  violet: 'bg-violet-500 text-white',
+  red: 'bg-red-500 text-white',
+  blue: 'bg-blue-900 text-white',
+  sky: 'bg-sky-400 text-slate-900',
+  orange: 'bg-orange-400 text-slate-900',
+  green: 'bg-green-500 text-white',
+  emerald: 'bg-emerald-500 text-white',
+  amber: 'bg-amber-400 text-slate-900',
+  pink: 'bg-pink-500 text-white',
+  indigo: 'bg-indigo-500 text-white',
 };
 
 const MISSION_STATUS_LABELS = {
@@ -109,9 +113,9 @@ export function MissionCard({
       headerLeft={(
         <>
           <span
-            className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[mission.category] ?? 'bg-amber-400 text-slate-900'}`}
+            className={`rounded-full px-3 py-1.5 font-bold ${MISSION_TYPE_COLOR_CLASSES[mission.mission_type?.color ?? ''] ?? 'bg-slate-200 text-slate-800'}`}
           >
-            {MISSION_CATEGORY_LABELS[mission.category]}
+            {mission.mission_type?.name ?? '—'}
           </span>
           <span className="text-slate-400">|</span>
           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>

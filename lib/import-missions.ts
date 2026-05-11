@@ -1,4 +1,3 @@
-import { MissionCategory } from '@/lib/types';
 
 export type ImportFieldKey =
   | 'do_status'
@@ -35,7 +34,7 @@ export type NormalizedMissionImport = {
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
-  category: MissionCategory;
+  category: string;
   do_status: string | null;
   retained_status: string | null;
   requirements_notes: string | null;
@@ -602,7 +601,7 @@ function parseTimeRange(value: string | null): { startHour: number; startMinute:
   return { startHour, startMinute, endHour, endMinute };
 }
 
-function inferCategory(value: string | null): MissionCategory {
+function inferCategory(value: string | null): string {
   if (!value) {
     return 'poste_de_secours';
   }

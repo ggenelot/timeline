@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode } from 'react';
-import { MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus } from '@/lib/types';
+import { MissionStatus, MissionType } from '@/lib/types';
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
@@ -27,7 +27,7 @@ export type MissionFormState = {
   ends_at_date: string;
   ends_at_time: string;
   required_volunteers: string;
-  category: MissionCategory;
+  mission_type_id: string;
   status: MissionStatus;
 };
 
@@ -35,13 +35,12 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   title: '',
   description: '',
   location: '',
-  
   starts_at_date: '',
   starts_at_time: '',
   ends_at_date: '',
   ends_at_time: '',
   required_volunteers: '1',
-  category: 'maraude',
+  mission_type_id: '',
   status: 'draft'
 };
 
@@ -66,6 +65,7 @@ type SkillOption = {
 type MissionFormProps = {
   form: MissionFormState;
   onChange: (nextValue: MissionFormState) => void;
+  missionTypes: Pick<MissionType, 'id' | 'name'>[];
   requirements?: MissionRequirementFormState[];
   onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
   availableSkills?: SkillOption[];
@@ -92,6 +92,7 @@ const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = 
 export function MissionForm({
   form,
   onChange,
+  missionTypes,
   requirements = [],
   onRequirementsChange,
   availableSkills = [],
@@ -154,7 +155,6 @@ export function MissionForm({
             </datalist>
           ) : null}
         </label>
-
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -205,22 +205,22 @@ export function MissionForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <p className="text-sm text-slate-700">Catégorie *</p>
+          <p className="text-sm text-slate-700">Type de mission *</p>
           <div className="flex flex-wrap gap-2">
-            {MISSION_CATEGORY_OPTIONS.map((option) => (
+            {missionTypes.map((mt) => (
               <button
-                key={option.value}
+                key={mt.id}
                 type="button"
-                onClick={() => onChange({ ...form, category: option.value })}
+                onClick={() => onChange({ ...form, mission_type_id: mt.id })}
                 disabled={submitting}
-                aria-pressed={form.category === option.value}
+                aria-pressed={form.mission_type_id === mt.id}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.category === option.value
+                  form.mission_type_id === mt.id
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {option.label}
+                {mt.name}
               </button>
             ))}
           </div>

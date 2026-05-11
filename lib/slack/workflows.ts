@@ -312,18 +312,18 @@ export async function inviteResponsibilityHoldersToMissionChannel(missionId: str
 
   const { data: mission } = await serviceClient
     .from('missions')
-    .select('id,category,slack_channel_id')
+    .select('id,mission_type_id,slack_channel_id')
     .eq('id', missionId)
-    .single<{ id: string; category: string; slack_channel_id: string | null }>();
+    .single<{ id: string; mission_type_id: string | null; slack_channel_id: string | null }>();
 
-  if (!mission?.slack_channel_id || !mission.category) {
+  if (!mission?.slack_channel_id || !mission.mission_type_id) {
     return;
   }
 
   const { data: mappings } = await serviceClient
     .from('mission_category_responsibilities')
     .select('responsibility_id')
-    .eq('category', mission.category);
+    .eq('mission_type_id', mission.mission_type_id);
 
   if (!mappings?.length) return;
 

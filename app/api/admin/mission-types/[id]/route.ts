@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { MissionCategory, MISSION_CATEGORY_OPTIONS } from '@/lib/types';
 
-const VALID_CATEGORIES = MISSION_CATEGORY_OPTIONS.map((o) => o.value);
+const MISSION_TYPE_SELECT = `
+  id,name,description,color,default_required_volunteers,default_start_time,default_end_time,created_at,
+  required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
+`;
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
   const token = getBearerToken(request);
@@ -16,7 +18,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = (await request.json().catch(() => ({}))) as {
     name?: string;
     description?: string;
-    category?: string | null;
+    color?: string | null;
     default_required_volunteers?: number;
     default_start_time?: string | null;
     default_end_time?: string | null;
@@ -26,18 +28,13 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const trimmedName = body.name?.trim() ?? '';
   if (!trimmedName) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
 
-  const category = body.category ?? null;
-  if (category && !VALID_CATEGORIES.includes(category as MissionCategory)) {
-    return NextResponse.json({ error: 'Catégorie invalide.' }, { status: 400 });
-  }
-
   const serviceClient = createServerSupabaseServiceClient();
   const { error: updateError } = await serviceClient
     .from('mission_types')
     .update({
       name: trimmedName,
       description: body.description?.trim() || null,
-      category: category || null,
+      color: body.color ?? null,
       default_required_volunteers: body.default_required_volunteers ?? 1,
       default_start_time: body.default_start_time || null,
       default_end_time: body.default_end_time || null,
@@ -52,13 +49,11 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
       .map((s) => ({ mission_type_id: params.id, skill_id: s.skill_id, quantity: s.quantity }));
 
     if (skillRows.length > 0) {
-      // Upsert new/updated skills first so there is never a window with missing skills
       const { error: upsertError } = await serviceClient
         .from('mission_type_required_skills')
         .upsert(skillRows, { onConflict: 'mission_type_id,skill_id' });
       if (upsertError) return NextResponse.json({ error: upsertError.message }, { status: 500 });
 
-      // Then prune skills that are no longer in the list
       const keepIds = skillRows.map((s) => s.skill_id);
       const { error: pruneError } = await serviceClient
         .from('mission_type_required_skills')
@@ -67,7 +62,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
         .not('skill_id', 'in', `(${keepIds.join(',')})`);
       if (pruneError) return NextResponse.json({ error: pruneError.message }, { status: 500 });
     } else {
-      // No skills in new list: remove all
       const { error: deleteError } = await serviceClient
         .from('mission_type_required_skills')
         .delete()
@@ -78,10 +72,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const { data, error: fetchError } = await serviceClient
     .from('mission_types')
-    .select(`
-      id,name,description,category,default_required_volunteers,default_start_time,default_end_time,created_at,
-      required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
-    `)
+    .select(MISSION_TYPE_SELECT)
     .eq('id', params.id)
     .single();
 

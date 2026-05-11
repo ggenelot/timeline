@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { MissionCategory } from '@/lib/types';
 import { buildMissionDedupKey, getMissionDateForDedupFromStartsAt } from '@/lib/import-missions';
 
 type ImportMissionPayload = {
@@ -10,7 +9,7 @@ type ImportMissionPayload = {
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
-  category: MissionCategory;
+  category: string;
   do_status: string | null;
   retained_status: string | null;
   requirements_notes: string | null;
@@ -49,42 +48,28 @@ function getBearerToken(request: NextRequest): string {
   return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
 }
 
-function isValidCategory(value: string): value is MissionCategory {
-  return ['maraude', 'garde', 'formation', 'vie_antenne', 'poste_de_secours'].includes(value);
-}
-
-function normalizeCategory(value: string | null | undefined): MissionCategory {
-  if (!value) {
-    return 'poste_de_secours';
-  }
-
-  if (isValidCategory(value)) {
-    return value;
-  }
-
-  const normalized = value
+function normalizeName(value: string): string {
+  return value
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
     .trim();
+}
 
-  if (normalized.includes('poste de secours') || normalized.includes('poste') || normalized.includes('pds') || normalized.includes('dps')) {
-    return 'poste_de_secours';
+function slugToNameFragment(slug: string): string {
+  return slug.replace(/_/g, ' ');
+}
+
+function resolveMissionTypeId(slug: string, missionTypes: Array<{ id: string; name: string }>): string | null {
+  const normalizedSlug = normalizeName(slugToNameFragment(slug));
+  for (const mt of missionTypes) {
+    const normalizedName = normalizeName(mt.name);
+    if (normalizedName === normalizedSlug || normalizedName.includes(normalizedSlug) || normalizedSlug.includes(normalizedName)) {
+      return mt.id;
+    }
   }
-
-  if (normalized.includes('garde')) {
-    return 'garde';
-  }
-
-  if (normalized.includes('format')) {
-    return 'formation';
-  }
-
-  if (normalized.includes('antenne') || normalized.includes('vie')) {
-    return 'vie_antenne';
-  }
-
-  return 'poste_de_secours';
+  return missionTypes[0]?.id ?? null;
 }
 
 function isIsoDate(value: string) {
@@ -270,6 +255,9 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  const { data: missionTypesData } = await serviceClient.from('mission_types').select('id,name');
+  const missionTypes = (missionTypesData ?? []) as Array<{ id: string; name: string }>;
+
   const payload: Record<string, unknown>[] = deduplicatedMissions.map((mission) => ({
     title: mission.title.trim(),
     description: null,
@@ -278,7 +266,7 @@ export async function POST(request: NextRequest) {
     starts_at: mission.starts_at,
     ends_at: mission.ends_at,
     required_volunteers: mission.required_volunteers,
-    category: normalizeCategory(mission.category),
+    mission_type_id: resolveMissionTypeId(mission.category, missionTypes),
     status: importStatus,
     created_by: userData.user.id,
     do_status: mission.do_status,
@@ -391,6 +379,8 @@ export async function PATCH(request: NextRequest) {
   }
 
   const serviceClient = createServerSupabaseServiceClient();
+  const { data: missionTypesData } = await serviceClient.from('mission_types').select('id,name');
+  const missionTypes = (missionTypesData ?? []) as Array<{ id: string; name: string }>;
   let updated = 0;
   let failed = 0;
 
@@ -419,7 +409,7 @@ export async function PATCH(request: NextRequest) {
       starts_at: mission.starts_at,
       ends_at: mission.ends_at,
       required_volunteers: mission.required_volunteers,
-      category: normalizeCategory(mission.category),
+      mission_type_id: resolveMissionTypeId(mission.category, missionTypes),
       do_status: mission.do_status,
       retained_status: mission.retained_status,
       requirements_notes: mission.requirements_notes,

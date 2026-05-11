@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, Profile } from '@/lib/types';
+import { Mission, MissionType, Profile } from '@/lib/types';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
 
 function isPositiveInteger(value: string) {
@@ -83,7 +83,7 @@ function missionToForm(mission: Mission): MissionFormState {
     description: mission.description ?? '',
     location: mission.location ?? '',
     
-    category: mission.category,
+    mission_type_id: mission.mission_type_id,
     starts_at_date: startsAt.date,
     starts_at_time: startsAt.time,
     ends_at_date: endsAt.date,
@@ -103,6 +103,7 @@ export default function AdminEditMissionPage() {
   const [form, setForm] = useState<MissionFormState | null>(null);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -141,7 +142,7 @@ export default function AdminEditMissionPage() {
 
       const { data: missionData, error: missionError } = await supabase
         .from('missions')
-        .select('id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
+        .select('id,title,description,location,mission_type_id,mission_type:mission_types(id,name,color),starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
         .eq('id', missionId)
         .single<MissionEditPayload>();
 
@@ -174,6 +175,9 @@ export default function AdminEditMissionPage() {
       }
 
       setSkills(skillData ?? []);
+
+      const { data: mtData } = await supabase.from('mission_types').select('id,name').order('name', { ascending: true });
+      setMissionTypes((mtData ?? []) as Pick<MissionType, 'id' | 'name'>[]);
 
       const { data: locationsData, error: locationsError } = await supabase
         .from('missions')
@@ -259,8 +263,7 @@ export default function AdminEditMissionPage() {
         title: form.title.trim(),
         description: form.description.trim() || null,
         location: form.location.trim() || null,
-        
-        category: form.category,
+        mission_type_id: form.mission_type_id || null,
         starts_at: startsAtIso,
         ends_at: endsAtIso,
         required_volunteers: Number.parseInt(form.required_volunteers, 10),
@@ -309,8 +312,7 @@ export default function AdminEditMissionPage() {
             title: form.title.trim(),
             description: form.description.trim() || null,
             location: form.location.trim() || null,
-            
-            category: form.category,
+            mission_type_id: form.mission_type_id || prev.mission_type_id,
             starts_at: startsAtIso,
             ends_at: endsAtIso,
             required_volunteers: Number.parseInt(form.required_volunteers, 10),
@@ -366,6 +368,7 @@ export default function AdminEditMissionPage() {
       <MissionForm
         form={form}
         onChange={setForm}
+        missionTypes={missionTypes}
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}

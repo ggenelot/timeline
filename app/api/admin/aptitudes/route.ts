@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data: aptitudes, error } = await serviceClient
     .from('aptitudes')
-    .select('id,name,description,allowed_categories,created_at')
+    .select('id,name,description,allowed_mission_type_ids,created_at')
     .order('name', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -37,7 +37,7 @@ export async function POST(request: NextRequest) {
   const body = (await request.json().catch(() => ({}))) as {
     name?: string;
     description?: string;
-    allowed_categories?: string[];
+    allowed_mission_type_ids?: string[];
   };
 
   if (!body.name?.trim()) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
@@ -48,9 +48,9 @@ export async function POST(request: NextRequest) {
     .insert({
       name: body.name.trim(),
       description: body.description?.trim() ?? null,
-      allowed_categories: body.allowed_categories ?? []
+      allowed_mission_type_ids: body.allowed_mission_type_ids ?? []
     })
-    .select('id,name,description,allowed_categories,created_at')
+    .select('id,name,description,allowed_mission_type_ids,created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
