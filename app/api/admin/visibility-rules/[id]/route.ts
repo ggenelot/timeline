@@ -16,6 +16,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     criterion_type?: string;
     criterion_id?: string;
     required_status?: string | null;
+    required_category?: string | null;
     is_active?: boolean;
   };
 
@@ -29,6 +30,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.required_status !== undefined && body.required_status !== null && !validStatuses.includes(body.required_status)) {
     return NextResponse.json({ error: 'Le statut requis est invalide.' }, { status: 400 });
   }
+  const validCategories = ['maraude', 'garde', 'formation', 'vie_antenne', 'poste_de_secours'];
+  if (body.required_category !== undefined && body.required_category !== null && !validCategories.includes(body.required_category)) {
+    return NextResponse.json({ error: 'La catégorie requise est invalide.' }, { status: 400 });
+  }
 
   const updates: Record<string, unknown> = {};
   if (body.name !== undefined) updates.name = body.name.trim();
@@ -36,6 +41,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   if (body.criterion_type !== undefined) updates.criterion_type = body.criterion_type;
   if (body.criterion_id !== undefined) updates.criterion_id = body.criterion_id;
   if (body.required_status !== undefined) updates.required_status = body.required_status ?? null;
+  if (body.required_category !== undefined) updates.required_category = body.required_category ?? null;
   if (body.is_active !== undefined) updates.is_active = body.is_active;
 
   const serviceClient = createServerSupabaseServiceClient();
@@ -43,7 +49,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     .from('mission_visibility_rules')
     .update(updates)
     .eq('id', params.id)
-    .select('id,name,description,criterion_type,criterion_id,required_status,is_active,created_at')
+    .select('id,name,description,criterion_type,criterion_id,required_status,required_category,is_active,created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
