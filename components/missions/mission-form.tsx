@@ -326,7 +326,7 @@ export function MissionForm({
               ) : null}
 
               <label className="block text-sm text-slate-600">
-                Répéter jusqu'au *
+                Répéter jusqu&apos;au *
                 <input
                   type="date"
                   value={recurrence.end_date}
