@@ -12,7 +12,17 @@ import {
   parseParisLocalToUtcIso,
   utcIsoToParisParts
 } from '@/lib/import-missions';
-import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus, Profile } from '@/lib/types';
+import { MissionStatus, Profile } from '@/lib/types';
+
+const CATEGORY_SLUG_LABELS: Record<string, string> = {
+  poste_de_secours: 'Poste de secours',
+  garde: 'Garde',
+  formation: 'Formation',
+  maraude: 'Maraude',
+  vie_antenne: "Vie de l'antenne"
+};
+
+const CATEGORY_SLUG_OPTIONS = Object.entries(CATEGORY_SLUG_LABELS).map(([value, label]) => ({ value, label }));
 import { supabase } from '@/lib/supabase/client';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 
@@ -56,7 +66,7 @@ type EditableImportRow = {
   startTime: string;
   endTime: string;
   location: string;
-  category: MissionCategory;
+  category: string;
   do_status: string;
   retained_status: string;
   requirements_notes: string;
@@ -316,7 +326,7 @@ const MissionImportRow = memo(function MissionImportRow({
           </span>
           <span className="text-slate-400">|</span>
           <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[liveRow.category] ?? 'bg-amber-400 text-slate-900'}`}>
-            {MISSION_CATEGORY_LABELS[liveRow.category]}
+            {CATEGORY_SLUG_LABELS[liveRow.category] ?? liveRow.category}
           </span>
         </>
       }
@@ -402,8 +412,8 @@ const MissionImportRow = memo(function MissionImportRow({
               </div>
               <label className="text-slate-700">
                 Catégorie
-                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.category} onChange={(e) => updateDraft({ category: e.target.value as MissionCategory })}>
-                  {MISSION_CATEGORY_OPTIONS.map((option) => (
+                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.category} onChange={(e) => updateDraft({ category: e.target.value })}>
+                  {CATEGORY_SLUG_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

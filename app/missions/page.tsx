@@ -6,24 +6,15 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
-import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
-import { SkillCode } from '@/lib/skills';
+import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, MissionType, Profile } from '@/lib/types';
 import { formatMissionRequirementLabel, MISSION_STATUS_LABELS } from '@/lib/missions';
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
 };
 
-const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
 const STATUS_FILTER_OPTIONS: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
-
-function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
-  if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
-    return value as 'all' | MissionCategory;
-  }
-  return 'all';
-}
 
 function parseStatusFilter(value: string | null): 'all' | MissionStatus {
   if (value && STATUS_FILTER_VALUES.includes(value as 'all' | MissionStatus)) {
@@ -36,7 +27,8 @@ export default function MissionsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
-  const [canCreateCategories, setCanCreateCategories] = useState<MissionCategory[]>([]);
+  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
+  const [canCreateMissionTypeIds, setCanCreateMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
     Map<
       string,
@@ -56,16 +48,16 @@ export default function MissionsPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const selectedCategory = useMemo(() => parseCategoryFilter(searchParams.get('category')), [searchParams]);
+  const selectedMissionTypeId = searchParams.get('mission_type_id') ?? 'all';
   const selectedStatus = useMemo(() => parseStatusFilter(searchParams.get('status')), [searchParams]);
 
-  function updateMainFilters(nextCategory: 'all' | MissionCategory, nextStatus: 'all' | MissionStatus) {
+  function updateMainFilters(nextMissionTypeId: string, nextStatus: 'all' | MissionStatus) {
     const params = new URLSearchParams(searchParams.toString());
 
-    if (nextCategory === 'all') {
-      params.delete('category');
+    if (nextMissionTypeId === 'all') {
+      params.delete('mission_type_id');
     } else {
-      params.set('category', nextCategory);
+      params.set('mission_type_id', nextMissionTypeId);
     }
 
     if (nextStatus === 'all') {
@@ -101,29 +93,31 @@ export default function MissionsPage() {
 
     setProfile(profileData);
 
-    // For benevoles, fetch aptitudes to know if they can propose missions
+    // Load mission types (all users can read them)
+    const { data: mtData } = await supabase
+      .from('mission_types')
+      .select('id,name')
+      .order('name', { ascending: true });
+    setMissionTypes(mtData ?? []);
+
+    // For benevoles, fetch aptitudes to know which mission types they can create
     if (profileData.role === 'benevole') {
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       const aptRes = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
       if (aptRes.ok) {
-        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_categories: MissionCategory[] }> };
-        const cats = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_categories)));
-        setCanCreateCategories(cats);
+        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_mission_type_ids: string[] }> };
+        const ids = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_mission_type_ids)));
+        setCanCreateMissionTypeIds(ids);
       }
     }
 
-    let missionQuery = supabase
+    const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
-      );
-
-    if (profileData.role === 'benevole') {
-      // RLS already filters: proposed missions + own drafts — no extra filter needed
-    }
-
-    const { data: missionData, error: missionError } = await missionQuery.order('starts_at', { ascending: true });
+        'id,title,description,location,mission_type_id,mission_type:mission_types(id,name,color),starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+      )
+      .order('starts_at', { ascending: true });
 
     if (missionError) {
       setError(`Erreur chargement missions: ${missionError.message}`);
@@ -133,6 +127,7 @@ export default function MissionsPage() {
 
     const mappedMissions: MissionWithRequiredSkills[] = (missionData ?? []).map((mission) => ({
       ...mission,
+      mission_type: Array.isArray(mission.mission_type) ? (mission.mission_type[0] ?? null) : mission.mission_type,
       mission_required_skills: (mission.mission_required_skills ?? []).map((requiredSkill) => ({
         ...requiredSkill,
         skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
@@ -144,10 +139,7 @@ export default function MissionsPage() {
     const { data: proposalData } = await supabase
       .from('mission_proposals')
       .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
-      .in(
-        'mission_id',
-        mappedMissions.map((mission) => mission.id)
-      );
+      .in('mission_id', mappedMissions.map((mission) => mission.id));
 
     const allMissionProposals = proposalData ?? [];
     setProposals(allMissionProposals.filter((proposal) => proposal.volunteer_id === authData.user.id));
@@ -179,6 +171,7 @@ export default function MissionsPage() {
         }
       ])
     );
+
     const nextProposalStats = new Map<
       string,
       {
@@ -209,14 +202,11 @@ export default function MissionsPage() {
 
   async function publishDraftMission(missionId: string) {
     setError(null);
-
     const { error: updateError } = await supabase.from('missions').update({ status: 'proposed' }).eq('id', missionId).eq('status', 'draft');
-
     if (updateError) {
       setError(`Impossible de passer la mission en proposé : ${updateError.message}`);
       return;
     }
-
     await loadData();
   }
 
@@ -233,15 +223,12 @@ export default function MissionsPage() {
   const effectiveSelectedStatus =
     profile?.role === 'benevole' && selectedStatus !== 'all' && selectedStatus !== 'proposed' ? 'all' : selectedStatus;
 
-  const missionCountsByCategory = useMemo(
+  const missionCountsByType = useMemo(
     () =>
-      missions.reduce<Record<MissionCategory, number>>(
-        (counts, mission) => {
-          counts[mission.category] += 1;
-          return counts;
-        },
-        { maraude: 0, garde: 0, formation: 0, vie_antenne: 0, poste_de_secours: 0 }
-      ),
+      missions.reduce<Record<string, number>>((counts, mission) => {
+        counts[mission.mission_type_id] = (counts[mission.mission_type_id] ?? 0) + 1;
+        return counts;
+      }, {}),
     [missions]
   );
 
@@ -273,7 +260,7 @@ export default function MissionsPage() {
           }
         }
 
-        if (selectedCategory !== 'all' && mission.category !== selectedCategory) {
+        if (selectedMissionTypeId !== 'all' && mission.mission_type_id !== selectedMissionTypeId) {
           return false;
         }
 
@@ -283,12 +270,7 @@ export default function MissionsPage() {
 
         return true;
       }),
-    [
-      missions,
-      searchQuery,
-      selectedCategory,
-      effectiveSelectedStatus
-    ]
+    [missions, searchQuery, selectedMissionTypeId, effectiveSelectedStatus]
   );
 
   const prioritizedMissions = useMemo(() => {
@@ -332,7 +314,7 @@ export default function MissionsPage() {
               </button>
               <NewMissionSplitButton />
             </div>
-          ) : profile?.role === 'benevole' && canCreateCategories.length > 0 ? (
+          ) : profile?.role === 'benevole' && canCreateMissionTypeIds.length > 0 ? (
             <button
               type="button"
               onClick={() => router.push('/missions/create')}
@@ -360,25 +342,25 @@ export default function MissionsPage() {
               type="button"
               onClick={() => updateMainFilters('all', effectiveSelectedStatus)}
               className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                selectedCategory === 'all'
+                selectedMissionTypeId === 'all'
                   ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                   : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               Toutes {missions.length}
             </button>
-            {MISSION_CATEGORY_OPTIONS.map((option) => (
+            {missionTypes.map((mt) => (
               <button
-                key={option.value}
+                key={mt.id}
                 type="button"
-                onClick={() => updateMainFilters(option.value, effectiveSelectedStatus)}
+                onClick={() => updateMainFilters(mt.id, effectiveSelectedStatus)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                  selectedCategory === option.value
+                  selectedMissionTypeId === mt.id
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {option.label} {missionCountsByCategory[option.value]}
+                {mt.name} {missionCountsByType[mt.id] ?? 0}
               </button>
             ))}
           </div>
@@ -386,7 +368,7 @@ export default function MissionsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => updateMainFilters(selectedCategory, 'all')}
+                onClick={() => updateMainFilters(selectedMissionTypeId, 'all')}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
                   effectiveSelectedStatus === 'all'
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
@@ -399,7 +381,7 @@ export default function MissionsPage() {
                 <button
                   key={status}
                   type="button"
-                  onClick={() => updateMainFilters(selectedCategory, status)}
+                  onClick={() => updateMainFilters(selectedMissionTypeId, status)}
                   className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
                     effectiveSelectedStatus === status
                       ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
@@ -415,7 +397,6 @@ export default function MissionsPage() {
       </section>
 
       <div className="space-y-3">
-        {/* Draft missions created by this volunteer — awaiting admin validation */}
         {profile?.role === 'benevole' && missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).length > 0 ? (
           <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
             <h2 className="text-sm font-semibold text-amber-900">

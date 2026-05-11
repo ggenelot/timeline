@@ -3,14 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionCategory, MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, Profile } from '@/lib/types';
+import { MissionType, Profile } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Aptitude = {
   id: string;
   name: string;
   description: string | null;
-  allowed_categories: MissionCategory[];
+  allowed_mission_type_ids: string[];
   created_at: string;
 };
 
@@ -38,27 +38,26 @@ function resolveProfile(profile: VolunteerProfile | VolunteerProfile[] | null): 
   return Array.isArray(profile) ? (profile[0] ?? null) : profile;
 }
 
-const ALL_CATEGORIES = MISSION_CATEGORY_OPTIONS.map((o) => o.value);
-
 export default function AdminAptitudesPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ApiData>({ aptitudes: [], profileAptitudes: [] });
+  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [token, setToken] = useState<string>('');
 
   // Create form
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
-  const [newCategories, setNewCategories] = useState<MissionCategory[]>([]);
+  const [newMissionTypeIds, setNewMissionTypeIds] = useState<string[]>([]);
   const [creating, setCreating] = useState(false);
 
   // Edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
-  const [editCategories, setEditCategories] = useState<MissionCategory[]>([]);
+  const [editMissionTypeIds, setEditMissionTypeIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Volunteer assignment
@@ -102,12 +101,14 @@ export default function AdminAptitudesPage() {
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
 
-      const [, volunteersRes] = await Promise.all([
+      const [, volunteersRes, mtRes] = await Promise.all([
         fetchData(tok),
-        supabase.from('profiles').select('id,full_name,email').order('full_name', { ascending: true })
+        supabase.from('profiles').select('id,full_name,email').order('full_name', { ascending: true }),
+        supabase.from('mission_types').select('id,name').order('name', { ascending: true })
       ]);
 
       setVolunteers((volunteersRes.data ?? []) as VolunteerProfile[]);
+      setMissionTypes((mtRes.data ?? []) as Pick<MissionType, 'id' | 'name'>[]);
       setLoading(false);
     }
     void init();
@@ -118,8 +119,8 @@ export default function AdminAptitudesPage() {
     setTimeout(() => setSuccessMsg(null), 3000);
   }
 
-  function toggleCategory(cat: MissionCategory, selected: MissionCategory[], set: (v: MissionCategory[]) => void) {
-    set(selected.includes(cat) ? selected.filter((c) => c !== cat) : [...selected, cat]);
+  function toggleMissionType(id: string, selected: string[], set: (v: string[]) => void) {
+    set(selected.includes(id) ? selected.filter((s) => s !== id) : [...selected, id]);
   }
 
   async function handleCreate() {
@@ -129,10 +130,10 @@ export default function AdminAptitudesPage() {
     const res = await fetch('/api/admin/aptitudes', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: newName.trim(), description: newDescription.trim() || null, allowed_categories: newCategories })
+      body: JSON.stringify({ name: newName.trim(), description: newDescription.trim() || null, allowed_mission_type_ids: newMissionTypeIds })
     });
     if (res.ok) {
-      setNewName(''); setNewDescription(''); setNewCategories([]);
+      setNewName(''); setNewDescription(''); setNewMissionTypeIds([]);
       await fetchData(token);
       flash('Aptitude créée.');
     } else {
@@ -149,7 +150,7 @@ export default function AdminAptitudesPage() {
     const res = await fetch(`/api/admin/aptitudes/${id}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name: editName.trim(), description: editDescription.trim() || null, allowed_categories: editCategories })
+      body: JSON.stringify({ name: editName.trim(), description: editDescription.trim() || null, allowed_mission_type_ids: editMissionTypeIds })
     });
     if (res.ok) {
       setEditingId(null);
@@ -220,7 +221,6 @@ export default function AdminAptitudesPage() {
     );
   }
 
-  // Group profile_aptitudes by aptitude
   const holdersByAptitudeId = new Map<string, VolunteerProfile[]>();
   for (const pa of data.profileAptitudes) {
     const p = resolveProfile(pa.profile);
@@ -230,12 +230,13 @@ export default function AdminAptitudesPage() {
     holdersByAptitudeId.set(pa.aptitude_id, list);
   }
 
-  // Volunteers already holding a given aptitude (for the assign form)
   const assignedProfileIds = new Set(
     data.profileAptitudes
       .filter((pa) => pa.aptitude_id === assignAptitudeId)
       .map((pa) => pa.profile_id)
   );
+
+  const missionTypeById = new Map(missionTypes.map((mt) => [mt.id, mt]));
 
   return (
     <div className="space-y-8">
@@ -250,11 +251,9 @@ export default function AdminAptitudesPage() {
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
       {successMsg ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{successMsg}</div> : null}
 
-      {/* ── Section 1 : Créer une aptitude ── */}
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
         <h2 className="mb-4 text-lg font-semibold text-slate-800">1. Aptitudes</h2>
 
-        {/* Create form */}
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm font-medium text-slate-700">Nouvelle aptitude</p>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -276,18 +275,18 @@ export default function AdminAptitudesPage() {
           <div className="mt-3">
             <p className="mb-1.5 text-xs font-medium text-slate-600">Types d&apos;événements autorisés</p>
             <div className="flex flex-wrap gap-2">
-              {ALL_CATEGORIES.map((cat) => (
+              {missionTypes.map((mt) => (
                 <button
-                  key={cat}
+                  key={mt.id}
                   type="button"
-                  onClick={() => toggleCategory(cat, newCategories, setNewCategories)}
+                  onClick={() => toggleMissionType(mt.id, newMissionTypeIds, setNewMissionTypeIds)}
                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                    newCategories.includes(cat)
+                    newMissionTypeIds.includes(mt.id)
                       ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
                       : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  {MISSION_CATEGORY_LABELS[cat]}
+                  {mt.name}
                 </button>
               ))}
             </div>
@@ -296,7 +295,7 @@ export default function AdminAptitudesPage() {
             <button
               type="button"
               onClick={handleCreate}
-              disabled={!newName.trim() || newCategories.length === 0 || creating}
+              disabled={!newName.trim() || newMissionTypeIds.length === 0 || creating}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? 'Création...' : 'Créer'}
@@ -304,7 +303,6 @@ export default function AdminAptitudesPage() {
           </div>
         </div>
 
-        {/* List */}
         {data.aptitudes.length === 0 ? (
           <p className="text-sm text-slate-400">Aucune aptitude définie.</p>
         ) : (
@@ -334,18 +332,18 @@ export default function AdminAptitudesPage() {
                       <div>
                         <p className="mb-1.5 text-xs font-medium text-slate-600">Types d&apos;événements autorisés</p>
                         <div className="flex flex-wrap gap-2">
-                          {ALL_CATEGORIES.map((cat) => (
+                          {missionTypes.map((mt) => (
                             <button
-                              key={cat}
+                              key={mt.id}
                               type="button"
-                              onClick={() => toggleCategory(cat, editCategories, setEditCategories)}
+                              onClick={() => toggleMissionType(mt.id, editMissionTypeIds, setEditMissionTypeIds)}
                               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                                editCategories.includes(cat)
+                                editMissionTypeIds.includes(mt.id)
                                   ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
                                   : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                               }`}
                             >
-                              {MISSION_CATEGORY_LABELS[cat]}
+                              {mt.name}
                             </button>
                           ))}
                         </div>
@@ -354,7 +352,7 @@ export default function AdminAptitudesPage() {
                         <button
                           type="button"
                           onClick={() => handleSaveEdit(apt.id)}
-                          disabled={!editName.trim() || editCategories.length === 0 || saving}
+                          disabled={!editName.trim() || editMissionTypeIds.length === 0 || saving}
                           className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
                         >
                           {saving ? 'Enregistrement...' : 'Enregistrer'}
@@ -375,11 +373,11 @@ export default function AdminAptitudesPage() {
                           <p className="font-medium text-slate-800">{apt.name}</p>
                           {apt.description ? <p className="text-sm text-slate-500">{apt.description}</p> : null}
                           <div className="mt-1.5 flex flex-wrap gap-1">
-                            {apt.allowed_categories.length === 0 ? (
-                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Aucune catégorie</span>
-                            ) : apt.allowed_categories.map((cat) => (
-                              <span key={cat} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-                                {MISSION_CATEGORY_LABELS[cat]}
+                            {apt.allowed_mission_type_ids.length === 0 ? (
+                              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-700">Aucun type</span>
+                            ) : apt.allowed_mission_type_ids.map((id) => (
+                              <span key={id} className="rounded-full bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+                                {missionTypeById.get(id)?.name ?? id}
                               </span>
                             ))}
                           </div>
@@ -391,7 +389,7 @@ export default function AdminAptitudesPage() {
                               setEditingId(apt.id);
                               setEditName(apt.name);
                               setEditDescription(apt.description ?? '');
-                              setEditCategories([...apt.allowed_categories]);
+                              setEditMissionTypeIds([...apt.allowed_mission_type_ids]);
                             }}
                             className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
                           >
@@ -407,7 +405,6 @@ export default function AdminAptitudesPage() {
                         </div>
                       </div>
 
-                      {/* Holders list */}
                       {holders.length > 0 ? (
                         <div className="flex flex-wrap gap-1.5 pt-1">
                           {holders.map((h) => (
@@ -436,7 +433,6 @@ export default function AdminAptitudesPage() {
         )}
       </section>
 
-      {/* ── Section 2 : Attribuer une aptitude ── */}
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
         <h2 className="mb-1 text-lg font-semibold text-slate-800">2. Attribuer une aptitude à un bénévole</h2>
         <p className="mb-5 text-sm text-slate-500">

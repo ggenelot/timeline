@@ -32,32 +32,35 @@ export type ProfileSkill = {
 
 export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
 
-export type MissionCategory = 'maraude' | 'garde' | 'formation' | 'vie_antenne' | 'poste_de_secours';
-
-export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: string }> = [
-  { value: 'maraude', label: 'Maraude' },
-  { value: 'garde', label: 'Garde' },
-  { value: 'formation', label: 'Formation' },
-  { value: 'vie_antenne', label: "Vie de l'antenne" },
-  { value: 'poste_de_secours', label: 'Poste de secours' }
-];
-
-export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
-  maraude: 'Maraude',
-  garde: 'Garde',
-  formation: 'Formation',
-  vie_antenne: "Vie de l'antenne",
-  poste_de_secours: 'Poste de secours'
+export type MissionTypeRequiredSkill = {
+  id: string;
+  mission_type_id: string;
+  skill_id: string;
+  quantity: number;
+  created_at: string;
+  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
 };
 
+export type MissionType = {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  default_required_volunteers: number;
+  default_start_time: string | null;
+  default_end_time: string | null;
+  created_at: string;
+  required_skills?: MissionTypeRequiredSkill[];
+};
 
 export type Mission = {
   id: string;
   title: string;
   description: string | null;
   location: string | null;
-  
-  category: MissionCategory;
+
+  mission_type_id: string;
+  mission_type: Pick<MissionType, 'id' | 'name' | 'color'> | null;
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
@@ -151,7 +154,7 @@ export type Aptitude = {
   id: string;
   name: string;
   description: string | null;
-  allowed_categories: MissionCategory[];
+  allowed_mission_type_ids: string[];
   created_at: string;
 };
 
@@ -160,27 +163,6 @@ export type ProfileAptitude = {
   profile_id: string;
   aptitude_id: string;
   created_at: string;
-};
-
-export type MissionTypeRequiredSkill = {
-  id: string;
-  mission_type_id: string;
-  skill_id: string;
-  quantity: number;
-  created_at: string;
-  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
-};
-
-export type MissionType = {
-  id: string;
-  name: string;
-  description: string | null;
-  category: MissionCategory | null;
-  default_required_volunteers: number;
-  default_start_time: string | null;
-  default_end_time: string | null;
-  created_at: string;
-  required_skills?: MissionTypeRequiredSkill[];
 };
 
 export type Responsibility = {
@@ -199,7 +181,8 @@ export type ResponsibilityHolder = {
 
 export type MissionCategoryResponsibility = {
   id: string;
-  category: MissionCategory;
+  mission_type_id: string;
   responsibility_id: string;
   created_at: string;
+  mission_type?: Pick<MissionType, 'id' | 'name'>;
 };

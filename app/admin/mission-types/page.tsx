@@ -4,9 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import {
-  MissionCategory,
-  MISSION_CATEGORY_LABELS,
-  MISSION_CATEGORY_OPTIONS,
   MissionType,
   MissionTypeRequiredSkill,
   Profile,
@@ -14,6 +11,19 @@ import {
 } from '@/lib/types';
 
 type SkillRow = { skill_id: string; quantity: number };
+
+const COLOR_OPTIONS = [
+  { value: 'violet', label: 'Violet', className: 'bg-violet-500' },
+  { value: 'red', label: 'Rouge', className: 'bg-red-500' },
+  { value: 'blue', label: 'Bleu', className: 'bg-blue-900' },
+  { value: 'sky', label: 'Ciel', className: 'bg-sky-400' },
+  { value: 'orange', label: 'Orange', className: 'bg-orange-400' },
+  { value: 'green', label: 'Vert', className: 'bg-green-500' },
+  { value: 'emerald', label: 'Émeraude', className: 'bg-emerald-500' },
+  { value: 'amber', label: 'Ambre', className: 'bg-amber-400' },
+  { value: 'pink', label: 'Rose', className: 'bg-pink-500' },
+  { value: 'indigo', label: 'Indigo', className: 'bg-indigo-500' },
+];
 
 function formatTime(time: string | null): string {
   if (!time) return '—';
@@ -89,7 +99,7 @@ function SkillsEditor({
 function MissionTypeForm({
   initialName = '',
   initialDescription = '',
-  initialCategory = '' as MissionCategory | '',
+  initialColor = '' as string,
   initialRequiredVolunteers = 1,
   initialStartTime = '',
   initialEndTime = '',
@@ -102,7 +112,7 @@ function MissionTypeForm({
 }: {
   initialName?: string;
   initialDescription?: string;
-  initialCategory?: MissionCategory | '';
+  initialColor?: string;
   initialRequiredVolunteers?: number;
   initialStartTime?: string;
   initialEndTime?: string;
@@ -111,7 +121,7 @@ function MissionTypeForm({
   onSubmit: (data: {
     name: string;
     description: string;
-    category: MissionCategory | '';
+    color: string;
     default_required_volunteers: number;
     default_start_time: string;
     default_end_time: string;
@@ -123,7 +133,7 @@ function MissionTypeForm({
 }) {
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
-  const [category, setCategory] = useState<MissionCategory | ''>(initialCategory);
+  const [color, setColor] = useState(initialColor);
   const [requiredVolunteers, setRequiredVolunteers] = useState(initialRequiredVolunteers);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(initialEndTime);
@@ -131,7 +141,7 @@ function MissionTypeForm({
 
   function handleSubmit() {
     if (!name.trim()) return;
-    onSubmit({ name, description, category, default_required_volunteers: requiredVolunteers, default_start_time: startTime, default_end_time: endTime, required_skills: skills });
+    onSubmit({ name, description, color, default_required_volunteers: requiredVolunteers, default_start_time: startTime, default_end_time: endTime, required_skills: skills });
   }
 
   return (
@@ -158,17 +168,20 @@ function MissionTypeForm({
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Catégorie</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as MissionCategory | '')}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-          >
-            <option value="">— Aucune —</option>
-            {MISSION_CATEGORY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
+          <label className="mb-1 block text-xs font-medium text-slate-600">Couleur du badge</label>
+          <div className="flex flex-wrap gap-2">
+            {COLOR_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => setColor(opt.value)}
+                title={opt.label}
+                className={`h-7 w-7 rounded-full border-2 transition ${opt.className} ${
+                  color === opt.value ? 'border-slate-800 scale-110' : 'border-transparent opacity-70 hover:opacity-100'
+                }`}
+              />
             ))}
-          </select>
+          </div>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Secouristes requis par défaut</label>
@@ -227,6 +240,19 @@ function MissionTypeForm({
     </div>
   );
 }
+
+const MISSION_TYPE_COLOR_CLASSES: Record<string, string> = {
+  violet: 'bg-violet-500 text-white',
+  red: 'bg-red-500 text-white',
+  blue: 'bg-blue-900 text-white',
+  sky: 'bg-sky-400 text-slate-900',
+  orange: 'bg-orange-400 text-slate-900',
+  green: 'bg-green-500 text-white',
+  emerald: 'bg-emerald-500 text-white',
+  amber: 'bg-amber-400 text-slate-900',
+  pink: 'bg-pink-500 text-white',
+  indigo: 'bg-indigo-500 text-white',
+};
 
 export default function AdminMissionTypesPage() {
   const router = useRouter();
@@ -292,7 +318,7 @@ export default function AdminMissionTypesPage() {
   async function handleCreate(data: {
     name: string;
     description: string;
-    category: MissionCategory | '';
+    color: string;
     default_required_volunteers: number;
     default_start_time: string;
     default_end_time: string;
@@ -306,7 +332,7 @@ export default function AdminMissionTypesPage() {
       body: JSON.stringify({
         name: data.name.trim(),
         description: data.description.trim() || null,
-        category: data.category || null,
+        color: data.color || null,
         default_required_volunteers: data.default_required_volunteers,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
@@ -328,7 +354,7 @@ export default function AdminMissionTypesPage() {
     data: {
       name: string;
       description: string;
-      category: MissionCategory | '';
+      color: string;
       default_required_volunteers: number;
       default_start_time: string;
       default_end_time: string;
@@ -343,7 +369,7 @@ export default function AdminMissionTypesPage() {
       body: JSON.stringify({
         name: data.name.trim(),
         description: data.description.trim() || null,
-        category: data.category || null,
+        color: data.color || null,
         default_required_volunteers: data.default_required_volunteers,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
@@ -393,7 +419,7 @@ export default function AdminMissionTypesPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Types de missions</h1>
         <p className="mt-1 text-sm text-slate-500">
           Définissez les types de missions proposés par l&apos;antenne — maraudes, postes de secours, formations, etc. —
-          et renseignez leurs paramètres par défaut : catégorie, nombre de secouristes, horaires habituels et
+          et renseignez leurs paramètres par défaut : couleur du badge, nombre de secouristes, horaires habituels et
           compétences requises.
         </p>
       </header>
@@ -431,7 +457,7 @@ export default function AdminMissionTypesPage() {
                     <MissionTypeForm
                       initialName={mt.name}
                       initialDescription={mt.description ?? ''}
-                      initialCategory={mt.category ?? ''}
+                      initialColor={mt.color ?? ''}
                       initialRequiredVolunteers={mt.default_required_volunteers}
                       initialStartTime={mt.default_start_time?.slice(0, 5) ?? ''}
                       initialEndTime={mt.default_end_time?.slice(0, 5) ?? ''}
@@ -445,16 +471,15 @@ export default function AdminMissionTypesPage() {
                   ) : (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-1.5">
-                        <p className="font-medium text-slate-800">{mt.name}</p>
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${MISSION_TYPE_COLOR_CLASSES[mt.color ?? ''] ?? 'bg-slate-200 text-slate-700'}`}
+                          >
+                            {mt.name}
+                          </span>
+                        </div>
                         {mt.description ? <p className="text-sm text-slate-500">{mt.description}</p> : null}
                         <div className="flex flex-wrap gap-2 text-xs">
-                          {mt.category ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-                              {MISSION_CATEGORY_LABELS[mt.category]}
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-slate-50 px-2 py-0.5 text-slate-400">Toutes catégories</span>
-                          )}
                           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
                             {mt.default_required_volunteers} secouriste{mt.default_required_volunteers > 1 ? 's' : ''}
                           </span>

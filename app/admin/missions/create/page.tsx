@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { MissionType, Profile } from '@/lib/types';
 import { getEventTemplateById } from '@/lib/event-templates';
 
 type MissionSkillOption = {
@@ -71,6 +71,7 @@ export default function AdminCreateMissionPage() {
   const [form, setForm] = useState<MissionFormState>(INITIAL_MISSION_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +117,9 @@ export default function AdminCreateMissionPage() {
       }
 
       setSkills(skillData ?? []);
+
+      const { data: mtData } = await supabase.from('mission_types').select('id,name').order('name', { ascending: true });
+      setMissionTypes((mtData ?? []) as Pick<MissionType, 'id' | 'name'>[]);
 
       const { data: locationsData, error: locationsError } = await supabase
         .from('missions')
@@ -236,7 +240,7 @@ export default function AdminCreateMissionPage() {
         description: form.description.trim() || null,
         location: form.location.trim() || null,
         
-        category: form.category,
+        mission_type_id: form.mission_type_id,
         starts_at: startsAtIso,
         ends_at: endsAtIso,
         required_volunteers: Number.parseInt(form.required_volunteers, 10),
@@ -315,6 +319,7 @@ export default function AdminCreateMissionPage() {
       <MissionForm
         form={form}
         onChange={setForm}
+        missionTypes={missionTypes}
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
