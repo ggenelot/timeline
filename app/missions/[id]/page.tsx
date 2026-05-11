@@ -461,8 +461,12 @@ export default function MissionDetailPage() {
       return;
     }
 
+    const rawMissionType = missionData.mission_type;
+    const normalizedMissionType = Array.isArray(rawMissionType) ? rawMissionType[0] ?? null : rawMissionType;
+
     const mappedMission: MissionWithSkills = {
       ...missionData,
+      mission_type: normalizedMissionType,
       mission_required_skills: (missionData.mission_required_skills ?? []).map((requiredSkill) => ({
         ...requiredSkill,
         skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
