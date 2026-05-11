@@ -2,6 +2,22 @@ import { FormEvent, ReactNode } from 'react';
 import { MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus } from '@/lib/types';
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
+
+export type RecurrenceFormState = {
+  enabled: boolean;
+  frequency: RecurrenceFrequency;
+  days_of_week: number[];
+  end_date: string;
+};
+
+export const INITIAL_RECURRENCE_FORM: RecurrenceFormState = {
+  enabled: false,
+  frequency: 'weekly',
+  days_of_week: [],
+  end_date: ''
+};
+
 export type MissionFormState = {
   title: string;
   description: string;
@@ -55,6 +71,8 @@ type MissionFormProps = {
   availableSkills?: SkillOption[];
   requirementsError?: string | null;
   locationSuggestions?: string[];
+  recurrence?: RecurrenceFormState;
+  onRecurrenceChange?: (nextValue: RecurrenceFormState) => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   submitting: boolean;
   submitLabel: string;
@@ -62,6 +80,14 @@ type MissionFormProps = {
   createdByLabel?: string;
   footerActions?: ReactNode;
 };
+
+const DAYS_OF_WEEK = ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'];
+
+const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = [
+  { value: 'daily', label: 'Quotidienne' },
+  { value: 'weekly', label: 'Hebdomadaire' },
+  { value: 'monthly', label: 'Mensuelle' }
+];
 
 export function MissionForm({
   form,
@@ -71,6 +97,8 @@ export function MissionForm({
   availableSkills = [],
   requirementsError,
   locationSuggestions = [],
+  recurrence,
+  onRecurrenceChange,
   onSubmit,
   submitting,
   submitLabel,
@@ -229,6 +257,88 @@ export function MissionForm({
           requirementsError={requirementsError}
           submitting={submitting}
         />
+      ) : null}
+
+      {recurrence !== undefined && onRecurrenceChange ? (
+        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
+          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+            <input
+              type="checkbox"
+              checked={recurrence.enabled}
+              onChange={(e) => onRecurrenceChange({ ...recurrence, enabled: e.target.checked })}
+              disabled={submitting}
+              className="rounded"
+            />
+            Répéter cette mission
+          </label>
+
+          {recurrence.enabled ? (
+            <div className="space-y-3 pl-6">
+              <div className="space-y-1">
+                <p className="text-sm text-slate-600">Fréquence</p>
+                <div className="flex flex-wrap gap-2">
+                  {FREQUENCY_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => onRecurrenceChange({ ...recurrence, frequency: option.value })}
+                      disabled={submitting}
+                      aria-pressed={recurrence.frequency === option.value}
+                      className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+                        recurrence.frequency === option.value
+                          ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {recurrence.frequency === 'weekly' ? (
+                <div className="space-y-1">
+                  <p className="text-sm text-slate-600">Jours de la semaine</p>
+                  <div className="flex flex-wrap gap-2">
+                    {DAYS_OF_WEEK.map((day, index) => (
+                      <button
+                        key={index}
+                        type="button"
+                        onClick={() => {
+                          const days = recurrence.days_of_week.includes(index)
+                            ? recurrence.days_of_week.filter((d) => d !== index)
+                            : [...recurrence.days_of_week, index];
+                          onRecurrenceChange({ ...recurrence, days_of_week: days });
+                        }}
+                        disabled={submitting}
+                        aria-pressed={recurrence.days_of_week.includes(index)}
+                        className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
+                          recurrence.days_of_week.includes(index)
+                            ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                      >
+                        {day}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
+              <label className="block text-sm text-slate-600">
+                Répéter jusqu'au *
+                <input
+                  type="date"
+                  value={recurrence.end_date}
+                  onChange={(e) => onRecurrenceChange({ ...recurrence, end_date: e.target.value })}
+                  disabled={submitting}
+                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  required={recurrence.enabled}
+                />
+              </label>
+            </div>
+          ) : null}
+        </div>
       ) : null}
 
       {createdByLabel ? (
