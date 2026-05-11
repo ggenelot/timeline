@@ -10,6 +10,7 @@ type ProposalButtonProps = {
   disabled: boolean;
   missionStatus: MissionStatus;
   currentResponse: MissionProposalResponse | null;
+  onResponse?: () => void;
 };
 
 const responseOptions: Array<{ label: string; value: MissionProposalResponse }> = [
@@ -17,7 +18,7 @@ const responseOptions: Array<{ label: string; value: MissionProposalResponse }> 
   { label: 'Non disponible', value: 'unavailable' }
 ];
 
-export function ProposalButton({ missionId, volunteerId, disabled, missionStatus, currentResponse }: ProposalButtonProps) {
+export function ProposalButton({ missionId, volunteerId, disabled, missionStatus, currentResponse, onResponse }: ProposalButtonProps) {
   const [loadingResponse, setLoadingResponse] = useState<MissionProposalResponse | null>(null);
   const [localResponse, setLocalResponse] = useState<MissionProposalResponse | null>(currentResponse);
   const [error, setError] = useState<string | null>(null);
@@ -95,6 +96,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
       setLocalResponse(response);
       setLoadingResponse(null);
+      onResponse?.();
       return;
     }
 
@@ -118,6 +120,7 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
 
     setLocalResponse(response);
     setLoadingResponse(null);
+    onResponse?.();
   }
 
   if (missionBlocksResponse) {

@@ -22,6 +22,7 @@ type MissionCardProps = {
   unavailableVolunteersCount: number;
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
   onPublishDraft?: (missionId: string) => Promise<void>;
+  onResponse?: () => void;
 };
 
 
@@ -76,7 +77,8 @@ export function MissionCard({
   availableVolunteersCount,
   unavailableVolunteersCount,
   availableVolunteers,
-  onPublishDraft
+  onPublishDraft,
+  onResponse
 }: MissionCardProps) {
   const [selectedSkillFilter, setSelectedSkillFilter] = useState('all');
 
@@ -171,7 +173,7 @@ export function MissionCard({
           </div>
 
           {canPropose ? (
-            <ProposalButton missionId={mission.id} volunteerId={currentUserId} disabled={false} missionStatus={mission.status} currentResponse={proposalResponse} />
+            <ProposalButton missionId={mission.id} volunteerId={currentUserId} disabled={false} missionStatus={mission.status} currentResponse={proposalResponse} onResponse={onResponse} />
           ) : null}
         </>
       }
