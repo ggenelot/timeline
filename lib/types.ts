@@ -179,6 +179,14 @@ export type ResponsibilityHolder = {
   created_at: string;
 };
 
+export const MISSION_CATEGORY_OPTIONS: { value: string; label: string }[] = [
+  { value: 'poste_de_secours', label: 'Poste de secours' },
+  { value: 'garde', label: 'Garde' },
+  { value: 'formation', label: 'Formation' },
+  { value: 'maraude', label: 'Maraude' },
+  { value: 'vie_antenne', label: "Vie de l'antenne" },
+];
+
 export type MissionCategoryResponsibility = {
   id: string;
   mission_type_id: string;
