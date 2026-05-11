@@ -307,32 +307,40 @@ export default function AdminCreateMissionPage() {
       created_by: profile.id
     };
 
-    const missionsToInsert = dates.map((date) => {
+    const createdMissions: Array<{ id: string }> = [];
+
+    for (const date of dates) {
       const newStart = new Date(`${date}T${form.starts_at_time}`);
       const newEnd = new Date(newStart.getTime() + durationMs);
-      return {
-        ...missionBase,
-        starts_at: newStart.toISOString(),
-        ends_at: newEnd.toISOString()
-      };
-    });
 
-    const { data: createdMissions, error: insertError } = await supabase
-      .from('missions')
-      .insert(missionsToInsert)
-      .select('id');
+      const { data: created, error: insertError } = await supabase
+        .from('missions')
+        .insert({
+          ...missionBase,
+          starts_at: newStart.toISOString(),
+          ends_at: newEnd.toISOString()
+        })
+        .select('id')
+        .single();
 
-    if (insertError) {
-      if (insertError.message.toLowerCase().includes('row-level security')) {
-        setError("Action refusée par la politique d'accès (RLS). Vérifiez que votre profil est admin.");
-      } else {
-        setError(insertError.message);
+      if (insertError) {
+        const insertedIds = createdMissions.map((m) => m.id);
+        if (insertedIds.length > 0) {
+          await supabase.from('missions').delete().in('id', insertedIds);
+        }
+        if (insertError.message.toLowerCase().includes('row-level security')) {
+          setError("Action refusée par la politique d'accès (RLS). Vérifiez que votre profil est admin.");
+        } else {
+          setError(insertError.message);
+        }
+        setSubmitting(false);
+        return;
       }
-      setSubmitting(false);
-      return;
+
+      createdMissions.push(created);
     }
 
-    if (parsedRequirements.length > 0 && createdMissions && createdMissions.length > 0) {
+    if (parsedRequirements.length > 0 && createdMissions.length > 0) {
       const requirementRows = createdMissions.flatMap((mission) =>
         parsedRequirements.map((requirement) => ({
           mission_id: mission.id,
