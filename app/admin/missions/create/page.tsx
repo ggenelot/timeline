@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState } from '@/components/missions/mission-form';
+import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
 import { MissionType, Profile } from '@/lib/types';
 import { getEventTemplateById } from '@/lib/event-templates';
@@ -17,6 +17,49 @@ type ParsedRequirement = {
   skill_id: string | null;
   quantity: number;
 };
+
+function parseLocalDate(dateStr: string): Date {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+function toDateStr(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
+function generateRecurrenceDates(startDateStr: string, recurrence: RecurrenceFormState): string[] {
+  if (!recurrence.enabled || !recurrence.end_date || recurrence.end_date < startDateStr) {
+    return [startDateStr];
+  }
+
+  const dates: string[] = [];
+  const endDate = parseLocalDate(recurrence.end_date);
+
+  if (recurrence.frequency === 'daily') {
+    const current = parseLocalDate(startDateStr);
+    while (current <= endDate) {
+      dates.push(toDateStr(current));
+      current.setDate(current.getDate() + 1);
+    }
+  } else if (recurrence.frequency === 'weekly') {
+    if (recurrence.days_of_week.length === 0) return [startDateStr];
+    const current = parseLocalDate(startDateStr);
+    while (current <= endDate) {
+      if (recurrence.days_of_week.includes(current.getDay())) {
+        dates.push(toDateStr(current));
+      }
+      current.setDate(current.getDate() + 1);
+    }
+  } else if (recurrence.frequency === 'monthly') {
+    const current = parseLocalDate(startDateStr);
+    while (current <= endDate) {
+      dates.push(toDateStr(current));
+      current.setMonth(current.getMonth() + 1);
+    }
+  }
+
+  return dates.length > 0 ? dates : [startDateStr];
+}
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -69,6 +112,7 @@ export default function AdminCreateMissionPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<MissionFormState>(INITIAL_MISSION_FORM);
+  const [recurrence, setRecurrence] = useState<RecurrenceFormState>(INITIAL_RECURRENCE_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
   const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
@@ -224,6 +268,21 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
+    if (recurrence.enabled) {
+      if (!recurrence.end_date) {
+        setError('La date de fin de récurrence est obligatoire.');
+        return;
+      }
+      if (recurrence.end_date < form.starts_at_date) {
+        setError('La date de fin de récurrence doit être postérieure à la date de début.');
+        return;
+      }
+      if (recurrence.frequency === 'weekly' && recurrence.days_of_week.length === 0) {
+        setError('Veuillez sélectionner au moins un jour de la semaine.');
+        return;
+      }
+    }
+
     const { parsedRequirements, error: parsedRequirementsError } = parseMissionRequirements(requirements);
 
     if (parsedRequirementsError) {
@@ -233,57 +292,92 @@ export default function AdminCreateMissionPage() {
 
     setSubmitting(true);
 
-    const { data: createdMission, error: insertError } = await supabase
-      .from('missions')
-      .insert({
-        title: form.title.trim(),
-        description: form.description.trim() || null,
-        location: form.location.trim() || null,
-        
-        mission_type_id: form.mission_type_id,
-        starts_at: startsAtIso,
-        ends_at: endsAtIso,
-        required_volunteers: Number.parseInt(form.required_volunteers, 10),
-        status: form.status,
-        created_by: profile.id
-      })
-      .select('id')
-      .single();
+    const durationMs = new Date(endsAtIso).getTime() - new Date(startsAtIso).getTime();
+    const dates = generateRecurrenceDates(form.starts_at_date, recurrence);
 
-    if (insertError) {
-      if (insertError.message.toLowerCase().includes('row-level security')) {
-        setError("Action refusée par la politique d'accès (RLS). Vérifiez que votre profil est admin.");
-      } else {
-        setError(insertError.message);
-      }
+    if (dates.length > 100) {
+      setError('La récurrence génèrerait plus de 100 missions. Veuillez réduire la période ou changer la fréquence.');
       setSubmitting(false);
       return;
     }
 
-    if ((createdMission?.id ?? null) && parsedRequirements.length > 0) {
-      const { error: requirementInsertError } = await supabase.from('mission_required_skills').insert(
+    const missionBase = {
+      title: form.title.trim(),
+      description: form.description.trim() || null,
+      location: form.location.trim() || null,
+      mission_type_id: form.mission_type_id || null,
+      required_volunteers: Number.parseInt(form.required_volunteers, 10),
+      status: form.status,
+      created_by: profile.id
+    };
+
+    const createdMissions: Array<{ id: string }> = [];
+
+    for (const date of dates) {
+      const newStart = new Date(`${date}T${form.starts_at_time}`);
+      const newEnd = new Date(newStart.getTime() + durationMs);
+
+      const { data: created, error: insertError } = await supabase
+        .from('missions')
+        .insert({
+          ...missionBase,
+          starts_at: newStart.toISOString(),
+          ends_at: newEnd.toISOString()
+        })
+        .select('id')
+        .single();
+
+      if (insertError) {
+        const insertedIds = createdMissions.map((m) => m.id);
+        if (insertedIds.length > 0) {
+          await supabase.from('missions').delete().in('id', insertedIds);
+        }
+        if (insertError.message.toLowerCase().includes('row-level security')) {
+          setError("Action refusée par la politique d'accès (RLS). Vérifiez que votre profil est admin.");
+        } else {
+          setError(insertError.message);
+        }
+        setSubmitting(false);
+        return;
+      }
+
+      createdMissions.push(created);
+    }
+
+    if (parsedRequirements.length > 0 && createdMissions.length > 0) {
+      const requirementRows = createdMissions.flatMap((mission) =>
         parsedRequirements.map((requirement) => ({
-          mission_id: createdMission.id,
+          mission_id: mission.id,
           skill_id: requirement.skill_id,
           quantity: requirement.quantity
         }))
       );
 
+      const { error: requirementInsertError } = await supabase.from('mission_required_skills').insert(requirementRows);
+
       if (requirementInsertError) {
-        await supabase.from('missions').delete().eq('id', createdMission.id);
-        setError(`Mission non enregistrée: impossible de créer les besoins en compétences (${requirementInsertError.message}).`);
+        const missionIds = createdMissions.map((m) => m.id);
+        await supabase.from('missions').delete().in('id', missionIds);
+        setError(`Missions non enregistrées: impossible de créer les besoins en compétences (${requirementInsertError.message}).`);
         setSubmitting(false);
         return;
       }
     }
 
-    setSuccess('Mission créée avec succès. Redirection en cours...');
+    const count = createdMissions?.length ?? 0;
+    const successMsg = count > 1
+      ? `${count} missions créées avec succès. Redirection en cours...`
+      : 'Mission créée avec succès. Redirection en cours...';
+
+    setSuccess(successMsg);
     setForm(INITIAL_MISSION_FORM);
+    setRecurrence(INITIAL_RECURRENCE_FORM);
     setRequirements([]);
 
+    const firstId = createdMissions?.[0]?.id;
     window.setTimeout(() => {
-      if (createdMission?.id) {
-        router.push(`/missions/${createdMission.id}`);
+      if (count === 1 && firstId) {
+        router.push(`/missions/${firstId}`);
         return;
       }
       router.push('/missions');
@@ -325,6 +419,8 @@ export default function AdminCreateMissionPage() {
         requirementsError={requirementsError}
         availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom', category: skill.category }))}
         locationSuggestions={locationSuggestions}
+        recurrence={recurrence}
+        onRecurrenceChange={setRecurrence}
         onSubmit={handleSubmit}
         submitting={submitting}
         submitLabel="Créer la mission"

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, MISSION_CATEGORY_OPTIONS } from '@/lib/types';
 
 type VisibilityRule = {
   id: string;
@@ -12,6 +12,7 @@ type VisibilityRule = {
   criterion_type: 'skill' | 'aptitude';
   criterion_id: string;
   required_status: string | null;
+  required_category: string | null;
   is_active: boolean;
   created_at: string;
 };
@@ -24,8 +25,17 @@ const STATUS_OPTIONS: { value: string | null; label: string }[] = [
   { value: 'cancelled', label: 'Annulé' },
 ];
 
+const CATEGORY_OPTIONS: { value: string | null; label: string }[] = [
+  { value: null, label: 'Toutes les catégories' },
+  ...MISSION_CATEGORY_OPTIONS.map((o) => ({ value: o.value, label: o.label })),
+];
+
 function getStatusLabel(status: string | null): string {
   return STATUS_OPTIONS.find((o) => o.value === status)?.label ?? status ?? 'Tous les statuts';
+}
+
+function getCategoryLabel(category: string | null): string {
+  return CATEGORY_OPTIONS.find((o) => o.value === category)?.label ?? category ?? 'Toutes les catégories';
 }
 
 type SkillOption = { id: string; name: string; category: string | null };
@@ -55,6 +65,7 @@ export default function AdminVisibilitePage() {
   const [newCriterionType, setNewCriterionType] = useState<'skill' | 'aptitude'>('skill');
   const [newCriterionId, setNewCriterionId] = useState('');
   const [newRequiredStatus, setNewRequiredStatus] = useState<string | null>(null);
+  const [newRequiredCategory, setNewRequiredCategory] = useState<string | null>(null);
   const [newIsActive, setNewIsActive] = useState(true);
   const [creating, setCreating] = useState(false);
 
@@ -65,6 +76,7 @@ export default function AdminVisibilitePage() {
   const [editCriterionType, setEditCriterionType] = useState<'skill' | 'aptitude'>('skill');
   const [editCriterionId, setEditCriterionId] = useState('');
   const [editRequiredStatus, setEditRequiredStatus] = useState<string | null>(null);
+  const [editRequiredCategory, setEditRequiredCategory] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [error, setError] = useState<string | null>(null);
@@ -136,11 +148,12 @@ export default function AdminVisibilitePage() {
         criterion_type: newCriterionType,
         criterion_id: newCriterionId,
         required_status: newRequiredStatus,
+        required_category: newRequiredCategory,
         is_active: newIsActive
       })
     });
     if (res.ok) {
-      setNewName(''); setNewDescription(''); setNewCriterionId(''); setNewRequiredStatus(null); setNewIsActive(true);
+      setNewName(''); setNewDescription(''); setNewCriterionId(''); setNewRequiredStatus(null); setNewRequiredCategory(null); setNewIsActive(true);
       await fetchData(token);
       flash('Règle créée.');
     } else {
@@ -162,7 +175,8 @@ export default function AdminVisibilitePage() {
         description: editDescription.trim() || null,
         criterion_type: editCriterionType,
         criterion_id: editCriterionId,
-        required_status: editRequiredStatus
+        required_status: editRequiredStatus,
+        required_category: editRequiredCategory
       })
     });
     if (res.ok) {
@@ -302,8 +316,21 @@ export default function AdminVisibilitePage() {
                 <option key={o.value ?? '__all'} value={o.value ?? ''}>{o.label}</option>
               ))}
             </select>
+          </div>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <span className="shrink-0 text-sm font-medium text-slate-700">Catégorie requise :</span>
+            <select
+              value={newRequiredCategory ?? ''}
+              onChange={(e) => setNewRequiredCategory(e.target.value || null)}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              {CATEGORY_OPTIONS.map((o) => (
+                <option key={o.value ?? '__all'} value={o.value ?? ''}>{o.label}</option>
+              ))}
+            </select>
             <span className="text-xs text-slate-400">
-              Le groupe voit les missions avec ce statut (et les non-membres les voient si un membre est disponible).
+              Restreint la règle à un type de mission. Sans filtre, la règle s&apos;applique à toutes les catégories.
             </span>
           </div>
 
@@ -385,6 +412,19 @@ export default function AdminVisibilitePage() {
                           ))}
                         </select>
                       </div>
+
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                        <span className="shrink-0 text-sm font-medium text-slate-700">Catégorie requise :</span>
+                        <select
+                          value={editRequiredCategory ?? ''}
+                          onChange={(e) => setEditRequiredCategory(e.target.value || null)}
+                          className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        >
+                          {CATEGORY_OPTIONS.map((o) => (
+                            <option key={o.value ?? '__all'} value={o.value ?? ''}>{o.label}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div className="flex gap-2">
                         <button
                           type="button"
@@ -436,6 +476,16 @@ export default function AdminVisibilitePage() {
                             {getStatusLabel(rule.required_status)}
                           </span>
                         </p>
+                        <p className="text-sm text-slate-600">
+                          <span className="font-medium">Catégorie :</span>{' '}
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                            rule.required_category
+                              ? 'bg-amber-100 text-amber-700'
+                              : 'bg-slate-100 text-slate-500'
+                          }`}>
+                            {getCategoryLabel(rule.required_category)}
+                          </span>
+                        </p>
                       </div>
                       <div className="flex shrink-0 gap-2">
                         <button
@@ -458,6 +508,7 @@ export default function AdminVisibilitePage() {
                             setEditCriterionType(rule.criterion_type);
                             setEditCriterionId(rule.criterion_id);
                             setEditRequiredStatus(rule.required_status);
+                            setEditRequiredCategory(rule.required_category);
                           }}
                           className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
                         >
@@ -495,12 +546,18 @@ export default function AdminVisibilitePage() {
             non-brouillon.
           </li>
           <li>
+            <strong>Catégorie requise</strong> : restreint la règle à un type de mission (ex. <em>Poste de secours</em>).
+            Sans filtre, la règle s&apos;applique à toutes les catégories.
+          </li>
+          <li>
             <strong>Autres bénévoles</strong> : voient uniquement les missions couvertes par une règle active
             (statut correspondant) sur lesquelles un membre du groupe privilégié a répondu <em>disponible</em>.
           </li>
           <li>
-            <strong>Exemple</strong> : règle &laquo; CP &raquo; avec statut <em>Proposé</em> — les CP voient
-            toutes les missions proposées ; les non-CP voient les missions proposées où au moins un CP est disponible.
+            <strong>Exemple</strong> : règle &laquo; Visibilité CP - PS &raquo; avec statut <em>Proposé</em>
+            et catégorie <em>Poste de secours</em> — les CP voient tous les postes de secours proposés ;
+            les non-CP voient les postes de secours proposés où au moins un CP est disponible ;
+            les brouillons restent invisibles pour tout le monde sauf les admins.
           </li>
           <li>
             <strong>Plusieurs règles actives</strong> : chaque règle est évaluée indépendamment. Une mission

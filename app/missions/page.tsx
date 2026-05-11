@@ -438,6 +438,7 @@ export default function MissionsPage() {
                   unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
                   availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
                   onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
+                  onResponse={() => void loadData()}
                 />
               </div>
             ))}
@@ -458,6 +459,7 @@ export default function MissionsPage() {
               unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
               availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
               onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
+              onResponse={() => void loadData()}
             />
           </div>
         ))}
