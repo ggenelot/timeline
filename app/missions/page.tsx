@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
+import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
 import { MISSION_STATUS_LABELS } from '@/lib/missions';
 
@@ -37,6 +37,7 @@ export default function MissionsPage() {
   const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [canCreateMissionTypeIds, setCanCreateMissionTypeIds] = useState<string[]>([]);
+  const [canManageMissionTypeIds, setCanManageMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
     Map<
       string,
@@ -106,19 +107,31 @@ export default function MissionsPage() {
     const tok = sessionData.session?.access_token ?? '';
 
     // Fetch all mission types
+    let allTypeIds: string[] = [];
     const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
     if (typesRes.ok) {
       const typesJson = (await typesRes.json()) as { missionTypes: MissionType[] };
       setMissionTypes(typesJson.missionTypes);
+      allTypeIds = typesJson.missionTypes.map((t) => t.id);
     }
 
-    // For benevoles, fetch aptitudes to know which mission types they can propose
     if (profileData.role === 'benevole') {
-      const aptRes = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
-      if (aptRes.ok) {
-        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_mission_type_ids: string[] }> };
-        const ids = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_mission_type_ids ?? [])));
-        setCanCreateMissionTypeIds(ids);
+      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
+      if (rolesRes.ok) {
+        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
+
+        const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+        const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
+        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
+        const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
+        setCanCreateMissionTypeIds(createIds);
+        setCanManageMissionTypeIds(manageIds);
       }
     }
 
@@ -463,7 +476,7 @@ export default function MissionsPage() {
                   currentUserId={profile?.id ?? ''}
                   canPropose={profile?.role === 'benevole'}
                   proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
-                  canEdit={profile?.role === 'admin'}
+                  canEdit={profile?.role === 'admin' || canManageMissionTypeIds.includes(mission.mission_type_id)}
                   availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
                   unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
                   availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
@@ -484,7 +497,7 @@ export default function MissionsPage() {
               currentUserId={profile?.id ?? ''}
               canPropose={profile?.role === 'benevole'}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
-              canEdit={profile?.role === 'admin'}
+              canEdit={profile?.role === 'admin' || canManageMissionTypeIds.includes(mission.mission_type_id)}
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
               unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
               availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}

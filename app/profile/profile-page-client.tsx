@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, Skill } from '@/lib/types';
+import { Profile, Role, RoleBehavior, Skill } from '@/lib/types';
 import { getSkillBadgeClass } from '@/components/skills/skill-badge';
 
 export function ProfilePageClient() {
@@ -17,6 +17,7 @@ export function ProfilePageClient() {
   const [copiedCalendarUrl, setCopiedCalendarUrl] = useState<string | null>(null);
   const [skillsByCategory, setSkillsByCategory] = useState<Record<string, Skill[]>>({});
   const [acquiredSkillIds, setAcquiredSkillIds] = useState<Set<string>>(new Set());
+  const [roles, setRoles] = useState<Array<Role & { behaviors: RoleBehavior[] }>>([]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const searchParams = useSearchParams();
@@ -55,6 +56,18 @@ export function ProfilePageClient() {
         setError('Impossible de charger votre profil.');
       } else {
         setProfile(data);
+
+        const rolesRes = await fetch('/api/roles/mine', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (rolesRes.ok) {
+          const rolesJson = (await rolesRes.json()) as { roles: Role[]; behaviors: RoleBehavior[] };
+          const rolesWithBehaviors = rolesJson.roles.map((role) => ({
+            ...role,
+            behaviors: rolesJson.behaviors.filter((b) => b.role_id === role.id)
+          }));
+          setRoles(rolesWithBehaviors);
+        }
 
         if (data.role === 'benevole') {
           const [{ data: skillsData }, { data: profileSkillsData }] = await Promise.all([
@@ -255,6 +268,20 @@ export function ProfilePageClient() {
         <p><span className="font-medium">Email:</span> {profile.email}</p>
         <p><span className="font-medium">Rôle:</span> {profile.role}</p>
       </div>
+
+      {roles.length > 0 ? (
+        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+          <p className="font-medium text-slate-900">Mes rôles</p>
+          <div className="mt-2 space-y-2">
+            {roles.map((role) => (
+              <div key={role.id}>
+                <p className="font-medium text-slate-800">{role.name}</p>
+                {role.description ? <p className="text-xs text-slate-500">{role.description}</p> : null}
+              </div>
+            ))}
+          </div>
+        </div>
+      ) : null}
 
       {isVolunteer ? (
         <div className="space-y-4 text-sm">

@@ -3,15 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile } from '@/lib/types';
+import { Profile, RoleBehavior } from '@/lib/types';
 
 type MissionTypeOption = { id: string; name: string };
-
-type AptitudeData = {
-  id: string;
-  name: string;
-  allowed_mission_type_ids: string[];
-};
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -21,7 +15,7 @@ export default function VolunteerCreateMissionPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [aptitudes, setAptitudes] = useState<AptitudeData[]>([]);
+  const [roleNames, setRoleNames] = useState<string[]>([]);
   const [allMissionTypes, setAllMissionTypes] = useState<MissionTypeOption[]>([]);
   const [allowedMissionTypeIds, setAllowedMissionTypeIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -53,7 +47,6 @@ export default function VolunteerCreateMissionPage() {
 
       setProfile(profileData);
 
-      // Admins/responsables should use the admin creation page
       if (profileData.role !== 'benevole') {
         router.replace('/admin/missions/create');
         return;
@@ -62,22 +55,27 @@ export default function VolunteerCreateMissionPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
 
-      // Fetch all mission types
-      const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
+      const [typesRes, rolesRes] = await Promise.all([
+        fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } }),
+        fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } }),
+      ]);
+
+      let allTypeIds: string[] = [];
       if (typesRes.ok) {
         const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
         setAllMissionTypes(typesJson.missionTypes);
+        allTypeIds = typesJson.missionTypes.map((t) => t.id);
       }
 
-      // Fetch user's aptitudes
-      const res = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
-
-      if (res.ok) {
-        const json = (await res.json()) as { aptitudes: AptitudeData[] };
-        setAptitudes(json.aptitudes);
-        const typeIds = Array.from(new Set(json.aptitudes.flatMap((a) => a.allowed_mission_type_ids ?? [])));
-        setAllowedMissionTypeIds(typeIds);
-        if (typeIds.length === 1) setMissionTypeId(typeIds[0]);
+      if (rolesRes.ok) {
+        const rolesJson = (await rolesRes.json()) as { roles: Array<{ name: string }>; behaviors: RoleBehavior[] };
+        setRoleNames(rolesJson.roles.map((r) => r.name));
+        const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+        const canCreateIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+        setAllowedMissionTypeIds(canCreateIds);
+        if (canCreateIds.length === 1) setMissionTypeId(canCreateIds[0]);
       }
 
       setLoading(false);
@@ -134,7 +132,7 @@ export default function VolunteerCreateMissionPage() {
   if (allowedMissionTypeIds.length === 0) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        Vous n&apos;avez pas d&apos;aptitude vous permettant de créer des missions. Contactez un administrateur.
+        Vous n&apos;avez pas de rôle vous permettant de créer des missions. Contactez un administrateur.
       </div>
     );
   }
@@ -146,9 +144,9 @@ export default function VolunteerCreateMissionPage() {
         <p className="mt-1 text-sm text-slate-500">
           La mission sera créée en <span className="font-medium text-amber-700">brouillon</span> et devra être validée par un administrateur avant d&apos;être proposée aux bénévoles.
         </p>
-        {aptitudes.length > 0 ? (
+        {roleNames.length > 0 ? (
           <p className="mt-1 text-xs text-slate-400">
-            Vos aptitudes : {aptitudes.map((a) => a.name).join(', ')}
+            Vos rôles : {roleNames.join(', ')}
           </p>
         ) : null}
       </div>
@@ -156,7 +154,6 @@ export default function VolunteerCreateMissionPage() {
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        {/* Title */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Titre <span className="text-red-500">*</span></label>
           <input
@@ -168,7 +165,6 @@ export default function VolunteerCreateMissionPage() {
           />
         </div>
 
-        {/* Category */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Type d&apos;événement <span className="text-red-500">*</span></label>
           <div className="flex flex-wrap gap-2">
@@ -189,7 +185,6 @@ export default function VolunteerCreateMissionPage() {
           </div>
         </div>
 
-        {/* Description */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
           <textarea
@@ -200,7 +195,6 @@ export default function VolunteerCreateMissionPage() {
           />
         </div>
 
-        {/* Location */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Lieu</label>
           <input
@@ -211,7 +205,6 @@ export default function VolunteerCreateMissionPage() {
           />
         </div>
 
-        {/* Dates */}
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-slate-700">Début <span className="text-red-500">*</span></label>
@@ -253,7 +246,6 @@ export default function VolunteerCreateMissionPage() {
           </div>
         </div>
 
-        {/* Required volunteers */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Nombre de bénévoles requis <span className="text-red-500">*</span></label>
           <input
