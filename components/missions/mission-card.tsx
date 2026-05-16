@@ -36,23 +36,23 @@ const MISSION_STATUS_LABELS = {
 
 const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; statusBadgeClassName: string }> = {
   draft: {
-    cardClassName: 'border-amber-200 bg-amber-50/60',
+    cardClassName: 'border-l-4 border-l-amber-400',
     statusBadgeClassName: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200'
   },
   proposed: {
-    cardClassName: 'border-sky-200 bg-sky-50/55',
+    cardClassName: 'border-l-4 border-l-sky-400',
     statusBadgeClassName: 'bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-200'
   },
   confirmed: {
-    cardClassName: 'border-emerald-200 bg-emerald-50/55',
+    cardClassName: 'border-l-4 border-l-emerald-400',
     statusBadgeClassName: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200'
   },
   closed: {
-    cardClassName: 'border-slate-300 bg-slate-100/70',
+    cardClassName: 'border-l-4 border-l-slate-400',
     statusBadgeClassName: 'bg-slate-200 text-slate-700 ring-1 ring-inset ring-slate-300'
   },
   cancelled: {
-    cardClassName: 'border-rose-200 bg-rose-50/65',
+    cardClassName: 'border-l-4 border-l-rose-400',
     statusBadgeClassName: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200'
   }
 };
@@ -100,35 +100,31 @@ export function MissionCard({
     <MissionCardShell
       headerLeft={(
         <>
-          <span className="rounded-full bg-slate-700 px-3 py-1.5 text-sm font-bold text-white">
+          <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white">
             {missionTypeName ?? '—'}
           </span>
-          <span className="text-slate-400">|</span>
           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>
             {MISSION_STATUS_LABELS[mission.status]}
           </span>
-          <span className="text-slate-400">|</span>
-          <span className="text-slate-500">{doStatusLabel}</span>
+          <span className="text-xs text-slate-500">{doStatusLabel}</span>
         </>
       )}
       className={missionStatusStyle.cardClassName}
       headerRight={(
-        <div className="flex flex-col items-end gap-1">
-          <div className="flex items-center gap-2">
-          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{availableVolunteersCount} DISPONIBLES</span>
-          <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-400">{unavailableVolunteersCount} INDISPONIBLES</span>
-          </div>
+        <div className="flex items-center gap-1.5">
+          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{availableVolunteersCount} DISPONIBLES</span>
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">{unavailableVolunteersCount} INDISPONIBLES</span>
         </div>
       )}
       title={mission.title}
       metadata={
         <>
-          {new Date(mission.starts_at).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} |{' '}
+          {new Date(mission.starts_at).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} •{' '}
           {new Date(mission.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} à{' '}
-          {new Date(mission.ends_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+          {new Date(mission.ends_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} • Lieu : {mission.location ?? 'Non défini'}
         </>
       }
-      location={<>Lieu : {mission.location ?? 'Non défini'}</>}
+      location={null}
       description={mission.description ?? 'Aucune description'}
       requirements={
         requiredSkills.length > 0 ? (
@@ -176,7 +172,7 @@ export function MissionCard({
                 <button
                   type="button"
                   onClick={() => setSelectedSkillFilter('all')}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                  className={`rounded-md border px-2 py-1 text-xs font-medium transition ${
                     selectedSkillFilter === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                   }`}
                 >
@@ -187,7 +183,7 @@ export function MissionCard({
                     key={skill.name}
                     type="button"
                     onClick={() => setSelectedSkillFilter(skill.name)}
-                    className={`rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                    className={`rounded-md border px-2 py-1 text-xs font-medium transition ${
                       selectedSkillFilter === skill.name ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
                     }`}
                   >
@@ -197,7 +193,7 @@ export function MissionCard({
               </div>
             </div>
           ) : null}
-          Personnes disponibles :{' '}
+          <div className="mb-1 text-sm font-semibold text-slate-700">Personnes disponibles</div>
           {filteredAvailableVolunteers.length > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-x-1">
               {filteredAvailableVolunteers.map((volunteer, index) => (
@@ -219,7 +215,7 @@ export function MissionCard({
               ))}
             </span>
           ) : (
-            '-'
+            'Aucun bénévole disponible'
           )}
         </>
       }
