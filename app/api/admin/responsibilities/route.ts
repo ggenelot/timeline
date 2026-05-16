@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
 
   const { data: categoryMappings } = await serviceClient
     .from('mission_category_responsibilities')
-    .select('id,mission_type_id,responsibility_id,created_at')
+    .select('id,mission_type_id,responsibility_id,created_at,mission_type:mission_types(id,name)')
     .order('mission_type_id', { ascending: true });
 
   return NextResponse.json({

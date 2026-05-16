@@ -7,7 +7,7 @@ export type Profile = {
   identifier?: string | null;
   role: AppRole;
   phone?: string | null;
-  
+
   created_at: string;
   slack_user_id?: string | null;
   slack_team_id?: string | null;
@@ -75,6 +75,27 @@ export const MISSION_TYPE_OPTIONS: Array<{ value: string; label: string; slug: M
   { value: 'aaaaaaaa-0000-0000-0000-000000000005', label: 'Poste de secours', slug: 'poste_de_secours' },
 ];
 
+export type MissionTypeRequiredSkill = {
+  id: string;
+  mission_type_id: string;
+  skill_id: string;
+  quantity: number;
+  created_at: string;
+  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
+};
+
+export type MissionType = {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string | null;
+  default_required_volunteers: number;
+  default_start_time: string | null;
+  default_end_time: string | null;
+  created_at: string;
+  required_skills?: MissionTypeRequiredSkill[];
+};
+
 export type Mission = {
   id: string;
   title: string;
@@ -82,6 +103,7 @@ export type Mission = {
   location: string | null;
 
   mission_type_id: string;
+  mission_type?: Pick<MissionType, 'id' | 'name' | 'color'> | null;
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
@@ -186,26 +208,6 @@ export type ProfileAptitude = {
   created_at: string;
 };
 
-export type MissionTypeRequiredSkill = {
-  id: string;
-  mission_type_id: string;
-  skill_id: string;
-  quantity: number;
-  created_at: string;
-  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
-};
-
-export type MissionType = {
-  id: string;
-  name: string;
-  description: string | null;
-  default_required_volunteers: number;
-  default_start_time: string | null;
-  default_end_time: string | null;
-  created_at: string;
-  required_skills?: MissionTypeRequiredSkill[];
-};
-
 export type Responsibility = {
   id: string;
   name: string;
@@ -220,9 +222,18 @@ export type ResponsibilityHolder = {
   created_at: string;
 };
 
+export const MISSION_CATEGORY_TITLE_OPTIONS: { value: string; label: string }[] = [
+  { value: 'poste_de_secours', label: 'Poste de secours' },
+  { value: 'garde', label: 'Garde' },
+  { value: 'formation', label: 'Formation' },
+  { value: 'maraude', label: 'Maraude' },
+  { value: 'vie_antenne', label: "Vie de l'antenne" },
+];
+
 export type MissionCategoryResponsibility = {
   id: string;
   mission_type_id: string;
   responsibility_id: string;
   created_at: string;
+  mission_type?: Pick<MissionType, 'id' | 'name'>;
 };
