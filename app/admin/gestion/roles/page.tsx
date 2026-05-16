@@ -110,7 +110,7 @@ export default function AdminRolesPage() {
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id,full_name,email,phone,role,created_at')
+        .select('id,full_name,email,role,created_at')
         .eq('id', authData.user.id)
         .single();
 

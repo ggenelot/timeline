@@ -6,7 +6,6 @@ type CreateVolunteerPayload = {
   firstName?: string;
   lastName?: string;
   identifier?: string;
-  phone?: string;
   role?: 'benevole';
   password?: string;
   skill_ids?: string[];
@@ -31,7 +30,6 @@ export async function POST(request: NextRequest) {
   const firstName = payload.firstName?.trim() ?? '';
   const lastName = payload.lastName?.trim() ?? '';
   const identifier = payload.identifier?.trim().toLowerCase() ?? '';
-  const phone = payload.phone?.trim() ?? '';
   const password = payload.password?.trim() ?? '';
   const skillIds = Array.isArray(payload.skill_ids)
     ? payload.skill_ids.map((skillId) => skillId.trim()).filter((skillId) => skillId.length > 0)
@@ -91,8 +89,7 @@ export async function POST(request: NextRequest) {
     email_confirm: true,
     password,
     user_metadata: {
-      full_name: fullName,
-      phone
+      full_name: fullName
     }
   });
 
@@ -112,7 +109,6 @@ export async function POST(request: NextRequest) {
     full_name: fullName,
     email: authEmail,
     identifier,
-    phone: phone || null,
     role: 'benevole' as const
   };
 
@@ -187,7 +183,6 @@ export async function POST(request: NextRequest) {
       lastName,
       email: authEmail,
       identifier,
-      phone,
       role: 'benevole'
     }
   });

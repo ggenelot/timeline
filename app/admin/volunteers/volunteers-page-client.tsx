@@ -64,7 +64,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
       const { data: profileData } = await supabase
         .from('profiles')
-        .select('id,full_name,email,phone,role,sector,created_at')
+        .select('id,full_name,email,role,sector,created_at')
         .eq('id', authData.user.id)
         .single();
 

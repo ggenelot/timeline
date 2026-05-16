@@ -23,7 +23,7 @@ export function Header() {
 
       const { data } = await supabase
         .from('profiles')
-        .select('id,full_name,email,phone,role,sector,created_at')
+        .select('id,full_name,email,role,sector,created_at')
         .eq('id', currentSession.user.id)
         .single();
 

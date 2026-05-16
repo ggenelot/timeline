@@ -5,7 +5,6 @@ import { notifyVolunteerRoleUpdatedByAdmin } from '@/lib/slack/workflows';
 type UpdateVolunteerPayload = {
   full_name?: string;
   identifier?: string;
-  phone?: string;
   sector?: string;
   role?: 'benevole' | 'responsable';
   skill_ids?: string[];
@@ -57,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: volunteer, error: volunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,identifier,phone,sector,role,created_at')
+    .select('id,full_name,identifier,sector,role,created_at')
     .eq('id', volunteerId)
     .single();
 
@@ -105,7 +104,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const volunteerId = params.volunteerId;
   const fullName = payload.full_name?.trim() ?? '';
   const identifier = payload.identifier?.trim().toLowerCase() ?? '';
-  const phone = payload.phone?.trim() ?? '';
   const sector = payload.sector?.trim() ?? '';
   const role = payload.role ?? 'benevole';
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
@@ -165,7 +163,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
       full_name: fullName,
       identifier,
       email: authEmail,
-      phone: phone || null,
       sector: sector || null,
       role
     })
@@ -175,11 +172,10 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: `Impossible de mettre à jour le profil : ${profileUpdateError.message}` }, { status: 400 });
   }
 
-  const authUpdatePayload: { email: string; user_metadata: { full_name: string; phone: string | null }; password?: string } = {
+  const authUpdatePayload: { email: string; user_metadata: { full_name: string }; password?: string } = {
     email: authEmail,
     user_metadata: {
-      full_name: fullName,
-      phone: phone || null
+      full_name: fullName
     }
   };
 

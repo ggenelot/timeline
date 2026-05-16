@@ -6,8 +6,6 @@ export type Profile = {
   email: string;
   identifier?: string | null;
   role: AppRole;
-  phone?: string | null;
-  
   created_at: string;
   slack_user_id?: string | null;
   slack_team_id?: string | null;
