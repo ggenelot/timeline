@@ -1,1 +1,5 @@
-export { default } from '@/app/admin/mission-types/page';
+import { redirect } from 'next/navigation';
+
+export default function GestionMissionTypesPage() {
+  redirect('/admin/mission-types');
+}
