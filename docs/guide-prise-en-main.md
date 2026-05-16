@@ -1,230 +1,235 @@
-# Guide de prise en main (utilisateur, admin et installation)
+# Guide de prise en main — Timeline
 
-Ce guide explique l’application en français simple, étape par étape.
+Ce guide présente l'application Timeline en français simple. Il est organisé en trois parties selon votre profil.
 
 ---
 
-## 1) Partie **Utilisateur** (bénévole / responsable)
+## Partie 1 — Bénévole
 
-## À quoi sert l’application ?
+### À quoi sert l'application ?
 
-Timeline sert à gérer des missions de protection civile :
-- voir les missions,
-- proposer des bénévoles,
-- répondre aux propositions,
-- confirmer une équipe finale,
-- suivre ses missions.
+Timeline gère les missions de protection civile. En tant que bénévole, vous pouvez :
 
-## Se connecter
+- consulter les missions disponibles,
+- répondre aux propositions de mission (disponible, indisponible, peut-être),
+- suivre les missions où vous avez été retenu(e) dans l'équipe.
 
-1. Ouvrir la page **/login**.
-2. Se connecter avec son compte.
-3. Selon votre rôle, vous verrez des pages différentes :
-   - **bénévole** : accès à ses missions et ses réponses,
-   - **responsable** : gestion des missions dont il est responsable,
-   - **admin** : accès global.
+### Se connecter
 
-## Voir les missions
+1. Ouvrir **/login**.
+2. Saisir votre email et mot de passe (ou se connecter via Slack si votre organisation l'a activé).
+3. Vous arrivez sur la liste des missions.
+
+### Voir les missions
 
 Page : **/missions**
 
-Vous pouvez :
-- parcourir la liste des missions,
-- filtrer par date, compétences, catégorie,
-- ouvrir une mission pour voir le détail.
+Vous pouvez filtrer par :
 
-Dans le détail d’une mission, on trouve généralement :
-- le statut (proposée, confirmée, annulée…),
-- les besoins en compétences,
-- les propositions/réponses,
-- l’historique des actions.
+- **Catégorie** (Maraude, Garde, Formation, Poste de secours, Vie d'antenne…)
+- **Dates** (missions à venir uniquement, ou sur une plage choisie)
+- **Compétences requises** (PSC1, PSE1, PSE2…)
 
-## Répondre à une proposition (bénévole)
+Cliquer sur une mission pour voir son détail : statut, lieu, horaires, compétences requises, liste des bénévoles proposés.
 
-Quand une mission vous est proposée, vous pouvez répondre :
-- **Disponible**,
-- **Indisponible**,
-- **Peut-être**.
+### Répondre à une proposition
 
-Ensuite, le responsable/admin décide si votre proposition est acceptée ou refusée.
+Quand une mission vous est proposée, une section **Votre réponse** apparaît dans le détail de la mission.
 
-## Suivre ses missions retenues
+Vous pouvez répondre :
+- **Disponible** — vous vous portez candidat(e)
+- **Indisponible** — vous ne pouvez pas
+- **Peut-être** — vous n'êtes pas certain(e)
+
+Vous pouvez changer votre réponse tant que la mission est au statut **proposée**. Une fois confirmée ou clôturée, les réponses sont verrouillées.
+
+### Suivre ses missions retenues
 
 Page : **/my-missions**
 
-Cette page affiche les missions où vous êtes retenu(e) dans l’équipe finale.
+Cette page liste les missions où vous avez été sélectionné(e) par le responsable. C'est votre planning mission.
 
-## Gérer son profil
+### Gérer son profil
 
 Page : **/profile**
 
-Vous pouvez vérifier et mettre à jour vos informations (par exemple téléphone/identifiant selon configuration active).
+Vous pouvez mettre à jour vos informations personnelles et, si Slack est activé, connecter/déconnecter votre compte Slack.
 
-## Slack (si activé)
+### Connexion Slack (si activé)
 
-Selon la configuration de votre organisation :
-- connexion du compte Slack,
-- liaison/déliaison du compte,
-- réception de messages privés automatiques (ex. changement de statut, infos mission).
+Si votre organisation utilise Slack :
+
+- Vous pouvez lier votre compte Slack depuis **/profile**.
+- Vous recevrez des messages privés automatiques (ex. changement de statut de proposition, infos mission).
+- La commande `/timeline login` dans Slack envoie un lien de connexion direct valable 10 minutes.
 
 ---
 
-## 2) Partie **Admin**
+## Partie 2 — Responsable
 
-## Rôle de l’admin
+### Rôle du responsable
 
-L’admin voit l’ensemble des missions et bénévoles, et peut faire des actions globales.
+Le responsable gère les missions dont il est responsable : création, suivi des propositions, sélection de l'équipe finale, confirmation ou annulation.
 
-## Gestion des bénévoles
-
-Pages :
-- **/admin/volunteers** : liste des bénévoles,
-- **/admin/volunteers/create** : créer un profil,
-- **/admin/volunteers/[id]/edit** : modifier un profil.
-
-Actions typiques :
-- créer/éditer un bénévole,
-- corriger des informations,
-- gérer les disponibilités ou le rattachement aux missions selon workflow.
-
-## Gestion des missions
+### Gérer les missions
 
 Pages :
-- **/admin/missions/create** : créer une mission,
-- **/admin/missions/[id]/edit** : modifier une mission,
-- **/admin/missions/import** : importer des missions.
+- **/missions** : liste des missions
+- **/admin/gestion** : interface de gestion avancée
+- **/admin/missions/create** : créer une mission
 
-Actions possibles :
-- créer une mission,
-- modifier statut/dates/informations,
-- affecter ou retirer des bénévoles,
-- confirmer une mission.
+Sur la fiche d'une mission, vous pouvez :
+- modifier les informations (titre, dates, lieu, compétences requises),
+- voir les réponses des bénévoles,
+- sélectionner ou retirer des bénévoles de l'équipe,
+- confirmer ou annuler la mission,
+- consulter l'historique de toutes les actions sur cette mission.
 
-## Gestion des propositions
+### Gérer les propositions
 
 Page : **/admin/proposals**
 
-L’admin peut :
-- voir les propositions des bénévoles,
-- accepter/refuser une proposition,
-- suivre l’état des réponses.
+Liste de toutes les propositions en attente. Vous pouvez :
+- **Accepter** une proposition (le bénévole rejoint l'équipe),
+- **Refuser** une proposition (un DM Slack est envoyé si Slack est configuré).
 
-## Slack côté admin
+### Statuts de mission
 
-Fonctions disponibles si Slack est configuré :
-- test de santé Slack : **/api/admin/slack/health**,
-- création/synchronisation du canal mission,
-- invitations des bénévoles retenus,
-- envoi de messages mission depuis l’interface admin (selon écrans activés).
+| Statut | Description |
+|---|---|
+| `proposed` | Mission visible par les bénévoles, réponses acceptées |
+| `closed` | Plus de nouvelles réponses acceptées |
+| `confirmed` | Équipe validée, mission confirmée |
+| `cancelled` | Mission annulée |
 
-## Bonnes pratiques admin
+### Slack côté responsable
 
-- Valider les informations de mission avant confirmation.
-- Vérifier les compétences requises avant sélection finale.
-- Utiliser l’historique de mission pour garder une traçabilité claire.
+Si Slack est configuré, vous pouvez depuis la fiche mission :
+- Créer ou resynchroniser le canal Slack privé de la mission.
+- Inviter automatiquement les bénévoles retenus dans ce canal.
+- Envoyer un message sur le canal mission.
 
 ---
 
-## 3) Partie **Installation & exploitation**
+## Partie 3 — Admin
 
-## Prérequis
+### Rôle de l'admin
 
-- Node.js 20+
-- npm 10+
-- Docker
-- Supabase CLI
+L'admin dispose d'un accès global : tous les bénévoles, toutes les missions, toutes les propositions.
 
-## Installation locale
+### Gestion des bénévoles
 
-1. Installer les dépendances :
+Pages :
+- **/admin/volunteers** : liste complète des bénévoles
+- **/admin/volunteers/create** : créer un profil
+- **/admin/volunteers/[id]/edit** : modifier un profil
+
+Actions disponibles : créer, modifier, assigner des compétences, rattacher à des missions.
+
+### Gestion des types de missions
+
+Page : **/admin/mission-types**
+
+Configurer les catégories de mission et leurs compétences requises par défaut.
+
+### Gestion des compétences
+
+Page : **/admin/competences**
+
+Référentiel des compétences disponibles (PSC1, PSE1, PSE2, etc.).
+
+### Gestion des rôles
+
+Page : **/admin/slack** (si Slack activé) et paramètres de rôles
+
+Configurer les rôles fonctionnels et leurs comportements (visibilité des missions, permissions de création, déclenchements Slack automatiques).
+
+### Import de missions
+
+Page : **/admin/missions/import**
+
+Importer un lot de missions depuis un Google Sheet public. Le sheet doit être partagé en lecture publique.
+
+### Slack côté admin
+
+- `GET /api/admin/slack/health` : vérifie l'état du bot Slack (workspace, scopes, connexion). À utiliser pour diagnostiquer les problèmes d'intégration.
+
+---
+
+## Partie 4 — Installation et exploitation (technique)
+
+> Cette section s'adresse à la personne en charge de l'installation et du déploiement.
+
+### Prérequis
+
+- Node.js 20+, npm 10+
+- Docker (pour Supabase local)
+- Supabase CLI (`npm install -g supabase`)
+- Git
+
+### Installation complète depuis zéro
+
+Voir le **README.md** à la racine du dépôt pour les instructions pas à pas.
+
+Résumé :
 
 ```bash
+git clone https://github.com/ggenelot/timeline.git
+cd timeline
 npm install
-```
-
-2. Créer le fichier d’environnement local :
-
-```bash
 cp .env.example .env.local
-```
-
-3. Renseigner au minimum :
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-
-## Base de données (Supabase)
-
-1. Démarrer Supabase en local :
-
-```bash
+# → Renseigner .env.local avec les valeurs Supabase et Slack
 npm run supabase:start
-```
-
-2. Appliquer les migrations :
-
-```bash
 npm run supabase:db:push
-```
-
-3. Charger les données de seed :
-
-```bash
 npm run supabase:db:seed
+npm run dev
+# → Application sur http://localhost:3000
 ```
 
-> Important : ne pas modifier manuellement les tables système de migrations. Utiliser le workflow officiel Supabase pour réparer/réconcilier.
+### Variables d'environnement essentielles
 
-## Variables d’environnement (exemples utiles)
+| Variable | Obligatoire | Description |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Oui | URL du projet Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Oui | Clé publique Supabase |
+| `SUPABASE_SERVICE_ROLE_KEY` | Oui | Clé de service Supabase (côté serveur uniquement) |
+| `APP_BASE_URL` | Oui | URL de base de l'application |
+| `SLACK_BOT_TOKEN` | Si Slack V1 | Token du bot Slack |
+| `SLACK_SIGNING_SECRET` | Si slash commands | Secret de signature Slack |
+| `SLACK_CLIENT_ID` / `SLACK_CLIENT_SECRET` | Si Slack V2 | OAuth Slack |
+| `SLACK_AUTH_REDIRECT_URI` | Si auth Slack | URI de callback SSO |
 
-### Front/public
-- `NEXT_PUBLIC_SUPABASE_URL`
-- `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+Voir `.env.example` pour la liste complète avec descriptions.
 
-### Serveur
-- `SUPABASE_SERVICE_ROLE_KEY`
-- `APP_BASE_URL`
-
-### Slack (si utilisé)
-- `SLACK_BOT_TOKEN`
-- `SLACK_SIGNING_SECRET` (slash commands)
-- `SLACK_AUTH_REDIRECT_URI` (auth Slack v2)
-
-## Secrets : règles simples
-
-- Ne jamais commiter les secrets dans Git.
-- Utiliser les variables d’environnement de la plateforme de déploiement (Vercel, etc.).
-- Faire une rotation immédiate en cas de fuite.
-- Vérifier l’historique avec :
+### Commandes de maintenance
 
 ```bash
+# Remettre la base locale à zéro et recharger les seeds
+npm run supabase:db:reset && npm run supabase:db:seed
+
+# Créer une nouvelle migration
+npm run supabase:migration:new nom_de_ma_migration
+
+# Diagnostiquer Slack OAuth
+npm run diagnose:slack-oauth
+
+# Scanner l'historique Git pour des secrets exposés
 ./scripts/scan-secrets-history.sh
 ```
 
-## Lancer l’application en local
+### Déploiement
 
-```bash
-npm run dev
-```
+1. Configurer toutes les variables d'environnement dans Vercel (ou votre plateforme).
+2. Les migrations DB sont déployées automatiquement sur push vers `main` (GitHub Actions).
+3. Vérifier le healthcheck Slack après déploiement si l'intégration est active.
 
-Puis ouvrir : **http://localhost:3000**
+### Règles de sécurité importantes
 
-## Déploiement (principe)
-
-1. Préparer les variables d’environnement de production.
-2. Déployer l’application Next.js (ex. Vercel).
-3. Appliquer les migrations DB sur l’environnement cible.
-4. Vérifier les endpoints critiques (auth, missions, admin, Slack).
-5. Contrôler les droits d’accès (RLS) avec des comptes de test.
-
-## Vérifications après déploiement
-
-- Connexion utilisateur OK.
-- Liste missions et filtres OK.
-- Réponse bénévole (disponible/indisponible/peut-être) OK.
-- Validation admin des propositions OK.
-- Mission confirmée visible dans **/my-missions**.
-- Si Slack actif : healthcheck + envoi message test OK.
+- Ne jamais commiter `.env.local` ni aucun secret dans Git.
+- `SUPABASE_SERVICE_ROLE_KEY` ne doit jamais être exposée côté client.
+- Effectuer une rotation immédiate de tout secret qui aurait été exposé.
+- Toute évolution du schéma passe par une migration SQL dans `supabase/migrations/` (jamais de modification directe en base).
 
 ---
 
-Si vous débutez : commencez par la partie **Utilisateur**, puis passez à **Admin**, et gardez la partie **Installation** pour la personne en charge de la technique.
+*Pour toute question technique, consulter le README.md ou contacter l'équipe technique.*
