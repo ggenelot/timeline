@@ -314,7 +314,7 @@ export async function inviteResponsibilityHoldersToMissionChannel(missionId: str
     .from('missions')
     .select('id,mission_type_id,slack_channel_id')
     .eq('id', missionId)
-    .single<{ id: string; mission_type_id: string | null; slack_channel_id: string | null }>();
+    .single<{ id: string; mission_type_id: string; slack_channel_id: string | null }>();
 
   if (!mission?.slack_channel_id || !mission.mission_type_id) {
     return;

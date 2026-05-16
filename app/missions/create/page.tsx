@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionType, Profile } from '@/lib/types';
+import { MISSION_CATEGORY_LABELS, MISSION_TYPE_ID_TO_SLUG, MISSION_TYPE_OPTIONS, Profile } from '@/lib/types';
 
 type AptitudeData = {
   id: string;
@@ -21,7 +21,6 @@ export default function VolunteerCreateMissionPage() {
   const [loading, setLoading] = useState(true);
   const [aptitudes, setAptitudes] = useState<AptitudeData[]>([]);
   const [allowedMissionTypeIds, setAllowedMissionTypeIds] = useState<string[]>([]);
-  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -57,10 +56,6 @@ export default function VolunteerCreateMissionPage() {
         return;
       }
 
-      const { data: mtData } = await supabase.from('mission_types').select('id,name').order('name', { ascending: true });
-      const types = (mtData ?? []) as Pick<MissionType, 'id' | 'name'>[];
-      setMissionTypes(types);
-
       // Fetch user's aptitudes
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
@@ -69,9 +64,9 @@ export default function VolunteerCreateMissionPage() {
       if (res.ok) {
         const json = (await res.json()) as { aptitudes: AptitudeData[] };
         setAptitudes(json.aptitudes);
-        const ids = Array.from(new Set(json.aptitudes.flatMap((a) => a.allowed_mission_type_ids)));
-        setAllowedMissionTypeIds(ids);
-        if (ids.length === 1) setMissionTypeId(ids[0]);
+        const typeIds = Array.from(new Set(json.aptitudes.flatMap((a) => a.allowed_mission_type_ids ?? [])));
+        setAllowedMissionTypeIds(typeIds);
+        if (typeIds.length === 1) setMissionTypeId(typeIds[0]);
       }
 
       setLoading(false);
@@ -121,8 +116,6 @@ export default function VolunteerCreateMissionPage() {
     router.push(`/missions/${mission.id}`);
   }
 
-  const allowedTypes = missionTypes.filter((mt) => allowedMissionTypeIds.includes(mt.id));
-
   if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
 
   if (!profile) return <p className="text-sm text-red-600">Accès refusé.</p>;
@@ -164,22 +157,22 @@ export default function VolunteerCreateMissionPage() {
           />
         </div>
 
-        {/* Mission type */}
+        {/* Category */}
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Type d&apos;événement <span className="text-red-500">*</span></label>
           <div className="flex flex-wrap gap-2">
-            {allowedTypes.map((mt) => (
+            {MISSION_TYPE_OPTIONS.filter((opt) => allowedMissionTypeIds.includes(opt.value)).map((opt) => (
               <button
-                key={mt.id}
+                key={opt.value}
                 type="button"
-                onClick={() => setMissionTypeId(mt.id)}
+                onClick={() => setMissionTypeId(opt.value)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                  missionTypeId === mt.id
+                  missionTypeId === opt.value
                     ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
                     : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {mt.name}
+                {MISSION_CATEGORY_LABELS[opt.slug]}
               </button>
             ))}
           </div>

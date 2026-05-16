@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
-const MISSION_TYPE_SELECT = `
-  id,name,description,color,default_required_volunteers,default_start_time,default_end_time,created_at,
+const MISSION_TYPES_SELECT = `
+  id,name,description,default_required_volunteers,default_start_time,default_end_time,created_at,
   required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
 `;
 
@@ -18,7 +18,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
   const body = (await request.json().catch(() => ({}))) as {
     name?: string;
     description?: string;
-    color?: string | null;
     default_required_volunteers?: number;
     default_start_time?: string | null;
     default_end_time?: string | null;
@@ -34,7 +33,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
     .update({
       name: trimmedName,
       description: body.description?.trim() || null,
-      color: body.color ?? null,
       default_required_volunteers: body.default_required_volunteers ?? 1,
       default_start_time: body.default_start_time || null,
       default_end_time: body.default_end_time || null,
@@ -72,7 +70,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 
   const { data, error: fetchError } = await serviceClient
     .from('mission_types')
-    .select(MISSION_TYPE_SELECT)
+    .select(MISSION_TYPES_SELECT)
     .eq('id', params.id)
     .single();
 

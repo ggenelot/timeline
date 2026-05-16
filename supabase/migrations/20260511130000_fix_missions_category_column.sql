@@ -1,0 +1,103 @@
+-- The unify_mission_types_as_categories migration replaced missions.category
+-- with missions.mission_type_id, but can_read_mission still references m.category.
+-- Fix: rewrite the function using mission_type_id with a slug→UUID mapping.
+
+CREATE OR REPLACE FUNCTION public.can_read_mission(_mission_id uuid, _user_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.missions m
+    WHERE m.id = _mission_id
+      AND (
+        -- Admins et responsables voient tout
+        public.current_user_role() IN ('admin', 'responsable')
+
+        -- Brouillon créé par le bénévole lui-même
+        OR (m.status = 'draft' AND m.created_by = _user_id)
+
+        -- Bénévoles sur missions non-brouillon
+        OR (
+          public.current_user_role() = 'benevole'
+          AND m.status <> 'draft'
+          AND (
+            -- Au moins une règle active couvre ce statut/catégorie et accorde la visibilité
+            EXISTS (
+              SELECT 1
+              FROM public.mission_visibility_rules r
+              WHERE r.is_active = true
+                AND (r.required_status IS NULL OR m.status::text = r.required_status)
+                AND (r.required_category IS NULL OR m.mission_type_id = CASE r.required_category
+                      WHEN 'maraude'          THEN 'aaaaaaaa-0000-0000-0000-000000000001'::uuid
+                      WHEN 'garde'            THEN 'aaaaaaaa-0000-0000-0000-000000000002'::uuid
+                      WHEN 'formation'        THEN 'aaaaaaaa-0000-0000-0000-000000000003'::uuid
+                      WHEN 'vie_antenne'      THEN 'aaaaaaaa-0000-0000-0000-000000000004'::uuid
+                      WHEN 'poste_de_secours' THEN 'aaaaaaaa-0000-0000-0000-000000000005'::uuid
+                    END)
+                AND (
+                  -- L'utilisateur est dans le groupe privilégié de cette règle
+                  (
+                    r.criterion_type = 'skill'
+                    AND EXISTS (
+                      SELECT 1 FROM public.profile_skills ps
+                      WHERE ps.profile_id = _user_id AND ps.skill_id = r.criterion_id
+                    )
+                  )
+                  OR (
+                    r.criterion_type = 'aptitude'
+                    AND EXISTS (
+                      SELECT 1 FROM public.profile_aptitudes pa
+                      WHERE pa.profile_id = _user_id AND pa.aptitude_id = r.criterion_id
+                    )
+                  )
+                  -- OU un membre du groupe privilégié est disponible sur cette mission
+                  OR EXISTS (
+                    SELECT 1
+                    FROM public.mission_proposals mp
+                    WHERE mp.mission_id = m.id
+                      AND mp.response = 'available'
+                      AND (
+                        (
+                          r.criterion_type = 'skill'
+                          AND EXISTS (
+                            SELECT 1 FROM public.profile_skills ps
+                            WHERE ps.profile_id = mp.volunteer_id AND ps.skill_id = r.criterion_id
+                          )
+                        )
+                        OR (
+                          r.criterion_type = 'aptitude'
+                          AND EXISTS (
+                            SELECT 1 FROM public.profile_aptitudes pa
+                            WHERE pa.profile_id = mp.volunteer_id AND pa.aptitude_id = r.criterion_id
+                          )
+                        )
+                      )
+                  )
+                )
+            )
+            -- Aucune règle active ne couvre cette mission : comportement par défaut
+            OR (
+              NOT EXISTS (
+                SELECT 1
+                FROM public.mission_visibility_rules r
+                WHERE r.is_active = true
+                  AND (r.required_status IS NULL OR m.status::text = r.required_status)
+                  AND (r.required_category IS NULL OR m.mission_type_id = CASE r.required_category
+                        WHEN 'maraude'          THEN 'aaaaaaaa-0000-0000-0000-000000000001'::uuid
+                        WHEN 'garde'            THEN 'aaaaaaaa-0000-0000-0000-000000000002'::uuid
+                        WHEN 'formation'        THEN 'aaaaaaaa-0000-0000-0000-000000000003'::uuid
+                        WHEN 'vie_antenne'      THEN 'aaaaaaaa-0000-0000-0000-000000000004'::uuid
+                        WHEN 'poste_de_secours' THEN 'aaaaaaaa-0000-0000-0000-000000000005'::uuid
+                      END)
+              )
+              AND public.is_mission_proposed_to(m.id, _user_id)
+            )
+          )
+        )
+      )
+  );
+$$;

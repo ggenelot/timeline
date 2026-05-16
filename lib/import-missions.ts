@@ -1,3 +1,4 @@
+import { MissionCategory, MISSION_TYPE_SLUG_TO_ID } from '@/lib/types';
 
 export type ImportFieldKey =
   | 'do_status'
@@ -34,7 +35,7 @@ export type NormalizedMissionImport = {
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
-  category: string;
+  mission_type_id: string;
   do_status: string | null;
   retained_status: string | null;
   requirements_notes: string | null;
@@ -601,7 +602,7 @@ function parseTimeRange(value: string | null): { startHour: number; startMinute:
   return { startHour, startMinute, endHour, endMinute };
 }
 
-function inferCategory(value: string | null): string {
+function inferCategory(value: string | null): MissionCategory {
   if (!value) {
     return 'poste_de_secours';
   }
@@ -758,7 +759,7 @@ export function buildMissionsPreview(rows: string[][]): MissionImportPreview {
         starts_at: startsAtIso,
         ends_at: endsAtIso,
         required_volunteers: inferRequiredVolunteers(block.values.requirements_notes),
-        category: inferCategory(block.values.type),
+        mission_type_id: MISSION_TYPE_SLUG_TO_ID[inferCategory(block.values.type)],
         do_status: block.values.do_status?.trim() || null,
         retained_status: block.values.retained_status?.trim() || null,
         requirements_notes: block.values.requirements_notes?.trim() || null,

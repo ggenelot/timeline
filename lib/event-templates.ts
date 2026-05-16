@@ -18,7 +18,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     label: 'Maraude',
     defaults: {
       title: 'Maraude',
-      mission_type_id: 'maraude',
+      mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000001',
       required_volunteers: '2'
     },
     requirementDefaults: [
@@ -31,7 +31,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     label: 'Poste',
     defaults: {
       title: 'Poste de secours',
-      mission_type_id: 'poste_de_secours'
+      mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000005'
     }
   },
   {
@@ -39,7 +39,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     label: 'Garde',
     defaults: {
       title: 'Garde',
-      mission_type_id: 'garde',
+      mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000002',
       required_volunteers: '5'
     },
     requirementDefaults: [
@@ -53,7 +53,7 @@ export const EVENT_TEMPLATES: EventTemplate[] = [
     label: 'PSC1',
     defaults: {
       title: 'Formation PSC1',
-      mission_type_id: 'formation',
+      mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000003',
       starts_at_time: '08:30',
       ends_at_time: '17:30',
       required_volunteers: '3'

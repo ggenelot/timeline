@@ -40,8 +40,8 @@ export function runImportMissionsParsingTests() {
 
   const categoryCsv = `Intitulé;Date;Horaires;Type\nDPS Test;30/04/26;08h00 - 12h00;DPS`;
   const categoryPreview = buildMissionsPreview(parseCsvContent(categoryCsv));
-  const importedCategory = categoryPreview.items[0]?.normalized?.category;
-  assert(importedCategory === 'poste_de_secours', 'Le type DPS doit être importé en catégorie poste_de_secours.');
+  const importedMissionTypeId = categoryPreview.items[0]?.normalized?.mission_type_id;
+  assert(importedMissionTypeId === 'aaaaaaaa-0000-0000-0000-000000000005', 'Le type DPS doit être importé en poste_de_secours (UUID).');
 
   const quotedCommaCsv = `Intitulé,Date,Horaires,Lieu\n"Mission, test",30/04/26,09h00 - 10h00,"Paris, 15e"`;
   const quotedPreview = buildMissionsPreview(parseCsvContent(quotedCommaCsv));

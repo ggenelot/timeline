@@ -32,26 +32,48 @@ export type ProfileSkill = {
 
 export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
 
-export type MissionTypeRequiredSkill = {
-  id: string;
-  mission_type_id: string;
-  skill_id: string;
-  quantity: number;
-  created_at: string;
-  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
+export type MissionCategory = 'maraude' | 'garde' | 'formation' | 'vie_antenne' | 'poste_de_secours';
+
+export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: string }> = [
+  { value: 'maraude', label: 'Maraude' },
+  { value: 'garde', label: 'Garde' },
+  { value: 'formation', label: 'Formation' },
+  { value: 'vie_antenne', label: "Vie de l'antenne" },
+  { value: 'poste_de_secours', label: 'Poste de secours' }
+];
+
+export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
+  maraude: 'Maraude',
+  garde: 'Garde',
+  formation: 'Formation',
+  vie_antenne: "Vie de l'antenne",
+  poste_de_secours: 'Poste de secours'
 };
 
-export type MissionType = {
-  id: string;
-  name: string;
-  description: string | null;
-  color: string | null;
-  default_required_volunteers: number;
-  default_start_time: string | null;
-  default_end_time: string | null;
-  created_at: string;
-  required_skills?: MissionTypeRequiredSkill[];
+
+export const MISSION_TYPE_SLUG_TO_ID: Record<MissionCategory, string> = {
+  maraude: 'aaaaaaaa-0000-0000-0000-000000000001',
+  garde: 'aaaaaaaa-0000-0000-0000-000000000002',
+  formation: 'aaaaaaaa-0000-0000-0000-000000000003',
+  vie_antenne: 'aaaaaaaa-0000-0000-0000-000000000004',
+  poste_de_secours: 'aaaaaaaa-0000-0000-0000-000000000005',
 };
+
+export const MISSION_TYPE_ID_TO_SLUG: Record<string, MissionCategory> = Object.fromEntries(
+  Object.entries(MISSION_TYPE_SLUG_TO_ID).map(([slug, id]) => [id, slug as MissionCategory])
+);
+
+export function getMissionCategory(missionTypeId: string): MissionCategory {
+  return MISSION_TYPE_ID_TO_SLUG[missionTypeId] ?? 'maraude';
+}
+
+export const MISSION_TYPE_OPTIONS: Array<{ value: string; label: string; slug: MissionCategory }> = [
+  { value: 'aaaaaaaa-0000-0000-0000-000000000001', label: 'Maraude', slug: 'maraude' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000002', label: 'Garde', slug: 'garde' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000003', label: 'Formation', slug: 'formation' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000004', label: "Vie de l'antenne", slug: 'vie_antenne' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000005', label: 'Poste de secours', slug: 'poste_de_secours' },
+];
 
 export type Mission = {
   id: string;
@@ -60,7 +82,6 @@ export type Mission = {
   location: string | null;
 
   mission_type_id: string;
-  mission_type: Pick<MissionType, 'id' | 'name' | 'color'> | null;
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
@@ -165,6 +186,26 @@ export type ProfileAptitude = {
   created_at: string;
 };
 
+export type MissionTypeRequiredSkill = {
+  id: string;
+  mission_type_id: string;
+  skill_id: string;
+  quantity: number;
+  created_at: string;
+  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
+};
+
+export type MissionType = {
+  id: string;
+  name: string;
+  description: string | null;
+  default_required_volunteers: number;
+  default_start_time: string | null;
+  default_end_time: string | null;
+  created_at: string;
+  required_skills?: MissionTypeRequiredSkill[];
+};
+
 export type Responsibility = {
   id: string;
   name: string;
@@ -179,18 +220,9 @@ export type ResponsibilityHolder = {
   created_at: string;
 };
 
-export const MISSION_CATEGORY_OPTIONS: { value: string; label: string }[] = [
-  { value: 'poste_de_secours', label: 'Poste de secours' },
-  { value: 'garde', label: 'Garde' },
-  { value: 'formation', label: 'Formation' },
-  { value: 'maraude', label: 'Maraude' },
-  { value: 'vie_antenne', label: "Vie de l'antenne" },
-];
-
 export type MissionCategoryResponsibility = {
   id: string;
   mission_type_id: string;
   responsibility_id: string;
   created_at: string;
-  mission_type?: Pick<MissionType, 'id' | 'name'>;
 };

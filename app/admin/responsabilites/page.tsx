@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionType, Profile } from '@/lib/types';
+import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, Profile } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Responsibility = {
@@ -34,7 +34,6 @@ type CategoryMapping = {
   mission_type_id: string;
   responsibility_id: string;
   created_at: string;
-  mission_type?: { id: string; name: string } | { id: string; name: string }[] | null;
 };
 
 type ApiData = {
@@ -59,20 +58,22 @@ export default function AdminResponsabilitesPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<ApiData>({ responsibilities: [], holders: [], categoryMappings: [] });
-  const [missionTypes, setMissionTypes] = useState<Pick<MissionType, 'id' | 'name'>[]>([]);
   const [volunteers, setVolunteers] = useState<VolunteerOption[]>([]);
   const [token, setToken] = useState<string>('');
 
+  // Create responsibility form
   const [newName, setNewName] = useState('');
   const [newDescription, setNewDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
+  // Edit responsibility
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const [mapMissionTypeId, setMapMissionTypeId] = useState('');
+  // Category mapping form
+  const [mapCategory, setMapCategory] = useState<string>('aaaaaaaa-0000-0000-0000-000000000002');
   const [mapResponsibilityId, setMapResponsibilityId] = useState('');
   const [addingMapping, setAddingMapping] = useState(false);
 
@@ -115,14 +116,12 @@ export default function AdminResponsabilitesPage() {
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
 
-      const [, volunteersRes, mtRes] = await Promise.all([
+      const [, volunteersRes] = await Promise.all([
         fetchData(tok),
-        supabase.from('profiles').select('id,full_name,email').order('full_name', { ascending: true }),
-        supabase.from('mission_types').select('id,name').order('name', { ascending: true })
+        supabase.from('profiles').select('id,full_name,email').order('full_name', { ascending: true })
       ]);
 
       setVolunteers((volunteersRes.data ?? []) as VolunteerOption[]);
-      setMissionTypes((mtRes.data ?? []) as Pick<MissionType, 'id' | 'name'>[]);
       setLoading(false);
     }
 
@@ -223,13 +222,13 @@ export default function AdminResponsabilitesPage() {
   }
 
   async function handleAddMapping() {
-    if (!mapMissionTypeId || !mapResponsibilityId) return;
+    if (!mapResponsibilityId) return;
     setAddingMapping(true);
     setError(null);
     const res = await fetch('/api/admin/category-responsibilities', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mission_type_id: mapMissionTypeId, responsibility_id: mapResponsibilityId })
+      body: JSON.stringify({ mission_type_id: mapCategory, responsibility_id: mapResponsibilityId })
     });
     if (res.ok) {
       await fetchData(token);
@@ -274,11 +273,11 @@ export default function AdminResponsabilitesPage() {
     holderByResponsibilityId.set(h.responsibility_id, resolveProfile(h.profile));
   }
 
-  const mappingsByMissionTypeId = new Map<string, CategoryMapping[]>();
+  const mappingsByMissionType = new Map<string, CategoryMapping[]>();
   for (const m of data.categoryMappings) {
-    const list = mappingsByMissionTypeId.get(m.mission_type_id) ?? [];
+    const list = mappingsByMissionType.get(m.mission_type_id) ?? [];
     list.push(m);
-    mappingsByMissionTypeId.set(m.mission_type_id, list);
+    mappingsByMissionType.set(m.mission_type_id, list);
   }
 
   const responsibilityById = new Map(data.responsibilities.map((r) => [r.id, r]));
@@ -289,7 +288,8 @@ export default function AdminResponsabilitesPage() {
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Responsabilités</h1>
         <p className="mt-1 text-sm text-slate-500">
           Définissez des responsabilités, affectez un titulaire à chacune, puis configurez lesquelles s&apos;appliquent
-          automatiquement par type de mission. Les titulaires sont invités au canal Slack lors de la synchronisation.
+          automatiquement par catégorie d&apos;activité. Les titulaires sont invités au canal Slack lors de la
+          synchronisation.
         </p>
       </header>
 
@@ -305,6 +305,7 @@ export default function AdminResponsabilitesPage() {
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
         <h2 className="mb-4 text-lg font-semibold text-slate-800">1. Responsabilités</h2>
 
+        {/* Create form */}
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm font-medium text-slate-700">Nouvelle responsabilité</p>
           <div className="flex flex-col gap-3 sm:flex-row">
@@ -333,6 +334,7 @@ export default function AdminResponsabilitesPage() {
           </div>
         </div>
 
+        {/* List */}
         {data.responsibilities.length === 0 ? (
           <p className="text-sm text-slate-400">Aucune responsabilité définie.</p>
         ) : (
@@ -385,6 +387,7 @@ export default function AdminResponsabilitesPage() {
                         {r.description ? <p className="text-sm text-slate-500">{r.description}</p> : null}
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
+                        {/* Holder picker */}
                         <SearchableSelect
                           value={holder?.id ?? ''}
                           options={volunteers.map((v) => ({ value: v.id, label: v.full_name ?? v.email }))}
@@ -434,22 +437,22 @@ export default function AdminResponsabilitesPage() {
         )}
       </section>
 
-      {/* ── Section 2 : Configuration par type de mission ── */}
+      {/* ── Section 2 : Configuration par catégorie ── */}
       <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
-        <h2 className="mb-1 text-lg font-semibold text-slate-800">2. Responsabilités par type de mission</h2>
+        <h2 className="mb-1 text-lg font-semibold text-slate-800">2. Responsabilités par catégorie d&apos;activité</h2>
         <p className="mb-5 text-sm text-slate-500">
-          Choisissez quelles responsabilités sont automatiquement ajoutées au canal Slack pour chaque type de mission.
+          Choisissez quelles responsabilités sont automatiquement ajoutées au canal Slack pour chaque type d&apos;activité.
         </p>
 
+        {/* Add mapping form */}
         <div className="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <p className="mb-3 text-sm font-medium text-slate-700">Ajouter une association</p>
           <div className="flex flex-col gap-3 sm:flex-row">
             <SearchableSelect
-              value={mapMissionTypeId}
-              options={missionTypes.map((mt) => ({ value: mt.id, label: mt.name }))}
-              onChange={setMapMissionTypeId}
-              emptyLabel="— Choisir un type de mission —"
-              className="w-56"
+              value={mapCategory}
+              options={MISSION_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+              onChange={(val) => setMapCategory(val)}
+              className="w-48"
             />
             <SearchableSelect
               value={mapResponsibilityId}
@@ -461,7 +464,7 @@ export default function AdminResponsabilitesPage() {
             <button
               type="button"
               onClick={handleAddMapping}
-              disabled={!mapMissionTypeId || !mapResponsibilityId || addingMapping}
+              disabled={!mapResponsibilityId || addingMapping}
               className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {addingMapping ? 'Ajout...' : 'Ajouter'}
@@ -469,13 +472,14 @@ export default function AdminResponsabilitesPage() {
           </div>
         </div>
 
+        {/* Category summary */}
         <div className="space-y-4">
-          {missionTypes.map((mt) => {
-            const mappings = mappingsByMissionTypeId.get(mt.id) ?? [];
+          {MISSION_TYPE_OPTIONS.map((cat) => {
+            const mappings = mappingsByMissionType.get(cat.value) ?? [];
             return (
-              <div key={mt.id} className="rounded-xl border border-slate-200 bg-white">
+              <div key={cat.value} className="rounded-xl border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
-                  <span className="font-medium text-slate-800">{mt.name}</span>
+                  <span className="font-medium text-slate-800">{cat.label}</span>
                   <span className="text-xs text-slate-400">{mappings.length} responsabilité{mappings.length !== 1 ? 's' : ''}</span>
                 </div>
                 {mappings.length === 0 ? (

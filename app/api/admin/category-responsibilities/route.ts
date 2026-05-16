@@ -23,12 +23,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'mission_type_id et responsibility_id sont obligatoires.' }, { status: 400 });
   }
 
-  const serviceClient = createServerSupabaseServiceClient();
-
-  const { data: mt } = await serviceClient.from('mission_types').select('id').eq('id', body.mission_type_id).single();
-  if (!mt) {
-    return NextResponse.json({ error: 'Type de mission introuvable.' }, { status: 400 });
+  const validMissionTypeIds = [
+    'aaaaaaaa-0000-0000-0000-000000000001',
+    'aaaaaaaa-0000-0000-0000-000000000002',
+    'aaaaaaaa-0000-0000-0000-000000000003',
+    'aaaaaaaa-0000-0000-0000-000000000004',
+    'aaaaaaaa-0000-0000-0000-000000000005',
+  ];
+  if (!validMissionTypeIds.includes(body.mission_type_id)) {
+    return NextResponse.json({ error: 'Type de mission invalide.' }, { status: 400 });
   }
+
+  const serviceClient = createServerSupabaseServiceClient();
 
   const { data, error } = await serviceClient
     .from('mission_category_responsibilities')
@@ -38,7 +44,7 @@ export async function POST(request: NextRequest) {
 
   if (error) {
     if (error.code === '23505') {
-      return NextResponse.json({ error: 'Cette responsabilité est déjà associée à ce type de mission.' }, { status: 409 });
+      return NextResponse.json({ error: 'Cette responsabilité est déjà associée à cette catégorie.' }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

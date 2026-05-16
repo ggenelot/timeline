@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode } from 'react';
-import { MissionStatus, MissionType } from '@/lib/types';
+import { MISSION_TYPE_OPTIONS, MissionStatus } from '@/lib/types';
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
@@ -35,12 +35,13 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   title: '',
   description: '',
   location: '',
+  
   starts_at_date: '',
   starts_at_time: '',
   ends_at_date: '',
   ends_at_time: '',
   required_volunteers: '1',
-  mission_type_id: '',
+  mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000001',
   status: 'draft'
 };
 
@@ -65,7 +66,6 @@ type SkillOption = {
 type MissionFormProps = {
   form: MissionFormState;
   onChange: (nextValue: MissionFormState) => void;
-  missionTypes: Pick<MissionType, 'id' | 'name'>[];
   requirements?: MissionRequirementFormState[];
   onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
   availableSkills?: SkillOption[];
@@ -92,7 +92,6 @@ const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = 
 export function MissionForm({
   form,
   onChange,
-  missionTypes,
   requirements = [],
   onRequirementsChange,
   availableSkills = [],
@@ -155,6 +154,7 @@ export function MissionForm({
             </datalist>
           ) : null}
         </label>
+
       </div>
 
       <div className="grid gap-4 md:grid-cols-2">
@@ -205,22 +205,22 @@ export function MissionForm({
 
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <p className="text-sm text-slate-700">Type de mission *</p>
+          <p className="text-sm text-slate-700">Catégorie *</p>
           <div className="flex flex-wrap gap-2">
-            {missionTypes.map((mt) => (
+            {MISSION_TYPE_OPTIONS.map((option) => (
               <button
-                key={mt.id}
+                key={option.value}
                 type="button"
-                onClick={() => onChange({ ...form, mission_type_id: mt.id })}
+                onClick={() => onChange({ ...form, mission_type_id: option.value })}
                 disabled={submitting}
-                aria-pressed={form.mission_type_id === mt.id}
+                aria-pressed={form.mission_type_id === option.value}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.mission_type_id === mt.id
+                  form.mission_type_id === option.value
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {mt.name}
+                {option.label}
               </button>
             ))}
           </div>
