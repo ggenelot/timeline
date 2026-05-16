@@ -10,6 +10,7 @@ import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
 import {
   ActivityLog,
+  getMissionCategory,
   MISSION_CATEGORY_LABELS,
   Mission,
   MissionAssignment,
@@ -451,7 +452,7 @@ export default function MissionDetailPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
       )
       .eq('id', missionId)
       .single();
@@ -912,7 +913,7 @@ export default function MissionDetailPage() {
                 Modifier
               </Link>
             ) : null}
-            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{MISSION_CATEGORY_LABELS[mission.category]}</span>
+            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}</span>
             <MissionStatusBadge status={mission.status} />
           </div>
         </div>

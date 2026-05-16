@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await serviceClient
     .from('profile_aptitudes')
-    .select('id,aptitude_id,created_at,aptitude:aptitudes(id,name,description,allowed_categories)')
+    .select('id,aptitude_id,created_at,aptitude:aptitudes(id,name,description,allowed_mission_type_ids)')
     .eq('profile_id', auth.profile.id);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

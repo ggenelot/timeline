@@ -51,13 +51,37 @@ export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
 };
 
 
+export const MISSION_TYPE_SLUG_TO_ID: Record<MissionCategory, string> = {
+  maraude: 'aaaaaaaa-0000-0000-0000-000000000001',
+  garde: 'aaaaaaaa-0000-0000-0000-000000000002',
+  formation: 'aaaaaaaa-0000-0000-0000-000000000003',
+  vie_antenne: 'aaaaaaaa-0000-0000-0000-000000000004',
+  poste_de_secours: 'aaaaaaaa-0000-0000-0000-000000000005',
+};
+
+export const MISSION_TYPE_ID_TO_SLUG: Record<string, MissionCategory> = Object.fromEntries(
+  Object.entries(MISSION_TYPE_SLUG_TO_ID).map(([slug, id]) => [id, slug as MissionCategory])
+);
+
+export function getMissionCategory(missionTypeId: string): MissionCategory {
+  return MISSION_TYPE_ID_TO_SLUG[missionTypeId] ?? 'maraude';
+}
+
+export const MISSION_TYPE_OPTIONS: Array<{ value: string; label: string; slug: MissionCategory }> = [
+  { value: 'aaaaaaaa-0000-0000-0000-000000000001', label: 'Maraude', slug: 'maraude' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000002', label: 'Garde', slug: 'garde' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000003', label: 'Formation', slug: 'formation' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000004', label: "Vie de l'antenne", slug: 'vie_antenne' },
+  { value: 'aaaaaaaa-0000-0000-0000-000000000005', label: 'Poste de secours', slug: 'poste_de_secours' },
+];
+
 export type Mission = {
   id: string;
   title: string;
   description: string | null;
   location: string | null;
-  
-  category: MissionCategory;
+
+  mission_type_id: string;
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
@@ -151,7 +175,7 @@ export type Aptitude = {
   id: string;
   name: string;
   description: string | null;
-  allowed_categories: MissionCategory[];
+  allowed_mission_type_ids: string[];
   created_at: string;
 };
 
@@ -175,7 +199,6 @@ export type MissionType = {
   id: string;
   name: string;
   description: string | null;
-  category: MissionCategory | null;
   default_required_volunteers: number;
   default_start_time: string | null;
   default_end_time: string | null;
@@ -199,7 +222,7 @@ export type ResponsibilityHolder = {
 
 export type MissionCategoryResponsibility = {
   id: string;
-  category: MissionCategory;
+  mission_type_id: string;
   responsibility_id: string;
   created_at: string;
 };

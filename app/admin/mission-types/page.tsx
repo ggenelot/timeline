@@ -4,9 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import {
-  MissionCategory,
-  MISSION_CATEGORY_LABELS,
-  MISSION_CATEGORY_OPTIONS,
   MissionType,
   MissionTypeRequiredSkill,
   Profile,
@@ -89,7 +86,6 @@ function SkillsEditor({
 function MissionTypeForm({
   initialName = '',
   initialDescription = '',
-  initialCategory = '' as MissionCategory | '',
   initialRequiredVolunteers = 1,
   initialStartTime = '',
   initialEndTime = '',
@@ -102,7 +98,6 @@ function MissionTypeForm({
 }: {
   initialName?: string;
   initialDescription?: string;
-  initialCategory?: MissionCategory | '';
   initialRequiredVolunteers?: number;
   initialStartTime?: string;
   initialEndTime?: string;
@@ -111,7 +106,6 @@ function MissionTypeForm({
   onSubmit: (data: {
     name: string;
     description: string;
-    category: MissionCategory | '';
     default_required_volunteers: number;
     default_start_time: string;
     default_end_time: string;
@@ -123,7 +117,6 @@ function MissionTypeForm({
 }) {
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
-  const [category, setCategory] = useState<MissionCategory | ''>(initialCategory);
   const [requiredVolunteers, setRequiredVolunteers] = useState(initialRequiredVolunteers);
   const [startTime, setStartTime] = useState(initialStartTime);
   const [endTime, setEndTime] = useState(initialEndTime);
@@ -131,7 +124,7 @@ function MissionTypeForm({
 
   function handleSubmit() {
     if (!name.trim()) return;
-    onSubmit({ name, description, category, default_required_volunteers: requiredVolunteers, default_start_time: startTime, default_end_time: endTime, required_skills: skills });
+    onSubmit({ name, description, default_required_volunteers: requiredVolunteers, default_start_time: startTime, default_end_time: endTime, required_skills: skills });
   }
 
   return (
@@ -156,19 +149,6 @@ function MissionTypeForm({
             onChange={(e) => setDescription(e.target.value)}
             className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Catégorie</label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value as MissionCategory | '')}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
-          >
-            <option value="">— Aucune —</option>
-            {MISSION_CATEGORY_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium text-slate-600">Secouristes requis par défaut</label>
@@ -292,7 +272,6 @@ export default function AdminMissionTypesPage() {
   async function handleCreate(data: {
     name: string;
     description: string;
-    category: MissionCategory | '';
     default_required_volunteers: number;
     default_start_time: string;
     default_end_time: string;
@@ -306,7 +285,6 @@ export default function AdminMissionTypesPage() {
       body: JSON.stringify({
         name: data.name.trim(),
         description: data.description.trim() || null,
-        category: data.category || null,
         default_required_volunteers: data.default_required_volunteers,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
@@ -328,7 +306,6 @@ export default function AdminMissionTypesPage() {
     data: {
       name: string;
       description: string;
-      category: MissionCategory | '';
       default_required_volunteers: number;
       default_start_time: string;
       default_end_time: string;
@@ -343,7 +320,6 @@ export default function AdminMissionTypesPage() {
       body: JSON.stringify({
         name: data.name.trim(),
         description: data.description.trim() || null,
-        category: data.category || null,
         default_required_volunteers: data.default_required_volunteers,
         default_start_time: data.default_start_time || null,
         default_end_time: data.default_end_time || null,
@@ -431,7 +407,6 @@ export default function AdminMissionTypesPage() {
                     <MissionTypeForm
                       initialName={mt.name}
                       initialDescription={mt.description ?? ''}
-                      initialCategory={mt.category ?? ''}
                       initialRequiredVolunteers={mt.default_required_volunteers}
                       initialStartTime={mt.default_start_time?.slice(0, 5) ?? ''}
                       initialEndTime={mt.default_end_time?.slice(0, 5) ?? ''}
@@ -448,13 +423,6 @@ export default function AdminMissionTypesPage() {
                         <p className="font-medium text-slate-800">{mt.name}</p>
                         {mt.description ? <p className="text-sm text-slate-500">{mt.description}</p> : null}
                         <div className="flex flex-wrap gap-2 text-xs">
-                          {mt.category ? (
-                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-                              {MISSION_CATEGORY_LABELS[mt.category]}
-                            </span>
-                          ) : (
-                            <span className="rounded-full bg-slate-50 px-2 py-0.5 text-slate-400">Toutes catégories</span>
-                          )}
                           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
                             {mt.default_required_volunteers} secouriste{mt.default_required_volunteers > 1 ? 's' : ''}
                           </span>

@@ -3,12 +3,12 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionCategory, MISSION_CATEGORY_LABELS, Profile } from '@/lib/types';
+import { MISSION_CATEGORY_LABELS, MISSION_TYPE_ID_TO_SLUG, MISSION_TYPE_OPTIONS, Profile } from '@/lib/types';
 
 type AptitudeData = {
   id: string;
   name: string;
-  allowed_categories: MissionCategory[];
+  allowed_mission_type_ids: string[];
 };
 
 function isPositiveInteger(value: string) {
@@ -20,7 +20,7 @@ export default function VolunteerCreateMissionPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [aptitudes, setAptitudes] = useState<AptitudeData[]>([]);
-  const [allowedCategories, setAllowedCategories] = useState<MissionCategory[]>([]);
+  const [allowedMissionTypeIds, setAllowedMissionTypeIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -28,7 +28,7 @@ export default function VolunteerCreateMissionPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
-  const [category, setCategory] = useState<MissionCategory | ''>('');
+  const [missionTypeId, setMissionTypeId] = useState('');
   const [startsAtDate, setStartsAtDate] = useState('');
   const [startsAtTime, setStartsAtTime] = useState('');
   const [endsAtDate, setEndsAtDate] = useState('');
@@ -64,9 +64,9 @@ export default function VolunteerCreateMissionPage() {
       if (res.ok) {
         const json = (await res.json()) as { aptitudes: AptitudeData[] };
         setAptitudes(json.aptitudes);
-        const cats = Array.from(new Set(json.aptitudes.flatMap((a) => a.allowed_categories)));
-        setAllowedCategories(cats);
-        if (cats.length === 1) setCategory(cats[0]);
+        const typeIds = Array.from(new Set(json.aptitudes.flatMap((a) => a.allowed_mission_type_ids ?? [])));
+        setAllowedMissionTypeIds(typeIds);
+        if (typeIds.length === 1) setMissionTypeId(typeIds[0]);
       }
 
       setLoading(false);
@@ -80,7 +80,7 @@ export default function VolunteerCreateMissionPage() {
 
     if (!profile) { setError('Vous devez être connecté.'); return; }
     if (!title.trim()) { setError('Le titre est obligatoire.'); return; }
-    if (!category) { setError('La catégorie est obligatoire.'); return; }
+    if (!missionTypeId) { setError('La catégorie est obligatoire.'); return; }
     if (!startsAtDate || !startsAtTime) { setError('La date et l\'heure de début sont obligatoires.'); return; }
     if (!endsAtDate || !endsAtTime) { setError('La date et l\'heure de fin sont obligatoires.'); return; }
     if (!isPositiveInteger(requiredVolunteers)) { setError('Le nombre de bénévoles doit être un entier > 0.'); return; }
@@ -97,7 +97,7 @@ export default function VolunteerCreateMissionPage() {
         title: title.trim(),
         description: description.trim() || null,
         location: location.trim() || null,
-        category,
+        mission_type_id: missionTypeId,
         starts_at: startsAt,
         ends_at: endsAt,
         required_volunteers: Number.parseInt(requiredVolunteers, 10),
@@ -120,7 +120,7 @@ export default function VolunteerCreateMissionPage() {
 
   if (!profile) return <p className="text-sm text-red-600">Accès refusé.</p>;
 
-  if (allowedCategories.length === 0) {
+  if (allowedMissionTypeIds.length === 0) {
     return (
       <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
         Vous n&apos;avez pas d&apos;aptitude vous permettant de créer des missions. Contactez un administrateur.
@@ -161,18 +161,18 @@ export default function VolunteerCreateMissionPage() {
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Type d&apos;événement <span className="text-red-500">*</span></label>
           <div className="flex flex-wrap gap-2">
-            {allowedCategories.map((cat) => (
+            {MISSION_TYPE_OPTIONS.filter((opt) => allowedMissionTypeIds.includes(opt.value)).map((opt) => (
               <button
-                key={cat}
+                key={opt.value}
                 type="button"
-                onClick={() => setCategory(cat)}
+                onClick={() => setMissionTypeId(opt.value)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                  category === cat
+                  missionTypeId === opt.value
                     ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
                     : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {MISSION_CATEGORY_LABELS[cat]}
+                {MISSION_CATEGORY_LABELS[opt.slug]}
               </button>
             ))}
           </div>
@@ -264,7 +264,7 @@ export default function VolunteerCreateMissionPage() {
           </button>
           <button
             type="submit"
-            disabled={submitting || !category}
+            disabled={submitting || !missionTypeId}
             className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Envoi...' : 'Soumettre en brouillon'}

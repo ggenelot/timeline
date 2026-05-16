@@ -4,6 +4,7 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 import {
+  getMissionCategory,
   MISSION_CATEGORY_LABELS,
   Mission,
   MissionProposalResponse,
@@ -109,9 +110,9 @@ export function MissionCard({
       headerLeft={(
         <>
           <span
-            className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[mission.category] ?? 'bg-amber-400 text-slate-900'}`}
+            className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[getMissionCategory(mission.mission_type_id)] ?? 'bg-amber-400 text-slate-900'}`}
           >
-            {MISSION_CATEGORY_LABELS[mission.category]}
+            {MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}
           </span>
           <span className="text-slate-400">|</span>
           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>

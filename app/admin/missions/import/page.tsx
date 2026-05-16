@@ -12,7 +12,7 @@ import {
   parseParisLocalToUtcIso,
   utcIsoToParisParts
 } from '@/lib/import-missions';
-import { MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus, Profile } from '@/lib/types';
+import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, MissionStatus, Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 
@@ -56,7 +56,7 @@ type EditableImportRow = {
   startTime: string;
   endTime: string;
   location: string;
-  category: MissionCategory;
+  mission_type_id: string;
   do_status: string;
   retained_status: string;
   requirements_notes: string;
@@ -131,7 +131,7 @@ function normalizeEditableRow(item: MissionImportPreviewItem, index: number): Ed
       startTime: starts?.time ?? '',
       endTime: ends?.time ?? '',
       location: item.normalized.location ?? '',
-      category: item.normalized.category,
+      mission_type_id: item.normalized.mission_type_id,
       do_status: item.normalized.do_status ?? '',
       retained_status: item.normalized.retained_status ?? '',
       requirements_notes: item.normalized.requirements_notes ?? '',
@@ -156,7 +156,7 @@ function normalizeEditableRow(item: MissionImportPreviewItem, index: number): Ed
     startTime: fallbackTimes?.startTime ?? '',
     endTime: fallbackTimes?.endTime ?? '',
     location: item.block.values.location ?? '',
-    category: 'poste_de_secours',
+    mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000005',
     do_status: item.block.values.do_status ?? '',
     retained_status: item.block.values.retained_status ?? '',
     requirements_notes: item.block.values.requirements_notes ?? '',
@@ -249,7 +249,7 @@ function validateAndNormalizeRow(row: EditableImportRow): { normalized: Normaliz
       starts_at: startsAtIso,
       ends_at: endsAtIso,
       required_volunteers: inferRequiredVolunteersFromNotes(row.requirements_notes),
-      category: row.category,
+      mission_type_id: row.mission_type_id,
       do_status: row.do_status.trim() || null,
       retained_status: row.retained_status.trim() || null,
       requirements_notes: row.requirements_notes.trim() || null,
@@ -315,8 +315,8 @@ const MissionImportRow = memo(function MissionImportRow({
             {IMPORT_STATUS_LABELS[rowStatus]}
           </span>
           <span className="text-slate-400">|</span>
-          <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[liveRow.category] ?? 'bg-amber-400 text-slate-900'}`}>
-            {MISSION_CATEGORY_LABELS[liveRow.category]}
+          <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[getMissionCategory(liveRow.mission_type_id)] ?? 'bg-amber-400 text-slate-900'}`}>
+            {MISSION_CATEGORY_LABELS[getMissionCategory(liveRow.mission_type_id)]}
           </span>
         </>
       }
@@ -402,8 +402,8 @@ const MissionImportRow = memo(function MissionImportRow({
               </div>
               <label className="text-slate-700">
                 Catégorie
-                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.category} onChange={(e) => updateDraft({ category: e.target.value as MissionCategory })}>
-                  {MISSION_CATEGORY_OPTIONS.map((option) => (
+                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.mission_type_id} onChange={(e) => updateDraft({ mission_type_id: e.target.value })}>
+                  {MISSION_TYPE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>

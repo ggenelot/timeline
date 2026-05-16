@@ -1,5 +1,5 @@
 import { FormEvent, ReactNode } from 'react';
-import { MISSION_CATEGORY_OPTIONS, MissionCategory, MissionStatus } from '@/lib/types';
+import { MISSION_TYPE_OPTIONS, MissionStatus } from '@/lib/types';
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
@@ -27,7 +27,7 @@ export type MissionFormState = {
   ends_at_date: string;
   ends_at_time: string;
   required_volunteers: string;
-  category: MissionCategory;
+  mission_type_id: string;
   status: MissionStatus;
 };
 
@@ -41,7 +41,7 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   ends_at_date: '',
   ends_at_time: '',
   required_volunteers: '1',
-  category: 'maraude',
+  mission_type_id: 'aaaaaaaa-0000-0000-0000-000000000001',
   status: 'draft'
 };
 
@@ -207,15 +207,15 @@ export function MissionForm({
         <div className="space-y-2">
           <p className="text-sm text-slate-700">Catégorie *</p>
           <div className="flex flex-wrap gap-2">
-            {MISSION_CATEGORY_OPTIONS.map((option) => (
+            {MISSION_TYPE_OPTIONS.map((option) => (
               <button
                 key={option.value}
                 type="button"
-                onClick={() => onChange({ ...form, category: option.value })}
+                onClick={() => onChange({ ...form, mission_type_id: option.value })}
                 disabled={submitting}
-                aria-pressed={form.category === option.value}
+                aria-pressed={form.mission_type_id === option.value}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.category === option.value
+                  form.mission_type_id === option.value
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 } disabled:cursor-not-allowed disabled:opacity-60`}

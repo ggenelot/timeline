@@ -301,7 +301,7 @@ export default function AdminCreateMissionPage() {
       title: form.title.trim(),
       description: form.description.trim() || null,
       location: form.location.trim() || null,
-      category: form.category,
+      mission_type_id: form.mission_type_id,
       required_volunteers: Number.parseInt(form.required_volunteers, 10),
       status: form.status,
       created_by: profile.id

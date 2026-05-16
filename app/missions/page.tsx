@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
-import { MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
+import { getMissionCategory, MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, MISSION_TYPE_ID_TO_SLUG, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
 import { formatMissionRequirementLabel, MISSION_STATUS_LABELS } from '@/lib/missions';
 
@@ -107,8 +107,10 @@ export default function MissionsPage() {
       const tok = sessionData.session?.access_token ?? '';
       const aptRes = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
       if (aptRes.ok) {
-        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_categories: MissionCategory[] }> };
-        const cats = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_categories)));
+        const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_mission_type_ids: string[] }> };
+        const cats = Array.from(new Set(
+          aptJson.aptitudes.flatMap((a) => (a.allowed_mission_type_ids ?? []).map((id) => MISSION_TYPE_ID_TO_SLUG[id]).filter(Boolean) as MissionCategory[])
+        ));
         setCanCreateCategories(cats);
       }
     }
@@ -116,7 +118,7 @@ export default function MissionsPage() {
     let missionQuery = supabase
       .from('missions')
       .select(
-        'id,title,description,location,category,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
       );
 
     if (profileData.role === 'benevole') {
@@ -237,7 +239,7 @@ export default function MissionsPage() {
     () =>
       missions.reduce<Record<MissionCategory, number>>(
         (counts, mission) => {
-          counts[mission.category] += 1;
+          counts[getMissionCategory(mission.mission_type_id)] += 1;
           return counts;
         },
         { maraude: 0, garde: 0, formation: 0, vie_antenne: 0, poste_de_secours: 0 }
@@ -273,7 +275,7 @@ export default function MissionsPage() {
           }
         }
 
-        if (selectedCategory !== 'all' && mission.category !== selectedCategory) {
+        if (selectedCategory !== 'all' && getMissionCategory(mission.mission_type_id) !== selectedCategory) {
           return false;
         }
 

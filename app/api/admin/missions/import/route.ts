@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { MissionCategory } from '@/lib/types';
+import { MISSION_TYPE_SLUG_TO_ID } from '@/lib/types';
 import { buildMissionDedupKey, getMissionDateForDedupFromStartsAt } from '@/lib/import-missions';
 
 type ImportMissionPayload = {
@@ -10,7 +10,7 @@ type ImportMissionPayload = {
   starts_at: string;
   ends_at: string;
   required_volunteers: number;
-  category: MissionCategory;
+  mission_type_id: string;
   do_status: string | null;
   retained_status: string | null;
   requirements_notes: string | null;
@@ -49,18 +49,10 @@ function getBearerToken(request: NextRequest): string {
   return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
 }
 
-function isValidCategory(value: string): value is MissionCategory {
-  return ['maraude', 'garde', 'formation', 'vie_antenne', 'poste_de_secours'].includes(value);
-}
+function normalizeMissionTypeId(value: string | null | undefined): string {
+  if (!value) return MISSION_TYPE_SLUG_TO_ID['poste_de_secours'];
 
-function normalizeCategory(value: string | null | undefined): MissionCategory {
-  if (!value) {
-    return 'poste_de_secours';
-  }
-
-  if (isValidCategory(value)) {
-    return value;
-  }
+  if (Object.values(MISSION_TYPE_SLUG_TO_ID).includes(value)) return value;
 
   const normalized = value
     .normalize('NFD')
@@ -69,22 +61,14 @@ function normalizeCategory(value: string | null | undefined): MissionCategory {
     .trim();
 
   if (normalized.includes('poste de secours') || normalized.includes('poste') || normalized.includes('pds') || normalized.includes('dps')) {
-    return 'poste_de_secours';
+    return MISSION_TYPE_SLUG_TO_ID['poste_de_secours'];
   }
+  if (normalized.includes('garde')) return MISSION_TYPE_SLUG_TO_ID['garde'];
+  if (normalized.includes('format')) return MISSION_TYPE_SLUG_TO_ID['formation'];
+  if (normalized.includes('antenne') || normalized.includes('vie')) return MISSION_TYPE_SLUG_TO_ID['vie_antenne'];
+  if (normalized.includes('maraude')) return MISSION_TYPE_SLUG_TO_ID['maraude'];
 
-  if (normalized.includes('garde')) {
-    return 'garde';
-  }
-
-  if (normalized.includes('format')) {
-    return 'formation';
-  }
-
-  if (normalized.includes('antenne') || normalized.includes('vie')) {
-    return 'vie_antenne';
-  }
-
-  return 'poste_de_secours';
+  return MISSION_TYPE_SLUG_TO_ID['poste_de_secours'];
 }
 
 function isIsoDate(value: string) {
@@ -278,7 +262,7 @@ export async function POST(request: NextRequest) {
     starts_at: mission.starts_at,
     ends_at: mission.ends_at,
     required_volunteers: mission.required_volunteers,
-    category: normalizeCategory(mission.category),
+    mission_type_id: normalizeMissionTypeId(mission.mission_type_id),
     status: importStatus,
     created_by: userData.user.id,
     do_status: mission.do_status,
@@ -419,7 +403,7 @@ export async function PATCH(request: NextRequest) {
       starts_at: mission.starts_at,
       ends_at: mission.ends_at,
       required_volunteers: mission.required_volunteers,
-      category: normalizeCategory(mission.category),
+      mission_type_id: normalizeMissionTypeId(mission.mission_type_id),
       do_status: mission.do_status,
       retained_status: mission.retained_status,
       requirements_notes: mission.requirements_notes,

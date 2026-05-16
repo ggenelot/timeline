@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionCategory, MISSION_CATEGORY_LABELS, MISSION_CATEGORY_OPTIONS, Profile } from '@/lib/types';
+import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, Profile } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Responsibility = {
@@ -31,7 +31,7 @@ type HolderRow = {
 
 type CategoryMapping = {
   id: string;
-  category: MissionCategory;
+  mission_type_id: string;
   responsibility_id: string;
   created_at: string;
 };
@@ -73,7 +73,7 @@ export default function AdminResponsabilitesPage() {
   const [saving, setSaving] = useState(false);
 
   // Category mapping form
-  const [mapCategory, setMapCategory] = useState<MissionCategory>('garde');
+  const [mapCategory, setMapCategory] = useState<string>('aaaaaaaa-0000-0000-0000-000000000002');
   const [mapResponsibilityId, setMapResponsibilityId] = useState('');
   const [addingMapping, setAddingMapping] = useState(false);
 
@@ -228,7 +228,7 @@ export default function AdminResponsabilitesPage() {
     const res = await fetch('/api/admin/category-responsibilities', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ category: mapCategory, responsibility_id: mapResponsibilityId })
+      body: JSON.stringify({ mission_type_id: mapCategory, responsibility_id: mapResponsibilityId })
     });
     if (res.ok) {
       await fetchData(token);
@@ -273,11 +273,11 @@ export default function AdminResponsabilitesPage() {
     holderByResponsibilityId.set(h.responsibility_id, resolveProfile(h.profile));
   }
 
-  const mappingsByCategory = new Map<MissionCategory, CategoryMapping[]>();
+  const mappingsByMissionType = new Map<string, CategoryMapping[]>();
   for (const m of data.categoryMappings) {
-    const list = mappingsByCategory.get(m.category) ?? [];
+    const list = mappingsByMissionType.get(m.mission_type_id) ?? [];
     list.push(m);
-    mappingsByCategory.set(m.category, list);
+    mappingsByMissionType.set(m.mission_type_id, list);
   }
 
   const responsibilityById = new Map(data.responsibilities.map((r) => [r.id, r]));
@@ -450,8 +450,8 @@ export default function AdminResponsabilitesPage() {
           <div className="flex flex-col gap-3 sm:flex-row">
             <SearchableSelect
               value={mapCategory}
-              options={MISSION_CATEGORY_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
-              onChange={(val) => setMapCategory(val as MissionCategory)}
+              options={MISSION_TYPE_OPTIONS.map((opt) => ({ value: opt.value, label: opt.label }))}
+              onChange={(val) => setMapCategory(val)}
               className="w-48"
             />
             <SearchableSelect
@@ -474,8 +474,8 @@ export default function AdminResponsabilitesPage() {
 
         {/* Category summary */}
         <div className="space-y-4">
-          {MISSION_CATEGORY_OPTIONS.map((cat) => {
-            const mappings = mappingsByCategory.get(cat.value) ?? [];
+          {MISSION_TYPE_OPTIONS.map((cat) => {
+            const mappings = mappingsByMissionType.get(cat.value) ?? [];
             return (
               <div key={cat.value} className="rounded-xl border border-slate-200 bg-white">
                 <div className="flex items-center justify-between border-b border-slate-100 px-4 py-2.5">
