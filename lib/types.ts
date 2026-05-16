@@ -40,6 +40,15 @@ export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: st
   { value: 'poste_de_secours', label: 'Poste de secours' }
 ];
 
+export type HelpPage = {
+  id: string;
+  page_path: string;
+  title: string;
+  content: string;
+  created_at: string;
+  updated_at: string;
+};
+
 export const MISSION_CATEGORY_LABELS: Record<MissionCategory, string> = {
   maraude: 'Maraude',
   garde: 'Garde',

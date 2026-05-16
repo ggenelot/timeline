@@ -7,6 +7,7 @@ const navItems = [
   { href: '/admin/gestion/roles', label: 'Rôles' },
   { href: '/admin/gestion/mission-types', label: 'Types de missions' },
   { href: '/admin/gestion/slack', label: 'Slack' },
+  { href: '/admin/gestion/help', label: 'Aide' },
 ];
 
 export default function GestionLayout({ children }: { children: React.ReactNode }) {
