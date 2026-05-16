@@ -481,7 +481,6 @@ export default function MissionsPage() {
               mission={mission}
               missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
               requiredSkills={mission.mission_required_skills ?? []}
-              formatMissionRequirementLabel={formatMissionRequirementLabel}
               currentUserId={profile?.id ?? ''}
               canPropose={profile?.role === 'benevole'}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
