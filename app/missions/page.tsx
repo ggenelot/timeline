@@ -8,7 +8,7 @@ import { NewMissionSplitButton } from '@/components/missions/new-mission-split-b
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
-import { formatMissionRequirementLabel, MISSION_STATUS_LABELS } from '@/lib/missions';
+import { MISSION_STATUS_LABELS } from '@/lib/missions';
 
 type MissionType = { id: string; name: string };
 
@@ -438,7 +438,6 @@ export default function MissionsPage() {
                   mission={mission}
                   missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
                   requiredSkills={mission.mission_required_skills ?? []}
-                  formatMissionRequirementLabel={formatMissionRequirementLabel}
                   currentUserId={profile.id}
                   canPropose={false}
                   proposalResponse={null}
@@ -461,7 +460,6 @@ export default function MissionsPage() {
                   mission={mission}
                   missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
                   requiredSkills={mission.mission_required_skills ?? []}
-                  formatMissionRequirementLabel={formatMissionRequirementLabel}
                   currentUserId={profile?.id ?? ''}
                   canPropose={profile?.role === 'benevole'}
                   proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
