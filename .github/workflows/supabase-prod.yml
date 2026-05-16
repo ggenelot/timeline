@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit whose CI succeeded to avoid a race where a
+          # newer push lands before this job runs and gets deployed unvalidated.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
