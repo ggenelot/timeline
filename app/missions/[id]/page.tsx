@@ -18,7 +18,8 @@ import {
   MissionProposalResponse,
   MissionRequiredSkill,
   Profile,
-  ProfileSkill
+  ProfileSkill,
+  RoleBehavior
 } from '@/lib/types';
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
@@ -125,6 +126,7 @@ export default function MissionDetailPage() {
   const [slackCreationState, setSlackCreationState] = useState<'idle' | 'creating' | 'created'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [canManageByRole, setCanManageByRole] = useState(false);
 
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
 
@@ -590,6 +592,21 @@ export default function MissionDetailPage() {
 
     if (profileData.role === 'admin') {
       await loadAdminVolunteerDirectory(missionId);
+    } else if (profileData.role === 'benevole' && mappedMission) {
+      const tok = await getAccessToken();
+      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
+      if (rolesRes.ok) {
+        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
+        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
+        const hasManageAll = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0);
+        const canManage = hasManageAll || canManageBehaviors.some((b) =>
+          (b.mission_type_ids ?? []).includes(mappedMission.mission_type_id)
+        );
+        setCanManageByRole(canManage);
+        if (canManage) {
+          await loadAdminVolunteerDirectory(missionId);
+        }
+      }
     }
 
     setLoading(false);
@@ -625,7 +642,7 @@ export default function MissionDetailPage() {
     );
   }
 
-  const canManageMission = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === user?.id);
+  const canManageMission = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === user?.id) || canManageByRole;
   const missionBlocksSelection = mission.status === 'cancelled' || mission.status === 'confirmed';
   const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
 

@@ -60,19 +60,20 @@ export default function VolunteerCreateMissionPage() {
         fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } }),
       ]);
 
+      let allTypeIds: string[] = [];
       if (typesRes.ok) {
         const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
         setAllMissionTypes(typesJson.missionTypes);
+        allTypeIds = typesJson.missionTypes.map((t) => t.id);
       }
 
       if (rolesRes.ok) {
         const rolesJson = (await rolesRes.json()) as { roles: Array<{ name: string }>; behaviors: RoleBehavior[] };
         setRoleNames(rolesJson.roles.map((r) => r.name));
-        const canCreateIds = Array.from(new Set(
-          rolesJson.behaviors
-            .filter((b) => b.behavior_type === 'can_create')
-            .flatMap((b) => b.mission_type_ids ?? [])
-        ));
+        const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+        const canCreateIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
         setAllowedMissionTypeIds(canCreateIds);
         if (canCreateIds.length === 1) setMissionTypeId(canCreateIds[0]);
       }

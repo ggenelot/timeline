@@ -107,26 +107,29 @@ export default function MissionsPage() {
     const tok = sessionData.session?.access_token ?? '';
 
     // Fetch all mission types
+    let allTypeIds: string[] = [];
     const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
     if (typesRes.ok) {
       const typesJson = (await typesRes.json()) as { missionTypes: MissionType[] };
       setMissionTypes(typesJson.missionTypes);
+      allTypeIds = typesJson.missionTypes.map((t) => t.id);
     }
 
     if (profileData.role === 'benevole') {
       const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
       if (rolesRes.ok) {
         const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
-        const createIds = Array.from(new Set(
-          rolesJson.behaviors
-            .filter((b) => b.behavior_type === 'can_create')
-            .flatMap((b) => b.mission_type_ids ?? [])
-        ));
-        const manageIds = Array.from(new Set(
-          rolesJson.behaviors
-            .filter((b) => b.behavior_type === 'can_manage')
-            .flatMap((b) => b.mission_type_ids ?? [])
-        ));
+
+        const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+        const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
+        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
+        const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+          ? allTypeIds
+          : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
         setCanCreateMissionTypeIds(createIds);
         setCanManageMissionTypeIds(manageIds);
       }
