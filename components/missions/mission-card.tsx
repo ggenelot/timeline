@@ -158,7 +158,7 @@ export function MissionCard({
       footer={
         <>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold text-slate-700">Personnes disponibles ({availableVolunteersCount})</div>
+            <div className="text-sm font-semibold text-slate-700">Dispos :</div>
             {skillFilters.length > 0 ? (
               <>
                 <button
