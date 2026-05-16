@@ -157,14 +157,10 @@ export function MissionCard({
       }
       footer={
         <>
-          <div className="mb-2 flex items-start justify-between gap-2">
-            <div className="text-sm font-semibold text-slate-700">Personnes disponibles</div>
-            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{availableVolunteersCount} disponibles</span>
-          </div>
-          {skillFilters.length > 0 ? (
-            <div className="mb-2 space-y-1.5">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-xs font-medium text-slate-600">Filtrer par compétence requise :</span>
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <div className="text-sm font-semibold text-slate-700">Personnes disponibles ({availableVolunteersCount})</div>
+            {skillFilters.length > 0 ? (
+              <>
                 <button
                   type="button"
                   onClick={() => setSelectedSkillFilter('all')}
@@ -190,9 +186,9 @@ export function MissionCard({
                     {skill.name} {skill.availableCount}/{skill.requiredCount}
                   </button>
                 ))}
-              </div>
-            </div>
-          ) : null}
+              </>
+            ) : null}
+          </div>
           {filteredAvailableVolunteers.length > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-x-1">
               {filteredAvailableVolunteers.map((volunteer, index) => (
