@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 
 type MissionCardShellProps = {
+  statusRail?: ReactNode;
   headerLeft: ReactNode;
   headerRight?: ReactNode;
   title: ReactNode;
@@ -14,6 +15,7 @@ type MissionCardShellProps = {
 };
 
 export function MissionCardShell({
+  statusRail,
   headerLeft,
   headerRight,
   title,
@@ -26,7 +28,8 @@ export function MissionCardShell({
   className
 }: MissionCardShellProps) {
   return (
-    <article className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className ?? ''}`.trim()}>
+    <article className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className ?? ''}`.trim()}>
+      {statusRail ? <div className="absolute inset-y-0 left-0 z-10 w-12">{statusRail}</div> : null}
       <div className="p-5">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="flex min-w-0 flex-wrap items-center gap-2 text-xs font-medium">{headerLeft}</div>
