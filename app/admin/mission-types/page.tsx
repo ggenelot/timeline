@@ -366,7 +366,7 @@ export default function AdminMissionTypesPage() {
   return (
     <div className="space-y-8">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Types de missions</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Missions</h1>
         <p className="mt-1 text-sm text-slate-500">
           Définissez les types de missions proposés par l&apos;antenne — maraudes, postes de secours, formations, etc. —
           et renseignez leurs paramètres par défaut : catégorie, nombre de secouristes, horaires habituels et
