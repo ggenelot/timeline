@@ -72,14 +72,9 @@ export function Header() {
               <span className="whitespace-nowrap text-slate-600">Bonjour, {greetingName}</span>
               <div className="ml-auto flex items-center gap-4 whitespace-nowrap">
                 {role === 'admin' ? (
-                  <>
-                    <Link href="/admin/volunteers" className="text-slate-700 hover:text-slate-900">
-                      Bénévoles
-                    </Link>
-                    <Link href="/admin/gestion" className="text-slate-700 hover:text-slate-900">
-                      Gestion
-                    </Link>
-                  </>
+                  <Link href="/admin/gestion" className="text-slate-700 hover:text-slate-900">
+                    Gestion
+                  </Link>
                 ) : null}
                 <Link href="/profile" className="text-slate-700 hover:text-slate-900">
                   Profil
