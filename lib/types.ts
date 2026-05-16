@@ -169,21 +169,6 @@ export type Event = {
   created_at: string;
 };
 
-export type Aptitude = {
-  id: string;
-  name: string;
-  description: string | null;
-  allowed_mission_type_ids: string[];
-  created_at: string;
-};
-
-export type ProfileAptitude = {
-  id: string;
-  profile_id: string;
-  aptitude_id: string;
-  created_at: string;
-};
-
 export type MissionTypeRequiredSkill = {
   id: string;
   mission_type_id: string;
@@ -202,27 +187,6 @@ export type MissionType = {
   default_end_time: string | null;
   created_at: string;
   required_skills?: MissionTypeRequiredSkill[];
-};
-
-export type Responsibility = {
-  id: string;
-  name: string;
-  description: string | null;
-  created_at: string;
-};
-
-export type ResponsibilityHolder = {
-  id: string;
-  responsibility_id: string;
-  profile_id: string;
-  created_at: string;
-};
-
-export type MissionCategoryResponsibility = {
-  id: string;
-  mission_type_id: string;
-  responsibility_id: string;
-  created_at: string;
 };
 
 export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack';
