@@ -67,7 +67,7 @@ export function MissionCard({
   proposalResponse,
   canEdit,
   availableVolunteersCount,
-  unavailableVolunteersCount,
+  unavailableVolunteersCount: _unavailableVolunteersCount,
   availableVolunteers,
   onPublishDraft,
   onResponse
@@ -99,21 +99,15 @@ export function MissionCard({
   return (
     <MissionCardShell
       headerLeft={(
-        <>
-          <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white">
-            {missionTypeName ?? '—'}
-          </span>
-          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>
-            {MISSION_STATUS_LABELS[mission.status]}
-          </span>
-          <span className="text-xs text-slate-500">{doStatusLabel}</span>
-        </>
+        <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white">{missionTypeName ?? '—'}</span>
       )}
       className={missionStatusStyle.cardClassName}
       headerRight={(
-        <div className="flex items-center gap-1.5">
-          <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{availableVolunteersCount} DISPONIBLES</span>
-          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-500">{unavailableVolunteersCount} INDISPONIBLES</span>
+        <div className="flex items-center gap-2">
+          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>
+            {MISSION_STATUS_LABELS[mission.status]}
+          </span>
+          <span className="text-xs text-slate-600">{doStatusLabel}</span>
         </div>
       )}
       title={mission.title}
@@ -165,6 +159,10 @@ export function MissionCard({
       }
       footer={
         <>
+          <div className="mb-3 flex items-start justify-between gap-2">
+            <div className="text-sm font-semibold text-slate-700">Personnes disponibles</div>
+            <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{availableVolunteersCount} disponibles</span>
+          </div>
           {skillFilters.length > 0 ? (
             <div className="mb-3 space-y-2">
               <div className="flex flex-wrap items-center gap-2">
@@ -193,7 +191,6 @@ export function MissionCard({
               </div>
             </div>
           ) : null}
-          <div className="mb-1 text-sm font-semibold text-slate-700">Personnes disponibles</div>
           {filteredAvailableVolunteers.length > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-x-1">
               {filteredAvailableVolunteers.map((volunteer, index) => (

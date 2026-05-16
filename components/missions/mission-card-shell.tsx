@@ -43,8 +43,8 @@ export function MissionCardShell({
         {requirements ? <div className="mt-3">{requirements}</div> : null}
 
         {actions ? <div className="mt-4 space-y-3">{actions}</div> : null}
-        {footer ? <div className="mt-4 text-sm text-slate-600">{footer}</div> : null}
       </div>
+      {footer ? <div className="border-t border-slate-200 bg-slate-50/80 px-5 py-4 text-sm text-slate-600">{footer}</div> : null}
     </article>
   );
 }
