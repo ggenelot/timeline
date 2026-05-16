@@ -13,7 +13,6 @@ type MissionCardProps = {
   mission: Mission;
   missionTypeName?: string;
   requiredSkills: MissionRequiredSkill[];
-  formatMissionRequirementLabel: (skillName: string | undefined, quantity: number) => string;
   currentUserId: string;
   canPropose: boolean;
   proposalResponse: MissionProposalResponse | null;
@@ -36,23 +35,23 @@ const MISSION_STATUS_LABELS = {
 
 const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; railClassName: string }> = {
   draft: {
-    cardClassName: 'pl-8',
+    cardClassName: 'pl-10',
     railClassName: 'bg-amber-400 text-amber-950'
   },
   proposed: {
-    cardClassName: 'pl-8',
+    cardClassName: 'pl-10',
     railClassName: 'bg-sky-400 text-sky-950'
   },
   confirmed: {
-    cardClassName: 'pl-8',
+    cardClassName: 'pl-10',
     railClassName: 'bg-emerald-400 text-emerald-950'
   },
   closed: {
-    cardClassName: 'pl-8',
+    cardClassName: 'pl-10',
     railClassName: 'bg-slate-400 text-slate-950'
   },
   cancelled: {
-    cardClassName: 'pl-8',
+    cardClassName: 'pl-10',
     railClassName: 'bg-rose-400 text-rose-950'
   }
 };
@@ -61,7 +60,6 @@ export function MissionCard({
   mission,
   missionTypeName,
   requiredSkills,
-  formatMissionRequirementLabel,
   currentUserId,
   canPropose,
   proposalResponse,
@@ -82,10 +80,16 @@ export function MissionCard({
     return requiredSkills
       .map((requiredSkill) => requiredSkill.skill?.name?.trim())
       .filter((skillName): skillName is string => Boolean(skillName))
-      .map((skillName) => ({
-        name: skillName,
-        count: availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === skillName)).length
-      }))
+      .map((skillName) => {
+        const requirement = requiredSkills.find((requiredSkill) => requiredSkill.skill?.name?.trim() === skillName);
+        const availableCount = availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === skillName)).length;
+
+        return {
+          name: skillName,
+          availableCount,
+          requiredCount: requirement?.quantity ?? 0
+        };
+      })
       .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
   }, [availableVolunteers, requiredSkills]);
 
@@ -99,8 +103,12 @@ export function MissionCard({
   return (
     <MissionCardShell
       headerLeft={(
-        <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white">{missionTypeName ?? '—'}</span>
+        <>
+          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[11px] font-bold text-white">{missionTypeName ?? '—'}</span>
+          <h2 className="text-sm font-semibold text-slate-900">{mission.title}</h2>
+        </>
       )}
+      compact
       className={missionStatusStyle.cardClassName}
       statusRail={(
         <div className={`flex h-full w-full items-center justify-center ${missionStatusStyle.railClassName}`}>
@@ -109,12 +117,8 @@ export function MissionCard({
           </span>
         </div>
       )}
-      headerRight={(
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-slate-600">{doStatusLabel}</span>
-        </div>
-      )}
-      title={mission.title}
+      headerRight={<span className="text-[11px] text-slate-600">{doStatusLabel}</span>}
+      title={null}
       metadata={
         <>
           {new Date(mission.starts_at).toLocaleDateString('fr-FR', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' })} •{' '}
@@ -123,18 +127,8 @@ export function MissionCard({
         </>
       }
       location={null}
-      description={mission.description ?? 'Aucune description'}
-      requirements={
-        requiredSkills.length > 0 ? (
-          <div className="flex flex-wrap gap-1">
-            {requiredSkills.map((requiredSkill) => (
-              <span key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700">
-                {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
-              </span>
-            ))}
-          </div>
-        ) : null
-      }
+      description={mission.description?.trim() ? mission.description : null}
+      requirements={null}
       actions={
         <>
           <div className="relative z-10 flex flex-wrap items-center justify-end gap-3">
@@ -163,19 +157,19 @@ export function MissionCard({
       }
       footer={
         <>
-          <div className="mb-3 flex items-start justify-between gap-2">
+          <div className="mb-2 flex items-start justify-between gap-2">
             <div className="text-sm font-semibold text-slate-700">Personnes disponibles</div>
             <span className="text-xs font-semibold uppercase tracking-wide text-emerald-700">{availableVolunteersCount} disponibles</span>
           </div>
           {skillFilters.length > 0 ? (
-            <div className="mb-3 space-y-2">
+            <div className="mb-2 space-y-1.5">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-xs font-medium text-slate-600">Filtrer par compétence requise :</span>
                 <button
                   type="button"
                   onClick={() => setSelectedSkillFilter('all')}
-                  className={`rounded-md border px-2 py-1 text-xs font-medium transition ${
-                    selectedSkillFilter === 'all' ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                    selectedSkillFilter === 'all' ? 'border-slate-600 bg-slate-600 text-white' : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
                   }`}
                 >
                   Toutes {availableVolunteers.length}
@@ -185,11 +179,15 @@ export function MissionCard({
                     key={skill.name}
                     type="button"
                     onClick={() => setSelectedSkillFilter(skill.name)}
-                    className={`rounded-md border px-2 py-1 text-xs font-medium transition ${
-                      selectedSkillFilter === skill.name ? 'border-slate-700 bg-slate-700 text-white' : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
+                      selectedSkillFilter === skill.name
+                        ? 'border-slate-600 bg-slate-600 text-white'
+                        : skill.availableCount > skill.requiredCount
+                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
+                          : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
-                    {skill.name} {skill.count}
+                    {skill.name} {skill.availableCount}/{skill.requiredCount}
                   </button>
                 ))}
               </div>
