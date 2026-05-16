@@ -194,3 +194,27 @@ export type MissionCategoryResponsibility = {
   created_at: string;
   mission_type?: Pick<MissionType, 'id' | 'name'>;
 };
+
+export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack';
+
+export type Role = {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+};
+
+export type RoleBehavior = {
+  id: string;
+  role_id: string;
+  behavior_type: RoleBehaviorType;
+  mission_type_ids: string[];
+  created_at: string;
+};
+
+export type ProfileRole = {
+  id: string;
+  profile_id: string;
+  role_id: string;
+  created_at: string;
+};
