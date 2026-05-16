@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MissionForm, MissionFormState, INITIAL_MISSION_FORM, MissionRequirementFormState, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
+import { MissionForm, MissionFormState, MissionTypeOption, INITIAL_MISSION_FORM, MissionRequirementFormState, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 import { getEventTemplateById } from '@/lib/event-templates';
@@ -115,6 +115,7 @@ export default function AdminCreateMissionPage() {
   const [recurrence, setRecurrence] = useState<RecurrenceFormState>(INITIAL_RECURRENCE_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [missionTypes, setMissionTypes] = useState<MissionTypeOption[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -147,6 +148,17 @@ export default function AdminCreateMissionPage() {
       }
 
       setProfile(profileData);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const tok = sessionData.session?.access_token ?? '';
+      const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
+      if (typesRes.ok) {
+        const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
+        setMissionTypes(typesJson.missionTypes);
+        if (typesJson.missionTypes.length > 0 && !INITIAL_MISSION_FORM.mission_type_id) {
+          setForm((prev) => ({ ...prev, mission_type_id: typesJson.missionTypes[0].id }));
+        }
+      }
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
@@ -409,6 +421,7 @@ export default function AdminCreateMissionPage() {
       <MissionForm
         form={form}
         onChange={setForm}
+        missionTypes={missionTypes}
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}

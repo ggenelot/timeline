@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
-import { MissionForm, MissionFormState, MissionRequirementFormState } from '@/components/missions/mission-form';
+import { MissionForm, MissionFormState, MissionTypeOption, MissionRequirementFormState } from '@/components/missions/mission-form';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, Profile } from '@/lib/types';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
@@ -103,6 +103,7 @@ export default function AdminEditMissionPage() {
   const [form, setForm] = useState<MissionFormState | null>(null);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [missionTypes, setMissionTypes] = useState<MissionTypeOption[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -161,6 +162,14 @@ export default function AdminEditMissionPage() {
           quantity: String(requirement.quantity ?? 1)
         }))
       );
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const tok = sessionData.session?.access_token ?? '';
+      const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
+      if (typesRes.ok) {
+        const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
+        setMissionTypes(typesJson.missionTypes);
+      }
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
@@ -366,6 +375,7 @@ export default function AdminEditMissionPage() {
       <MissionForm
         form={form}
         onChange={setForm}
+        missionTypes={missionTypes}
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}

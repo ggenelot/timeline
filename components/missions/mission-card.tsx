@@ -4,8 +4,6 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 import {
-  getMissionCategory,
-  MISSION_CATEGORY_LABELS,
   Mission,
   MissionProposalResponse,
   MissionRequiredSkill
@@ -13,6 +11,7 @@ import {
 
 type MissionCardProps = {
   mission: Mission;
+  missionTypeName?: string;
   requiredSkills: MissionRequiredSkill[];
   formatMissionRequirementLabel: (skillName: string | undefined, quantity: number) => string;
   currentUserId: string;
@@ -24,15 +23,6 @@ type MissionCardProps = {
   availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
   onPublishDraft?: (missionId: string) => Promise<void>;
   onResponse?: () => void;
-};
-
-
-const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
-  poste_de_secours: 'bg-orange-400 text-slate-900',
-  garde: 'bg-red-500 text-white',
-  formation: 'bg-blue-900 text-white',
-  maraude: 'bg-violet-500 text-white',
-  vie_antenne: 'bg-sky-400 text-slate-900'
 };
 
 const MISSION_STATUS_LABELS = {
@@ -69,6 +59,7 @@ const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; 
 
 export function MissionCard({
   mission,
+  missionTypeName,
   requiredSkills,
   formatMissionRequirementLabel,
   currentUserId,
@@ -109,10 +100,8 @@ export function MissionCard({
     <MissionCardShell
       headerLeft={(
         <>
-          <span
-            className={`rounded-full px-3 py-1.5 font-bold ${MISSION_CATEGORY_BADGE_CLASSES[getMissionCategory(mission.mission_type_id)] ?? 'bg-amber-400 text-slate-900'}`}
-          >
-            {MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}
+          <span className="rounded-full bg-slate-700 px-3 py-1.5 text-sm font-bold text-white">
+            {missionTypeName ?? '—'}
           </span>
           <span className="text-slate-400">|</span>
           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>

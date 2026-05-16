@@ -1,5 +1,7 @@
 import { FormEvent, ReactNode } from 'react';
-import { MISSION_TYPE_OPTIONS, MissionStatus } from '@/lib/types';
+import { MissionStatus } from '@/lib/types';
+
+export type MissionTypeOption = { id: string; name: string };
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
@@ -66,6 +68,7 @@ type SkillOption = {
 type MissionFormProps = {
   form: MissionFormState;
   onChange: (nextValue: MissionFormState) => void;
+  missionTypes?: MissionTypeOption[];
   requirements?: MissionRequirementFormState[];
   onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
   availableSkills?: SkillOption[];
@@ -92,6 +95,7 @@ const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = 
 export function MissionForm({
   form,
   onChange,
+  missionTypes = [],
   requirements = [],
   onRequirementsChange,
   availableSkills = [],
@@ -207,22 +211,25 @@ export function MissionForm({
         <div className="space-y-2">
           <p className="text-sm text-slate-700">Catégorie *</p>
           <div className="flex flex-wrap gap-2">
-            {MISSION_TYPE_OPTIONS.map((option) => (
+            {missionTypes.map((option) => (
               <button
-                key={option.value}
+                key={option.id}
                 type="button"
-                onClick={() => onChange({ ...form, mission_type_id: option.value })}
+                onClick={() => onChange({ ...form, mission_type_id: option.id })}
                 disabled={submitting}
-                aria-pressed={form.mission_type_id === option.value}
+                aria-pressed={form.mission_type_id === option.id}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.mission_type_id === option.value
+                  form.mission_type_id === option.id
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 } disabled:cursor-not-allowed disabled:opacity-60`}
               >
-                {option.label}
+                {option.name}
               </button>
             ))}
+            {missionTypes.length === 0 && (
+              <p className="text-sm text-slate-400">Chargement des types de mission...</p>
+            )}
           </div>
         </div>
 

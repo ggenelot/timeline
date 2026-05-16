@@ -3,7 +3,9 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MISSION_CATEGORY_LABELS, MISSION_TYPE_ID_TO_SLUG, MISSION_TYPE_OPTIONS, Profile } from '@/lib/types';
+import { Profile } from '@/lib/types';
+
+type MissionTypeOption = { id: string; name: string };
 
 type AptitudeData = {
   id: string;
@@ -20,6 +22,7 @@ export default function VolunteerCreateMissionPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [aptitudes, setAptitudes] = useState<AptitudeData[]>([]);
+  const [allMissionTypes, setAllMissionTypes] = useState<MissionTypeOption[]>([]);
   const [allowedMissionTypeIds, setAllowedMissionTypeIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -56,9 +59,17 @@ export default function VolunteerCreateMissionPage() {
         return;
       }
 
-      // Fetch user's aptitudes
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
+
+      // Fetch all mission types
+      const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
+      if (typesRes.ok) {
+        const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
+        setAllMissionTypes(typesJson.missionTypes);
+      }
+
+      // Fetch user's aptitudes
       const res = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
 
       if (res.ok) {
@@ -161,18 +172,18 @@ export default function VolunteerCreateMissionPage() {
         <div>
           <label className="mb-1 block text-sm font-medium text-slate-700">Type d&apos;événement <span className="text-red-500">*</span></label>
           <div className="flex flex-wrap gap-2">
-            {MISSION_TYPE_OPTIONS.filter((opt) => allowedMissionTypeIds.includes(opt.value)).map((opt) => (
+            {allMissionTypes.filter((mt) => allowedMissionTypeIds.includes(mt.id)).map((mt) => (
               <button
-                key={opt.value}
+                key={mt.id}
                 type="button"
-                onClick={() => setMissionTypeId(opt.value)}
+                onClick={() => setMissionTypeId(mt.id)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
-                  missionTypeId === opt.value
+                  missionTypeId === mt.id
                     ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
                     : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                 }`}
               >
-                {MISSION_CATEGORY_LABELS[opt.slug]}
+                {mt.name}
               </button>
             ))}
           </div>
