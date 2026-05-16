@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import { Header } from '@/components/header';
 import { AuthGuard } from '@/components/auth-guard';
+import { HelpButton } from '@/components/help-button';
 
 export const metadata: Metadata = {
   title: 'Timeline',
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <AuthGuard>
           <Header />
           <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
+          <HelpButton />
         </AuthGuard>
       </body>
     </html>
