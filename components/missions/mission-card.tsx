@@ -34,26 +34,26 @@ const MISSION_STATUS_LABELS = {
 } as const;
 
 
-const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; statusBadgeClassName: string }> = {
+const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; railClassName: string }> = {
   draft: {
-    cardClassName: 'border-l-4 border-l-amber-400',
-    statusBadgeClassName: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200'
+    cardClassName: 'pl-8',
+    railClassName: 'bg-amber-400 text-amber-950'
   },
   proposed: {
-    cardClassName: 'border-l-4 border-l-sky-400',
-    statusBadgeClassName: 'bg-sky-100 text-sky-800 ring-1 ring-inset ring-sky-200'
+    cardClassName: 'pl-8',
+    railClassName: 'bg-sky-400 text-sky-950'
   },
   confirmed: {
-    cardClassName: 'border-l-4 border-l-emerald-400',
-    statusBadgeClassName: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200'
+    cardClassName: 'pl-8',
+    railClassName: 'bg-emerald-400 text-emerald-950'
   },
   closed: {
-    cardClassName: 'border-l-4 border-l-slate-400',
-    statusBadgeClassName: 'bg-slate-200 text-slate-700 ring-1 ring-inset ring-slate-300'
+    cardClassName: 'pl-8',
+    railClassName: 'bg-slate-400 text-slate-950'
   },
   cancelled: {
-    cardClassName: 'border-l-4 border-l-rose-400',
-    statusBadgeClassName: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200'
+    cardClassName: 'pl-8',
+    railClassName: 'bg-rose-400 text-rose-950'
   }
 };
 
@@ -102,11 +102,15 @@ export function MissionCard({
         <span className="rounded-full bg-slate-700 px-2.5 py-1 text-xs font-bold text-white">{missionTypeName ?? '—'}</span>
       )}
       className={missionStatusStyle.cardClassName}
-      headerRight={(
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${missionStatusStyle.statusBadgeClassName}`}>
+      statusRail={(
+        <div className={`flex h-full w-full items-center justify-center ${missionStatusStyle.railClassName}`}>
+          <span className="text-[11px] font-bold uppercase tracking-[0.18em] [writing-mode:vertical-rl] [text-orientation:mixed]">
             {MISSION_STATUS_LABELS[mission.status]}
           </span>
+        </div>
+      )}
+      headerRight={(
+        <div className="flex items-center gap-2">
           <span className="text-xs text-slate-600">{doStatusLabel}</span>
         </div>
       )}
