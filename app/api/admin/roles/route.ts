@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data: roles, error: rolesError } = await serviceClient
     .from('roles')
-    .select('id,name,description,created_at')
+    .select('id,name,description,is_default,created_at')
     .order('name', { ascending: true });
 
   if (rolesError) return NextResponse.json({ error: rolesError.message }, { status: 500 });
@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data: roleBehaviors, error: behaviorsError } = await serviceClient
     .from('role_behaviors')
-    .select('id,role_id,behavior_type,mission_type_ids,created_at');
+    .select('id,role_id,behavior_type,mission_type_ids,mission_statuses,created_at');
 
   if (behaviorsError) return NextResponse.json({ error: behaviorsError.message }, { status: 500 });
 
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       name: body.name.trim(),
       description: body.description?.trim() ?? null
     })
-    .select('id,name,description,created_at')
+    .select('id,name,description,is_default,created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -15,9 +15,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   const body = (await request.json().catch(() => ({}))) as {
     behavior_type?: RoleBehaviorType;
     mission_type_ids?: string[];
+    mission_statuses?: string[];
   };
 
-  const validBehaviorTypes: RoleBehaviorType[] = ['can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
+  const validBehaviorTypes: RoleBehaviorType[] = ['can_create', 'can_manage', 'required_for_visibility', 'auto_slack', 'can_see'];
   if (!body.behavior_type || !validBehaviorTypes.includes(body.behavior_type)) {
     return NextResponse.json({ error: 'behavior_type invalide.' }, { status: 400 });
   }
@@ -28,9 +29,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     .insert({
       role_id: params.id,
       behavior_type: body.behavior_type,
-      mission_type_ids: body.mission_type_ids ?? []
+      mission_type_ids: body.mission_type_ids ?? [],
+      mission_statuses: body.mission_statuses ?? [],
     })
-    .select('id,role_id,behavior_type,mission_type_ids,created_at')
+    .select('id,role_id,behavior_type,mission_type_ids,mission_statuses,created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

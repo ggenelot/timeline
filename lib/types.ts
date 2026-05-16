@@ -198,12 +198,13 @@ export type MissionType = {
   required_skills?: MissionTypeRequiredSkill[];
 };
 
-export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack';
+export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack' | 'can_see';
 
 export type Role = {
   id: string;
   name: string;
   description: string | null;
+  is_default: boolean;
   created_at: string;
 };
 
@@ -212,6 +213,7 @@ export type RoleBehavior = {
   role_id: string;
   behavior_type: RoleBehaviorType;
   mission_type_ids: string[];
+  mission_statuses: string[];
   created_at: string;
 };
 
