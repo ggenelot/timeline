@@ -6,22 +6,21 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
-import { getMissionCategory, MISSION_CATEGORY_OPTIONS, Mission, MissionCategory, MissionProposal, MissionRequiredSkill, MissionStatus, MISSION_TYPE_ID_TO_SLUG, Profile } from '@/lib/types';
+import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile } from '@/lib/types';
 import { SkillCode } from '@/lib/skills';
 import { formatMissionRequirementLabel, MISSION_STATUS_LABELS } from '@/lib/missions';
+
+type MissionType = { id: string; name: string };
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
 };
 
-const CATEGORY_FILTER_VALUES: Array<'all' | MissionCategory> = ['all', ...MISSION_CATEGORY_OPTIONS.map((option) => option.value)];
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
 const STATUS_FILTER_OPTIONS: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
 
-function parseCategoryFilter(value: string | null): 'all' | MissionCategory {
-  if (value && CATEGORY_FILTER_VALUES.includes(value as 'all' | MissionCategory)) {
-    return value as 'all' | MissionCategory;
-  }
+function parseTypeFilter(value: string | null, validIds: string[]): 'all' | string {
+  if (value && (value === 'all' || validIds.includes(value))) return value;
   return 'all';
 }
 
@@ -35,8 +34,9 @@ function parseStatusFilter(value: string | null): 'all' | MissionStatus {
 export default function MissionsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
+  const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
-  const [canCreateCategories, setCanCreateCategories] = useState<MissionCategory[]>([]);
+  const [canCreateMissionTypeIds, setCanCreateMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
     Map<
       string,
@@ -56,16 +56,17 @@ export default function MissionsPage() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  const selectedCategory = useMemo(() => parseCategoryFilter(searchParams.get('category')), [searchParams]);
+  const missionTypeIds = useMemo(() => missionTypes.map((t) => t.id), [missionTypes]);
+  const selectedTypeId = useMemo(() => parseTypeFilter(searchParams.get('type'), missionTypeIds), [searchParams, missionTypeIds]);
   const selectedStatus = useMemo(() => parseStatusFilter(searchParams.get('status')), [searchParams]);
 
-  function updateMainFilters(nextCategory: 'all' | MissionCategory, nextStatus: 'all' | MissionStatus) {
+  function updateMainFilters(nextTypeId: 'all' | string, nextStatus: 'all' | MissionStatus) {
     const params = new URLSearchParams(searchParams.toString());
 
-    if (nextCategory === 'all') {
-      params.delete('category');
+    if (nextTypeId === 'all') {
+      params.delete('type');
     } else {
-      params.set('category', nextCategory);
+      params.set('type', nextTypeId);
     }
 
     if (nextStatus === 'all') {
@@ -101,17 +102,23 @@ export default function MissionsPage() {
 
     setProfile(profileData);
 
-    // For benevoles, fetch aptitudes to know if they can propose missions
+    const { data: sessionData } = await supabase.auth.getSession();
+    const tok = sessionData.session?.access_token ?? '';
+
+    // Fetch all mission types
+    const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
+    if (typesRes.ok) {
+      const typesJson = (await typesRes.json()) as { missionTypes: MissionType[] };
+      setMissionTypes(typesJson.missionTypes);
+    }
+
+    // For benevoles, fetch aptitudes to know which mission types they can propose
     if (profileData.role === 'benevole') {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
       const aptRes = await fetch('/api/aptitudes/mine', { headers: { Authorization: `Bearer ${tok}` } });
       if (aptRes.ok) {
         const aptJson = (await aptRes.json()) as { aptitudes: Array<{ allowed_mission_type_ids: string[] }> };
-        const cats = Array.from(new Set(
-          aptJson.aptitudes.flatMap((a) => (a.allowed_mission_type_ids ?? []).map((id) => MISSION_TYPE_ID_TO_SLUG[id]).filter(Boolean) as MissionCategory[])
-        ));
-        setCanCreateCategories(cats);
+        const ids = Array.from(new Set(aptJson.aptitudes.flatMap((a) => a.allowed_mission_type_ids ?? [])));
+        setCanCreateMissionTypeIds(ids);
       }
     }
 
@@ -235,16 +242,18 @@ export default function MissionsPage() {
   const effectiveSelectedStatus =
     profile?.role === 'benevole' && selectedStatus !== 'all' && selectedStatus !== 'proposed' ? 'all' : selectedStatus;
 
-  const missionCountsByCategory = useMemo(
+  const missionCountsByTypeId = useMemo(
     () =>
-      missions.reduce<Record<MissionCategory, number>>(
-        (counts, mission) => {
-          counts[getMissionCategory(mission.mission_type_id)] += 1;
-          return counts;
-        },
-        { maraude: 0, garde: 0, formation: 0, vie_antenne: 0, poste_de_secours: 0 }
-      ),
+      missions.reduce<Record<string, number>>((counts, mission) => {
+        counts[mission.mission_type_id] = (counts[mission.mission_type_id] ?? 0) + 1;
+        return counts;
+      }, {}),
     [missions]
+  );
+
+  const missionTypeById = useMemo(
+    () => new Map(missionTypes.map((t) => [t.id, t])),
+    [missionTypes]
   );
 
   const missionCountsByStatus = useMemo(
@@ -275,7 +284,7 @@ export default function MissionsPage() {
           }
         }
 
-        if (selectedCategory !== 'all' && getMissionCategory(mission.mission_type_id) !== selectedCategory) {
+        if (selectedTypeId !== 'all' && mission.mission_type_id !== selectedTypeId) {
           return false;
         }
 
@@ -288,7 +297,7 @@ export default function MissionsPage() {
     [
       missions,
       searchQuery,
-      selectedCategory,
+      selectedTypeId,
       effectiveSelectedStatus
     ]
   );
@@ -334,7 +343,7 @@ export default function MissionsPage() {
               </button>
               <NewMissionSplitButton />
             </div>
-          ) : profile?.role === 'benevole' && canCreateCategories.length > 0 ? (
+          ) : profile?.role === 'benevole' && canCreateMissionTypeIds.length > 0 ? (
             <button
               type="button"
               onClick={() => router.push('/missions/create')}
@@ -362,25 +371,25 @@ export default function MissionsPage() {
               type="button"
               onClick={() => updateMainFilters('all', effectiveSelectedStatus)}
               className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                selectedCategory === 'all'
+                selectedTypeId === 'all'
                   ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                   : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
               Toutes {missions.length}
             </button>
-            {MISSION_CATEGORY_OPTIONS.map((option) => (
+            {missionTypes.map((mt) => (
               <button
-                key={option.value}
+                key={mt.id}
                 type="button"
-                onClick={() => updateMainFilters(option.value, effectiveSelectedStatus)}
+                onClick={() => updateMainFilters(mt.id, effectiveSelectedStatus)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                  selectedCategory === option.value
+                  selectedTypeId === mt.id
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                {option.label} {missionCountsByCategory[option.value]}
+                {mt.name} {missionCountsByTypeId[mt.id] ?? 0}
               </button>
             ))}
           </div>
@@ -388,7 +397,7 @@ export default function MissionsPage() {
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => updateMainFilters(selectedCategory, 'all')}
+                onClick={() => updateMainFilters(selectedTypeId, 'all')}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
                   effectiveSelectedStatus === 'all'
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
@@ -401,7 +410,7 @@ export default function MissionsPage() {
                 <button
                   key={status}
                   type="button"
-                  onClick={() => updateMainFilters(selectedCategory, status)}
+                  onClick={() => updateMainFilters(selectedTypeId, status)}
                   className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
                     effectiveSelectedStatus === status
                       ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
@@ -427,6 +436,7 @@ export default function MissionsPage() {
               <div key={mission.id}>
                 <MissionCard
                   mission={mission}
+                  missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
                   requiredSkills={mission.mission_required_skills ?? []}
                   formatMissionRequirementLabel={formatMissionRequirementLabel}
                   currentUserId={profile.id}
@@ -449,6 +459,7 @@ export default function MissionsPage() {
               <div key={mission.id}>
                 <MissionCard
                   mission={mission}
+                  missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
                   requiredSkills={mission.mission_required_skills ?? []}
                   formatMissionRequirementLabel={formatMissionRequirementLabel}
                   currentUserId={profile?.id ?? ''}
@@ -470,6 +481,7 @@ export default function MissionsPage() {
           <div key={mission.id}>
             <MissionCard
               mission={mission}
+              missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
               requiredSkills={mission.mission_required_skills ?? []}
               formatMissionRequirementLabel={formatMissionRequirementLabel}
               currentUserId={profile?.id ?? ''}
