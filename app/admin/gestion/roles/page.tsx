@@ -3,13 +3,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionType, Profile, RoleBehaviorType } from '@/lib/types';
+import { MissionStatus, MissionType, Profile, RoleBehaviorType } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Role = {
   id: string;
   name: string;
   description: string | null;
+  is_default: boolean;
   created_at: string;
 };
 
@@ -18,6 +19,7 @@ type RoleBehavior = {
   role_id: string;
   behavior_type: RoleBehaviorType;
   mission_type_ids: string[];
+  mission_statuses: string[];
   created_at: string;
 };
 
@@ -47,20 +49,30 @@ function resolveProfile(profile: VolunteerProfile | VolunteerProfile[] | null): 
 }
 
 const BEHAVIOR_LABELS: Record<RoleBehaviorType, string> = {
+  can_see: 'Peut voir des événements',
   can_create: 'Peut créer des événements',
   can_manage: 'Peut gérer des événements',
-  required_for_visibility: 'Est nécessaire pour rendre visible les événements',
+  required_for_visibility: 'Est référent pour la visibilité',
   auto_slack: 'Est ajouté automatiquement sur Slack',
 };
 
 const BEHAVIOR_DESCRIPTIONS: Record<RoleBehaviorType, string> = {
+  can_see: 'Les membres voient les événements des types et statuts sélectionnés. Si un comportement "référent" couvre ce type, un référent disponible est requis.',
   can_create: 'Les membres peuvent créer des brouillons pour les types sélectionnés',
   can_manage: 'Les membres ont des droits d\'administration sur les événements sélectionnés. Sans restriction de type = droits admin complets.',
-  required_for_visibility: 'Les événements des types sélectionnés ne sont visibles que si au moins un membre de ce rôle est disponible',
+  required_for_visibility: 'Les membres rendent visibles les événements de leurs types (pour les rôles avec can_see). Ils voient toujours ces missions eux-mêmes.',
   auto_slack: 'Les membres sont invités automatiquement sur les canaux Slack des missions sélectionnées',
 };
 
-const ALL_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
+const ALL_MISSION_STATUSES: { value: MissionStatus; label: string }[] = [
+  { value: 'draft', label: 'Brouillon' },
+  { value: 'proposed', label: 'Proposé' },
+  { value: 'confirmed', label: 'Confirmé' },
+  { value: 'closed', label: 'Clôturé' },
+  { value: 'cancelled', label: 'Annulé' },
+];
+
+const ALL_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_see', 'can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
 
 export default function AdminRolesPage() {
   const router = useRouter();
@@ -87,8 +99,9 @@ export default function AdminRolesPage() {
   const [assigning, setAssigning] = useState<Record<string, boolean>>({});
 
   // Add behavior per role (roleId -> form state)
-  const [behaviorForms, setBehaviorForms] = useState<Record<string, { type: RoleBehaviorType | ''; missionTypeIds: string[] }>>({});
+  const [behaviorForms, setBehaviorForms] = useState<Record<string, { type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>>({});
   const [addingBehavior, setAddingBehavior] = useState<Record<string, boolean>>({});
+  const [settingDefault, setSettingDefault] = useState<Record<string, boolean>>({});
 
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
@@ -245,14 +258,33 @@ export default function AdminRolesPage() {
   // ---- Behaviors ----
 
   function getBehaviorForm(roleId: string) {
-    return behaviorForms[roleId] ?? { type: '', missionTypeIds: [] };
+    return behaviorForms[roleId] ?? { type: '', missionTypeIds: [], missionStatuses: [] };
   }
 
-  function setBehaviorForm(roleId: string, update: Partial<{ type: RoleBehaviorType | ''; missionTypeIds: string[] }>) {
+  function setBehaviorForm(roleId: string, update: Partial<{ type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>) {
     setBehaviorForms((prev) => ({
       ...prev,
       [roleId]: { ...getBehaviorForm(roleId), ...update },
     }));
+  }
+
+  async function handleSetDefault(roleId: string, role: Role) {
+    setSettingDefault((prev) => ({ ...prev, [roleId]: true }));
+    setError(null);
+    const newIsDefault = !role.is_default;
+    const res = await fetch(`/api/admin/roles/${roleId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: role.name, description: role.description, is_default: newIsDefault }),
+    });
+    if (res.ok) {
+      await fetchData(token);
+      flash(newIsDefault ? 'Rôle défini comme rôle par défaut.' : 'Rôle par défaut retiré.');
+    } else {
+      const json = (await res.json()) as { error?: string };
+      setError(json.error ?? 'Erreur lors de la mise à jour.');
+    }
+    setSettingDefault((prev) => ({ ...prev, [roleId]: false }));
   }
 
   async function handleAddBehavior(roleId: string) {
@@ -263,10 +295,14 @@ export default function AdminRolesPage() {
     const res = await fetch(`/api/admin/roles/${roleId}/behaviors`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ behavior_type: form.type, mission_type_ids: form.missionTypeIds }),
+      body: JSON.stringify({
+        behavior_type: form.type,
+        mission_type_ids: form.missionTypeIds,
+        mission_statuses: form.type === 'can_see' ? form.missionStatuses : [],
+      }),
     });
     if (res.ok) {
-      setBehaviorForms((prev) => ({ ...prev, [roleId]: { type: '', missionTypeIds: [] } }));
+      setBehaviorForms((prev) => ({ ...prev, [roleId]: { type: '', missionTypeIds: [], missionStatuses: [] } }));
       await fetchData(token);
       flash('Comportement ajouté.');
     } else {
@@ -420,10 +456,33 @@ export default function AdminRolesPage() {
                 ) : (
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
-                      <p className="font-semibold text-slate-800">{role.name}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-semibold text-slate-800">{role.name}</p>
+                        {role.is_default && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                            Rôle par défaut
+                          </span>
+                        )}
+                      </div>
                       {role.description ? <p className="text-sm text-slate-500">{role.description}</p> : null}
                     </div>
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleSetDefault(role.id, role)}
+                        disabled={settingDefault[role.id]}
+                        className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                          role.is_default
+                            ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
+                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                        }`}
+                      >
+                        {settingDefault[role.id]
+                          ? '...'
+                          : role.is_default
+                            ? 'Retirer défaut'
+                            : 'Définir par défaut'}
+                      </button>
                       <button
                         type="button"
                         onClick={() => {
@@ -435,13 +494,15 @@ export default function AdminRolesPage() {
                       >
                         Modifier
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(role.id, role.name)}
-                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
-                      >
-                        Supprimer
-                      </button>
+                      {!role.is_default && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(role.id, role.name)}
+                          className="rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                        >
+                          Supprimer
+                        </button>
+                      )}
                     </div>
                   </div>
                 )}
@@ -514,6 +575,17 @@ export default function AdminRolesPage() {
                                   </span>
                                 ))
                               )}
+                              {b.behavior_type === 'can_see' && (
+                                b.mission_statuses.length === 0 ? (
+                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Tous les statuts</span>
+                                ) : (
+                                  b.mission_statuses.map((s) => (
+                                    <span key={s} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                                      {ALL_MISSION_STATUSES.find((ms) => ms.value === s)?.label ?? s}
+                                    </span>
+                                  ))
+                                )
+                              )}
                             </div>
                           </div>
                           <button
@@ -537,7 +609,7 @@ export default function AdminRolesPage() {
                     <div className="mb-3">
                       <select
                         value={behaviorForm.type}
-                        onChange={(e) => setBehaviorForm(role.id, { type: e.target.value as RoleBehaviorType | '', missionTypeIds: [] })}
+                        onChange={(e) => setBehaviorForm(role.id, { type: e.target.value as RoleBehaviorType | '', missionTypeIds: [], missionStatuses: [] })}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
                       >
                         <option value="">— Choisir un type de comportement —</option>
@@ -551,38 +623,76 @@ export default function AdminRolesPage() {
                     </div>
 
                     {behaviorForm.type ? (
-                      <div className="mb-3">
-                        <p className="mb-1.5 text-xs font-medium text-slate-600">Types de missions concernés</p>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            onClick={() => setBehaviorForm(role.id, { missionTypeIds: [] })}
-                            className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                              behaviorForm.missionTypeIds.length === 0
-                                ? 'border-violet-400 bg-violet-100 text-violet-800'
-                                : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                            }`}
-                          >
-                            Tous les types
-                          </button>
-                          {missionTypes.map((mt) => (
+                      <div className="mb-3 space-y-3">
+                        <div>
+                          <p className="mb-1.5 text-xs font-medium text-slate-600">Types de missions concernés</p>
+                          <div className="flex flex-wrap gap-2">
                             <button
-                              key={mt.id}
                               type="button"
-                              onClick={() => {
-                                const current = behaviorForm.missionTypeIds;
-                                toggleMissionType(mt.id, current, (next) => setBehaviorForm(role.id, { missionTypeIds: next }));
-                              }}
+                              onClick={() => setBehaviorForm(role.id, { missionTypeIds: [] })}
                               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
-                                behaviorForm.missionTypeIds.includes(mt.id)
+                                behaviorForm.missionTypeIds.length === 0
                                   ? 'border-violet-400 bg-violet-100 text-violet-800'
                                   : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                               }`}
                             >
-                              {mt.name}
+                              Tous les types
                             </button>
-                          ))}
+                            {missionTypes.map((mt) => (
+                              <button
+                                key={mt.id}
+                                type="button"
+                                onClick={() => {
+                                  const current = behaviorForm.missionTypeIds;
+                                  toggleMissionType(mt.id, current, (next) => setBehaviorForm(role.id, { missionTypeIds: next }));
+                                }}
+                                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                  behaviorForm.missionTypeIds.includes(mt.id)
+                                    ? 'border-violet-400 bg-violet-100 text-violet-800'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                {mt.name}
+                              </button>
+                            ))}
+                          </div>
                         </div>
+
+                        {behaviorForm.type === 'can_see' && (
+                          <div>
+                            <p className="mb-1.5 text-xs font-medium text-slate-600">Statuts visibles</p>
+                            <div className="flex flex-wrap gap-2">
+                              <button
+                                type="button"
+                                onClick={() => setBehaviorForm(role.id, { missionStatuses: [] })}
+                                className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                  behaviorForm.missionStatuses.length === 0
+                                    ? 'border-blue-400 bg-blue-100 text-blue-800'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                }`}
+                              >
+                                Tous les statuts
+                              </button>
+                              {ALL_MISSION_STATUSES.map((ms) => (
+                                <button
+                                  key={ms.value}
+                                  type="button"
+                                  onClick={() => {
+                                    const current = behaviorForm.missionStatuses;
+                                    toggleMissionType(ms.value, current, (next) => setBehaviorForm(role.id, { missionStatuses: next }));
+                                  }}
+                                  className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
+                                    behaviorForm.missionStatuses.includes(ms.value)
+                                      ? 'border-blue-400 bg-blue-100 text-blue-800'
+                                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                  }`}
+                                >
+                                  {ms.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     ) : null}
 
