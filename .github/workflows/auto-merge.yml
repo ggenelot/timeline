@@ -21,7 +21,8 @@ jobs:
       (
         startsWith(github.event.pull_request.user.login, 'codex') ||
         startsWith(github.event.pull_request.head.ref, 'codex/') ||
-        contains(github.event.pull_request.title, '[codex]')
+        contains(github.event.pull_request.title, '[codex]') ||
+        startsWith(github.event.pull_request.head.ref, 'claude/')
       )
     runs-on: ubuntu-latest
     steps:

@@ -1,13 +1,19 @@
 name: Deploy Supabase migrations to production
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 jobs:
   deploy:
+    # On workflow_run, only proceed if CI succeeded.
+    # workflow_dispatch bypasses this guard (useful for emergency rollouts).
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
 
     env:
@@ -15,10 +21,13 @@ jobs:
       SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
       SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
 
-      
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
+        with:
+          # Pin to the exact commit whose CI succeeded to avoid a race where a
+          # newer push lands before this job runs and gets deployed unvalidated.
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
