@@ -5,8 +5,17 @@ import { usePathname } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { HelpPage } from '@/lib/types';
 
-function inlineMarkdown(text: string): string {
+function escapeHtml(text: string): string {
   return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function inlineMarkdown(text: string): string {
+  return escapeHtml(text)
     .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.*?)\*/g, '<em>$1</em>')
     .replace(/`(.*?)`/g, '<code class="rounded bg-slate-100 px-1 font-mono text-xs">$1</code>');
