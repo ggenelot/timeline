@@ -5,9 +5,7 @@ import { usePathname } from 'next/navigation';
 
 const navItems = [
   { href: '/admin/gestion/mission-types', label: 'Types de missions' },
-  { href: '/admin/gestion/aptitudes', label: 'Aptitudes' },
-  { href: '/admin/gestion/responsabilites', label: 'Responsabilités' },
-  { href: '/admin/gestion/visibilite', label: 'Visibilité' },
+  { href: '/admin/gestion/roles', label: 'Rôles' },
   { href: '/admin/gestion/slack', label: 'Slack' },
 ];
 
