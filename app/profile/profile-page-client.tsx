@@ -20,6 +20,9 @@ export function ProfilePageClient() {
   const [roles, setRoles] = useState<Array<Role & { behaviors: RoleBehavior[] }>>([]);
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [statPeriod, setStatPeriod] = useState<7 | 30 | 90>(30);
+  const [proposals, setProposals] = useState<Array<{ response: string }>>([]);
+  const [confirmedAssignments, setConfirmedAssignments] = useState<Array<{ mission: { starts_at: string | null } | { starts_at: string | null }[] | null }>>([]);
   const searchParams = useSearchParams();
 
   useEffect(() => {
@@ -70,17 +73,25 @@ export function ProfilePageClient() {
         }
 
         if (data.role === 'benevole') {
-          const [catsRes, profileSkillsRes] = await Promise.all([
+          const [catsRes, profileSkillsRes, proposalsRes, assignmentsRes] = await Promise.all([
             supabase
               .from('skill_categories')
               .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
               .order('display_order', { ascending: true })
               .order('display_order', { referencedTable: 'skills', ascending: true }),
             supabase.from('profile_skills').select('skill_id').eq('profile_id', data.id),
+            supabase.from('mission_proposals').select('response').eq('volunteer_id', data.id),
+            supabase
+              .from('mission_assignments')
+              .select('mission:missions(starts_at)')
+              .eq('volunteer_id', data.id)
+              .eq('assignment_status', 'confirmed'),
           ]);
 
           setCategoriesWithSkills((catsRes.data ?? []) as Array<SkillCategory & { skills: Skill[] }>);
           setAcquiredSkillIds(new Set((profileSkillsRes.data ?? []).map((row) => row.skill_id)));
+          setProposals((proposalsRes.data ?? []) as Array<{ response: string }>);
+          setConfirmedAssignments(assignmentsRes.data ?? []);
         }
       }
 
@@ -297,6 +308,13 @@ export function ProfilePageClient() {
           )}
           </div>
 
+          <ProfileStats
+            proposals={proposals}
+            confirmedAssignments={confirmedAssignments}
+            period={statPeriod}
+            onPeriodChange={setStatPeriod}
+          />
+
           <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
           <div>
             <p className="font-medium text-slate-900">Mes compétences</p>
@@ -391,5 +409,89 @@ export function ProfilePageClient() {
         {slackConnectError ? <p className="mt-2 text-xs text-red-600">{slackConnectError}</p> : null}
       </div>
     </section>
+  );
+}
+
+type ProfileStatsProps = {
+  proposals: Array<{ response: string }>;
+  confirmedAssignments: Array<{ mission: { starts_at: string | null } | { starts_at: string | null }[] | null }>;
+  period: 7 | 30 | 90;
+  onPeriodChange: (p: 7 | 30 | 90) => void;
+};
+
+function ProfileStats({ proposals, confirmedAssignments, period, onPeriodChange }: ProfileStatsProps) {
+  const total = proposals.length;
+  const responded = proposals.filter((p) => p.response !== 'no_response').length;
+  const available = proposals.filter((p) => p.response === 'available').length;
+  const maybe = proposals.filter((p) => p.response === 'maybe').length;
+  const unavailable = proposals.filter((p) => p.response === 'unavailable').length;
+  const noResponse = proposals.filter((p) => p.response === 'no_response').length;
+  const responseRate = total > 0 ? Math.round((responded / total) * 100) : null;
+
+  const confirmedAllTime = confirmedAssignments.length;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - period);
+
+  const confirmedInPeriod = confirmedAssignments.filter((a) => {
+    const m = Array.isArray(a.mission) ? a.mission[0] : a.mission;
+    if (!m?.starts_at) return false;
+    return new Date(m.starts_at) >= cutoff;
+  }).length;
+
+  return (
+    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
+      <p className="font-medium text-slate-900">Mes statistiques</p>
+
+      <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          { label: 'Propositions reçues', value: total },
+          { label: 'Taux de réponse', value: responseRate !== null ? `${responseRate} %` : '—' },
+          { label: 'Missions confirmées', value: confirmedAllTime },
+          { label: `Confirmées (${period} j)`, value: confirmedInPeriod },
+        ].map(({ label, value }) => (
+          <div key={label} className="rounded-md border border-slate-200 bg-white p-3">
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className="mt-0.5 text-xl font-semibold text-slate-900">{value}</p>
+          </div>
+        ))}
+      </div>
+
+      {total > 0 ? (
+        <div className="mt-3 space-y-1">
+          <p className="text-xs font-medium text-slate-700">Répartition de mes réponses</p>
+          <div className="flex flex-wrap gap-2">
+            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">
+              Disponible : {available}
+            </span>
+            <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
+              Peut-être : {maybe}
+            </span>
+            <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-800">
+              Indisponible : {unavailable}
+            </span>
+            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
+              Sans réponse : {noResponse}
+            </span>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex items-center gap-1">
+        <p className="text-xs text-slate-500">Période :</p>
+        {([7, 30, 90] as const).map((p) => (
+          <button
+            key={p}
+            type="button"
+            onClick={() => onPeriodChange(p)}
+            className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
+              period === p ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-200'
+            }`}
+          >
+            {p} j
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
