@@ -259,9 +259,8 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 <tr>
                   <th className="px-4 py-2 font-medium">Nom</th>
                   <th className="px-4 py-2 font-medium">Identifiant</th>
-                  <th className="px-4 py-2 font-medium">Compte Slack</th>
+                  <th className="px-4 py-2 font-medium">Slack</th>
                   <th className="px-4 py-2 font-medium">Compétences</th>
-                  <th className="px-4 py-2 font-medium">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -273,21 +272,8 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       </Link>
                     </td>
                     <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-700">
-                      {volunteer.slack_user_id && volunteer.slack_team_id ? (
-                        <div className="space-y-1">
-                          <p className="font-medium text-emerald-700">
-                            Connecté ({volunteer.slack_username ? `@${volunteer.slack_username}` : `${volunteer.slack_team_id} / ${volunteer.slack_user_id}`})
-                          </p>
-                          {volunteer.slack_connected_at ? (
-                            <p className="text-xs text-slate-500">
-                              Lié le {new Date(volunteer.slack_connected_at).toLocaleString('fr-FR')}
-                            </p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Non connecté</span>
-                      )}
+                    <td className="px-4 py-2">
+                      <span className={`inline-block h-3 w-3 rounded-full ${volunteer.slack_user_id && volunteer.slack_team_id ? 'bg-emerald-500' : 'bg-slate-300'}`} />
                     </td>
                     <td className="px-4 py-2 text-slate-700">
                       {skills.length === 0 ? (
@@ -302,11 +288,6 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                           })}
                         </div>
                       )}
-                    </td>
-                    <td className="px-4 py-2 text-slate-700">
-                      <Link href={`/admin/volunteers/${volunteer.id}/edit`} className="text-slate-900 underline hover:text-slate-700">
-                        Modifier
-                      </Link>
                     </td>
                   </tr>
                 ))}
