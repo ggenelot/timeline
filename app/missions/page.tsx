@@ -137,7 +137,7 @@ export default function MissionsPage() {
     let missionQuery = supabase
       .from('missions')
       .select(
-        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
       );
 
     if (profileData.role === 'benevole') {

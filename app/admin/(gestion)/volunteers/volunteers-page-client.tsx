@@ -9,9 +9,11 @@ import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge'
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
+type SkillRef = { id: string; name: string; category_id: string | null; display_order: number };
+
 type VolunteerSkillRow = {
   skill_id: string;
-  skill: { id: string; name: string; category_id: string | null; display_order: number } | null;
+  skill: SkillRef | SkillRef[] | null;
 };
 
 type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at'> & {
@@ -20,7 +22,7 @@ type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role'
 
 type VolunteerWithSkills = {
   volunteer: VolunteerProfile;
-  skills: Array<{ id: string; name: string; category_id: string | null; display_order: number }>;
+  skills: SkillRef[];
 };
 
 type VolunteersPageClientProps = {
