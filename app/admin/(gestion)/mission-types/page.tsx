@@ -226,7 +226,7 @@ export default function AdminMissionTypesPage() {
   const fetchData = useCallback(async (tok: string) => {
     const [typesRes, skillsRes] = await Promise.all([
       fetch('/api/admin/mission-types', { headers: { Authorization: `Bearer ${tok}` } }),
-      supabase.from('skills').select('id,name,category,level,created_at').order('name', { ascending: true }),
+      supabase.from('skills').select('id,name,category_id,display_order,created_at').order('name', { ascending: true }),
     ]);
     if (typesRes.ok) {
       const json = (await typesRes.json()) as { missionTypes: MissionType[] };

@@ -10,7 +10,7 @@ import { getEventTemplateById } from '@/lib/event-templates';
 type MissionSkillOption = {
   id: string;
   name: string | null;
-  category: 'formation' | 'operationnel' | 'conduite' | 'accso' | 'technique' | null;
+  color: string | null;
 };
 
 type ParsedRequirement = {
@@ -162,7 +162,7 @@ export default function AdminCreateMissionPage() {
 
       const { data: skillData, error: skillError } = await supabase
         .from('skills')
-        .select('id,name,category')
+        .select('id,name,skill_categories(color)')
         .order('name', { ascending: true });
 
       if (skillError) {
@@ -171,7 +171,13 @@ export default function AdminCreateMissionPage() {
         return;
       }
 
-      setSkills(skillData ?? []);
+      setSkills(
+        (skillData ?? []).map((s) => ({
+          id: s.id,
+          name: s.name,
+          color: (s.skill_categories as { color?: string } | null)?.color ?? null
+        }))
+      );
 
       const { data: locationsData, error: locationsError } = await supabase
         .from('missions')
@@ -425,7 +431,7 @@ export default function AdminCreateMissionPage() {
         requirements={requirements}
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
-        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom', category: skill.category }))}
+        availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom', color: skill.color }))}
         locationSuggestions={locationSuggestions}
         recurrence={recurrence}
         onRecurrenceChange={setRecurrence}

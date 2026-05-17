@@ -3,8 +3,8 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, Role, RoleBehavior, Skill } from '@/lib/types';
-import { getSkillBadgeClass } from '@/components/skills/skill-badge';
+import { Profile, Role, RoleBehavior, Skill, SkillCategory } from '@/lib/types';
+import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
 
 export function ProfilePageClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -15,7 +15,7 @@ export function ProfilePageClient() {
   const [slackConnectError, setSlackConnectError] = useState<string | null>(null);
   const [calendarLinks, setCalendarLinks] = useState<{ all: string; positioned: string; retained: string } | null>(null);
   const [copiedCalendarUrl, setCopiedCalendarUrl] = useState<string | null>(null);
-  const [skillsByCategory, setSkillsByCategory] = useState<Record<string, Skill[]>>({});
+  const [categoriesWithSkills, setCategoriesWithSkills] = useState<Array<SkillCategory & { skills: Skill[] }>>([]);
   const [acquiredSkillIds, setAcquiredSkillIds] = useState<Set<string>>(new Set());
   const [roles, setRoles] = useState<Array<Role & { behaviors: RoleBehavior[] }>>([]);
   const [newPassword, setNewPassword] = useState('');
@@ -70,24 +70,17 @@ export function ProfilePageClient() {
         }
 
         if (data.role === 'benevole') {
-          const [{ data: skillsData }, { data: profileSkillsData }] = await Promise.all([
-            supabase.from('skills').select('id,name,category,level,created_at').order('category', { ascending: true }).order('level', { ascending: true }).order('name', { ascending: true }),
-            supabase.from('profile_skills').select('skill_id').eq('profile_id', data.id)
+          const [catsRes, profileSkillsRes] = await Promise.all([
+            supabase
+              .from('skill_categories')
+              .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
+              .order('display_order', { ascending: true })
+              .order('display_order', { referencedTable: 'skills', ascending: true }),
+            supabase.from('profile_skills').select('skill_id').eq('profile_id', data.id),
           ]);
 
-          const grouped = (skillsData ?? []).reduce<Record<string, Skill[]>>((acc, skill) => {
-            const rawCategory = (skill.category ?? '').toLowerCase();
-            const key = rawCategory === 'technique' ? 'conduite' : rawCategory;
-            if (!['formation', 'accso', 'operationnel', 'conduite'].includes(key)) {
-              return acc;
-            }
-            if (!acc[key]) acc[key] = [];
-            acc[key].push(skill);
-            return acc;
-          }, {});
-
-          setSkillsByCategory(grouped);
-          setAcquiredSkillIds(new Set((profileSkillsData ?? []).map((row) => row.skill_id)));
+          setCategoriesWithSkills((catsRes.data ?? []) as Array<SkillCategory & { skills: Skill[] }>);
+          setAcquiredSkillIds(new Set((profileSkillsRes.data ?? []).map((row) => row.skill_id)));
         }
       }
 
@@ -248,12 +241,6 @@ export function ProfilePageClient() {
 
   const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
   const isVolunteer = profile.role === 'benevole';
-  const categoryLabels: Record<string, string> = {
-    formation: 'Formation',
-    accso: 'ACCSO',
-    operationnel: 'Opérationnel',
-    conduite: 'Conduite'
-  };
   const neutralBadgeClass = 'inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500';
 
   return (
@@ -314,21 +301,24 @@ export function ProfilePageClient() {
           <div>
             <p className="font-medium text-slate-900">Mes compétences</p>
             <div className="mt-3 space-y-3">
-              {Object.entries(skillsByCategory).map(([category, skills]) => (
-                <div key={category} className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{categoryLabels[category] ?? category}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {skills.map((skill) => {
-                      const isAcquired = acquiredSkillIds.has(skill.id);
-                      return (
-                        <span key={skill.id} className={isAcquired ? getSkillBadgeClass(skill.category) : neutralBadgeClass}>
-                          {skill.name}
-                        </span>
-                      );
-                    })}
+              {categoriesWithSkills.map((cat) => {
+                if (cat.skills.length === 0) return null;
+                return (
+                  <div key={cat.id} className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{cat.name}</p>
+                    <div className="flex flex-wrap gap-2">
+                      {cat.skills.map((skill) => {
+                        const isAcquired = acquiredSkillIds.has(skill.id);
+                        return isAcquired ? (
+                          <SkillBadge key={skill.id} name={skill.name} color={cat.color} />
+                        ) : (
+                          <span key={skill.id} className={neutralBadgeClass}>{skill.name}</span>
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
           </div>

@@ -4,19 +4,25 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, Skill } from '@/lib/types';
-import { SkillBadge } from '@/components/skills/skill-badge';
-import { getSkillBadgeClass } from '@/components/skills/skill-badge';
-import { compareSkillCodes, expandSkills, getSkillLabel, resolveSkillCode, SkillCode } from '@/lib/skills';
+import { Profile, Skill, SkillCategory } from '@/lib/types';
+import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
 
-type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
+type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
-type VolunteerSkill = {
-  skill: SkillOption | SkillOption[] | null;
+type SkillRef = { id: string; name: string; category_id: string | null; display_order: number };
+
+type VolunteerSkillRow = {
+  skill_id: string;
+  skill: SkillRef | SkillRef[] | null;
 };
 
 type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at'> & {
-  profile_skills: VolunteerSkill[] | null;
+  profile_skills: VolunteerSkillRow[] | null;
+};
+
+type VolunteerWithSkills = {
+  volunteer: VolunteerProfile;
+  skills: SkillRef[];
 };
 
 type VolunteersPageClientProps = {
@@ -29,26 +35,11 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
+  const [categories, setCategories] = useState<CategoryWithSkills[]>([]);
   const [selectedSkillByCategory, setSelectedSkillByCategory] = useState<Record<string, string | null>>({});
-  const [skillsDirectory, setSkillsDirectory] = useState<SkillOption[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const normalizedSkillsDirectory = useMemo(() =>
-    skillsDirectory.map((skill) => ({ ...skill, code: resolveSkillCode(skill.name) })),
-    [skillsDirectory]
-  );
-
-  const codeToSkillId = useMemo(() => {
-    const map = new Map<SkillCode, string>();
-    for (const skill of normalizedSkillsDirectory) {
-      if (skill.code) {
-        map.set(skill.code, skill.id);
-      }
-    }
-    return map;
-  }, [normalizedSkillsDirectory]);
 
   const router = useRouter();
 
@@ -57,10 +48,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       setError(null);
 
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        router.replace('/login');
-        return;
-      }
+      if (!authData.user) { router.replace('/login'); return; }
 
       const { data: profileData } = await supabase
         .from('profiles')
@@ -68,154 +56,54 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
         .eq('id', authData.user.id)
         .single();
 
-      if (!profileData) {
-        setError('Profil introuvable.');
-        setLoading(false);
-        return;
-      }
-
-      if (profileData.role !== 'admin') {
-        setError('Accès réservé aux administrateurs.');
-        setLoading(false);
-        return;
-      }
+      if (!profileData) { setError('Profil introuvable.'); setLoading(false); return; }
+      if (profileData.role !== 'admin') { setError('Accès réservé aux administrateurs.'); setLoading(false); return; }
 
       setProfile(profileData);
 
-      const { data: volunteersData, error: volunteersError } = await supabase
-        .from('profiles')
-        .select('id,full_name,identifier,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill:skills(id,name,category))')
-        .eq('role', 'benevole')
-        .order('full_name', { ascending: true });
+      const [volunteersRes, categoriesRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id,full_name,identifier,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill_id,skill:skills(id,name,category_id,display_order))')
+          .eq('role', 'benevole')
+          .order('full_name', { ascending: true }),
+        supabase
+          .from('skill_categories')
+          .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
+          .order('display_order', { ascending: true })
+          .order('display_order', { referencedTable: 'skills', ascending: true }),
+      ]);
 
-      if (volunteersError) {
-        setError(volunteersError.message);
-        setLoading(false);
-        return;
-      }
+      if (volunteersRes.error) { setError(volunteersRes.error.message); setLoading(false); return; }
+      if (categoriesRes.error) { setError(categoriesRes.error.message); setLoading(false); return; }
 
-      const { data: skillsData, error: skillsError } = await supabase
-        .from('skills')
-        .select('id,name,category')
-        .order('name', { ascending: true });
-
-      if (skillsError) {
-        setError(skillsError.message);
-        setLoading(false);
-        return;
-      }
-
-      setVolunteers(volunteersData ?? []);
-      setSkillsDirectory(skillsData ?? []);
+      setVolunteers((volunteersRes.data ?? []) as VolunteerProfile[]);
+      setCategories((categoriesRes.data ?? []) as CategoryWithSkills[]);
       setLoading(false);
     }
 
     void loadData();
   }, [router]);
 
-  const volunteersWithSkills = useMemo(
-    () =>
-      volunteers.map((volunteer) => {
-        const explicitSkills = (volunteer.profile_skills ?? [])
-          .flatMap((profileSkill) => {
-            if (!profileSkill.skill) {
-              return [];
-            }
-
-            return Array.isArray(profileSkill.skill) ? profileSkill.skill : [profileSkill.skill];
-          })
-          .filter((skill): skill is SkillOption => Boolean(skill));
-
-        const explicitCodes = explicitSkills
-          .map((skill) => resolveSkillCode(skill.name))
-          .filter((skillCode): skillCode is SkillCode => skillCode !== null);
-
-        const expandedCodes = expandSkills(explicitCodes);
-
-        const expandedSkills = expandedCodes
-          .map((skillCode) => {
-            const skillId = codeToSkillId.get(skillCode);
-            if (!skillId) {
-              return null;
-            }
-
-            const existing = explicitSkills.find((skill) => skill.id === skillId);
-            if (existing) {
-              return existing;
-            }
-
-            return {
-              id: skillId,
-              name: getSkillLabel(skillCode),
-              category: normalizedSkillsDirectory.find((skill) => skill.id === skillId)?.category ?? null
-            };
-          })
-          .filter((skill): skill is SkillOption => Boolean(skill));
-
-        return {
-          volunteer,
-          explicitSkills,
-          skills: expandedSkills
-        };
-      }),
-    [codeToSkillId, normalizedSkillsDirectory, volunteers]
+  const volunteersWithSkills = useMemo<VolunteerWithSkills[]>(() =>
+    volunteers.map((volunteer) => {
+      const skills = (volunteer.profile_skills ?? [])
+        .map((ps) => {
+          const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+          if (!s) return null;
+          return { id: s.id, name: s.name, category_id: s.category_id, display_order: s.display_order };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
+      return { volunteer, skills };
+    }),
+    [volunteers]
   );
-
-  const availableSkills = useMemo(() => {
-    return [...normalizedSkillsDirectory].sort((a, b) => {
-      if (a.code && b.code) {
-        return compareSkillCodes(a.code, b.code);
-      }
-      if (a.code) return -1;
-      if (b.code) return 1;
-      return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-    });
-  }, [normalizedSkillsDirectory]);
-
-  const availableSkillsByCategory = useMemo(() => {
-    const groups = new Map<string, SkillOption[]>();
-
-    for (const skill of availableSkills) {
-      const rawCategory = (skill.category ?? '').toLowerCase();
-      const categoryKey = rawCategory === 'technique' ? 'conduite' : rawCategory;
-      if (!['conduite', 'formation', 'operationnel', 'accso'].includes(categoryKey)) {
-        continue;
-      }
-      const current = groups.get(categoryKey) ?? [];
-      current.push(skill);
-      groups.set(categoryKey, current);
-    }
-
-    const categoryOrder = ['conduite', 'formation', 'operationnel', 'accso'];
-    const categoryLabels: Record<string, string> = {
-      conduite: 'CONDUITE',
-      formation: 'FORMATION',
-      operationnel: 'OPERATIONNEL',
-      accso: 'ACCSO',
-    };
-
-    return Array.from(groups.entries())
-      .sort((a, b) => {
-        const indexA = categoryOrder.indexOf(a[0]);
-        const indexB = categoryOrder.indexOf(b[0]);
-        if (indexA === -1 && indexB === -1) return a[0].localeCompare(b[0], 'fr', { sensitivity: 'base' });
-        if (indexA === -1) return 1;
-        if (indexB === -1) return -1;
-        return indexA - indexB;
-      })
-      .map(([category, skills]) => ({
-        category,
-        label: categoryLabels[category] ?? category.toLocaleUpperCase('fr'),
-        skills
-      }));
-  }, [availableSkills]);
 
   const skillCounts = useMemo(() => {
     const counts = new Map<string, number>();
     for (const { skills } of volunteersWithSkills) {
-      const uniqueIds = new Set(skills.map((skill) => skill.id));
-      for (const id of uniqueIds) {
-        counts.set(id, (counts.get(id) ?? 0) + 1);
+      for (const skill of skills) {
+        counts.set(skill.id, (counts.get(skill.id) ?? 0) + 1);
       }
     }
     return counts;
@@ -226,47 +114,43 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       const searchTerm = searchQuery.trim().toLocaleLowerCase('fr');
       const matchesSearch =
         searchTerm.length === 0 ||
-        [volunteer.full_name ?? '', volunteer.identifier ?? '', ...skills.map((skill) => skill.name)]
+        [volunteer.full_name ?? '', volunteer.identifier ?? '', ...skills.map((s) => s.name)]
           .join(' ')
           .toLocaleLowerCase('fr')
           .includes(searchTerm);
 
-      if (!matchesSearch) {
-        return false;
+      if (!matchesSearch) return false;
+
+      for (const [categoryId, selectedSkillId] of Object.entries(selectedSkillByCategory)) {
+        if (!selectedSkillId) continue;
+        const category = categories.find((c) => c.id === categoryId);
+        const selectedSkill = category?.skills.find((s) => s.id === selectedSkillId);
+        if (!selectedSkill) continue;
+
+        const passes = skills.some(
+          (s) => s.category_id === categoryId && s.display_order >= selectedSkill.display_order
+        );
+        if (!passes) return false;
       }
 
-      const activeSkillIds = Object.values(selectedSkillByCategory).filter((id): id is string => Boolean(id));
-      if (activeSkillIds.length === 0) {
-        return true;
-      }
-
-      return activeSkillIds.every((selectedSkillId) => skills.some((skill) => skill.id === selectedSkillId));
+      return true;
     });
-  }, [searchQuery, selectedSkillByCategory, volunteersWithSkills]);
+  }, [searchQuery, selectedSkillByCategory, volunteersWithSkills, categories]);
 
-  const toggleSkillFilter = (category: string, skillId: string | null) => {
+  const toggleSkillFilter = (categoryId: string, skillId: string | null) => {
     setSelectedSkillByCategory((current) => ({
       ...current,
-      [category]: current[category] === skillId ? null : skillId
+      [categoryId]: current[categoryId] === skillId ? null : skillId,
     }));
   };
 
   const volunteerCountLabel = useMemo(() => {
     const count = filteredVolunteers.length;
-    if (count <= 1) {
-      return `${count} bénévole`;
-    }
-
-    return `${count} bénévoles`;
+    return `${count} bénévole${count !== 1 ? 's' : ''}`;
   }, [filteredVolunteers.length]);
 
-  if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des bénévoles...</p>;
-  }
-
-  if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
-  }
+  if (loading) return <p className="text-sm text-slate-600">Chargement des bénévoles...</p>;
+  if (!profile) return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
 
   return (
     <div className="space-y-6">
@@ -290,13 +174,11 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
           Le bénévole a été ajouté avec succès.
         </div>
       ) : null}
-
       {edited ? (
         <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
           Le bénévole a été modifié avec succès.
         </div>
       ) : null}
-
       {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
 
       {volunteers.length === 0 ? (
@@ -318,42 +200,56 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 />
               </label>
 
-              <div className="space-y-3">
-                {availableSkillsByCategory.map(({ category, label, skills }) => {
-                  const selectedSkillId = selectedSkillByCategory[category] ?? null;
-                  const selectedSkillIndex = skills.findIndex((skill) => skill.id === selectedSkillId);
+              {categories.length > 0 && (
+                <div className="space-y-3">
+                  {categories.map((category) => {
+                    if (category.skills.length === 0) return null;
+                    const selectedSkillId = selectedSkillByCategory[category.id] ?? null;
+                    const selectedSkill = category.skills.find((s) => s.id === selectedSkillId);
 
-                  return (
-                    <div key={category} className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-                      <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => toggleSkillFilter(category, null)}
-                          className={`${getSkillBadgeClass(category)} px-2.5 py-1`}
-                        >
-                          Toutes
-                        </button>
-                        {skills.map((skill, skillIndex) => {
-                          const count = skillCounts.get(skill.id) ?? 0;
-                          const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
+                    return (
+                      <div key={category.id} className="space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category.name}</p>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => toggleSkillFilter(category.id, null)}
+                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
+                              !selectedSkillId
+                                ? getSkillColorClass(category.color)
+                                : 'border-slate-300 bg-slate-100 text-slate-600'
+                            }`}
+                          >
+                            Toutes
+                          </button>
+                          {category.skills.map((skill) => {
+                            const isSelected = selectedSkillId === skill.id;
+                            const isHighlighted = selectedSkill
+                              ? skill.display_order <= selectedSkill.display_order
+                              : false;
+                            const count = skillCounts.get(skill.id) ?? 0;
 
-                          return (
-                            <button
-                              key={skill.id}
-                              type="button"
-                              onClick={() => toggleSkillFilter(category, skill.id)}
-                              className={`${shouldUseCategoryColor ? getSkillBadgeClass(skill.category) : neutralSkillBadgeClass} hover:opacity-80`}
-                            >
-                              {skill.name} {count}
-                            </button>
-                          );
-                        })}
+                            return (
+                              <button
+                                key={skill.id}
+                                type="button"
+                                onClick={() => toggleSkillFilter(category.id, skill.id)}
+                                className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
+                                  isSelected || isHighlighted
+                                    ? getSkillColorClass(category.color)
+                                    : neutralSkillBadgeClass
+                                }`}
+                              >
+                                {skill.name} {count}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
-              </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
@@ -369,7 +265,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredVolunteers.map(({ volunteer, explicitSkills }) => (
+                {filteredVolunteers.map(({ volunteer, skills }) => (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
                     <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
@@ -390,13 +286,16 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                       )}
                     </td>
                     <td className="px-4 py-2 text-slate-700">
-                      {explicitSkills.length === 0 ? (
+                      {skills.length === 0 ? (
                         <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
-                          {explicitSkills.map((skill) => (
-                            <SkillBadge key={`${volunteer.id}-${skill.id}`} name={skill.name} category={skill.category} />
-                          ))}
+                          {skills.map((skill) => {
+                            const cat = categories.find((c) => c.id === skill.category_id);
+                            return (
+                              <SkillBadge key={skill.id} name={skill.name} color={cat?.color} />
+                            );
+                          })}
                         </div>
                       )}
                     </td>

@@ -7,7 +7,6 @@ import { MissionCard } from '@/components/missions/mission-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
-import { SkillCode } from '@/lib/skills';
 import { MISSION_STATUS_LABELS } from '@/lib/missions';
 
 type MissionType = { id: string; name: string };
@@ -44,7 +43,7 @@ export default function MissionsPage() {
       {
         availableCount: number;
         unavailableCount: number;
-        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; color?: string | null }> }>;
       }
     >
   >(new Map());
@@ -138,7 +137,7 @@ export default function MissionsPage() {
     let missionQuery = supabase
       .from('missions')
       .select(
-        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
       );
 
     if (profileData.role === 'benevole') {
@@ -181,7 +180,7 @@ export default function MissionsPage() {
     const { data: availableProfiles } = availableVolunteerIds.length
       ? await supabase
         .from('profiles')
-        .select('id,full_name,profile_skills(skill:skills(name,category))')
+        .select('id,full_name,profile_skills(skill:skills(name,skill_categories(color)))')
         .in('id', availableVolunteerIds)
       : { data: [] };
 
@@ -192,12 +191,12 @@ export default function MissionsPage() {
           name: profile.full_name?.trim() || 'Sans nom',
           skills: (
             (profile.profile_skills ?? []) as Array<{
-              skill?: { name?: string; category?: string | null } | Array<{ name?: string; category?: string | null }> | null;
+              skill?: { name?: string; skill_categories?: { color?: string } | null } | Array<{ name?: string; skill_categories?: { color?: string } | null }> | null;
             }>
           )
             .map((profileSkill) => (Array.isArray(profileSkill.skill) ? profileSkill.skill[0] : profileSkill.skill) ?? null)
-            .filter((skill): skill is { name?: string; category?: string | null } => Boolean(skill?.name))
-            .map((skill) => ({ name: skill.name ?? 'Compétence sans nom', category: skill.category ?? null }))
+            .filter((skill): skill is { name?: string; skill_categories?: { color?: string } | null } => Boolean(skill?.name))
+            .map((skill) => ({ name: skill.name ?? 'Compétence sans nom', color: skill.skill_categories?.color ?? null }))
         }
       ])
     );
@@ -206,7 +205,7 @@ export default function MissionsPage() {
       {
         availableCount: number;
         unavailableCount: number;
-        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+        availableVolunteers: Array<{ name: string; skills: Array<{ name: string; color?: string | null }> }>;
       }
     >();
 

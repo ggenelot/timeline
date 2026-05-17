@@ -1,10 +1,10 @@
 import { MissionRequirementFormState } from '@/components/missions/mission-form';
-import { getSkillBadgeClass } from '@/components/skills/skill-badge';
+import { getSkillColorClass } from '@/components/skills/skill-badge';
 
 type SkillOption = {
   id: string;
   name: string;
-  category?: 'formation' | 'operationnel' | 'conduite' | 'accso' | 'technique' | null;
+  color?: string | null;
 };
 
 type MissionRequirementsEditorProps = {
@@ -73,7 +73,7 @@ export function MissionRequirementsEditor({
                     type="button"
                     onClick={() => updateRequirement(index, { skill_id: '' })}
                     disabled={submitting || usedSkillIdsByOtherRows.has('')}
-                    className={`${requirement.skill_id === '' ? getSkillBadgeClass('technique') : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                    className={`${requirement.skill_id === '' ? getSkillColorClass('slate') : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
                   >
                     {GENERIC_VOLUNTEER_LABEL}
                   </button>
@@ -87,7 +87,7 @@ export function MissionRequirementsEditor({
                         type="button"
                         onClick={() => updateRequirement(index, { skill_id: skill.id })}
                         disabled={submitting || isUsedInAnotherRow}
-                        className={`${isSelected ? getSkillBadgeClass(skill.category ?? null) : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                        className={`${isSelected ? getSkillColorClass(skill.color ?? null) : neutralSkillBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
                       >
                         {skill.name}
                       </button>
