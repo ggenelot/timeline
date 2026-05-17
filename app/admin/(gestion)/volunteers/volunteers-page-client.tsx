@@ -266,7 +266,11 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
               <tbody className="divide-y divide-slate-100">
                 {filteredVolunteers.map(({ volunteer, skills }) => (
                   <tr key={volunteer.id}>
-                    <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
+                    <td className="px-4 py-2 font-medium">
+                      <Link href={`/admin/volunteers/${volunteer.id}`} className="text-slate-900 hover:underline">
+                        {volunteer.full_name ?? '—'}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
                     <td className="px-4 py-2">
                       <span className={`inline-block h-3 w-3 rounded-full ${volunteer.slack_user_id && volunteer.slack_team_id ? 'bg-emerald-500' : 'bg-slate-300'}`} />
