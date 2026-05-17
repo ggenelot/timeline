@@ -13,19 +13,28 @@ export type Profile = {
   slack_connected_at?: string | null;
 };
 
+export type SkillCategory = {
+  id: string;
+  name: string;
+  color: string;
+  display_order: number;
+  created_at: string;
+};
+
 export type Skill = {
   id: string;
   name: string;
-  category: string | null;
-  level: string | null;
+  category_id: string | null;
+  display_order: number;
   created_at: string;
+  category?: SkillCategory | null;
 };
 
 export type ProfileSkill = {
   profile_id: string;
   skill_id: string;
   created_at: string;
-  skill: Pick<Skill, 'id' | 'name'> | null;
+  skill: Pick<Skill, 'id' | 'name' | 'category_id' | 'display_order'> | null;
 };
 
 export type MissionStatus = 'draft' | 'proposed' | 'closed' | 'confirmed' | 'cancelled';
@@ -116,7 +125,7 @@ export type MissionRequiredSkill = {
   skill_id: string | null;
   quantity: number;
   created_at: string;
-  skill: Pick<Skill, 'id' | 'name'> | null;
+  skill: Pick<Skill, 'id' | 'name' | 'category_id' | 'display_order'> | null;
 };
 
 export type MissionProposalStatus = 'pending' | 'accepted' | 'refused';
@@ -184,7 +193,7 @@ export type MissionTypeRequiredSkill = {
   skill_id: string;
   quantity: number;
   created_at: string;
-  skill: Pick<Skill, 'id' | 'name' | 'category'> | null;
+  skill: Pick<Skill, 'id' | 'name' | 'category_id' | 'display_order'> | null;
 };
 
 export type MissionType = {
@@ -195,6 +204,7 @@ export type MissionType = {
   default_start_time: string | null;
   default_end_time: string | null;
   created_at: string;
+  color: string | null;
   required_skills?: MissionTypeRequiredSkill[];
 };
 

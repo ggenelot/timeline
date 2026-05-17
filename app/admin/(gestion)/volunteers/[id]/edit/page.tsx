@@ -4,9 +4,10 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { AppRole, Profile, Skill } from '@/lib/types';
-import { getSkillBadgeClass } from '@/components/skills/skill-badge';
-import { compareSkillCodes, resolveSkillCode } from '@/lib/skills';
+import { AppRole, Profile, Skill, SkillCategory } from '@/lib/types';
+import { getSkillColorClass } from '@/components/skills/skill-badge';
+
+type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
 type EditVolunteerForm = {
   firstName: string;
@@ -16,42 +17,20 @@ type EditVolunteerForm = {
   selectedSkillByCategory: Record<string, string | null>;
 };
 
-type SkillOption = Pick<Skill, 'id' | 'name' | 'category'>;
-
-const SKILL_CATEGORIES = ['conduite', 'formation', 'operationnel', 'accso'] as const;
-
-const SKILL_CATEGORY_LABELS: Record<(typeof SKILL_CATEGORIES)[number], string> = {
-  conduite: 'TECHNIQUE',
-  formation: 'FORMATION',
-  operationnel: 'OPERATIONNEL',
-  accso: 'ACCSO'
-};
-
-function normalizeSkillCategory(category: string | null | undefined): (typeof SKILL_CATEGORIES)[number] | null {
-  const normalized = (category ?? '').toLowerCase();
-  const key = normalized === 'technique' ? 'conduite' : normalized;
-
-  return SKILL_CATEGORIES.includes(key as (typeof SKILL_CATEGORIES)[number])
-    ? (key as (typeof SKILL_CATEGORIES)[number])
-    : null;
-}
-
 type VolunteerPayload = {
   full_name: string | null;
   identifier: string | null;
   role: AppRole;
 };
 
-type VolunteerSkill = {
-  skill_id: string;
-};
+type VolunteerSkill = { skill_id: string };
 
 const INITIAL_FORM: EditVolunteerForm = {
   firstName: '',
   lastName: '',
   identifier: '',
   password: '',
-  selectedSkillByCategory: {}
+  selectedSkillByCategory: {},
 };
 
 export default function EditVolunteerPage() {
@@ -63,7 +42,7 @@ export default function EditVolunteerPage() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<EditVolunteerForm>(INITIAL_FORM);
-  const [skills, setSkills] = useState<SkillOption[]>([]);
+  const [categories, setCategories] = useState<CategoryWithSkills[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -71,10 +50,7 @@ export default function EditVolunteerPage() {
       setError(null);
 
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        router.replace('/login');
-        return;
-      }
+      if (!authData.user) { router.replace('/login'); return; }
 
       const { data: profileData, error: profileError } = await supabase
         .from('profiles')
@@ -98,31 +74,37 @@ export default function EditVolunteerPage() {
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
-
       if (!accessToken) {
         setError('Session invalide. Veuillez vous reconnecter.');
         setLoading(false);
         return;
       }
 
-      const response = await fetch(`/api/admin/volunteers/${volunteerId}`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`
-        }
-      });
+      const [volunteerRes, categoriesRes] = await Promise.all([
+        fetch(`/api/admin/volunteers/${volunteerId}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }),
+        supabase
+          .from('skill_categories')
+          .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
+          .order('display_order', { ascending: true })
+          .order('display_order', { referencedTable: 'skills', ascending: true }),
+      ]);
 
-      const payload = (await response.json()) as {
+      const payload = (await volunteerRes.json()) as {
         error?: string;
         volunteer?: VolunteerPayload;
         profileSkills?: VolunteerSkill[];
-        skills?: SkillOption[];
       };
 
-      if (!response.ok || !payload.volunteer) {
+      if (!volunteerRes.ok || !payload.volunteer) {
         setError(payload.error ?? 'Impossible de charger le bénévole.');
         setLoading(false);
         return;
       }
+
+      const cats = (categoriesRes.data ?? []) as CategoryWithSkills[];
+      setCategories(cats);
 
       const fullName = payload.volunteer.full_name?.trim() ?? '';
       const nameParts = fullName.split(/\s+/).filter(Boolean);
@@ -130,28 +112,23 @@ export default function EditVolunteerPage() {
       const lastName = nameParts.join(' ');
       const identifier = payload.volunteer.identifier?.trim() ?? '';
 
-      const selectedSkillIds = (payload.profileSkills ?? []).map((profileSkill) => profileSkill.skill_id);
-      const selectedSkillByCategory = (payload.skills ?? []).reduce<Record<string, string | null>>((acc, skill) => {
-        if (!selectedSkillIds.includes(skill.id)) return acc;
-        const category = normalizeSkillCategory(skill.category);
-        if (category) acc[category] = skill.id;
-        return acc;
-      }, {});
+      const selectedSkillIds = new Set((payload.profileSkills ?? []).map((ps) => ps.skill_id));
 
-      setForm({
-        firstName,
-        lastName,
-        identifier,
-        password: '',
-        selectedSkillByCategory
-      });
-      setSkills(payload.skills ?? []);
+      const selectedSkillByCategory: Record<string, string | null> = {};
+      for (const cat of cats) {
+        const match = cat.skills
+          .filter((s) => selectedSkillIds.has(s.id))
+          .sort((a, b) => b.display_order - a.display_order)[0];
+        if (match) {
+          selectedSkillByCategory[cat.id] = match.id;
+        }
+      }
+
+      setForm({ firstName, lastName, identifier, password: '', selectedSkillByCategory });
       setLoading(false);
     }
 
-    if (volunteerId) {
-      void loadData();
-    }
+    if (volunteerId) void loadData();
   }, [router, volunteerId]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -159,7 +136,7 @@ export default function EditVolunteerPage() {
     setError(null);
 
     if (!profile || profile.role !== 'admin') {
-      setError('Accès refusé : seuls les administrateurs peuvent modifier un bénévole.');
+      setError('Accès refusé.');
       return;
     }
 
@@ -167,21 +144,9 @@ export default function EditVolunteerPage() {
     const lastName = form.lastName.trim();
     const identifier = form.identifier.trim().toLowerCase();
 
-    if (!firstName) {
-      setError('Le prénom est obligatoire.');
-      return;
-    }
-
-    if (!lastName) {
-      setError('Le nom est obligatoire.');
-      return;
-    }
-
-    if (!identifier) {
-      setError('Un identifiant est obligatoire.');
-      return;
-    }
-
+    if (!firstName) { setError('Le prénom est obligatoire.'); return; }
+    if (!lastName) { setError('Le nom est obligatoire.'); return; }
+    if (!identifier) { setError("Un identifiant est obligatoire."); return; }
     if (form.password && form.password.length < 10) {
       setError('Le mot de passe doit contenir au moins 10 caractères.');
       return;
@@ -191,33 +156,24 @@ export default function EditVolunteerPage() {
 
     const { data: sessionData } = await supabase.auth.getSession();
     const accessToken = sessionData.session?.access_token;
+    if (!accessToken) { setError('Session invalide.'); setSubmitting(false); return; }
 
-    if (!accessToken) {
-      setError('Session invalide. Veuillez vous reconnecter.');
-      setSubmitting(false);
-      return;
-    }
-
-    const skillIds = Object.values(form.selectedSkillByCategory).filter((value): value is string => Boolean(value));
+    const skillIds = Object.values(form.selectedSkillByCategory).filter((v): v is string => Boolean(v));
 
     const response = await fetch(`/api/admin/volunteers/${volunteerId}`, {
       method: 'PATCH',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
-      },
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({
         full_name: `${firstName} ${lastName}`.trim(),
         identifier,
         skill_ids: skillIds,
-        password: form.password || undefined
-      })
+        password: form.password || undefined,
+      }),
     });
 
-    const payload = (await response.json()) as { error?: string };
-
+    const result = (await response.json()) as { error?: string };
     if (!response.ok) {
-      setError(payload.error ?? 'La mise à jour du bénévole a échoué.');
+      setError(result.error ?? 'La mise à jour a échoué.');
       setSubmitting(false);
       return;
     }
@@ -226,14 +182,8 @@ export default function EditVolunteerPage() {
     router.push('/admin/volunteers?edited=1');
   }
 
-  if (loading) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
-  }
-
-  if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
-  }
-
+  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
+  if (!profile) return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
   if (profile.role !== 'admin') {
     return (
       <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
@@ -263,19 +213,18 @@ export default function EditVolunteerPage() {
             <input
               type="text"
               value={form.firstName}
-              onChange={(event) => setForm((prev) => ({ ...prev, firstName: event.target.value }))}
+              onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               disabled={submitting}
               required
             />
           </label>
-
           <label className="block text-sm text-slate-700">
             Nom
             <input
               type="text"
               value={form.lastName}
-              onChange={(event) => setForm((prev) => ({ ...prev, lastName: event.target.value }))}
+              onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
               className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
               disabled={submitting}
               required
@@ -288,7 +237,7 @@ export default function EditVolunteerPage() {
           <input
             type="text"
             value={form.identifier}
-            onChange={(event) => setForm((prev) => ({ ...prev, identifier: event.target.value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, identifier: e.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             placeholder="prenom.nom"
             disabled={submitting}
@@ -301,7 +250,7 @@ export default function EditVolunteerPage() {
           <input
             type="password"
             value={form.password}
-            onChange={(event) => setForm((prev) => ({ ...prev, password: event.target.value }))}
+            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
             className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
             disabled={submitting}
             minLength={10}
@@ -311,53 +260,59 @@ export default function EditVolunteerPage() {
 
         <div className="space-y-3 rounded-md border border-slate-200 p-3">
           <p className="text-sm font-medium text-slate-900">Compétences</p>
-          {SKILL_CATEGORIES.map((category) => {
-            const categorySkills = skills
-              .filter((skill) => normalizeSkillCategory(skill.category) === category)
-              .sort((a, b) => {
-                const codeA = resolveSkillCode(a.name);
-                const codeB = resolveSkillCode(b.name);
-                if (codeA && codeB) return compareSkillCodes(codeA, codeB);
-                if (codeA) return -1;
-                if (codeB) return 1;
-                return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' });
-              });
+          {categories.length === 0 ? (
+            <p className="text-xs text-slate-400">Aucune catégorie de compétences définie.</p>
+          ) : (
+            categories.map((category) => {
+              if (category.skills.length === 0) return null;
+              const selectedSkillId = form.selectedSkillByCategory[category.id] ?? null;
+              const selectedSkill = category.skills.find((s) => s.id === selectedSkillId);
 
-            if (categorySkills.length === 0) return null;
-
-            const selectedSkillId = form.selectedSkillByCategory[category] ?? null;
-            const selectedSkillIndex = categorySkills.findIndex((skill) => skill.id === selectedSkillId);
-
-            return (
-              <div key={category} className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{SKILL_CATEGORY_LABELS[category]}</p>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: null } }))}
-                    className={`${getSkillBadgeClass(category)} px-2.5 py-1`}
-                    disabled={submitting}
-                  >
-                    Aucune
-                  </button>
-                  {categorySkills.map((skill, skillIndex) => {
-                    const shouldUseCategoryColor = selectedSkillIndex >= 0 && skillIndex <= selectedSkillIndex;
-                    return (
-                      <button
-                        key={skill.id}
-                        type="button"
-                        onClick={() => setForm((prev) => ({ ...prev, selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category]: skill.id } }))}
-                        className={`${shouldUseCategoryColor ? getSkillBadgeClass(category) : 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600'} hover:opacity-80`}
-                        disabled={submitting}
-                      >
-                        {skill.name}
-                      </button>
-                    );
-                  })}
+              return (
+                <div key={category.id} className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category.name}</p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setForm((prev) => ({
+                        ...prev,
+                        selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category.id]: null },
+                      }))}
+                      className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
+                        !selectedSkillId ? getSkillColorClass(category.color) : 'border-slate-300 bg-slate-100 text-slate-600'
+                      }`}
+                      disabled={submitting}
+                    >
+                      Aucune
+                    </button>
+                    {category.skills.map((skill) => {
+                      const isHighlighted = selectedSkill
+                        ? skill.display_order <= selectedSkill.display_order
+                        : false;
+                      return (
+                        <button
+                          key={skill.id}
+                          type="button"
+                          onClick={() => setForm((prev) => ({
+                            ...prev,
+                            selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category.id]: skill.id },
+                          }))}
+                          className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
+                            isHighlighted
+                              ? getSkillColorClass(category.color)
+                              : 'border-slate-300 bg-slate-100 text-slate-600'
+                          }`}
+                          disabled={submitting}
+                        >
+                          {skill.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
 
         <button

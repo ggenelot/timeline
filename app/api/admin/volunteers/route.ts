@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { expandSkillNames } from '@/lib/skills';
 
 type CreateVolunteerPayload = {
   firstName?: string;
@@ -138,7 +137,7 @@ export async function POST(request: NextRequest) {
   if (skillIds.length > 0) {
     const { data: selectedSkills, error: selectedSkillsError } = await serviceClient
       .from('skills')
-      .select('id,name')
+      .select('id')
       .in('id', skillIds);
 
     if (selectedSkillsError) {
@@ -149,25 +148,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Compte créé mais certaines compétences sont invalides.' }, { status: 400 });
     }
 
-    const expandedSkillNames = expandSkillNames((selectedSkills ?? []).map((skill) => skill.name));
-    const { data: allSkills, error: allSkillsError } = await serviceClient.from('skills').select('id,name');
-
-    if (allSkillsError) {
-      return NextResponse.json({ error: `Compte créé mais impossible de charger le référentiel de compétences : ${allSkillsError.message}` }, { status: 500 });
-    }
-
-    const normalizedNameToId = new Map((allSkills ?? []).map((skill) => [skill.name.trim().toLocaleLowerCase('fr-FR'), skill.id]));
-
-    const expandedSkillIds = Array.from(
-      new Set(
-        expandedSkillNames
-          .map((skillName) => normalizedNameToId.get(skillName.trim().toLocaleLowerCase('fr-FR')))
-          .filter((skillId): skillId is string => Boolean(skillId))
-      )
-    );
-
     const { error: insertSkillsError } = await serviceClient.from('profile_skills').insert(
-      expandedSkillIds.map((skillId) => ({ profile_id: createdUserData.user.id, skill_id: skillId }))
+      skillIds.map((skillId) => ({ profile_id: createdUserData.user.id, skill_id: skillId }))
     );
 
     if (insertSkillsError) {

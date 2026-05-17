@@ -22,7 +22,6 @@ import {
   RoleBehavior
 } from '@/lib/types';
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
-import { buildExpandedSkillSet, compareSkillCodes, getSkillLabel, SkillCode } from '@/lib/skills';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -113,7 +112,7 @@ export default function MissionDetailPage() {
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
-  const [selectedVolunteerSkillCode, setSelectedVolunteerSkillCode] = useState<'all' | SkillCode>('all');
+  const [selectedVolunteerSkillId, setSelectedVolunteerSkillId] = useState<'all' | string>('all');
   const [availabilitySearchQuery, setAvailabilitySearchQuery] = useState('');
   const [availabilityStatusFilter, setAvailabilityStatusFilter] = useState<'all' | MissionProposalResponse>('all');
   const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
@@ -133,34 +132,40 @@ export default function MissionDetailPage() {
   const eligibleProposals = useMemo(() => proposals.filter((proposal) => proposal.response === 'available'), [proposals]);
 
   const volunteerSkillOptions = useMemo(() => {
-    const usedCodes = new Set<SkillCode>();
+    const seenIds = new Set<string>();
+    const skills: Array<{ id: string; name: string; category_id: string | null; display_order: number }> = [];
 
     eligibleProposals.forEach((proposal) => {
-      const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
-        .map((profileSkill) => profileSkill.skill?.name)
-        .filter((skillName): skillName is string => Boolean(skillName));
-
-      buildExpandedSkillSet(explicitSkillNames).forEach((skillCode) => usedCodes.add(skillCode));
+      (proposal.volunteer?.profile_skills ?? []).forEach((profileSkill) => {
+        const s = Array.isArray(profileSkill.skill) ? profileSkill.skill[0] : profileSkill.skill;
+        if (s && !seenIds.has(s.id)) {
+          seenIds.add(s.id);
+          skills.push({ id: s.id, name: s.name, category_id: s.category_id ?? null, display_order: s.display_order ?? 0 });
+        }
+      });
     });
 
-    return Array.from(usedCodes)
-      .sort(compareSkillCodes)
-      .map((skillCode) => ({ code: skillCode, name: getSkillLabel(skillCode) }));
+    return skills.sort((a, b) => a.display_order - b.display_order);
   }, [eligibleProposals]);
 
   const filteredEligibleProposals = useMemo(() => {
-    if (selectedVolunteerSkillCode === 'all') {
-      return eligibleProposals;
-    }
+    if (selectedVolunteerSkillId === 'all') return eligibleProposals;
+
+    const selectedSkill = volunteerSkillOptions.find((s) => s.id === selectedVolunteerSkillId);
+    if (!selectedSkill) return eligibleProposals;
 
     return eligibleProposals.filter((proposal) => {
-      const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
-        .map((profileSkill) => profileSkill.skill?.name)
-        .filter((skillName): skillName is string => Boolean(skillName));
+      const volunteerSkills = (proposal.volunteer?.profile_skills ?? []).map((ps) => {
+        const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+        return s ? { category_id: s.category_id ?? null, display_order: s.display_order ?? 0 } : null;
+      }).filter((s): s is NonNullable<typeof s> => s !== null);
 
-      return buildExpandedSkillSet(explicitSkillNames).has(selectedVolunteerSkillCode);
+      if (!selectedSkill.category_id) return true;
+      return volunteerSkills.some(
+        (vs) => vs.category_id === selectedSkill.category_id && vs.display_order >= selectedSkill.display_order
+      );
     });
-  }, [eligibleProposals, selectedVolunteerSkillCode]);
+  }, [eligibleProposals, selectedVolunteerSkillId, volunteerSkillOptions]);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -177,12 +182,13 @@ export default function MissionDetailPage() {
     };
   }, [allVolunteers.length, proposals]);
 
-  const requiredSkillCodes = useMemo(() => {
-    const skillNames = (mission?.mission_required_skills ?? [])
-      .map((requiredSkill) => requiredSkill.skill?.name)
-      .filter((skillName): skillName is string => Boolean(skillName));
-
-    return buildExpandedSkillSet(skillNames);
+  const requiredSkills = useMemo(() => {
+    return (mission?.mission_required_skills ?? []).map((rs) => ({
+      id: rs.id,
+      category_id: rs.skill?.category_id ?? null,
+      display_order: rs.skill?.display_order ?? 0,
+      name: rs.skill?.name ?? null,
+    }));
   }, [mission?.mission_required_skills]);
 
   const proposalsTableRows = useMemo(() => {
@@ -193,17 +199,22 @@ export default function MissionDetailPage() {
       const proposal = proposalByVolunteerId.get(volunteer.id);
       const response = proposal?.response ?? 'no_response';
 
+      const volunteerSkills = proposal
+        ? (proposal.volunteer?.profile_skills ?? []).map((ps) => {
+            const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+            return s ? { category_id: s.category_id ?? null, display_order: s.display_order ?? 0, name: s.name } : null;
+          }).filter((s): s is NonNullable<typeof s> => s !== null)
+        : [];
+
       const matchingRequiredSkills = proposal
-        ? Array.from(
-            buildExpandedSkillSet(
-              (proposal.volunteer?.profile_skills ?? [])
-                .map((profileSkill) => profileSkill.skill?.name)
-                .filter((skillName): skillName is string => Boolean(skillName))
-            )
-          )
-            .filter((skillCode) => requiredSkillCodes.has(skillCode))
-            .sort(compareSkillCodes)
-            .map((skillCode) => getSkillLabel(skillCode))
+        ? requiredSkills
+            .filter((req) => {
+              if (!req.category_id) return true;
+              return volunteerSkills.some(
+                (vs) => vs.category_id === req.category_id && vs.display_order >= req.display_order
+              );
+            })
+            .map((req) => req.name ?? 'Bénévole')
         : [];
 
       return {
@@ -230,7 +241,7 @@ export default function MissionDetailPage() {
       }
       return rowA.volunteerLabel.localeCompare(rowB.volunteerLabel, 'fr', { sensitivity: 'base' });
     });
-  }, [allVolunteers, proposals, requiredSkillCodes]);
+  }, [allVolunteers, proposals, requiredSkills]);
 
   const filteredProposalsTableRows = useMemo(() => {
     const normalizedSearch = availabilitySearchQuery.trim().toLocaleLowerCase('fr-FR');
@@ -270,10 +281,12 @@ export default function MissionDetailPage() {
 
 
   const requiredSkillsVolunteerDirectory = useMemo(() => {
-    const requiredSkills = (mission?.mission_required_skills ?? []).map((requiredSkill) => ({
+    const requiredSkillsWithQty = (mission?.mission_required_skills ?? []).map((requiredSkill) => ({
       id: requiredSkill.id,
       name: requiredSkill.skill?.name ?? null,
-      quantity: requiredSkill.quantity ?? 0
+      quantity: requiredSkill.quantity ?? 0,
+      category_id: requiredSkill.skill?.category_id ?? null,
+      display_order: requiredSkill.skill?.display_order ?? 0,
     }));
 
     const availableVolunteers = eligibleProposals
@@ -292,18 +305,17 @@ export default function MissionDetailPage() {
       })
       .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
 
-    const skillGroups = requiredSkills.map((requiredSkill) => {
-      const requiredSkillCode = requiredSkill.name ? buildExpandedSkillSet([requiredSkill.name]) : buildExpandedSkillSet([]);
-
+    const skillGroups = requiredSkillsWithQty.map((requiredSkill) => {
       const volunteers = eligibleProposals
         .map((proposal) => {
-          const explicitSkillNames = (proposal.volunteer?.profile_skills ?? [])
-            .map((profileSkill) => profileSkill.skill?.name)
-            .filter((skillName): skillName is string => Boolean(skillName));
+          const volunteerSkills = (proposal.volunteer?.profile_skills ?? []).map((ps) => {
+            const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+            return s ? { category_id: s.category_id ?? null, display_order: s.display_order ?? 0 } : null;
+          }).filter((s): s is NonNullable<typeof s> => s !== null);
 
-          const volunteerSkillCodes = buildExpandedSkillSet(explicitSkillNames);
-          const matchesRequiredSkill =
-            requiredSkillCode.size === 0 || Array.from(requiredSkillCode).some((skillCode) => volunteerSkillCodes.has(skillCode));
+          const matchesRequiredSkill = !requiredSkill.category_id || volunteerSkills.some(
+            (vs) => vs.category_id === requiredSkill.category_id && vs.display_order >= requiredSkill.display_order
+          );
 
           if (!matchesRequiredSkill || !proposal.volunteer) {
             return null;
@@ -454,7 +466,7 @@ export default function MissionDetailPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
       )
       .eq('id', missionId)
       .single();
@@ -478,7 +490,7 @@ export default function MissionDetailPage() {
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
-        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name)))'
+        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name,category_id,display_order)))'
       )
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
@@ -1204,17 +1216,15 @@ export default function MissionDetailPage() {
                             <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-2 text-left text-xs text-slate-700 shadow-lg group-hover/volunteer:block">
                               <p className="font-semibold text-slate-900">Compétences</p>
                               <div className="mt-1 flex flex-wrap gap-1">
-                                {Array.from(
-                                  buildExpandedSkillSet(
-                                    (proposals.find((proposal) => proposal.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? [])
-                                      .map((profileSkill) => profileSkill.skill?.name)
-                                      .filter((skillName): skillName is string => Boolean(skillName))
-                                  )
-                                ).map((skillCode) => (
-                                  <span key={`${volunteer.id}-${skillCode}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
-                                    {getSkillLabel(skillCode)}
-                                  </span>
-                                ))}
+                                {(proposals.find((p) => p.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? []).map((ps) => {
+                                  const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+                                  if (!s) return null;
+                                  return (
+                                    <span key={`${volunteer.id}-${s.id}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                      {s.name}
+                                    </span>
+                                  );
+                                })}
                               </div>
                               <p className="mt-2">Dernière activité : {formatElapsedSince(volunteerActivityStats[volunteer.id]?.lastActivityAt ?? null)}</p>
                               <p>Activités (30j) : {volunteerActivityStats[volunteer.id]?.monthlyCount ?? 0}</p>

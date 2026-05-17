@@ -1,37 +1,25 @@
-import { Skill } from '@/lib/types';
-
-type SkillBadgeProps = {
-  name: string;
-  category?: Skill['category'];
+const COLOR_CLASSES: Record<string, string> = {
+  slate:   'border-slate-400 bg-slate-200 text-slate-800',
+  amber:   'border-amber-300 bg-amber-50 text-amber-900',
+  sky:     'border-sky-300 bg-sky-50 text-sky-900',
+  violet:  'border-violet-300 bg-violet-50 text-violet-900',
+  emerald: 'border-emerald-300 bg-emerald-50 text-emerald-900',
+  pink:    'border-pink-300 bg-pink-50 text-pink-900',
+  rose:    'border-rose-300 bg-rose-50 text-rose-900',
+  orange:  'border-orange-300 bg-orange-50 text-orange-900',
+  cyan:    'border-cyan-300 bg-cyan-50 text-cyan-900',
+  indigo:  'border-indigo-300 bg-indigo-50 text-indigo-900',
 };
 
-function getSkillBadgeClass(skillCategory: Skill['category']): string {
-  const baseClass = 'inline-flex rounded-full border px-2 py-0.5 text-xs font-medium';
-
-  switch (skillCategory) {
-    case 'formation':
-      return `${baseClass} border-sky-300 bg-sky-50 text-sky-900`;
-    case 'accso':
-      return `${baseClass} border-violet-300 bg-violet-50 text-violet-900`;
-    case 'operationnel':
-      return `${baseClass} border-amber-300 bg-amber-50 text-amber-900`;
-    case 'conduite':
-      return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
-    case 'technique':
-      return `${baseClass} border-slate-400 bg-slate-200 text-slate-800`;
-    case 'sps':
-      return `${baseClass} border-emerald-300 bg-emerald-50 text-emerald-900`;
-    case 'complements':
-      return `${baseClass} border-pink-300 bg-pink-50 text-pink-900`;
-    case 'vss':
-      return `${baseClass} border-rose-300 bg-rose-50 text-rose-900`;
-    default:
-      return `${baseClass} border-slate-300 bg-slate-100 text-slate-900`;
-  }
+export function getSkillColorClass(color: string | null | undefined): string {
+  return COLOR_CLASSES[color ?? ''] ?? COLOR_CLASSES.slate;
 }
 
-export function SkillBadge({ name, category = null }: SkillBadgeProps) {
-  return <span className={getSkillBadgeClass(category)}>{name}</span>;
+export function SkillBadge({ name, color }: { name: string; color?: string | null }) {
+  const colorClass = getSkillColorClass(color);
+  return (
+    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${colorClass}`}>
+      {name}
+    </span>
+  );
 }
-
-export { getSkillBadgeClass };

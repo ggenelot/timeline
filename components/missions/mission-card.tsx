@@ -19,7 +19,7 @@ type MissionCardProps = {
   canEdit: boolean;
   availableVolunteersCount: number;
   unavailableVolunteersCount: number;
-  availableVolunteers: Array<{ name: string; skills: Array<{ name: string; category: string | null }> }>;
+  availableVolunteers: Array<{ name: string; skills: Array<{ name: string; color?: string | null }> }>;
   onPublishDraft?: (missionId: string) => Promise<void>;
   onResponse?: () => void;
 };
@@ -198,7 +198,7 @@ export function MissionCard({
                     {volunteer.skills.length > 0 ? (
                       <span className="inline-flex flex-wrap gap-1">
                         {volunteer.skills.map((skill) => (
-                          <SkillBadge key={`${volunteer.name}-${skill.name}`} name={skill.name} category={skill.category} />
+                          <SkillBadge key={`${volunteer.name}-${skill.name}`} name={skill.name} color={skill.color} />
                         ))}
                       </span>
                     ) : (
