@@ -1,10 +1,10 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Skill, SkillCategory } from '@/lib/types';
+import { Skill, SkillCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, getMissionCategory, MissionStatus } from '@/lib/types';
 import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
@@ -32,7 +32,44 @@ function formatRate(rate: number | null): string {
   return `${rate} %`;
 }
 
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 type StatPeriod = 7 | 30 | 90;
+
+type MissionRow = {
+  id: string;
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  location: string | null;
+  mission_type_id: string;
+  status: MissionStatus;
+};
+
+type ProposalWithMission = {
+  id: string;
+  mission_id: string;
+  mission: MissionRow | MissionRow[] | null;
+};
+
+type AssignmentRow = {
+  mission_id: string;
+  assignment_status: string;
+};
+
+const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
+  draft: 'Brouillon',
+  proposed: 'Proposée',
+  closed: 'Fermée',
+  confirmed: 'Confirmée',
+  cancelled: 'Annulée',
+};
 
 export default function VolunteerProfilePage() {
   const params = useParams<{ id: string }>();
@@ -55,6 +92,11 @@ export default function VolunteerProfilePage() {
   const [confirmedAssignments, setConfirmedAssignments] = useState<Array<{ mission: MissionRef | MissionRef[] }>>([]);
   const [statPeriod, setStatPeriod] = useState<StatPeriod>(30);
 
+  const [availableProposals, setAvailableProposals] = useState<ProposalWithMission[]>([]);
+  const [confirmedMissionIds, setConfirmedMissionIds] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
+
   useEffect(() => {
     async function loadData() {
       const { data: authData } = await supabase.auth.getUser();
@@ -74,7 +116,7 @@ export default function VolunteerProfilePage() {
 
       setIsAdmin(profileData.role === 'admin');
 
-      const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes] = await Promise.all([
+      const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes, availableProposalsRes] = await Promise.all([
         supabase
           .from('profiles')
           .select('id,full_name,identifier,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill_id)')
@@ -88,9 +130,14 @@ export default function VolunteerProfilePage() {
         supabase.from('mission_proposals').select('response').eq('volunteer_id', volunteerId),
         supabase
           .from('mission_assignments')
-          .select('mission:missions(starts_at)')
+          .select('mission_id, assignment_status, mission:missions(starts_at)')
+          .eq('volunteer_id', volunteerId),
+        supabase
+          .from('mission_proposals')
+          .select('id, mission_id, mission:missions(id, title, starts_at, ends_at, location, mission_type_id, status)')
           .eq('volunteer_id', volunteerId)
-          .eq('assignment_status', 'confirmed'),
+          .eq('response', 'available')
+          .order('created_at', { ascending: false }),
       ]);
 
       if (volunteerRes.error || !volunteerRes.data) {
@@ -116,9 +163,16 @@ export default function VolunteerProfilePage() {
       setSelectedSkillByCategory(byCategory);
 
       setProposals((proposalsRes.data ?? []) as Array<{ response: string }>);
+
+      const allAssignments = (assignmentsRes.data ?? []) as Array<AssignmentRow & { mission: MissionRef | MissionRef[] }>;
       setConfirmedAssignments(
-        (assignmentsRes.data ?? []) as Array<{ mission: MissionRef | MissionRef[] }>
+        allAssignments.filter((a) => a.assignment_status === 'confirmed')
       );
+      setConfirmedMissionIds(
+        new Set(allAssignments.filter((a) => a.assignment_status === 'confirmed').map((a) => a.mission_id))
+      );
+
+      setAvailableProposals((availableProposalsRes.data ?? []) as ProposalWithMission[]);
       setLoading(false);
     }
 
@@ -171,6 +225,34 @@ export default function VolunteerProfilePage() {
     const startsAt = getMissionStartsAt(a.mission as MissionRef | MissionRef[]);
     return startsAt ? new Date(startsAt) >= cutoff : false;
   }).length;
+
+  // Missions disponibles
+  const availableMissions = useMemo<MissionRow[]>(() =>
+    availableProposals
+      .map((p) => {
+        const m = Array.isArray(p.mission) ? p.mission[0] : p.mission;
+        return m ?? null;
+      })
+      .filter((m): m is MissionRow => m !== null),
+    [availableProposals]
+  );
+
+  const presentTypeIds = useMemo(
+    () => new Set(availableMissions.map((m) => m.mission_type_id)),
+    [availableMissions]
+  );
+
+  const filteredMissions = useMemo(() => {
+    const term = searchQuery.trim().toLocaleLowerCase('fr');
+    return availableMissions.filter((m) => {
+      if (selectedTypeId && m.mission_type_id !== selectedTypeId) return false;
+      if (term.length > 0) {
+        const haystack = [m.title, m.location ?? ''].join(' ').toLocaleLowerCase('fr');
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [availableMissions, selectedTypeId, searchQuery]);
 
   if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
   if (error) return <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>;
@@ -378,6 +460,100 @@ export default function VolunteerProfilePage() {
               })
             )}
           </div>
+        )}
+      </div>
+
+      <div className="space-y-3">
+        <h2 className="text-base font-semibold text-slate-900">
+          Missions (disponible)
+          <span className="ml-2 text-sm font-normal text-slate-500">{availableMissions.length}</span>
+        </h2>
+
+        {availableMissions.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+            Aucune mission où ce bénévole s'est rendu disponible.
+          </div>
+        ) : (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Rechercher une mission..."
+                className="w-56 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+              />
+              <div className="flex flex-wrap gap-1">
+                <button
+                  type="button"
+                  onClick={() => setSelectedTypeId(null)}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                    selectedTypeId === null
+                      ? 'border-slate-700 bg-slate-900 text-white'
+                      : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                  }`}
+                >
+                  Toutes
+                </button>
+                {MISSION_TYPE_OPTIONS.filter((opt) => presentTypeIds.has(opt.value)).map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setSelectedTypeId(opt.value)}
+                    className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
+                      selectedTypeId === opt.value
+                        ? 'border-slate-700 bg-slate-900 text-white'
+                        : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                    }`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {filteredMissions.length === 0 ? (
+              <p className="text-sm text-slate-500">Aucun résultat pour ces filtres.</p>
+            ) : (
+              <div className="space-y-2">
+                {filteredMissions.map((mission) => {
+                  const retained = confirmedMissionIds.has(mission.id);
+                  const category = getMissionCategory(mission.mission_type_id);
+                  return (
+                    <div key={mission.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                      <div className="flex flex-wrap items-start justify-between gap-2">
+                        <Link
+                          href={`/missions/${mission.id}`}
+                          className="font-medium text-slate-900 hover:underline"
+                        >
+                          {mission.title}
+                        </Link>
+                        <div className="flex shrink-0 flex-wrap gap-1.5">
+                          <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                            {MISSION_CATEGORY_LABELS[category]}
+                          </span>
+                          {retained ? (
+                            <span className="inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                              Retenu
+                            </span>
+                          ) : (
+                            <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                              Non retenu
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                        <span>{formatDate(mission.starts_at)}</span>
+                        {mission.location ? <span>{mission.location}</span> : null}
+                        <span>{MISSION_STATUS_LABELS[mission.status]}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
