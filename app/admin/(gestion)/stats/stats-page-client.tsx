@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
@@ -156,11 +157,8 @@ export function StatsPageClient() {
               <thead className="bg-slate-50 text-left text-xs font-medium uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Nom</th>
-                  <th className="px-4 py-3">Identifiant</th>
-                  <th className="px-4 py-3 text-right">Propositions</th>
                   <th className="px-4 py-3 text-right">Taux réponse</th>
                   <th className="px-4 py-3 text-right">Disponible</th>
-                  <th className="px-4 py-3 text-right">Peut-être</th>
                   <th className="px-4 py-3 text-right">Indisponible</th>
                   <th className="px-4 py-3 text-right">Sans réponse</th>
                   <th className="px-4 py-3 text-right">Confirmés</th>
@@ -169,9 +167,11 @@ export function StatsPageClient() {
               <tbody className="divide-y divide-slate-100">
                 {byVolunteer.map((v) => (
                   <tr key={v.id} className={v.proposals === 0 ? 'opacity-40' : ''}>
-                    <td className="px-4 py-2 font-medium text-slate-900">{v.full_name ?? '—'}</td>
-                    <td className="px-4 py-2 text-slate-600">{v.identifier ?? '—'}</td>
-                    <td className="px-4 py-2 text-right text-slate-700">{v.proposals}</td>
+                    <td className="px-4 py-2 font-medium">
+                      <Link href={`/admin/volunteers/${v.id}`} className="text-slate-900 hover:underline">
+                        {v.full_name ?? '—'}
+                      </Link>
+                    </td>
                     <td className="px-4 py-2 text-right">
                       <span className={`font-medium ${
                         v.response_rate === null ? 'text-slate-400' :
@@ -183,7 +183,6 @@ export function StatsPageClient() {
                       </span>
                     </td>
                     <td className="px-4 py-2 text-right text-emerald-700">{v.available}</td>
-                    <td className="px-4 py-2 text-right text-amber-700">{v.maybe}</td>
                     <td className="px-4 py-2 text-right text-red-700">{v.unavailable}</td>
                     <td className="px-4 py-2 text-right text-slate-400">{v.no_response}</td>
                     <td className="px-4 py-2 text-right font-medium text-slate-900">{v.confirmed}</td>
