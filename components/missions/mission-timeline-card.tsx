@@ -1,9 +1,11 @@
 'use client';
 
+import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposalResponse, MissionRequiredSkill } from '@/lib/types';
+import { Mission, MissionProposalResponse, MissionRequiredSkill, MissionStatus } from '@/lib/types';
 import { formatMissionDuration, MissionRelation } from '@/lib/mission-timeline';
+import { getMissionStatusBadgeClass, MISSION_STATUS_LABELS } from '@/lib/missions';
 
 type Volunteer = { name: string; skills: Array<{ name: string; color?: string | null }> };
 
@@ -12,13 +14,17 @@ type MissionTimelineCardProps = {
   missionTypeName?: string;
   typeColor: string;
   requiredSkills: MissionRequiredSkill[];
-  relation: MissionRelation;
-  currentUserId: string;
-  canPropose: boolean;
   availableVolunteers: Volunteer[];
   expanded: boolean;
   onToggle: () => void;
+  variant: 'benevole' | 'admin';
+  // Bénévole
+  relation?: MissionRelation;
+  canPropose?: boolean;
   onResponse?: () => void;
+  // Admin
+  canEdit?: boolean;
+  onPublishDraft?: (missionId: string) => Promise<void>;
 };
 
 function capitalize(value: string): string {
@@ -30,17 +36,21 @@ export function MissionTimelineCard({
   missionTypeName,
   typeColor,
   requiredSkills,
-  relation,
-  canPropose,
   availableVolunteers,
   expanded,
   onToggle,
-  onResponse
+  variant,
+  relation = 'pending',
+  canPropose = false,
+  onResponse,
+  canEdit = false,
+  onPublishDraft
 }: MissionTimelineCardProps) {
   const [pendingAction, setPendingAction] = useState<MissionProposalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
 
-  const isUnavailable = relation === 'declined';
+  const isBenevole = variant === 'benevole';
+  const isUnavailable = isBenevole && relation === 'declined';
 
   const skillCoverage = useMemo(
     () =>
@@ -127,6 +137,8 @@ export function MissionTimelineCard({
   const primaryButtonClass =
     'rounded-[9px] bg-[#059669] px-[18px] py-2 text-[13px] font-bold text-white hover:bg-[#047857] disabled:cursor-not-allowed disabled:opacity-50';
 
+  const status: MissionStatus = mission.status;
+
   return (
     <article
       className="rounded-2xl border border-[#e7e9ee] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-opacity"
@@ -175,38 +187,65 @@ export function MissionTimelineCard({
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2">
-          {!canPropose ? null : relation === 'retenu' ? (
-            <span className="text-[13px] font-bold text-[#047857]">✓ Retenu sur cette mission</span>
-          ) : relation === 'engaged' ? (
-            <>
-              <span className="text-[13px]">
-                <span className="font-bold text-[#047857]">✓ Engagé</span>
-                <span className="text-[#64748b]"> · en attente de sélection</span>
-              </span>
-              <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
-                {pendingAction === 'unavailable' ? 'Envoi…' : 'Se désengager'}
-              </button>
-            </>
-          ) : relation === 'declined' ? (
-            <>
-              <span className="text-[13px] text-[#94a3b8]">Indisponible</span>
-              <button
-                type="button"
-                disabled={pendingAction !== null}
-                onClick={() => respond('available')}
-                className="rounded-[9px] border border-[#cbd5e1] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#047857] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                {pendingAction === 'available' ? 'Envoi…' : 'Me rendre disponible'}
-              </button>
-            </>
+          {isBenevole ? (
+            !canPropose ? null : relation === 'retenu' ? (
+              <span className="text-[13px] font-bold text-[#047857]">✓ Retenu sur cette mission</span>
+            ) : relation === 'engaged' ? (
+              <>
+                <span className="text-[13px]">
+                  <span className="font-bold text-[#047857]">✓ Engagé</span>
+                  <span className="text-[#64748b]"> · en attente de sélection</span>
+                </span>
+                <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
+                  {pendingAction === 'unavailable' ? 'Envoi…' : 'Se désengager'}
+                </button>
+              </>
+            ) : relation === 'declined' ? (
+              <>
+                <span className="text-[13px] text-[#94a3b8]">Indisponible</span>
+                <button
+                  type="button"
+                  disabled={pendingAction !== null}
+                  onClick={() => respond('available')}
+                  className="rounded-[9px] border border-[#cbd5e1] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#047857] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {pendingAction === 'available' ? 'Envoi…' : 'Me rendre disponible'}
+                </button>
+              </>
+            ) : (
+              <>
+                <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
+                  {pendingAction === 'unavailable' ? 'Envoi…' : 'Non disponible'}
+                </button>
+                <button type="button" disabled={pendingAction !== null} onClick={() => respond('available')} className={primaryButtonClass}>
+                  {pendingAction === 'available' ? 'Envoi…' : "S'engager"}
+                </button>
+              </>
+            )
           ) : (
             <>
-              <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
-                {pendingAction === 'unavailable' ? 'Envoi…' : 'Non disponible'}
-              </button>
-              <button type="button" disabled={pendingAction !== null} onClick={() => respond('available')} className={primaryButtonClass}>
-                {pendingAction === 'available' ? 'Envoi…' : "S'engager"}
-              </button>
+              <span className={`rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${getMissionStatusBadgeClass(status)}`}>
+                {MISSION_STATUS_LABELS[status]}
+              </span>
+              {canEdit ? (
+                <>
+                  {status === 'draft' && onPublishDraft ? (
+                    <button
+                      type="button"
+                      onClick={() => void onPublishDraft(mission.id)}
+                      className="rounded-[9px] border border-emerald-300 bg-emerald-50 px-[13px] py-[7px] text-[13px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                    >
+                      Passer en proposé
+                    </button>
+                  ) : null}
+                  <Link
+                    href={`/missions/${mission.id}`}
+                    className="rounded-[9px] border border-[#e2e8f0] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#334155] hover:bg-slate-50"
+                  >
+                    Gérer
+                  </Link>
+                </>
+              ) : null}
             </>
           )}
         </div>
@@ -244,7 +283,9 @@ export function MissionTimelineCard({
           ) : null}
 
           <div className="mt-3">
-            <div className="text-[12px] font-bold text-[#475569]">Déjà engagés · {availableVolunteers.length}</div>
+            <div className="text-[12px] font-bold text-[#475569]">
+              {isBenevole ? 'Déjà engagés' : 'Disponibles'} · {availableVolunteers.length}
+            </div>
             {availableVolunteers.length > 0 ? (
               <p className="mt-1 text-[13px] text-[#64748b]">{availableVolunteers.map((volunteer) => volunteer.name).join(', ')}</p>
             ) : (
