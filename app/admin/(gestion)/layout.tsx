@@ -7,6 +7,7 @@ const navItems = [
   { href: '/admin/volunteers', label: 'Bénévoles' },
   { href: '/admin/roles', label: 'Rôles' },
   { href: '/admin/skills', label: 'Compétences' },
+  { href: '/admin/cursus', label: 'Cursus' },
   { href: '/admin/mission-types', label: 'Missions' },
   { href: '/admin/stats', label: 'Statistiques' },
   { href: '/admin/slack', label: 'Slack' },

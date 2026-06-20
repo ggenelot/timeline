@@ -76,6 +76,9 @@ export function Header() {
                     Gestion
                   </Link>
                 ) : null}
+                <Link href="/competences" className="text-slate-700 hover:text-slate-900">
+                  Compétences
+                </Link>
                 <Link href="/profile" className="text-slate-700 hover:text-slate-900">
                   Profil
                 </Link>
