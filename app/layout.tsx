@@ -1,8 +1,15 @@
 import type { Metadata } from 'next';
+import { Hanken_Grotesk } from 'next/font/google';
 import './globals.css';
 import { Header } from '@/components/header';
 import { AuthGuard } from '@/components/auth-guard';
 import { HelpButton } from '@/components/help-button';
+
+const hanken = Hanken_Grotesk({
+  subsets: ['latin'],
+  variable: '--font-hanken',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'Timeline',
@@ -11,7 +18,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr">
+    <html lang="fr" className={hanken.variable}>
       <body>
         <AuthGuard>
           <Header />
