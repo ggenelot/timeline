@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { supabase } from '@/lib/supabase/client';
 import type {
   Cursus,
   CursusRule,
@@ -18,449 +19,241 @@ import {
   deleteCursusCompetence,
 } from '@/lib/queries/cursus';
 
+// ── Types ─────────────────────────────────────────────────────
+
 type CursusDetail = Cursus & { rules: CursusRule[]; phases: CursusPhase[] };
 
-// ── Tiny helpers ──────────────────────────────────────────────
+type SkillOption = {
+  id: string;
+  code: string | null;
+  name: string;
+  level: number | null;
+  catLabel: string;
+  dot: string;
+};
 
-function Input({
-  label,
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
+type CompModal = {
+  phaseId: string;
+  compId?: string;
+  name: string;
+  description: string;
+  gardeOnly: boolean;
+};
+
+// ── Toggle switch ─────────────────────────────────────────────
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!value)}
+      style={{
+        position: 'relative',
+        flexShrink: 0,
+        width: 40,
+        height: 23,
+        border: 'none',
+        borderRadius: 99,
+        cursor: 'pointer',
+        background: value ? '#059669' : '#cbd5e1',
+      }}
+      aria-checked={value}
+      role="switch"
+    >
+      <span
+        style={{
+          position: 'absolute',
+          top: 2,
+          left: value ? 19 : 2,
+          width: 19,
+          height: 19,
+          borderRadius: '50%',
+          background: '#fff',
+          boxShadow: '0 1px 2px rgba(0,0,0,.25)',
+          transition: 'left 0.15s',
+        }}
+      />
+    </button>
+  );
+}
+
+// ── Phase pill ─────────────────────────────────────────────────
+
+function PhasePill({ kind }: { kind: 'pre' | 'post' }) {
+  const isPre = kind === 'pre';
+  return (
+    <span
+      style={{
+        fontSize: 11,
+        fontWeight: 800,
+        letterSpacing: '.06em',
+        textTransform: 'uppercase' as const,
+        color: isPre ? '#b45309' : '#1d4ed8',
+        background: isPre ? '#fffbeb' : '#eff6ff',
+        border: `1px solid ${isPre ? '#fde68a' : '#bfdbfe'}`,
+        borderRadius: 6,
+        padding: '3px 9px',
+      }}
+    >
+      {isPre ? 'PRÉ-DOUBLURE' : 'POST-DOUBLURE'}
+    </span>
+  );
+}
+
+// ── Stepper ────────────────────────────────────────────────────
+
+function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: 9, overflow: 'hidden' }}>
+      <button
+        type="button"
+        onClick={() => onChange(Math.max(0, value - 1))}
+        style={{ cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700 }}
+      >
+        −
+      </button>
+      <span style={{ minWidth: 38, textAlign: 'center', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+        {value}
+      </span>
+      <button
+        type="button"
+        onClick={() => onChange(value + 1)}
+        style={{ cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700 }}
+      >
+        +
+      </button>
+    </div>
+  );
+}
+
+// ── Modal ─────────────────────────────────────────────────────
+
+function Modal({
+  title,
+  subtitle,
+  onClose,
+  children,
+  onSubmit,
+  submitLabel,
+  submitDisabled,
 }: {
-  label: string;
-  value: string | number;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  type?: string;
+  title: string;
+  subtitle?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  onSubmit: () => void;
+  submitLabel: string;
+  submitDisabled?: boolean;
 }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '56px 18px', overflowY: 'auto' }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
+            {subtitle ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>{subtitle}</div> : null}
+          </div>
+          <button type="button" onClick={onClose} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
+        </div>
+        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #eef1f5', background: '#fafbfc' }}>
+          <button type="button" onClick={onClose} style={{ cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>Annuler</button>
+          <button type="button" onClick={onSubmit} disabled={submitDisabled} style={{ cursor: submitDisabled ? 'not-allowed' : 'pointer', border: 'none', background: submitDisabled ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitDisabled ? 0.6 : 1 }}>{submitLabel}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>{children}</div>;
+}
+
+// ── Skill picker ───────────────────────────────────────────────
+
+function SkillPicker({
+  chosenSkillId,
+  chosenSkill,
+  onPick,
+}: {
+  chosenSkillId: string | null;
+  chosenSkill: SkillOption | null;
+  onPick: (skill: SkillOption | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SkillOption[]>([]);
+
+  async function search(q: string) {
+    setQuery(q);
+    if (q.length < 1) { setResults([]); return; }
+    const { data } = await supabase
+      .from('skills')
+      .select('id, name, code, level, category:skill_categories(name, color)')
+      .or(`name.ilike.%${q}%,code.ilike.%${q}%`)
+      .limit(6);
+    type RawSkill = { id: string; name: string; code: string | null; level: number | null; category: { name: string; color: string }[] | null };
+    setResults(
+      (data ?? []).map((r: RawSkill) => {
+        const cat = Array.isArray(r.category) ? r.category[0] : r.category;
+        return {
+          id: r.id,
+          code: r.code,
+          name: r.name,
+          level: r.level,
+          catLabel: cat?.name ?? 'Général',
+          dot: cat?.color ?? '#64748b',
+        };
+      })
+    );
+  }
+
+  if (chosenSkillId && chosenSkill && !open) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 13, flexWrap: 'wrap', border: '1.5px solid #bfdbfe', background: '#f6f9ff', borderRadius: 13, padding: '13px 15px' }}>
+        <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 800, color: '#fff', background: chosenSkill.dot }}>
+          {chosenSkill.code ?? '?'}
+        </span>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>{chosenSkill.name}</div>
+          <div style={{ marginTop: 2, fontSize: 12.5, color: '#64748b' }}>
+            {chosenSkill.code} · {chosenSkill.catLabel}{chosenSkill.level ? ` · Niveau ${chosenSkill.level}` : ''}
+          </div>
+        </div>
+        <button type="button" onClick={() => { setOpen(true); setQuery(''); }} style={{ marginLeft: 'auto', cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit' }}>Changer</button>
+      </div>
+    );
+  }
+
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-slate-700">{label}</label>
       <input
-        type={type}
-        className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
+        value={query}
+        onChange={(e) => search(e.target.value)}
+        placeholder="Rechercher : code ou nom (ex : CE, Chef d'Équipe)…"
+        style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
       />
-    </div>
-  );
-}
-
-function SectionTitle({ children }: { children: React.ReactNode }) {
-  return (
-    <h3 className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-      {children}
-    </h3>
-  );
-}
-
-// ── Identité card editor ──────────────────────────────────────
-
-function IdentityEditor({
-  cursus,
-  onSaved,
-}: {
-  cursus: CursusDetail;
-  onSaved: (c: Cursus) => void;
-}) {
-  const [code, setCode] = useState(cursus.code);
-  const [name, setName] = useState(cursus.name);
-  const [category, setCategory] = useState(cursus.category ?? '');
-  const [level, setLevel] = useState(String(cursus.level ?? ''));
-  const [formationLabel, setFormationLabel] = useState(cursus.formation_label ?? '');
-  const [formationRequired, setFormationRequired] = useState(cursus.formation_required);
-  const [signoffRole, setSignoffRole] = useState(cursus.signoff_role);
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  async function handleSave(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true);
-    try {
-      const updated = await upsertCursus({
-        id: cursus.id,
-        code,
-        name,
-        category: category || null,
-        level: level ? Number(level) : null,
-        formation_label: formationLabel || null,
-        formation_required: formationRequired,
-        signoff_role: signoffRole,
-      });
-      onSaved(updated);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <form onSubmit={handleSave} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3">
-        <Input label="Code" value={code} onChange={setCode} placeholder="ex : CE" />
-        <Input label="Niveau" value={level} onChange={setLevel} type="number" placeholder="1–5" />
-      </div>
-      <Input label="Nom complet" value={name} onChange={setName} placeholder="Chef d'Équipe" />
-      <Input label="Catégorie" value={category} onChange={setCategory} placeholder="Opérationnel" />
-      <Input label="Formation" value={formationLabel} onChange={setFormationLabel} placeholder="Nom de la formation associée" />
-      <div className="flex items-center gap-4">
-        <label className="flex items-center gap-2 text-sm text-slate-700">
-          <input
-            type="checkbox"
-            className="rounded border-slate-300 text-emerald-600"
-            checked={formationRequired}
-            onChange={(e) => setFormationRequired(e.target.checked)}
-          />
-          Formation obligatoire
-        </label>
-      </div>
-      <Input
-        label="Rôle signataire"
-        value={signoffRole}
-        onChange={setSignoffRole}
-        placeholder="Président-Délégué"
-      />
-      <div className="flex justify-end">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          {saved ? 'Enregistré ✓' : saving ? 'Enregistrement…' : 'Enregistrer'}
-        </button>
-      </div>
-    </form>
-  );
-}
-
-// ── Rules editor ──────────────────────────────────────────────
-
-function RulesEditor({
-  cursusId,
-  rules: initialRules,
-}: {
-  cursusId: string;
-  rules: CursusRule[];
-}) {
-  const [rules, setRules] = useState<CursusRule[]>(initialRules);
-  const [newText, setNewText] = useState('');
-  const [newAuto, setNewAuto] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  async function addRule() {
-    if (!newText.trim()) return;
-    setSaving(true);
-    try {
-      const created = await upsertCursusRule({
-        cursus_id: cursusId,
-        text: newText.trim(),
-        auto: newAuto,
-        order_idx: rules.length,
-      });
-      setRules((prev) => [...prev, created]);
-      setNewText('');
-      setNewAuto(false);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function removeRule(id: string) {
-    await deleteCursusRule(id);
-    setRules((prev) => prev.filter((r) => r.id !== id));
-  }
-
-  return (
-    <div className="space-y-3">
-      <ul className="space-y-2">
-        {rules.map((r) => (
-          <li
-            key={r.id}
-            className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5"
-          >
-            <span className="mt-0.5 text-slate-400">{r.auto ? '⚡' : '•'}</span>
-            <span className="flex-1 text-sm text-slate-700">{r.text}</span>
-            <button
-              type="button"
-              onClick={() => removeRule(r.id)}
-              className="shrink-0 text-xs text-slate-400 hover:text-red-500"
-              aria-label="Supprimer la règle"
-            >
-              ✕
-            </button>
-          </li>
-        ))}
-      </ul>
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-            placeholder="Nouvelle règle…"
-            value={newText}
-            onChange={(e) => setNewText(e.target.value)}
-            onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRule(); } }}
-          />
-        </div>
-        <label className="flex items-center gap-1.5 text-xs text-slate-600 whitespace-nowrap">
-          <input
-            type="checkbox"
-            className="rounded border-slate-300 text-emerald-600"
-            checked={newAuto}
-            onChange={(e) => setNewAuto(e.target.checked)}
-          />
-          Automatique
-        </label>
-        <button
-          type="button"
-          onClick={addRule}
-          disabled={saving || !newText.trim()}
-          className="shrink-0 rounded-lg bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-800 disabled:opacity-50"
-        >
-          Ajouter
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Competence item ───────────────────────────────────────────
-
-function CompetenceRow({
-  comp,
-  onDelete,
-}: {
-  comp: CursusCompetence;
-  onDelete: (id: string) => void;
-}) {
-  return (
-    <li className="flex items-start gap-3 rounded-lg bg-slate-50 px-3 py-2.5">
-      <span className="mt-0.5 shrink-0 text-xs text-slate-400">{comp.order_idx + 1}</span>
-      <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-slate-800">
-          {comp.name}
-          {comp.garde_only ? (
-            <span className="ml-1.5 text-xs font-normal text-orange-500">(garde)</span>
-          ) : null}
-        </p>
-        {comp.description ? (
-          <p className="mt-0.5 text-xs text-slate-500">{comp.description}</p>
-        ) : null}
-      </div>
-      <button
-        type="button"
-        onClick={() => onDelete(comp.id)}
-        className="shrink-0 text-xs text-slate-400 hover:text-red-500"
-        aria-label="Supprimer la compétence"
-      >
-        ✕
-      </button>
-    </li>
-  );
-}
-
-// ── Phase editor ──────────────────────────────────────────────
-
-function PhaseEditor({
-  phase: initialPhase,
-  cursusId,
-  onPhaseUpdated,
-}: {
-  phase: CursusPhase;
-  cursusId: string;
-  onPhaseUpdated: (p: CursusPhase) => void;
-}) {
-  const [phase, setPhase] = useState<CursusPhase>(initialPhase);
-  const [newCompName, setNewCompName] = useState('');
-  const [newCompDesc, setNewCompDesc] = useState('');
-  const [newCompGarde, setNewCompGarde] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [expanded, setExpanded] = useState(false);
-
-  const comps = phase.competences ?? [];
-
-  async function savePhaseField(field: Partial<CursusPhase>) {
-    const updated = await upsertCursusPhase({ ...phase, ...field, cursus_id: cursusId });
-    const merged = { ...updated, competences: phase.competences };
-    setPhase(merged);
-    onPhaseUpdated(merged);
-  }
-
-  async function addCompetence() {
-    if (!newCompName.trim()) return;
-    setAdding(true);
-    try {
-      const created = await upsertCursusCompetence({
-        phase_id: phase.id,
-        name: newCompName.trim(),
-        description: newCompDesc.trim() || null,
-        garde_only: newCompGarde,
-        order_idx: comps.length,
-      });
-      const merged = { ...phase, competences: [...comps, created] };
-      setPhase(merged);
-      onPhaseUpdated(merged);
-      setNewCompName('');
-      setNewCompDesc('');
-      setNewCompGarde(false);
-    } finally {
-      setAdding(false);
-    }
-  }
-
-  async function deleteComp(id: string) {
-    await deleteCursusCompetence(id);
-    const merged = { ...phase, competences: comps.filter((c) => c.id !== id) };
-    setPhase(merged);
-    onPhaseUpdated(merged);
-  }
-
-  return (
-    <div className="rounded-xl border border-slate-200 bg-white overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-slate-50"
-      >
-        <span className={`text-slate-400 transition-transform ${expanded ? 'rotate-90' : ''}`}>
-          ▶
-        </span>
-        <span
-          className={`rounded-full px-2 py-0.5 text-xs font-medium ${
-            phase.kind === 'pre'
-              ? 'bg-orange-100 text-orange-700'
-              : 'bg-slate-100 text-slate-600'
-          }`}
-        >
-          {phase.kind === 'pre' ? 'Pré' : 'Post'}
-        </span>
-        <span className="font-semibold text-slate-900">{phase.label}</span>
-        <span className="ml-auto text-xs text-slate-400">
-          {comps.length} compétence{comps.length !== 1 ? 's' : ''}
-        </span>
-      </button>
-
-      {expanded ? (
-        <div className="border-t border-slate-100 px-5 pb-5 pt-4 space-y-5">
-          {/* Phase config */}
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">Label</label>
-              <input
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                value={phase.label}
-                onChange={(e) => setPhase((p) => ({ ...p, label: e.target.value }))}
-                onBlur={() => savePhaseField({ label: phase.label })}
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">Min doublures</label>
-              <input
-                type="number"
-                min={0}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                value={phase.min_doublures}
-                onChange={(e) => setPhase((p) => ({ ...p, min_doublures: Number(e.target.value) }))}
-                onBlur={() => savePhaseField({ min_doublures: phase.min_doublures })}
-              />
-            </div>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-700">Sous-titre</label>
-            <input
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-              value={phase.sub ?? ''}
-              onChange={(e) => setPhase((p) => ({ ...p, sub: e.target.value }))}
-              onBlur={() => savePhaseField({ sub: phase.sub })}
-              placeholder="Description courte de la phase"
-            />
-          </div>
-          <div className="flex items-center gap-5">
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 text-amber-500"
-                checked={phase.provisional}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setPhase((p) => ({ ...p, provisional: val }));
-                  savePhaseField({ provisional: val });
-                }}
-              />
-              Phase provisoire
-            </label>
-            <label className="flex items-center gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="rounded border-slate-300 text-emerald-600"
-                checked={phase.require_externe}
-                onChange={(e) => {
-                  const val = e.target.checked;
-                  setPhase((p) => ({ ...p, require_externe: val }));
-                  savePhaseField({ require_externe: val });
-                }}
-              />
-              Doublure externe requise
-            </label>
-          </div>
-
-          {/* Competences list */}
-          <div>
-            <SectionTitle>Compétences ({comps.length})</SectionTitle>
-            {comps.length > 0 ? (
-              <ul className="mb-3 space-y-1.5">
-                {comps.map((c: CursusCompetence) => (
-                  <CompetenceRow key={c.id} comp={c} onDelete={deleteComp} />
-                ))}
-              </ul>
-            ) : (
-              <p className="mb-3 text-sm text-slate-500">Aucune compétence.</p>
-            )}
-            {/* Add competence */}
-            <div className="rounded-lg border border-dashed border-slate-300 p-3 space-y-2">
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
-                placeholder="Nom de la compétence…"
-                value={newCompName}
-                onChange={(e) => setNewCompName(e.target.value)}
-              />
-              <input
-                className="w-full rounded border border-slate-300 px-3 py-1.5 text-sm focus:border-emerald-500 focus:outline-none"
-                placeholder="Description (optionnel)"
-                value={newCompDesc}
-                onChange={(e) => setNewCompDesc(e.target.value)}
-              />
-              <div className="flex items-center justify-between gap-3">
-                <label className="flex items-center gap-1.5 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    className="rounded border-slate-300 text-orange-500"
-                    checked={newCompGarde}
-                    onChange={(e) => setNewCompGarde(e.target.checked)}
-                  />
-                  Garde uniquement
-                </label>
-                <button
-                  type="button"
-                  onClick={addCompetence}
-                  disabled={adding || !newCompName.trim()}
-                  className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-50"
-                >
-                  {adding ? 'Ajout…' : '+ Ajouter'}
-                </button>
+      {results.length > 0 ? (
+        <div style={{ marginTop: 7, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 248, overflowY: 'auto' }}>
+          {results.map((o) => (
+            <button key={o.id} type="button" onClick={() => { onPick(o); setOpen(false); setQuery(''); }} style={{ cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 11, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '8px 11px', fontFamily: 'inherit' }}>
+              <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', background: o.dot }}>{o.code ?? '?'}</span>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, color: '#475569' }}><span style={{ fontWeight: 700, color: '#0f172a' }}>{o.code ?? o.name}</span>{o.code ? ` — ${o.name}` : ''}</div>
+                <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{o.catLabel}{o.level ? ` · Niveau ${o.level}` : ''}</div>
               </div>
-            </div>
-          </div>
+            </button>
+          ))}
         </div>
       ) : null}
     </div>
   );
 }
 
-// ── Main admin page ────────────────────────────────────────────
+// ── Main page ─────────────────────────────────────────────────
 
 export default function AdminCursusPage() {
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
@@ -469,12 +262,20 @@ export default function AdminCursusPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // New cursus form
+  const [linkedSkill, setLinkedSkill] = useState<SkillOption | null>(null);
+  const [savingSkill, setSavingSkill] = useState(false);
+  const [rules, setRules] = useState<CursusRule[]>([]);
+  const [ruleDraft, setRuleDraft] = useState('');
+  const [addingRule, setAddingRule] = useState(false);
+  const [formationLabel, setFormationLabel] = useState('');
+  const [formationRequired, setFormationRequired] = useState(true);
+  const [signoffRole, setSignoffRole] = useState('Président-Délégué');
   const [showNewForm, setShowNewForm] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newName, setNewName] = useState('');
-  const [newPhaseLabel, setNewPhaseLabel] = useState('');
   const [creating, setCreating] = useState(false);
+  const [compModal, setCompModal] = useState<CompModal | null>(null);
+  const [savingComp, setSavingComp] = useState(false);
 
   useEffect(() => {
     async function load() {
@@ -497,6 +298,32 @@ export default function AdminCursusPage() {
       try {
         const d = await getCursusWithDetails(selectedId!);
         setDetail(d);
+        if (d) {
+          setRules(d.rules);
+          setFormationLabel(d.formation_label ?? '');
+          setFormationRequired(d.formation_required);
+          setSignoffRole(d.signoff_role ?? 'Président-Délégué');
+          if (d.skill_id) {
+            const { data } = await supabase
+              .from('skills')
+              .select('id, name, code, level, category:skill_categories(name, color)')
+              .eq('id', d.skill_id)
+              .single();
+            if (data) {
+              const cat = Array.isArray(data.category) ? (data.category as { name: string; color: string }[])[0] : (data.category as { name: string; color: string } | null);
+              setLinkedSkill({
+                id: data.id,
+                code: data.code,
+                name: data.name,
+                level: data.level,
+                catLabel: cat?.name ?? 'Général',
+                dot: cat?.color ?? '#64748b',
+              });
+            }
+          } else {
+            setLinkedSkill(null);
+          }
+        }
       } catch (e) {
         setError((e as Error).message);
       }
@@ -504,26 +331,23 @@ export default function AdminCursusPage() {
     loadDetail();
   }, [selectedId]);
 
+  const totalComps = detail?.phases.reduce((s, p) => s + (p.competences?.length ?? 0), 0) ?? 0;
+  const totalMinDoublures = detail?.phases.reduce((s, p) => s + p.min_doublures, 0) ?? 0;
+
   async function createCursus(e: React.FormEvent) {
     e.preventDefault();
     if (!newCode.trim() || !newName.trim()) return;
     setCreating(true);
     try {
       const created = await upsertCursus({ code: newCode.trim(), name: newName.trim() });
-      if (newPhaseLabel.trim()) {
-        await upsertCursusPhase({
-          cursus_id: created.id,
-          kind: 'pre',
-          label: newPhaseLabel.trim(),
-          order_idx: 0,
-        });
-      }
+      const prePh = await upsertCursusPhase({ cursus_id: created.id, kind: 'pre', label: 'Pré-doublure', order_idx: 0 });
+      const postPh = await upsertCursusPhase({ cursus_id: created.id, kind: 'post', label: 'Post-doublure', order_idx: 1 });
       setAllCursus((prev) => [...prev, created]);
+      setDetail({ ...created, rules: [], phases: [{ ...prePh, competences: [] }, { ...postPh, competences: [] }] });
       setSelectedId(created.id);
       setShowNewForm(false);
       setNewCode('');
       setNewName('');
-      setNewPhaseLabel('');
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -531,186 +355,392 @@ export default function AdminCursusPage() {
     }
   }
 
-  function handlePhaseUpdated(updated: CursusPhase) {
-    setDetail((d) =>
-      d
-        ? {
-            ...d,
-            phases: d.phases.map((p) => (p.id === updated.id ? updated : p)),
-          }
-        : d
-    );
+  async function handleLinkSkill(skill: SkillOption | null) {
+    if (!detail) return;
+    setLinkedSkill(skill);
+    setSavingSkill(true);
+    try {
+      const updated = await upsertCursus({ ...detail, skill_id: skill?.id ?? null });
+      setDetail((d) => d ? { ...d, ...updated } : d);
+    } finally {
+      setSavingSkill(false);
+    }
+  }
+
+  async function addRule() {
+    if (!ruleDraft.trim() || !detail) return;
+    setAddingRule(true);
+    try {
+      const created = await upsertCursusRule({ cursus_id: detail.id, text: ruleDraft.trim(), auto: false, order_idx: rules.length });
+      setRules((prev) => [...prev, created]);
+      setRuleDraft('');
+    } finally {
+      setAddingRule(false);
+    }
+  }
+
+  async function toggleRuleAuto(rule: CursusRule) {
+    const updated = await upsertCursusRule({ ...rule, auto: !rule.auto });
+    setRules((prev) => prev.map((r) => (r.id === rule.id ? updated : r)));
+  }
+
+  async function removeRule(id: string) {
+    await deleteCursusRule(id);
+    setRules((prev) => prev.filter((r) => r.id !== id));
+  }
+
+  async function setPhaseMinDoublures(phase: CursusPhase, val: number) {
+    if (!detail) return;
+    const updated = await upsertCursusPhase({ ...phase, min_doublures: val, cursus_id: detail.id });
+    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
+  }
+
+  async function setPhaseExterne(phase: CursusPhase, val: boolean) {
+    if (!detail) return;
+    const updated = await upsertCursusPhase({ ...phase, require_externe: val, cursus_id: detail.id });
+    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
   }
 
   async function addPhase(kind: 'pre' | 'post') {
     if (!detail) return;
+    const label = kind === 'pre' ? 'Pré-doublure' : 'Post-doublure';
+    const created = await upsertCursusPhase({ cursus_id: detail.id, kind, label, order_idx: detail.phases.filter((p) => p.kind === kind).length });
+    setDetail((d) => d ? { ...d, phases: [...d.phases, { ...created, competences: [] }] } : d);
+  }
+
+  async function saveFormation(label?: string, required?: boolean) {
+    if (!detail) return;
+    await upsertCursus({ ...detail, formation_label: (label ?? formationLabel) || null, formation_required: required ?? formationRequired });
+  }
+
+  async function saveSignoff(role: string) {
+    if (!detail) return;
+    setSignoffRole(role);
+    await upsertCursus({ ...detail, signoff_role: role });
+  }
+
+  function openAddComp(phaseId: string) {
+    setCompModal({ phaseId, name: '', description: '', gardeOnly: false });
+  }
+
+  function openEditComp(phaseId: string, comp: CursusCompetence) {
+    setCompModal({ phaseId, compId: comp.id, name: comp.name, description: comp.description ?? '', gardeOnly: comp.garde_only });
+  }
+
+  async function submitComp() {
+    if (!compModal || !compModal.name.trim()) return;
+    setSavingComp(true);
     try {
-      const label = kind === 'pre' ? 'Pré-doublure' : 'Post-doublure';
-      const created = await upsertCursusPhase({
-        cursus_id: detail.id,
-        kind,
-        label,
-        order_idx: detail.phases.filter((p) => p.kind === kind).length,
+      const phase = detail?.phases.find((p) => p.id === compModal.phaseId);
+      const existing = compModal.compId ? phase?.competences?.find((c) => c.id === compModal.compId) : undefined;
+      const saved = await upsertCursusCompetence({
+        ...(compModal.compId ? { id: compModal.compId } : {}),
+        phase_id: compModal.phaseId,
+        name: compModal.name.trim(),
+        description: compModal.description.trim() || null,
+        garde_only: compModal.gardeOnly,
+        order_idx: existing?.order_idx ?? (phase?.competences?.length ?? 0),
       });
-      setDetail((d) => d ? { ...d, phases: [...d.phases, { ...created, competences: [] }] } : d);
-    } catch (e) {
-      setError((e as Error).message);
+      setDetail((d) => {
+        if (!d) return d;
+        return {
+          ...d,
+          phases: d.phases.map((p) => {
+            if (p.id !== compModal.phaseId) return p;
+            const comps = p.competences ?? [];
+            if (compModal.compId) return { ...p, competences: comps.map((c) => c.id === compModal.compId ? saved : c) };
+            return { ...p, competences: [...comps, saved] };
+          }),
+        };
+      });
+      setCompModal(null);
+    } finally {
+      setSavingComp(false);
     }
+  }
+
+  async function deleteComp(phaseId: string, compId: string) {
+    await deleteCursusCompetence(compId);
+    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id !== phaseId ? p : { ...p, competences: (p.competences ?? []).filter((c) => c.id !== compId) }) } : d);
   }
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Chargement…</p>
+      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#94a3b8' }}>Chargement…</p>
       </div>
     );
   }
 
+  const sortedPhases = [...(detail?.phases ?? [])].sort((a, b) => a.order_idx - b.order_idx);
+  const orderedPhases = [
+    ...sortedPhases.filter((p) => p.kind === 'pre'),
+    ...sortedPhases.filter((p) => p.kind === 'post'),
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Configuration des cursus</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Gérez les cursus de doublure, leurs phases et leurs compétences.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setShowNewForm((v) => !v)}
-          className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700"
-        >
-          + Nouveau cursus
-        </button>
+    <div style={{ paddingBottom: 80 }}>
+
+      {/* Page heading */}
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+          Cursus de doublure
+        </h1>
+        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
+          Définissez les cursus, leurs règles, le nombre de doublures requises et les compétences à valider en pré-doublure et en post-doublure. L&apos;ordre des compétences détermine leur niveau dans la fiche.
+        </p>
       </div>
 
       {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
           {error}
         </div>
       ) : null}
 
-      {/* New cursus mini form */}
-      {showNewForm ? (
-        <form
-          onSubmit={createCursus}
-          className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 space-y-3"
-        >
-          <p className="text-sm font-semibold text-emerald-800">Nouveau cursus</p>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Code" value={newCode} onChange={setNewCode} placeholder="ex : CE" />
-            <Input label="Nom" value={newName} onChange={setNewName} placeholder="Chef d'Équipe" />
-          </div>
-          <Input
-            label="Première phase (optionnel)"
-            value={newPhaseLabel}
-            onChange={setNewPhaseLabel}
-            placeholder="Pré-doublure"
-          />
-          <div className="flex justify-end gap-2">
-            <button
-              type="button"
-              onClick={() => setShowNewForm(false)}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-            >
-              Annuler
-            </button>
-            <button
-              type="submit"
-              disabled={creating || !newCode.trim() || !newName.trim()}
-              className="rounded-lg bg-emerald-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              {creating ? 'Création…' : 'Créer'}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
       {/* Cursus tabs */}
-      {allCursus.length > 0 ? (
-        <div className="flex gap-2 overflow-x-auto">
-          {allCursus.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => setSelectedId(c.id)}
-              className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                selectedId === c.id
-                  ? 'bg-slate-900 text-white'
-                  : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-              }`}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+        {allCursus.map((c) => {
+          const isActive = selectedId === c.id;
+          return (
+            <button key={c.id} type="button" onClick={() => setSelectedId(c.id)}
+              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${isActive ? '#0f172a' : '#e2e8f0'}`, background: isActive ? '#0f172a' : '#fff', color: isActive ? '#fff' : '#334155', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
             >
-              {c.code}
+              <span style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#fff' : '#059669', flexShrink: 0 }} />
+              <span>{c.code}</span>
+              <span style={{ fontWeight: 600, color: isActive ? 'rgba(255,255,255,.7)' : '#94a3b8' }}>{c.name}</span>
             </button>
-          ))}
+          );
+        })}
+        {showNewForm ? (
+          <form onSubmit={createCursus} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            <input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Code" autoFocus
+              style={{ width: 70, border: '1px solid #cbd5e1', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', outline: 'none', color: '#0f172a' }} />
+            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du cursus"
+              style={{ width: 200, border: '1px solid #cbd5e1', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', outline: 'none', color: '#0f172a' }} />
+            <button type="submit" disabled={creating || !newCode.trim() || !newName.trim()}
+              style={{ cursor: 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: creating ? 0.6 : 1 }}>
+              {creating ? '…' : 'Créer'}
+            </button>
+            <button type="button" onClick={() => setShowNewForm(false)}
+              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 20, padding: '0 4px' }}>✕</button>
+          </form>
+        ) : (
+          <button type="button" onClick={() => setShowNewForm(true)}
+            style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#475569', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+            + Nouveau cursus
+          </button>
+        )}
+      </div>
+
+      {!detail ? (
+        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 18, padding: '60px 24px' }}>
+          <p style={{ color: '#94a3b8', fontSize: 15 }}>Sélectionnez un cursus ou créez-en un.</p>
         </div>
-      ) : null}
-
-      {detail ? (
-        <div className="space-y-6">
-          {/* Identity */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <SectionTitle>Carte d&apos;identité</SectionTitle>
-            <IdentityEditor
-              cursus={detail}
-              onSaved={(updated) =>
-                setDetail((d) => (d ? { ...d, ...updated } : d))
-              }
-            />
-          </div>
-
-          {/* Rules */}
-          <div className="rounded-xl border border-slate-200 bg-white p-5">
-            <SectionTitle>Règles ({detail.rules.length})</SectionTitle>
-            <RulesEditor cursusId={detail.id} rules={detail.rules} />
-          </div>
-
-          {/* Phases */}
-          <div>
-            <div className="mb-3 flex items-center justify-between">
-              <SectionTitle>Phases ({detail.phases.length})</SectionTitle>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => addPhase('pre')}
-                  className="rounded-lg border border-orange-200 bg-orange-50 px-3 py-1.5 text-xs font-medium text-orange-700 hover:bg-orange-100"
-                >
-                  + Pré-doublure
-                </button>
-                <button
-                  type="button"
-                  onClick={() => addPhase('post')}
-                  className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100"
-                >
-                  + Post-doublure
-                </button>
+      ) : (
+        <>
+          {/* ── Identity card ── */}
+          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '20px 22px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 300 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 9 }}>
+                  Compétence du cursus
+                </div>
+                <SkillPicker chosenSkillId={detail.skill_id} chosenSkill={linkedSkill} onPick={handleLinkSkill} />
+                {savingSkill ? <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Enregistrement…</p> : null}
+                {!detail.skill_id ? <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Associez une compétence du référentiel pour lier ce cursus aux profils bénévoles.</p> : null}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
+                <div style={{ display: 'flex', gap: 18, textAlign: 'right' }}>
+                  <div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{totalComps}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>compétences</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{totalMinDoublures}</div>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>doublures min.</div>
+                  </div>
+                </div>
               </div>
             </div>
-            {detail.phases.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center">
-                <p className="text-slate-500">Aucune phase configurée.</p>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {detail.phases
-                  .sort((a, b) => a.order_idx - b.order_idx)
-                  .map((phase) => (
-                    <PhaseEditor
-                      key={phase.id}
-                      phase={phase}
-                      cursusId={detail.id}
-                      onPhaseUpdated={handlePhaseUpdated}
-                    />
-                  ))}
-              </div>
-            )}
           </div>
-        </div>
-      ) : allCursus.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-          <p className="text-slate-500">Aucun cursus configuré. Créez-en un pour commencer.</p>
-        </div>
+
+          {/* ── Rules ── */}
+          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '18px 22px', marginBottom: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 }}>
+              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>Règles du cursus</span>
+              <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Le badge <strong style={{ color: '#4338ca' }}>Auto</strong> = vérifiée automatiquement par l&apos;app</span>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+              {rules.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune règle pour l&apos;instant.</div>
+              ) : rules.map((r) => (
+                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 11, border: '1px solid #eef1f5', borderRadius: 11, padding: '10px 13px', background: '#fcfcfd' }}>
+                  <span style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3 }} title="Glisser pour réordonner">⠿⠿</span>
+                  <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, background: r.auto ? '#4338ca' : '#e2e8f0', color: r.auto ? '#fff' : '#94a3b8' }}>
+                    {r.auto ? '⚡' : '·'}
+                  </span>
+                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#334155', lineHeight: 1.45 }}>{r.text}</span>
+                  <button type="button" onClick={() => toggleRuleAuto(r)} style={{ flexShrink: 0, cursor: 'pointer', border: `1px solid ${r.auto ? '#6d28d9' : '#e2e8f0'}`, background: r.auto ? '#f5f3ff' : '#fff', color: r.auto ? '#6d28d9' : '#94a3b8', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Auto</button>
+                  <button type="button" onClick={() => removeRule(r.id)} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '3px 6px' }} aria-label="Supprimer">✕</button>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: 9 }}>
+              <input value={ruleDraft} onChange={(e) => setRuleDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRule(); } }} placeholder="Ajouter une règle…"
+                style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+              <button type="button" onClick={addRule} disabled={addingRule || !ruleDraft.trim()}
+                style={{ cursor: addingRule || !ruleDraft.trim() ? 'not-allowed' : 'pointer', border: 'none', background: addingRule || !ruleDraft.trim() ? '#cbd5e1' : '#0f172a', color: '#fff', borderRadius: 9, padding: '9px 17px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+                Ajouter
+              </button>
+            </div>
+          </div>
+
+          {/* ── Phases ── */}
+          {orderedPhases.map((phase, i) => {
+            const comps = (phase.competences ?? []) as CursusCompetence[];
+            const isLastPre = phase.kind === 'pre' && orderedPhases[i + 1]?.kind === 'post';
+
+            return (
+              <div key={phase.id}>
+                <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', marginBottom: 16, overflow: 'hidden' }}>
+                  {/* Phase header */}
+                  <div style={{ padding: '16px 22px 15px', borderBottom: '1px solid #eef1f5' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                      <PhasePill kind={phase.kind} />
+                      <span style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#64748b' }}>
+                        {comps.length} compétence{comps.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+                    {/* Config row */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap', marginTop: 14 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nombre minimum de doublures</span>
+                        <Stepper value={phase.min_doublures} onChange={(v) => setPhaseMinDoublures(phase, v)} />
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <Toggle value={phase.require_externe} onChange={(v) => setPhaseExterne(phase, v)} />
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Exiger une doublure en antenne extérieure</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Competences */}
+                  <div style={{ padding: '14px 22px 18px' }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
+                      Compétences à valider
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      {comps.length === 0 ? (
+                        <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
+                      ) : comps.map((c, ci) => (
+                        <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef1f5', borderRadius: 12, padding: '11px 13px', background: '#fcfcfd' }}>
+                          <span style={{ flexShrink: 0, marginTop: 3, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3 }} title="Glisser pour réordonner">⠿⠿</span>
+                          <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#f1f5f9', color: '#64748b' }}>{ci + 1}</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                              {c.garde_only ? (
+                                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px' }}>Garde uniquement</span>
+                              ) : null}
+                            </div>
+                            {c.description ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div> : null}
+                          </div>
+                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <button type="button" onClick={() => openEditComp(phase.id, c)}
+                              style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+                              Modifier
+                            </button>
+                            <button type="button" onClick={() => deleteComp(phase.id, c.id)} aria-label="Supprimer"
+                              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <button type="button" onClick={() => openAddComp(phase.id)}
+                      style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+                      + Ajouter une compétence
+                    </button>
+
+                    {/* Formation marker */}
+                    {isLastPre ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16, padding: '13px 15px', border: '1px dashed #e2e8f0', borderRadius: 12, background: '#f8fafc' }}>
+                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#475569', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 9px', flexShrink: 0 }}>
+                          Étape intermédiaire
+                        </span>
+                        <input value={formationLabel} onChange={(e) => setFormationLabel(e.target.value)} onBlur={() => saveFormation()} placeholder="Ex : Formation CE (BSPP)"
+                          style={{ flex: 1, minWidth: 200, border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 13.5, fontWeight: 600, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                          <Toggle value={formationRequired} onChange={(v) => { setFormationRequired(v); saveFormation(undefined, v); }} />
+                          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>Formation requise</span>
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {/* Add phase */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+            <button type="button" onClick={() => addPhase('pre')}
+              style={{ cursor: 'pointer', border: '1px dashed #fde68a', background: '#fffbeb', color: '#b45309', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+              + Pré-doublure
+            </button>
+            <button type="button" onClick={() => addPhase('post')}
+              style={{ cursor: 'pointer', border: '1px dashed #bfdbfe', background: '#eff6ff', color: '#1d4ed8', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+              + Post-doublure
+            </button>
+          </div>
+
+          {/* ── Final sign-off ── */}
+          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '18px 22px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 6, padding: '3px 9px' }}>
+                Signature finale
+              </span>
+              <span style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>Avis favorable de</span>
+              <select value={signoffRole} onChange={(e) => saveSignoff(e.target.value)}
+                style={{ border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 14, fontWeight: 600, color: '#0f172a', outline: 'none', background: '#fff', fontFamily: 'inherit' }}>
+                <option value="Président-Délégué">Président-Délégué</option>
+                <option value="Responsable de filière">Responsable de filière</option>
+                <option value="Directeur des opérations">Directeur des opérations</option>
+              </select>
+              <span style={{ fontSize: 12.5, color: '#94a3b8' }}>débloqué une fois toutes les compétences validées.</span>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ── Competence modal ── */}
+      {compModal ? (
+        <Modal
+          title={compModal.compId ? 'Modifier la compétence' : 'Ajouter une compétence'}
+          subtitle={detail?.phases.find((p) => p.id === compModal.phaseId)?.label}
+          onClose={() => setCompModal(null)}
+          onSubmit={submitComp}
+          submitLabel={savingComp ? 'Enregistrement…' : compModal.compId ? 'Enregistrer' : 'Ajouter'}
+          submitDisabled={savingComp || !compModal.name.trim()}
+        >
+          <div>
+            <FieldLabel>Intitulé de la compétence</FieldLabel>
+            <input value={compModal.name} onChange={(e) => setCompModal((m) => m ? { ...m, name: e.target.value } : m)} placeholder="Ex : Transmission du bilan à l'IOA"
+              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+          </div>
+          <div>
+            <FieldLabel>Description <span style={{ color: '#94a3b8', fontWeight: 600 }}>(critères d&apos;évaluation)</span></FieldLabel>
+            <textarea value={compModal.description} onChange={(e) => setCompModal((m) => m ? { ...m, description: e.target.value } : m)} placeholder="Ex : maîtrise de la transmission du bilan à l'Infirmier Organisateur de l'Accueil." rows={3}
+              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid #eef1f5', borderRadius: 11, background: '#fcfcfd' }}>
+            <Toggle value={compModal.gardeOnly} onChange={(v) => setCompModal((m) => m ? { ...m, gardeOnly: v } : m)} />
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Validable en garde uniquement</div>
+              <div style={{ fontSize: 12, color: '#94a3b8' }}>Ne peut être validée que sur un événement de type Garde.</div>
+            </div>
+          </div>
+        </Modal>
       ) : null}
     </div>
   );
