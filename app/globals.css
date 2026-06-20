@@ -4,4 +4,6 @@
 
 body {
   @apply bg-slate-100 text-slate-900;
+  font-family: var(--font-hanken), -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }

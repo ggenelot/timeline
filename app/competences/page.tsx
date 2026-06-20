@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type {
   Cursus,
@@ -29,181 +30,522 @@ import {
 type CursusDetail = Cursus & { rules: CursusRule[]; phases: CursusPhase[] };
 type ViewMode = 'parcours' | 'carnet';
 
-type DoublureForm = {
-  phase_id: string;
-  event_name: string;
-  event_date: string;
-  event_lieu: string;
-  is_external: boolean;
-  supervisor_name: string;
-  supervisor_antenne: string;
+type ModalKind = 'doublure' | 'validation';
+
+type EventOption = { id: string; name: string; sub: string; date?: string };
+type SupOption = { id: string; name: string; sub: string };
+
+type ModalState = {
+  kind: ModalKind;
+  phaseId?: string;
+  competenceId?: string;
+  // event
+  eventMode: 'search' | 'manual' | 'chosen';
+  eventQuery: string;
+  eventResults: EventOption[];
+  chosenEvent: EventOption | null;
+  // manual event
+  evName: string;
+  evDate: string;
+  evAntenne: string;
+  // supervisor
+  supMode: 'search' | 'manual' | 'chosen';
+  supQuery: string;
+  supResults: SupOption[];
+  chosenSup: SupOption | null;
+  // manual sup
+  supName: string;
+  supAntenne: string;
+  // message
   message: string;
-  is_pending: boolean;
 };
 
-type ValidationForm = {
-  competence_id: string;
-  event_name: string;
-  event_date: string;
-  event_lieu: string;
-  supervisor_name: string;
-  supervisor_antenne: string;
-};
-
-const EMPTY_DOUBLURE_FORM: DoublureForm = {
-  phase_id: '',
-  event_name: '',
-  event_date: '',
-  event_lieu: '',
-  is_external: false,
-  supervisor_name: '',
-  supervisor_antenne: '',
+const MODAL_INIT: ModalState = {
+  kind: 'doublure',
+  eventMode: 'search',
+  eventQuery: '',
+  eventResults: [],
+  chosenEvent: null,
+  evName: '',
+  evDate: '',
+  evAntenne: '',
+  supMode: 'search',
+  supQuery: '',
+  supResults: [],
+  chosenSup: null,
+  supName: '',
+  supAntenne: '',
   message: '',
-  is_pending: false,
 };
 
-const EMPTY_VALIDATION_FORM: ValidationForm = {
-  competence_id: '',
-  event_name: '',
-  event_date: '',
-  event_lieu: '',
-  supervisor_name: '',
-  supervisor_antenne: '',
-};
+// ── Helpers ────────────────────────────────────────────────────
 
-// ── Small UI helpers ─────────────────────────────────────────
+function fmt(d: string | null | undefined) {
+  if (!d) return '';
+  return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
-function Badge({
+// ── Visual primitives ─────────────────────────────────────────
+
+function Pill({
   children,
-  variant = 'default',
+  color,
+  bg,
+  border,
 }: {
   children: React.ReactNode;
-  variant?: 'default' | 'success' | 'warning' | 'pending';
+  color: string;
+  bg: string;
+  border?: string;
 }) {
-  const cls = {
-    default: 'bg-slate-100 text-slate-600',
-    success: 'bg-emerald-100 text-emerald-700',
-    warning: 'bg-orange-100 text-orange-700',
-    pending: 'bg-amber-100 text-amber-700',
-  }[variant];
   return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+    <span
+      style={{
+        display: 'inline-block',
+        fontSize: 10.5,
+        fontWeight: 700,
+        color,
+        background: bg,
+        border: `1px solid ${border ?? bg}`,
+        borderRadius: 5,
+        padding: '1px 7px',
+      }}
+    >
       {children}
     </span>
   );
 }
 
-function ProgressBar({ value, max }: { value: number; max: number }) {
-  const pct = max === 0 ? 0 : Math.min(100, Math.round((value / max) * 100));
+function SegmentedBar({
+  total,
+  validated,
+}: {
+  total: number;
+  validated: number;
+}) {
   return (
-    <div className="h-1.5 w-full rounded-full bg-slate-200">
-      <div
-        className="h-1.5 rounded-full bg-emerald-500 transition-all"
-        style={{ width: `${pct}%` }}
-      />
+    <div style={{ display: 'flex', gap: 4, marginTop: 18 }}>
+      {Array.from({ length: total }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            flex: 1,
+            height: 9,
+            borderRadius: 5,
+            background: i < validated ? '#059669' : '#e2e8f0',
+          }}
+        />
+      ))}
     </div>
   );
 }
 
-// ── Modal overlay ────────────────────────────────────────────
+// ── Modal ─────────────────────────────────────────────────────
 
 function Modal({
   title,
+  subtitle,
   onClose,
   children,
+  onSubmit,
+  submitLabel,
+  submitDisabled,
 }: {
   title: string;
+  subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
+  onSubmit: () => void;
+  submitLabel: string;
+  submitDisabled?: boolean;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="w-full max-w-lg rounded-xl bg-white shadow-xl">
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <h2 className="text-base font-semibold text-slate-900">{title}</h2>
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 100,
+        background: 'rgba(15,23,42,.45)',
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+        padding: '48px 18px',
+        overflowY: 'auto',
+      }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div
+        style={{
+          width: '100%',
+          maxWidth: 540,
+          background: '#fff',
+          borderRadius: 18,
+          boxShadow: '0 24px 60px rgba(15,23,42,.3)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'flex-start',
+            justifyContent: 'space-between',
+            gap: 12,
+            padding: '18px 20px 14px',
+            borderBottom: '1px solid #eef1f5',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
+            {subtitle ? (
+              <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>{subtitle}</div>
+            ) : null}
+          </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+            style={{
+              flexShrink: 0,
+              cursor: 'pointer',
+              border: 'none',
+              background: '#f1f5f9',
+              color: '#64748b',
+              width: 30,
+              height: 30,
+              borderRadius: 8,
+              fontSize: 16,
+            }}
             aria-label="Fermer"
           >
             ✕
           </button>
         </div>
-        <div className="max-h-[70vh] overflow-y-auto px-6 py-4">{children}</div>
+        <div
+          style={{
+            padding: '18px 20px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 18,
+            maxHeight: '60vh',
+            overflowY: 'auto',
+          }}
+        >
+          {children}
+        </div>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'flex-end',
+            gap: 10,
+            padding: '14px 20px',
+            borderTop: '1px solid #eef1f5',
+            background: '#fafbfc',
+          }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              cursor: 'pointer',
+              border: '1px solid #e2e8f0',
+              background: '#fff',
+              color: '#64748b',
+              borderRadius: 9,
+              padding: '9px 16px',
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+            }}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={onSubmit}
+            disabled={submitDisabled}
+            style={{
+              cursor: submitDisabled ? 'not-allowed' : 'pointer',
+              border: 'none',
+              background: '#059669',
+              color: '#fff',
+              borderRadius: 9,
+              padding: '9px 18px',
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              opacity: submitDisabled ? 0.5 : 1,
+            }}
+          >
+            {submitLabel}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Event form fields (shared by doublure + validation) ──────
+// ── Modal input helpers ───────────────────────────────────────
 
-function EventFields({
-  eventName,
-  eventDate,
-  eventLieu,
-  supervisorName,
-  supervisorAntenne,
+function ModalInput({
+  value,
   onChange,
+  placeholder,
+  style,
 }: {
-  eventName: string;
-  eventDate: string;
-  eventLieu: string;
-  supervisorName: string;
-  supervisorAntenne: string;
-  onChange: (field: string, value: string) => void;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div className="space-y-3">
+    <input
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      placeholder={placeholder}
+      style={{
+        width: '100%',
+        border: '1px solid #cbd5e1',
+        borderRadius: 9,
+        padding: '10px 12px',
+        fontSize: 14,
+        color: '#0f172a',
+        outline: 'none',
+        fontFamily: 'inherit',
+        ...style,
+      }}
+    />
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Event field ───────────────────────────────────────────────
+
+function EventField({
+  modal,
+  setModal,
+}: {
+  modal: ModalState;
+  setModal: React.Dispatch<React.SetStateAction<ModalState>>;
+}) {
+  async function search(q: string) {
+    setModal((m) => ({ ...m, eventQuery: q }));
+    if (q.length < 2) { setModal((m) => ({ ...m, eventResults: [] })); return; }
+    const { data } = await supabase
+      .from('missions')
+      .select('id, title, starts_at, location')
+      .ilike('title', `%${q}%`)
+      .order('starts_at', { ascending: false })
+      .limit(5);
+    setModal((m) => ({
+      ...m,
+      eventResults: (data ?? []).map((r: { id: string; title: string; starts_at: string; location: string | null }) => ({
+        id: r.id,
+        name: r.title,
+        sub: `${fmt(r.starts_at)}${r.location ? ' · ' + r.location : ''}`,
+        date: r.starts_at,
+      })),
+    }));
+  }
+
+  if (modal.eventMode === 'chosen' && modal.chosenEvent) {
+    return (
       <div>
-        <label className="mb-1 block text-xs font-medium text-slate-700">Nom de l&apos;événement</label>
-        <input
-          className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-          value={eventName}
-          onChange={(e) => onChange('event_name', e.target.value)}
-          placeholder="ex : Maraude Paris 10e"
-        />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Date</label>
-          <input
-            type="date"
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-            value={eventDate}
-            onChange={(e) => onChange('event_date', e.target.value)}
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Lieu</label>
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-            value={eventLieu}
-            onChange={(e) => onChange('event_lieu', e.target.value)}
-            placeholder="Ville / antenne"
-          />
+        <FieldLabel>Événement</FieldLabel>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            border: '1.5px solid #a7f3d0',
+            background: '#f6fdfa',
+            borderRadius: 10,
+            padding: '10px 12px',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{modal.chosenEvent.name}</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>{modal.chosenEvent.sub}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModal((m) => ({ ...m, eventMode: 'search', chosenEvent: null }))}
+            style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+          >
+            Changer
+          </button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Superviseur</label>
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-            value={supervisorName}
-            onChange={(e) => onChange('supervisor_name', e.target.value)}
-            placeholder="Prénom Nom"
-          />
+    );
+  }
+
+  if (modal.eventMode === 'manual') {
+    return (
+      <div>
+        <FieldLabel>Événement hors timeline</FieldLabel>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+          <ModalInput value={modal.evName} onChange={(v) => setModal((m) => ({ ...m, evName: v }))} placeholder="Nom de l'événement" />
+          <div style={{ display: 'flex', gap: 9 }}>
+            <ModalInput value={modal.evDate} onChange={(v) => setModal((m) => ({ ...m, evDate: v }))} placeholder="Date (jj/mm/aaaa)" style={{ flex: '1' }} />
+            <ModalInput value={modal.evAntenne} onChange={(v) => setModal((m) => ({ ...m, evAntenne: v }))} placeholder="Antenne / lieu" style={{ flex: '1' }} />
+          </div>
         </div>
-        <div>
-          <label className="mb-1 block text-xs font-medium text-slate-700">Antenne superviseur</label>
-          <input
-            className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-            value={supervisorAntenne}
-            onChange={(e) => onChange('supervisor_antenne', e.target.value)}
-            placeholder="ex : Paris 12e"
-          />
+        <button
+          type="button"
+          onClick={() => setModal((m) => ({ ...m, eventMode: 'search' }))}
+          style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#2563eb', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+        >
+          ‹ Rechercher dans la timeline
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel>Événement</FieldLabel>
+      <ModalInput
+        value={modal.eventQuery}
+        onChange={search}
+        placeholder="Rechercher un événement de la timeline…"
+      />
+      {modal.eventResults.length > 0 ? (
+        <div style={{ marginTop: 7, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {modal.eventResults.map((e) => (
+            <button
+              key={e.id}
+              type="button"
+              onClick={() => setModal((m) => ({ ...m, eventMode: 'chosen', chosenEvent: e, eventQuery: '' }))}
+              style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '9px 11px', fontFamily: 'inherit' }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{e.name}</div>
+              <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{e.sub}</div>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setModal((m) => ({ ...m, eventMode: 'manual' }))}
+        style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#2563eb', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+      >
+        + Événement hors timeline (doublure externe)
+      </button>
+    </div>
+  );
+}
+
+// ── Supervisor field ──────────────────────────────────────────
+
+function SupervisorField({
+  modal,
+  setModal,
+}: {
+  modal: ModalState;
+  setModal: React.Dispatch<React.SetStateAction<ModalState>>;
+}) {
+  async function search(q: string) {
+    setModal((m) => ({ ...m, supQuery: q }));
+    if (q.length < 2) { setModal((m) => ({ ...m, supResults: [] })); return; }
+    const { data } = await supabase
+      .from('profiles')
+      .select('id, full_name, email, role')
+      .or(`full_name.ilike.%${q}%,email.ilike.%${q}%`)
+      .limit(5);
+    setModal((m) => ({
+      ...m,
+      supResults: (data ?? []).map((r: { id: string; full_name: string | null; email: string }) => ({
+        id: r.id,
+        name: r.full_name ?? r.email,
+        sub: r.email,
+      })),
+    }));
+  }
+
+  if (modal.supMode === 'chosen' && modal.chosenSup) {
+    return (
+      <div>
+        <FieldLabel>Encadré par</FieldLabel>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            border: '1.5px solid #a7f3d0',
+            background: '#f6fdfa',
+            borderRadius: 10,
+            padding: '10px 12px',
+          }}
+        >
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{modal.chosenSup.name}</div>
+            <div style={{ fontSize: 12, color: '#64748b' }}>{modal.chosenSup.sub}</div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModal((m) => ({ ...m, supMode: 'search', chosenSup: null }))}
+            style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+          >
+            Changer
+          </button>
         </div>
       </div>
+    );
+  }
+
+  if (modal.supMode === 'manual') {
+    return (
+      <div>
+        <FieldLabel>Superviseur (hors liste)</FieldLabel>
+        <div style={{ display: 'flex', gap: 9 }}>
+          <ModalInput value={modal.supName} onChange={(v) => setModal((m) => ({ ...m, supName: v }))} placeholder="Prénom Nom" style={{ flex: '1.4' }} />
+          <ModalInput value={modal.supAntenne} onChange={(v) => setModal((m) => ({ ...m, supAntenne: v }))} placeholder="Antenne" style={{ flex: '1' }} />
+        </div>
+        <button
+          type="button"
+          onClick={() => setModal((m) => ({ ...m, supMode: 'search' }))}
+          style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#2563eb', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+        >
+          ‹ Rechercher dans les personnes
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <FieldLabel>Encadré par</FieldLabel>
+      <ModalInput value={modal.supQuery} onChange={search} placeholder="Rechercher une personne…" />
+      {modal.supResults.length > 0 ? (
+        <div style={{ marginTop: 7, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {modal.supResults.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => setModal((m) => ({ ...m, supMode: 'chosen', chosenSup: s, supQuery: '' }))}
+              style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '9px 11px', fontFamily: 'inherit' }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{s.name}</div>
+              <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{s.sub}</div>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => setModal((m) => ({ ...m, supMode: 'manual' }))}
+        style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#2563eb', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+      >
+        + Saisir un superviseur hors liste
+      </button>
     </div>
   );
 }
@@ -214,25 +556,19 @@ export default function CompetencesPage() {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [volunteerCursus, setVolunteerCursus] = useState<VolunteerCursus[]>([]);
-
-  // selected cursus detail
   const [selectedVCId, setSelectedVCId] = useState<string | null>(null);
   const [cursusDetail, setCursusDetail] = useState<CursusDetail | null>(null);
   const [doublures, setDoublures] = useState<Doublure[]>([]);
   const [validations, setValidations] = useState<CompetenceValidation[]>([]);
-
   const [view, setView] = useState<ViewMode>('parcours');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   // modals
-  const [doublureModal, setDoublureModal] = useState(false);
-  const [validationModal, setValidationModal] = useState(false);
-  const [doublureForm, setDoublureForm] = useState<DoublureForm>(EMPTY_DOUBLURE_FORM);
-  const [validationForm, setValidationForm] = useState<ValidationForm>(EMPTY_VALIDATION_FORM);
+  const [modal, setModal] = useState<ModalState | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // enrollment modal
+  // enroll modal
   const [enrollModal, setEnrollModal] = useState(false);
 
   // ── Load ──────────────────────────────────────────────────
@@ -244,10 +580,7 @@ export default function CompetencesPage() {
       const pid = session.user.id;
       setProfileId(pid);
       try {
-        const [cursusAll, vcAll] = await Promise.all([
-          getAllCursus(),
-          getVolunteerCursus(pid),
-        ]);
+        const [cursusAll, vcAll] = await Promise.all([getAllCursus(), getVolunteerCursus(pid)]);
         setAllCursus(cursusAll);
         setVolunteerCursus(vcAll);
         if (vcAll.length > 0) setSelectedVCId(vcAll[0].id);
@@ -260,7 +593,6 @@ export default function CompetencesPage() {
     load();
   }, []);
 
-  // load detail when selected cursus changes
   useEffect(() => {
     if (!selectedVCId) { setCursusDetail(null); setDoublures([]); setValidations([]); return; }
     const vc = volunteerCursus.find((v) => v.id === selectedVCId);
@@ -282,6 +614,21 @@ export default function CompetencesPage() {
     loadDetail();
   }, [selectedVCId, volunteerCursus]);
 
+  // ── Derived ────────────────────────────────────────────────
+
+  const validatedIds = useMemo(() => new Set(validations.map((v) => v.competence_id)), [validations]);
+
+  const allComps = useMemo(
+    () => cursusDetail?.phases.flatMap((p) => p.competences ?? []) ?? [],
+    [cursusDetail]
+  );
+
+  const enrolledCursusIds = useMemo(() => new Set(volunteerCursus.map((vc) => vc.cursus_id)), [volunteerCursus]);
+  const availableToEnroll = useMemo(() => allCursus.filter((c) => !enrolledCursusIds.has(c.id)), [allCursus, enrolledCursusIds]);
+
+  const currentVC = volunteerCursus.find((v) => v.id === selectedVCId);
+  const currentCursusData = currentVC ? (allCursus.find((c) => c.id === currentVC.cursus_id) ?? null) : null;
+
   // ── Enroll ────────────────────────────────────────────────
 
   async function handleEnroll(cursusId: string) {
@@ -297,633 +644,799 @@ export default function CompetencesPage() {
     }
   }
 
-  // ── Doublure submit ────────────────────────────────────────
+  // ── Modal submit ───────────────────────────────────────────
 
-  async function handleDoublureSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedVCId || !profileId) return;
+  function getEventData(m: ModalState) {
+    if (m.eventMode === 'chosen' && m.chosenEvent) {
+      return {
+        mission_id: m.chosenEvent.id,
+        event_name: m.chosenEvent.name,
+        event_date: m.chosenEvent.date ? m.chosenEvent.date.slice(0, 10) : null,
+        event_lieu: null as string | null,
+        is_external: false,
+      };
+    }
+    return {
+      mission_id: null as string | null,
+      event_name: m.evName || null,
+      event_date: m.evDate || null,
+      event_lieu: m.evAntenne || null,
+      is_external: true,
+    };
+  }
+
+  function getSupData(m: ModalState) {
+    if (m.supMode === 'chosen' && m.chosenSup) {
+      return { supervisor_id: m.chosenSup.id, supervisor_name: m.chosenSup.name, supervisor_antenne: null as string | null };
+    }
+    return { supervisor_id: null as string | null, supervisor_name: m.supName || null, supervisor_antenne: m.supAntenne || null };
+  }
+
+  async function handleSubmit() {
+    if (!modal || !selectedVCId || !profileId) return;
     setSubmitting(true);
     try {
-      const dbl = await declareDoublure({
-        volunteer_cursus_id: selectedVCId,
-        phase_id: doublureForm.phase_id,
-        mission_id: null,
-        event_name: doublureForm.event_name || null,
-        event_date: doublureForm.event_date || null,
-        event_lieu: doublureForm.event_lieu || null,
-        is_external: doublureForm.is_external,
-        supervisor_id: null,
-        supervisor_name: doublureForm.supervisor_name || null,
-        supervisor_antenne: doublureForm.supervisor_antenne || null,
-        message: doublureForm.message || null,
-        is_pending: doublureForm.is_pending,
-        declared_by: profileId,
-      });
-      setDoublures((prev) => [dbl, ...prev]);
-      setDoublureModal(false);
-      setDoublureForm(EMPTY_DOUBLURE_FORM);
+      const ev = getEventData(modal);
+      const sup = getSupData(modal);
+      if (modal.kind === 'doublure') {
+        const dbl = await declareDoublure({
+          volunteer_cursus_id: selectedVCId,
+          phase_id: modal.phaseId!,
+          ...ev,
+          ...sup,
+          message: modal.message || null,
+          is_pending: false,
+          declared_by: profileId,
+        });
+        setDoublures((prev) => [dbl, ...prev]);
+      } else {
+        const val = await declareCompetenceValidation({
+          volunteer_cursus_id: selectedVCId,
+          competence_id: modal.competenceId!,
+          doublure_id: null,
+          ...ev,
+          ...sup,
+          declared_by: profileId,
+        });
+        setValidations((prev) => [...prev, val]);
+      }
+      setModal(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
       setSubmitting(false);
     }
+  }
+
+  function openDoublureModal(phaseId: string) {
+    setModal({ ...MODAL_INIT, kind: 'doublure', phaseId });
+  }
+
+  function openValidationModal(competenceId: string) {
+    setModal({ ...MODAL_INIT, kind: 'validation', competenceId });
   }
 
   async function handleDeleteDoublure(id: string) {
-    try {
-      await deleteDoublure(id);
-      setDoublures((prev) => prev.filter((d) => d.id !== id));
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  }
-
-  // ── Validation submit ──────────────────────────────────────
-
-  async function handleValidationSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!selectedVCId || !profileId) return;
-    setSubmitting(true);
-    try {
-      const val = await declareCompetenceValidation({
-        volunteer_cursus_id: selectedVCId,
-        competence_id: validationForm.competence_id,
-        doublure_id: null,
-        mission_id: null,
-        event_name: validationForm.event_name || null,
-        event_date: validationForm.event_date || null,
-        event_lieu: validationForm.event_lieu || null,
-        supervisor_id: null,
-        supervisor_name: validationForm.supervisor_name || null,
-        supervisor_antenne: validationForm.supervisor_antenne || null,
-        declared_by: profileId,
-      });
-      setValidations((prev) => [...prev, val]);
-      setValidationModal(false);
-      setValidationForm(EMPTY_VALIDATION_FORM);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setSubmitting(false);
-    }
+    try { await deleteDoublure(id); setDoublures((prev) => prev.filter((d) => d.id !== id)); }
+    catch (e) { setError((e as Error).message); }
   }
 
   async function handleDeleteValidation(id: string) {
-    try {
-      await deleteCompetenceValidation(id);
-      setValidations((prev) => prev.filter((v) => v.id !== id));
-    } catch (e) {
-      setError((e as Error).message);
-    }
+    try { await deleteCompetenceValidation(id); setValidations((prev) => prev.filter((v) => v.id !== id)); }
+    catch (e) { setError((e as Error).message); }
   }
 
-  // ── Derived state ──────────────────────────────────────────
-
-  const enrolledCursusIds = new Set(volunteerCursus.map((vc) => vc.cursus_id));
-  const availableToEnroll = allCursus.filter((c) => !enrolledCursusIds.has(c.id));
-
-  const validatedCompetenceIds = new Set(validations.map((v) => v.competence_id));
-
-  function getPhaseDoublures(phaseId: string) {
-    return doublures.filter((d) => d.phase_id === phaseId);
-  }
-
-  function getPhaseProgress(phase: CursusPhase) {
-    const comps = phase.competences ?? [];
-    const validated = comps.filter((c) => validatedCompetenceIds.has(c.id)).length;
-    const phaseDoublures = getPhaseDoublures(phase.id);
-    return { validated, total: comps.length, doublureCount: phaseDoublures.length };
+  function isModalSubmittable() {
+    if (!modal) return false;
+    if (modal.kind === 'validation' && !modal.competenceId) return false;
+    if (modal.kind === 'doublure' && !modal.phaseId) return false;
+    return true;
   }
 
   // ── Render ─────────────────────────────────────────────────
 
   if (loading) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center">
-        <p className="text-slate-500">Chargement…</p>
+      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#94a3b8' }}>Chargement…</p>
       </div>
     );
   }
 
+  const selectedCursusCode = currentCursusData?.code ?? '';
+  const selectedCursusName = currentCursusData?.name ?? '';
+
   return (
-    <div className="space-y-6">
-      {/* Page header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Mes compétences</h1>
-          <p className="mt-1 text-sm text-slate-600">
-            Suivi de votre parcours de doublure et de certification.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setEnrollModal(true)}
-          disabled={availableToEnroll.length === 0}
-          className="shrink-0 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-        >
-          + Rejoindre un cursus
-        </button>
-      </div>
+    <div style={{ paddingBottom: 48 }}>
 
-      {error ? (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        {/* Breadcrumb */}
+        <div style={{ fontSize: 12.5, color: '#94a3b8', fontWeight: 600, marginBottom: 18 }}>
+          <Link href="/missions" style={{ color: '#94a3b8', textDecoration: 'none' }}>Missions</Link>
+          <span style={{ color: '#cbd5e1' }}> › </span>
+          <span>Suivi des compétences</span>
+          {selectedCursusName ? (
+            <>
+              <span style={{ color: '#cbd5e1' }}> › </span>
+              <span style={{ color: '#475569' }}>{selectedCursusName}</span>
+            </>
+          ) : null}
         </div>
-      ) : null}
 
-      {/* No cursus enrolled */}
-      {volunteerCursus.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
-          <p className="text-slate-500">Vous n&apos;êtes inscrit dans aucun cursus de doublure.</p>
-          <button
-            type="button"
-            onClick={() => setEnrollModal(true)}
-            className="mt-4 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-          >
-            Rejoindre un cursus
-          </button>
-        </div>
-      ) : (
-        <>
-          {/* Cursus tabs */}
-          <div className="flex gap-2 overflow-x-auto">
-            {volunteerCursus.map((vc) => (
+        {error ? (
+          <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
+            {error}
+          </div>
+        ) : null}
+
+        {/* Cursus tab selector + enroll */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+          {volunteerCursus.map((vc) => {
+            const c = allCursus.find((x) => x.id === vc.cursus_id);
+            return (
               <button
                 key={vc.id}
                 type="button"
                 onClick={() => setSelectedVCId(vc.id)}
-                className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-                  selectedVCId === vc.id
-                    ? 'bg-slate-900 text-white'
-                    : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-50'
-                }`}
+                style={{
+                  cursor: 'pointer',
+                  border: selectedVCId === vc.id ? 'none' : '1px solid #e2e8f0',
+                  borderRadius: 99,
+                  padding: '7px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                  background: selectedVCId === vc.id ? '#0f172a' : '#fff',
+                  color: selectedVCId === vc.id ? '#fff' : '#475569',
+                }}
               >
-                {(vc.cursus as Cursus)?.code ?? vc.cursus_id}
+                {c?.code ?? vc.cursus_id}
                 {vc.completed_at ? ' ✓' : ''}
               </button>
-            ))}
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => setEnrollModal(true)}
+            disabled={availableToEnroll.length === 0}
+            style={{
+              cursor: availableToEnroll.length === 0 ? 'not-allowed' : 'pointer',
+              border: '1px dashed #cbd5e1',
+              borderRadius: 99,
+              padding: '7px 16px',
+              fontSize: 13,
+              fontWeight: 700,
+              fontFamily: 'inherit',
+              background: 'transparent',
+              color: '#94a3b8',
+              opacity: availableToEnroll.length === 0 ? 0.5 : 1,
+            }}
+          >
+            + Rejoindre un cursus
+          </button>
+        </div>
+
+        {volunteerCursus.length === 0 ? (
+          <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 18, padding: '60px 24px' }}>
+            <p style={{ color: '#94a3b8', fontSize: 15 }}>Vous n&apos;êtes inscrit dans aucun cursus de doublure.</p>
+            <button
+              type="button"
+              onClick={() => setEnrollModal(true)}
+              style={{ marginTop: 16, cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+            >
+              Rejoindre un cursus
+            </button>
           </div>
-
-          {cursusDetail ? (
-            <>
-              {/* Cursus header card */}
-              <div className="rounded-xl border border-slate-200 bg-white p-5">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="rounded bg-slate-100 px-2 py-0.5 text-xs font-mono font-semibold text-slate-600">
-                        {cursusDetail.code}
-                      </span>
-                      <h2 className="text-lg font-semibold text-slate-900">{cursusDetail.name}</h2>
+        ) : cursusDetail ? (
+          <>
+            {/* ── Header card ── */}
+            <div
+              style={{
+                background: '#fff',
+                border: '1px solid #e7e9ee',
+                borderRadius: 18,
+                boxShadow: '0 2px 10px rgba(15,23,42,.05)',
+                padding: '22px 24px',
+                marginBottom: 16,
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
+                <div style={{ minWidth: 0 }}>
+                  {cursusDetail.category || cursusDetail.level ? (
+                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#2563eb', marginBottom: 7 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#2563eb', display: 'inline-block' }} />
+                      {[cursusDetail.category, cursusDetail.level ? `Niveau ${cursusDetail.level}` : null].filter(Boolean).join(' · ')}
                     </div>
-                    {cursusDetail.formation_label ? (
-                      <p className="mt-1 text-sm text-slate-600">
-                        Formation : {cursusDetail.formation_label}
-                        {cursusDetail.formation_required ? ' (obligatoire)' : ' (optionnelle)'}
-                      </p>
-                    ) : null}
-                    {cursusDetail.signoff_role ? (
-                      <p className="mt-0.5 text-xs text-slate-500">
-                        Validation par : {cursusDetail.signoff_role}
-                      </p>
-                    ) : null}
-                  </div>
-                  {/* Overall progress */}
-                  <div className="min-w-[120px] text-right">
-                    {(() => {
-                      const allComps = cursusDetail.phases.flatMap((p) => p.competences ?? []);
-                      const done = allComps.filter((c) => validatedCompetenceIds.has(c.id)).length;
-                      return (
-                        <>
-                          <p className="text-2xl font-bold text-emerald-600">
-                            {done}/{allComps.length}
-                          </p>
-                          <p className="text-xs text-slate-500">compétences validées</p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-
-                {/* Rules */}
-                {cursusDetail.rules.length > 0 ? (
-                  <div className="mt-4 rounded-lg bg-slate-50 px-4 py-3">
-                    <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Règles du cursus
-                    </p>
-                    <ul className="space-y-1">
-                      {cursusDetail.rules.map((r) => (
-                        <li key={r.id} className="flex items-start gap-2 text-sm text-slate-700">
-                          <span className="mt-0.5 text-slate-400">{r.auto ? '⚡' : '•'}</span>
-                          {r.text}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                ) : null}
-              </div>
-
-              {/* View switcher */}
-              <div className="flex items-center justify-between gap-4">
-                <div className="flex rounded-lg border border-slate-200 bg-white p-0.5">
-                  {(['parcours', 'carnet'] as ViewMode[]).map((v) => (
-                    <button
-                      key={v}
-                      type="button"
-                      onClick={() => setView(v)}
-                      className={`rounded-md px-4 py-1.5 text-sm font-medium capitalize transition-colors ${
-                        view === v
-                          ? 'bg-slate-900 text-white'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
+                  ) : null}
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 11 }}>
+                    <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+                      {cursusDetail.name}
+                    </h1>
+                    <span
+                      style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 7, padding: '3px 9px' }}
                     >
-                      {v === 'parcours' ? 'Parcours' : 'Carnet de doublure'}
-                    </button>
-                  ))}
+                      {cursusDetail.code}
+                    </span>
+                  </div>
+                  {cursusDetail.formation_label ? (
+                    <div style={{ marginTop: 9, fontSize: 13.5, color: '#64748b' }}>
+                      Formation : {cursusDetail.formation_label}
+                      {cursusDetail.formation_required ? ' (obligatoire)' : ' (optionnelle)'}
+                    </div>
+                  ) : null}
                 </div>
-                <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDoublureForm({
-                        ...EMPTY_DOUBLURE_FORM,
-                        phase_id: cursusDetail.phases[0]?.id ?? '',
-                      });
-                      setDoublureModal(true);
-                    }}
-                    className="rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
-                  >
-                    + Déclarer une doublure
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const firstComp = cursusDetail.phases
-                        .flatMap((p) => p.competences ?? [])
-                        .find((c) => !validatedCompetenceIds.has(c.id));
-                      setValidationForm({
-                        ...EMPTY_VALIDATION_FORM,
-                        competence_id: firstComp?.id ?? '',
-                      });
-                      setValidationModal(true);
-                    }}
-                    className="rounded-lg bg-emerald-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-emerald-700"
-                  >
-                    + Valider une compétence
-                  </button>
+                <div style={{ flexShrink: 0, textAlign: 'right' }}>
+                  <div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
+                    {validatedIds.size}
+                    <span style={{ fontSize: 17, fontWeight: 700, color: '#94a3b8' }}>/{allComps.length}</span>
+                  </div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: '#64748b', marginTop: 4 }}>compétences validées</div>
                 </div>
               </div>
 
-              {/* ── PARCOURS view ── */}
-              {view === 'parcours' ? (
-                <div className="space-y-4">
-                  {cursusDetail.phases.map((phase) => {
-                    const { validated, total, doublureCount } = getPhaseProgress(phase);
-                    return (
+              {/* Segmented progress bar */}
+              {allComps.length > 0 ? (
+                <>
+                  <SegmentedBar total={allComps.length} validated={allComps.filter((c) => validatedIds.has(c.id)).length} />
+                  <div style={{ display: 'flex', gap: 16, marginTop: 11, fontSize: 12, color: '#64748b' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: '#059669', display: 'inline-block' }} />
+                      Validée (autodéclarée)
+                    </span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ width: 9, height: 9, borderRadius: 3, background: '#e2e8f0', display: 'inline-block' }} />
+                      À valider
+                    </span>
+                  </div>
+                </>
+              ) : null}
+            </div>
+
+            {/* ── Phase stepper grid ── */}
+            {cursusDetail.phases.length > 0 ? (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: `repeat(${cursusDetail.phases.length}, 1fr)`,
+                  gap: 10,
+                  marginBottom: 22,
+                }}
+              >
+                {cursusDetail.phases.map((ph, i) => {
+                  const phDoublures = doublures.filter((d) => d.phase_id === ph.id);
+                  const phComps = ph.competences ?? [];
+                  const done = phComps.filter((c) => validatedIds.has(c.id)).length;
+                  const isComplete = done === phComps.length && phComps.length > 0 && phDoublures.length >= ph.min_doublures;
+                  const isActive = !isComplete && (i === 0 || cursusDetail.phases.slice(0, i).every((p) => {
+                    const pc = p.competences ?? [];
+                    return pc.length > 0 && pc.every((c) => validatedIds.has(c.id));
+                  }));
+                  const badgeBg = isComplete ? '#059669' : isActive ? '#0f172a' : '#f1f5f9';
+                  const badgeColor = isComplete || isActive ? '#fff' : '#94a3b8';
+                  const borderColor = isComplete ? '#a7f3d0' : isActive ? '#cbd5e1' : '#e7e9ee';
+                  const titleColor = isActive ? '#0f172a' : isComplete ? '#059669' : '#94a3b8';
+                  const pillBg = isComplete ? '#d1fae5' : '#f1f5f9';
+                  const pillColor = isComplete ? '#059669' : '#94a3b8';
+
+                  return (
+                    <div
+                      key={ph.id}
+                      style={{ background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 13, padding: '13px 14px' }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                        <span
+                          style={{ flexShrink: 0, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: badgeBg, color: badgeColor, border: `1.5px solid ${borderColor}` }}
+                        >
+                          {isComplete ? '✓' : i + 1}
+                        </span>
+                        <span style={{ fontSize: 13.5, fontWeight: 700, color: titleColor }}>
+                          {ph.kind === 'pre' ? 'Pré-doublure' : 'Post-doublure'}
+                        </span>
+                      </div>
+                      {ph.sub ? (
+                        <div style={{ marginTop: 8, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.4 }}>{ph.sub}</div>
+                      ) : null}
                       <div
-                        key={phase.id}
-                        className="rounded-xl border border-slate-200 bg-white overflow-hidden"
+                        style={{ marginTop: 9, display: 'inline-block', fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 8px', background: pillBg, color: pillColor }}
                       >
-                        <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant={phase.kind === 'pre' ? 'warning' : 'default'}>
-                                {phase.kind === 'pre' ? 'Pré-doublure' : 'Post-doublure'}
-                              </Badge>
-                              <h3 className="font-semibold text-slate-900">{phase.label}</h3>
+                        {done}/{phComps.length} compétences
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {/* ── View switcher ── */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#94a3b8' }}>Affichage</span>
+              <div style={{ display: 'inline-flex', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 10, padding: 3 }}>
+                {(['parcours', 'carnet'] as ViewMode[]).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => setView(v)}
+                    style={{
+                      cursor: 'pointer',
+                      border: 'none',
+                      borderRadius: 7,
+                      padding: '7px 16px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      fontFamily: 'inherit',
+                      background: view === v ? '#0f172a' : 'transparent',
+                      color: view === v ? '#fff' : '#64748b',
+                    }}
+                  >
+                    {v === 'parcours' ? 'Parcours' : 'Carnet'}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* ══════════════ PARCOURS VIEW ══════════════ */}
+            {view === 'parcours' ? (
+              <div style={{ position: 'relative', paddingLeft: 38 }}>
+                {/* vertical timeline line */}
+                <div style={{ position: 'absolute', left: 13, top: 6, bottom: 14, width: 2, background: '#e3e7ee' }} />
+
+                {cursusDetail.phases.map((phase, i) => {
+                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id);
+                  const phComps = (phase.competences ?? []) as CursusCompetence[];
+                  const doneComps = phComps.filter((c) => validatedIds.has(c.id));
+                  const todoComps = phComps.filter((c) => !validatedIds.has(c.id));
+                  const isComplete = doneComps.length === phComps.length && phComps.length > 0 && phDoublures.length >= phase.min_doublures;
+                  const nodeBg = isComplete ? '#059669' : i === 0 ? '#0f172a' : '#e2e8f0';
+                  const cardBorderColor = isComplete ? '#a7f3d0' : '#e7e9ee';
+                  const pillBg = isComplete ? '#d1fae5' : doneComps.length > 0 ? '#eff6ff' : '#f1f5f9';
+                  const pillColor = isComplete ? '#059669' : doneComps.length > 0 ? '#1d4ed8' : '#94a3b8';
+
+                  // Group validated competences by their doublure/event
+                  const validationsByDoublure: Map<string | null, CompetenceValidation[]> = new Map();
+                  for (const val of validations.filter((v) => phComps.some((c) => c.id === v.competence_id))) {
+                    const key = val.event_name ?? null;
+                    if (!validationsByDoublure.has(key)) validationsByDoublure.set(key, []);
+                    validationsByDoublure.get(key)!.push(val);
+                  }
+
+                  return (
+                    <div key={phase.id} style={{ position: 'relative', paddingBottom: 18 }}>
+                      {/* timeline node */}
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: -32,
+                          top: 1,
+                          width: 22,
+                          height: 22,
+                          borderRadius: '50%',
+                          background: nodeBg,
+                          border: '2px solid #f1f5f9',
+                          boxShadow: '0 0 0 4px #f1f5f9',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#fff',
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {isComplete ? '✓' : i + 1}
+                      </div>
+
+                      {/* phase card */}
+                      <div
+                        style={{
+                          background: '#fff',
+                          border: `1.5px solid ${cardBorderColor}`,
+                          borderRadius: 16,
+                          boxShadow: '0 1px 3px rgba(15,23,42,.04)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        {/* phase header */}
+                        <div style={{ padding: '15px 18px 14px', borderBottom: '1px solid #eef1f5' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 15.5, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
+                              {phase.provisional ? (
+                                <Pill color="#b45309" bg="#fffbeb" border="#fde68a">Contenu provisoire</Pill>
+                              ) : null}
                             </div>
-                            {phase.sub ? (
-                              <p className="mt-0.5 text-xs text-slate-500">{phase.sub}</p>
-                            ) : null}
+                            <div
+                              style={{ fontSize: 12, fontWeight: 700, color: pillColor, background: pillBg, borderRadius: 6, padding: '2px 9px' }}
+                            >
+                              {doneComps.length}/{phComps.length} compétences
+                            </div>
                           </div>
-                          <div className="text-right text-sm">
-                            <span className="font-semibold text-slate-900">
-                              {doublureCount}/{phase.min_doublures}
-                            </span>
-                            <span className="text-slate-500"> doublures</span>
-                            {phase.require_externe ? (
-                              <Badge variant="pending" >dont 1 externe</Badge>
-                            ) : null}
-                          </div>
+                          {phase.sub ? (
+                            <div style={{ marginTop: 5, fontSize: 13, color: '#64748b' }}>
+                              {phase.sub} · {phDoublures.length}/{phase.min_doublures} doublure{phase.min_doublures > 1 ? 's' : ''}
+                              {phase.require_externe ? ' (dont 1 externe)' : ''}
+                            </div>
+                          ) : null}
                         </div>
 
-                        {/* Progress bar */}
-                        <div className="px-5 py-3">
-                          <div className="mb-1 flex justify-between text-xs text-slate-500">
-                            <span>Compétences validées</span>
-                            <span>
-                              {validated}/{total}
+                        {/* Doublures & événements section */}
+                        <div style={{ padding: '15px 18px 6px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 11 }}>
+                            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                              Doublures &amp; événements
+                            </span>
+                            <span style={{ display: 'inline-flex', gap: 8 }}>
+                              <button
+                                type="button"
+                                onClick={() => openDoublureModal(phase.id)}
+                                style={{ cursor: 'pointer', border: '1px solid #0f172a', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+                              >
+                                Déclarer une doublure
+                              </button>
                             </span>
                           </div>
-                          <ProgressBar value={validated} max={total} />
-                        </div>
 
-                        {/* Competences list */}
-                        {(phase.competences ?? []).length > 0 ? (
-                          <ul className="divide-y divide-slate-100 px-5 pb-3">
-                            {(phase.competences ?? []).map((comp: CursusCompetence) => {
-                              const isDone = validatedCompetenceIds.has(comp.id);
-                              const val = validations.find(
-                                (v) => v.competence_id === comp.id
+                          {/* Events with their competences */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 6 }}>
+                            {phDoublures.map((d) => {
+                              const dVals = validations.filter(
+                                (v) => v.doublure_id === d.id || (d.event_name && v.event_name === d.event_name)
                               );
                               return (
-                                <li key={comp.id} className="flex items-start gap-3 py-2.5">
-                                  <div
-                                    className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-xs ${
-                                      isDone
-                                        ? 'bg-emerald-100 text-emerald-700'
-                                        : 'bg-slate-100 text-slate-400'
-                                    }`}
-                                  >
-                                    {isDone ? '✓' : comp.order_idx + 1}
-                                  </div>
-                                  <div className="flex-1 min-w-0">
-                                    <p className={`text-sm ${isDone ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                                      {comp.name}
-                                      {comp.garde_only ? (
-                                        <span className="ml-1.5 text-xs text-orange-500">(garde)</span>
+                                <div key={d.id} style={{ border: '1px solid #e7e9ee', borderRadius: 13, background: '#fff', overflow: 'hidden' }}>
+                                  {/* event header */}
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 14px', background: '#f8fafc', borderBottom: '1px solid #eef1f5' }}>
+                                    <span style={{ flexShrink: 0, marginTop: 1, width: 26, height: 26, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13 }}>📅</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{d.event_name ?? 'Doublure'}</span>
+                                        {d.is_external ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Externe</Pill> : null}
+                                        {d.mission_id ? <Pill color="#1d4ed8" bg="#eff6ff" border="#bfdbfe">Événement timeline</Pill> : null}
+                                        {d.is_pending ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">En attente</Pill> : null}
+                                        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
+                                      </div>
+                                      {d.event_lieu ? (
+                                        <div style={{ marginTop: 3, fontSize: 12, color: '#94a3b8' }}>{d.event_lieu}</div>
                                       ) : null}
-                                    </p>
-                                    {comp.description ? (
-                                      <p className="mt-0.5 text-xs text-slate-500">{comp.description}</p>
-                                    ) : null}
-                                    {isDone && val ? (
-                                      <p className="mt-0.5 text-xs text-emerald-600">
-                                        Validé le {new Date(val.validated_at).toLocaleDateString('fr-FR')}
-                                        {val.event_name ? ` — ${val.event_name}` : ''}
-                                        {val.supervisor_name ? ` (sup. ${val.supervisor_name})` : ''}
-                                      </p>
-                                    ) : null}
-                                  </div>
-                                  {isDone && val ? (
+                                      {d.supervisor_name ? (
+                                        <div style={{ marginTop: 5, fontSize: 12, color: '#475569' }}>
+                                          Encadré par <strong>{d.supervisor_name}</strong>
+                                          {d.supervisor_antenne ? ` · ${d.supervisor_antenne}` : ''}
+                                        </div>
+                                      ) : null}
+                                    </div>
                                     <button
                                       type="button"
-                                      onClick={() => handleDeleteValidation(val.id)}
-                                      className="shrink-0 text-xs text-slate-400 hover:text-red-500"
-                                      aria-label="Supprimer la validation"
+                                      onClick={() => handleDeleteDoublure(d.id)}
+                                      style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
+                                      aria-label="Supprimer"
                                     >
                                       ✕
                                     </button>
+                                  </div>
+                                  {/* Competences validated at this event */}
+                                  {dVals.map((val) => {
+                                    const comp = allComps.find((c) => c.id === val.competence_id);
+                                    if (!comp) return null;
+                                    return (
+                                      <div
+                                        key={val.id}
+                                        style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 16px 11px 40px', borderTop: '1px solid #f4f6f9', borderLeft: '3px solid #d1fae5' }}
+                                      >
+                                        <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, background: '#059669', color: '#fff', border: '1.5px solid #059669' }}>✓</span>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                            <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{comp.name}</span>
+                                            {comp.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                                          </div>
+                                          {comp.description ? (
+                                            <div style={{ marginTop: 2, fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div>
+                                          ) : null}
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteValidation(val.id)}
+                                          style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit' }}
+                                        >
+                                          Annuler
+                                        </button>
+                                      </div>
+                                    );
+                                  })}
+                                  {dVals.length === 0 ? (
+                                    <div style={{ padding: '11px 14px', fontSize: 12.5, color: '#94a3b8' }}>Aucune compétence validée sur cet événement.</div>
                                   ) : null}
-                                </li>
+                                </div>
                               );
                             })}
-                          </ul>
-                        ) : null}
-                      </div>
-                    );
-                  })}
-                </div>
-              ) : null}
 
-              {/* ── CARNET view ── */}
-              {view === 'carnet' ? (
-                <div className="space-y-3">
-                  {doublures.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-center">
-                      <p className="text-slate-500">Aucune doublure déclarée.</p>
-                    </div>
-                  ) : (
-                    doublures.map((d) => {
-                      const phase = cursusDetail.phases.find((p) => p.id === d.phase_id);
-                      return (
-                        <div
-                          key={d.id}
-                          className="flex items-start gap-4 rounded-xl border border-slate-200 bg-white px-5 py-4"
-                        >
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              {phase ? (
-                                <Badge variant={phase.kind === 'pre' ? 'warning' : 'default'}>
-                                  {phase.label}
-                                </Badge>
-                              ) : null}
-                              {d.is_pending ? <Badge variant="pending">En attente</Badge> : null}
-                              {d.is_external ? <Badge variant="default">Externe</Badge> : null}
-                            </div>
-                            <p className="mt-1 font-medium text-slate-900">
-                              {d.event_name ?? 'Événement sans nom'}
-                            </p>
-                            <p className="text-sm text-slate-500">
-                              {d.event_date
-                                ? new Date(d.event_date).toLocaleDateString('fr-FR')
-                                : 'Date inconnue'}
-                              {d.event_lieu ? ` — ${d.event_lieu}` : ''}
-                            </p>
-                            {d.supervisor_name ? (
-                              <p className="text-xs text-slate-500">
-                                Superviseur : {d.supervisor_name}
-                                {d.supervisor_antenne ? ` (${d.supervisor_antenne})` : ''}
-                              </p>
-                            ) : null}
-                            {d.message ? (
-                              <p className="mt-1 text-xs italic text-slate-500">&ldquo;{d.message}&rdquo;</p>
+                            {phDoublures.length === 0 ? (
+                              <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Aucune doublure déclarée pour l&apos;instant.</div>
                             ) : null}
                           </div>
+                        </div>
+
+                        {/* Compétences à valider */}
+                        {todoComps.length > 0 ? (
+                          <div style={{ padding: '14px 18px 18px' }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
+                              Compétences à valider
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                              {todoComps.map((c) => (
+                                <div
+                                  key={c.id}
+                                  style={{ display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 12, padding: '12px 14px' }}
+                                >
+                                  <span style={{ flexShrink: 0, marginTop: 1, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#f1f5f9', color: '#94a3b8', border: '1.5px solid #e2e8f0' }}>–</span>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                      {c.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                                    </div>
+                                    {c.description ? (
+                                      <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div>
+                                    ) : null}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => openValidationModal(c.id)}
+                                    style={{ flexShrink: 0, cursor: 'pointer', border: '1px solid #059669', background: '#059669', color: '#fff', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                                  >
+                                    Déclarer validée
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {/* ══════════════ CARNET VIEW ══════════════ */}
+            {view === 'carnet' ? (
+              <div>
+                {/* Rules */}
+                {cursusDetail.rules.length > 0 ? (
+                  <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
+                      Règles du cursus de doublure
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '9px 22px' }}>
+                      {cursusDetail.rules.map((r) => (
+                        <div key={r.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 9, fontSize: 13, color: '#475569', lineHeight: 1.45 }}>
+                          <span
+                            style={{ flexShrink: 0, marginTop: 1, width: 17, height: 17, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, background: r.auto ? '#0f172a' : '#e2e8f0', color: r.auto ? '#fff' : '#64748b' }}
+                          >
+                            {r.auto ? '⚡' : '·'}
+                          </span>
+                          <span>{r.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {/* Per-phase carnet */}
+                {cursusDetail.phases.map((phase) => {
+                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id);
+                  const phComps = (phase.competences ?? []) as CursusCompetence[];
+                  const doneComps = phComps.filter((c) => validatedIds.has(c.id));
+                  const isComplete = doneComps.length === phComps.length && phComps.length > 0;
+                  const pillBg = isComplete ? '#d1fae5' : '#f1f5f9';
+                  const pillColor = isComplete ? '#059669' : '#94a3b8';
+
+                  return (
+                    <div
+                      key={phase.id}
+                      style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 1px 3px rgba(15,23,42,.04)', marginBottom: 16, overflow: 'hidden' }}
+                    >
+                      {/* Phase header */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid #eef1f5' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
+                          <span style={{ fontSize: 11.5, fontWeight: 700, color: pillColor, background: pillBg, borderRadius: 6, padding: '2px 8px' }}>
+                            {doneComps.length}/{phComps.length}
+                          </span>
+                          {phase.provisional ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">Provisoire</Pill> : null}
+                        </div>
+                        <span style={{ display: 'inline-flex', gap: 8 }}>
                           <button
                             type="button"
-                            onClick={() => handleDeleteDoublure(d.id)}
-                            className="shrink-0 text-xs text-slate-400 hover:text-red-500"
-                            aria-label="Supprimer la doublure"
+                            onClick={() => openDoublureModal(phase.id)}
+                            style={{ cursor: 'pointer', border: '1px solid #0f172a', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
                           >
-                            ✕
+                            Déclarer une doublure
                           </button>
+                        </span>
+                      </div>
+
+                      {/* Doublures compact */}
+                      {phDoublures.length > 0 ? (
+                        <div style={{ padding: '6px 8px 4px' }}>
+                          {phDoublures.map((d) => (
+                            <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 168px', gap: 14, alignItems: 'start', padding: '10px 12px', borderBottom: '1px solid #f4f6f9' }}>
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{d.event_name ?? 'Doublure'}</span>
+                                  {d.is_external ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Ext.</Pill> : null}
+                                  {d.mission_id ? <Pill color="#1d4ed8" bg="#eff6ff" border="#bfdbfe">Timeline</Pill> : null}
+                                </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                <div style={{ fontSize: 12, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</div>
+                                {d.supervisor_name ? (
+                                  <div style={{ marginTop: 2, fontSize: 12.5, fontWeight: 700, color: '#334155' }}>{d.supervisor_name}</div>
+                                ) : null}
+                              </div>
+                            </div>
+                          ))}
                         </div>
-                      );
-                    })
-                  )}
-                </div>
-              ) : null}
-            </>
-          ) : (
-            <div className="text-center text-slate-500">Sélectionnez un cursus.</div>
-          )}
-        </>
-      )}
+                      ) : null}
+
+                      {/* Competences table */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 230px 188px', gap: 12, padding: '10px 18px', background: '#f8fafc', borderTop: phDoublures.length > 0 ? '1px solid #eef1f5' : 'none', borderBottom: '1px solid #eef1f5', fontSize: 11, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                        <div>Compétence</div>
+                        <div>Événement / lieu</div>
+                        <div>Superviseur</div>
+                      </div>
+                      {phComps.map((c) => {
+                        const val = validations.find((v) => v.competence_id === c.id);
+                        const isDone = validatedIds.has(c.id);
+                        return (
+                          <div
+                            key={c.id}
+                            style={{ display: 'grid', gridTemplateColumns: '1fr 230px 188px', gap: 12, alignItems: 'center', padding: '13px 18px', borderBottom: '1px solid #f1f5f9', background: isDone ? '#f9fffe' : '#fff' }}
+                          >
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                <span
+                                  style={{ flexShrink: 0, width: 20, height: 20, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, background: isDone ? '#059669' : '#f1f5f9', color: isDone ? '#fff' : '#94a3b8', border: `1.5px solid ${isDone ? '#059669' : '#e2e8f0'}` }}
+                                >
+                                  {isDone ? '✓' : '–'}
+                                </span>
+                                <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                {c.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde</Pill> : null}
+                              </div>
+                              {c.description ? (
+                                <div style={{ marginTop: 3, marginLeft: 28, fontSize: 12, color: '#94a3b8', lineHeight: 1.4 }}>{c.description}</div>
+                              ) : null}
+                            </div>
+                            <div style={{ fontSize: 12.5, color: '#475569', lineHeight: 1.4 }}>
+                              {val ? [val.event_name, val.event_lieu].filter(Boolean).join(' · ') || '—' : '—'}
+                            </div>
+                            <div>
+                              {isDone && val ? (
+                                <>
+                                  <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>{val.supervisor_name ?? '—'}</div>
+                                  <div style={{ fontSize: 11.5, color: '#94a3b8' }}>déclarée par moi</div>
+                                </>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => openValidationModal(c.id)}
+                                  style={{ cursor: 'pointer', border: '1px solid #059669', background: '#059669', color: '#fff', borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
+                                >
+                                  Déclarer validée
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })}
+
+                {/* Final sign-off */}
+                {cursusDetail.signoff_role ? (() => {
+                  const allDone = allComps.length > 0 && allComps.every((c) => validatedIds.has(c.id));
+                  return (
+                    <div
+                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: allDone ? '#f0fdf4' : '#f8fafc', border: `1px solid ${allDone ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 14, padding: '15px 18px' }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: allDone ? '#15803d' : '#64748b' }}>
+                          Avis favorable du {cursusDetail.signoff_role}
+                        </div>
+                        <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>
+                          {allDone ? 'Toutes les compétences ont été validées.' : 'En attente de la validation de toutes les compétences.'}
+                        </div>
+                      </div>
+                      <div
+                        style={{ fontSize: 12, fontWeight: 700, color: allDone ? '#059669' : '#94a3b8', background: allDone ? '#d1fae5' : '#f1f5f9', border: `1px solid ${allDone ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 11px', whiteSpace: 'nowrap' }}
+                      >
+                        {allDone ? 'Éligible à la validation' : 'Non éligible'}
+                      </div>
+                    </div>
+                  );
+                })() : null}
+              </div>
+            ) : null}
+          </>
+        ) : null}
 
       {/* ── Enroll modal ── */}
       {enrollModal ? (
-        <Modal title="Rejoindre un cursus" onClose={() => setEnrollModal(false)}>
-          {availableToEnroll.length === 0 ? (
-            <p className="text-sm text-slate-600">Vous êtes déjà inscrit à tous les cursus disponibles.</p>
-          ) : (
-            <ul className="space-y-2">
-              {availableToEnroll.map((c) => (
-                <li key={c.id}>
-                  <button
-                    type="button"
-                    onClick={() => handleEnroll(c.id)}
-                    className="w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-left hover:border-emerald-300 hover:bg-emerald-50"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="rounded bg-slate-100 px-1.5 py-0.5 text-xs font-mono font-semibold text-slate-600">
-                        {c.code}
-                      </span>
-                      <span className="font-medium text-slate-900">{c.name}</span>
-                    </div>
-                    {c.category ? (
-                      <p className="mt-0.5 text-xs text-slate-500">Catégorie : {c.category}</p>
-                    ) : null}
-                  </button>
-                </li>
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}
+          onClick={(e) => { if (e.target === e.currentTarget) setEnrollModal(false); }}
+        >
+          <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>Rejoindre un cursus</div>
+              <button type="button" onClick={() => setEnrollModal(false)} style={{ cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {availableToEnroll.length === 0 ? (
+                <p style={{ fontSize: 13, color: '#64748b' }}>Vous êtes déjà inscrit à tous les cursus disponibles.</p>
+              ) : availableToEnroll.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() => handleEnroll(c.id)}
+                  style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: '12px 14px', fontFamily: 'inherit' }}
+                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#a7f3d0'; (e.currentTarget as HTMLButtonElement).style.background = '#f6fdfa'; }}
+                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 8px' }}>{c.code}</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                  </div>
+                  {c.category ? <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8' }}>{c.category}{c.level ? ` · Niveau ${c.level}` : ''}</div> : null}
+                </button>
               ))}
-            </ul>
-          )}
-        </Modal>
+            </div>
+          </div>
+        </div>
       ) : null}
 
-      {/* ── Declare doublure modal ── */}
-      {doublureModal && cursusDetail ? (
-        <Modal title="Déclarer une doublure" onClose={() => setDoublureModal(false)}>
-          <form onSubmit={handleDoublureSubmit} className="space-y-4">
+      {/* ── Declare modal ── */}
+      {modal ? (
+        <Modal
+          title={modal.kind === 'doublure' ? 'Déclarer une doublure' : 'Valider une compétence'}
+          subtitle={
+            modal.kind === 'validation' && modal.competenceId
+              ? allComps.find((c) => c.id === modal.competenceId)?.name
+              : cursusDetail?.phases.find((p) => p.id === modal.phaseId)?.label
+          }
+          onClose={() => setModal(null)}
+          onSubmit={handleSubmit}
+          submitLabel={submitting ? 'Enregistrement…' : modal.kind === 'doublure' ? 'Déclarer la doublure' : 'Valider la compétence'}
+          submitDisabled={submitting || !isModalSubmittable()}
+        >
+          {modal.kind === 'validation' && !modal.competenceId ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">Phase</label>
+              <FieldLabel>Compétence</FieldLabel>
               <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                value={doublureForm.phase_id}
-                onChange={(e) =>
-                  setDoublureForm((f) => ({ ...f, phase_id: e.target.value }))
-                }
-                required
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
+                value={modal.competenceId ?? ''}
+                onChange={(e) => setModal((m) => m ? { ...m, competenceId: e.target.value } : m)}
               >
-                <option value="">— Choisir une phase —</option>
-                {cursusDetail.phases.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.kind === 'pre' ? 'Pré' : 'Post'} — {p.label}
-                  </option>
+                <option value="">— Choisir —</option>
+                {allComps.filter((c) => !validatedIds.has(c.id)).map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
                 ))}
               </select>
             </div>
+          ) : null}
 
-            <EventFields
-              eventName={doublureForm.event_name}
-              eventDate={doublureForm.event_date}
-              eventLieu={doublureForm.event_lieu}
-              supervisorName={doublureForm.supervisor_name}
-              supervisorAntenne={doublureForm.supervisor_antenne}
-              onChange={(field, value) =>
-                setDoublureForm((f) => ({ ...f, [field]: value }))
-              }
-            />
+          <EventField modal={modal} setModal={setModal as React.Dispatch<React.SetStateAction<ModalState>>} />
+          <SupervisorField modal={modal} setModal={setModal as React.Dispatch<React.SetStateAction<ModalState>>} />
 
-            <div className="flex items-center gap-3">
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300 text-emerald-600"
-                  checked={doublureForm.is_external}
-                  onChange={(e) =>
-                    setDoublureForm((f) => ({ ...f, is_external: e.target.checked }))
-                  }
-                />
-                Antenne externe
-              </label>
-              <label className="flex items-center gap-2 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  className="rounded border-slate-300 text-amber-500"
-                  checked={doublureForm.is_pending}
-                  onChange={(e) =>
-                    setDoublureForm((f) => ({ ...f, is_pending: e.target.checked }))
-                  }
-                />
-                En attente de confirmation
-              </label>
-            </div>
-
+          {modal.kind === 'doublure' ? (
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">
-                Message (optionnel)
-              </label>
+              <FieldLabel>Message (optionnel)</FieldLabel>
               <textarea
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                rows={2}
-                value={doublureForm.message}
-                onChange={(e) =>
-                  setDoublureForm((f) => ({ ...f, message: e.target.value }))
-                }
+                value={modal.message}
+                onChange={(e) => setModal((m) => m ? { ...m, message: e.target.value } : m)}
                 placeholder="Remarques, contexte…"
+                rows={3}
+                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
               />
             </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setDoublureModal(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || !doublureForm.phase_id}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {submitting ? 'Enregistrement…' : 'Déclarer'}
-              </button>
-            </div>
-          </form>
-        </Modal>
-      ) : null}
-
-      {/* ── Validate competence modal ── */}
-      {validationModal && cursusDetail ? (
-        <Modal title="Valider une compétence" onClose={() => setValidationModal(false)}>
-          <form onSubmit={handleValidationSubmit} className="space-y-4">
-            <div>
-              <label className="mb-1 block text-xs font-medium text-slate-700">Compétence</label>
-              <select
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-emerald-500 focus:outline-none"
-                value={validationForm.competence_id}
-                onChange={(e) =>
-                  setValidationForm((f) => ({ ...f, competence_id: e.target.value }))
-                }
-                required
-              >
-                <option value="">— Choisir une compétence —</option>
-                {cursusDetail.phases.flatMap((p) =>
-                  (p.competences ?? []).map((c: CursusCompetence) => (
-                    <option
-                      key={c.id}
-                      value={c.id}
-                      disabled={validatedCompetenceIds.has(c.id)}
-                    >
-                      {validatedCompetenceIds.has(c.id) ? '✓ ' : ''}
-                      [{p.kind === 'pre' ? 'Pré' : 'Post'}] {c.name}
-                    </option>
-                  ))
-                )}
-              </select>
-            </div>
-
-            <EventFields
-              eventName={validationForm.event_name}
-              eventDate={validationForm.event_date}
-              eventLieu={validationForm.event_lieu}
-              supervisorName={validationForm.supervisor_name}
-              supervisorAntenne={validationForm.supervisor_antenne}
-              onChange={(field, value) =>
-                setValidationForm((f) => ({ ...f, [field]: value }))
-              }
-            />
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => setValidationModal(false)}
-                className="rounded-lg border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
-              >
-                Annuler
-              </button>
-              <button
-                type="submit"
-                disabled={submitting || !validationForm.competence_id}
-                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {submitting ? 'Enregistrement…' : 'Valider'}
-              </button>
-            </div>
-          </form>
+          ) : null}
         </Modal>
       ) : null}
     </div>
