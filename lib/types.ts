@@ -243,3 +243,96 @@ export type ActivityAct = {
   missionDate: string;
   hours: number;
 };
+
+// ── Cursus / Doublure system ─────────────────────────────────
+
+export type Cursus = {
+  id: string;
+  code: string;
+  name: string;
+  category: string | null;
+  level: number | null;
+  skill_id: string | null;
+  formation_label: string | null;
+  formation_required: boolean;
+  signoff_role: string;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CursusRule = {
+  id: string;
+  cursus_id: string;
+  text: string;
+  auto: boolean;
+  order_idx: number;
+  created_at: string;
+};
+
+export type CursusPhase = {
+  id: string;
+  cursus_id: string;
+  kind: 'pre' | 'post';
+  label: string;
+  sub: string | null;
+  provisional: boolean;
+  min_doublures: number;
+  require_externe: boolean;
+  order_idx: number;
+  created_at: string;
+  competences?: CursusCompetence[];
+};
+
+export type CursusCompetence = {
+  id: string;
+  phase_id: string;
+  name: string;
+  description: string | null;
+  garde_only: boolean;
+  order_idx: number;
+  created_at: string;
+};
+
+export type VolunteerCursus = {
+  id: string;
+  profile_id: string;
+  cursus_id: string;
+  enrolled_at: string;
+  completed_at: string | null;
+  cursus?: Cursus;
+};
+
+export type Doublure = {
+  id: string;
+  volunteer_cursus_id: string;
+  phase_id: string;
+  mission_id: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  event_lieu: string | null;
+  is_external: boolean;
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  supervisor_antenne: string | null;
+  message: string | null;
+  is_pending: boolean;
+  declared_by: string;
+  created_at: string;
+};
+
+export type CompetenceValidation = {
+  id: string;
+  volunteer_cursus_id: string;
+  competence_id: string;
+  doublure_id: string | null;
+  mission_id: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  event_lieu: string | null;
+  supervisor_id: string | null;
+  supervisor_name: string | null;
+  supervisor_antenne: string | null;
+  declared_by: string;
+  validated_at: string;
+};
