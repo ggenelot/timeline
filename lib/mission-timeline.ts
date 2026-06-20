@@ -1,4 +1,4 @@
-import { MissionProposal } from '@/lib/types';
+import { MissionProposal, MissionStatus } from '@/lib/types';
 
 export type MissionRelation = 'pending' | 'engaged' | 'retenu' | 'declined';
 
@@ -53,6 +53,33 @@ export function missionMonthKey(iso: string): string {
 
 export function missionMonthLabel(iso: string): string {
   return new Date(iso).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+}
+
+// Couleur du nœud de frise pour la vue admin, par statut de mission.
+export const MISSION_STATUS_NODE_COLOR: Record<MissionStatus, string> = {
+  draft: '#f59e0b',
+  proposed: '#2563eb',
+  confirmed: '#059669',
+  closed: '#64748b',
+  cancelled: '#dc2626'
+};
+
+export function groupMissionsByMonth<T extends { starts_at: string }>(
+  items: T[]
+): Array<{ key: string; label: string; missions: T[] }> {
+  const groups: Array<{ key: string; label: string; missions: T[] }> = [];
+  const indexByKey = new Map<string, number>();
+  items.forEach((item) => {
+    const key = missionMonthKey(item.starts_at);
+    let index = indexByKey.get(key);
+    if (index === undefined) {
+      index = groups.length;
+      indexByKey.set(key, index);
+      groups.push({ key, label: missionMonthLabel(item.starts_at), missions: [] });
+    }
+    groups[index].missions.push(item);
+  });
+  return groups;
 }
 
 export function relationForProposal(proposal: MissionProposal | undefined, isRetained: boolean): MissionRelation {

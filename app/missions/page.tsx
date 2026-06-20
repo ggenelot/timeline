@@ -8,11 +8,10 @@ import { MissionTimelineCard } from '@/components/missions/mission-timeline-card
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
-import { MISSION_STATUS_LABELS } from '@/lib/missions';
 import {
+  groupMissionsByMonth,
+  MISSION_STATUS_NODE_COLOR,
   MissionRelation,
-  missionMonthKey,
-  missionMonthLabel,
   relationForProposal,
   resolveMissionTypeColor
 } from '@/lib/mission-timeline';
@@ -26,7 +25,6 @@ type MissionWithRequiredSkills = Mission & {
 type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
 
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
-const STATUS_FILTER_OPTIONS: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
 
 function parseTypeFilter(value: string | null, validIds: string[]): 'all' | string {
   if (value && (value === 'all' || validIds.includes(value))) return value;
@@ -82,6 +80,25 @@ function TimelineNode({ relation, typeColor }: { relation: MissionRelation; type
     <span
       className={`${base} rounded-full`}
       style={{ ...position, width: 14, height: 14, background: typeColor, boxShadow: shadow }}
+    />
+  );
+}
+
+function AdminTimelineNode({ status }: { status: MissionStatus }) {
+  const color = MISSION_STATUS_NODE_COLOR[status];
+  const hollow = status === 'draft' || status === 'cancelled';
+  return (
+    <span
+      className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full"
+      style={{
+        left: 24,
+        top: 28,
+        width: 14,
+        height: 14,
+        background: hollow ? '#f1f5f9' : color,
+        border: hollow ? `2px solid ${color}` : undefined,
+        boxShadow: '0 0 0 4px #f1f5f9'
+      }}
     />
   );
 }
@@ -430,21 +447,9 @@ export default function MissionsPage() {
     [proposedMissions, selectedTypeId, relationByMission, benevoleStatusFilter]
   );
 
-  const monthGroups = useMemo(() => {
-    const groups: Array<{ key: string; label: string; missions: MissionWithRequiredSkills[] }> = [];
-    const indexByKey = new Map<string, number>();
-    benevoleVisibleMissions.forEach((mission) => {
-      const key = missionMonthKey(mission.starts_at);
-      let index = indexByKey.get(key);
-      if (index === undefined) {
-        index = groups.length;
-        indexByKey.set(key, index);
-        groups.push({ key, label: missionMonthLabel(mission.starts_at), missions: [] });
-      }
-      groups[index].missions.push(mission);
-    });
-    return groups;
-  }, [benevoleVisibleMissions]);
+  const monthGroups = useMemo(() => groupMissionsByMonth(benevoleVisibleMissions), [benevoleVisibleMissions]);
+
+  const adminMonthGroups = useMemo(() => groupMissionsByMonth(filteredMissions), [filteredMissions]);
 
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
@@ -601,8 +606,8 @@ export default function MissionsPage() {
                           missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
                           typeColor={typeColor}
                           requiredSkills={mission.mission_required_skills ?? []}
+                          variant="benevole"
                           relation={relation}
-                          currentUserId={profile.id}
                           canPropose
                           availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
                           expanded={Boolean(expanded[mission.id])}
@@ -621,18 +626,34 @@ export default function MissionsPage() {
     );
   }
 
-  // ── Admin : vue liste existante ────────────────────────────────────────────
+  // ── Admin / responsable : frise chronologique (sémantique statut) ──────────
+  const isAdmin = profile?.role === 'admin';
+
+  const adminStatusCards: Array<{ key: 'all' | MissionStatus; label: string; count: number; color: string }> = [
+    { key: 'all', label: 'Toutes', count: missions.length, color: '#0f172a' },
+    { key: 'draft', label: 'Brouillons', count: missionCountsByStatus.draft, color: '#b45309' },
+    { key: 'proposed', label: 'Proposées', count: missionCountsByStatus.proposed, color: '#2563eb' },
+    { key: 'confirmed', label: 'Confirmées', count: missionCountsByStatus.confirmed, color: '#059669' },
+    ...(missionCountsByStatus.closed > 0
+      ? [{ key: 'closed' as MissionStatus, label: 'Clôturées', count: missionCountsByStatus.closed, color: '#64748b' }]
+      : []),
+    ...(missionCountsByStatus.cancelled > 0
+      ? [{ key: 'cancelled' as MissionStatus, label: 'Annulées', count: missionCountsByStatus.cancelled, color: '#dc2626' }]
+      : [])
+  ];
+
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
-            <p className="mt-1 text-sm text-slate-600">
-              Connecté en tant que <span className="font-medium">{profile?.full_name ?? profile?.email ?? 'Utilisateur'}</span> ({profile?.role ?? 'profil incomplet'})
-            </p>
-            <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
-          </div>
+    <div className="mx-auto w-full max-w-[880px]">
+      {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#0f172a]">Missions</h1>
+          <p className="mt-1 text-sm text-[#64748b]">
+            {filteredMissions.length} mission{filteredMissions.length > 1 ? 's' : ''} affichée{filteredMissions.length > 1 ? 's' : ''} sur {missions.length}
+          </p>
+        </div>
+        {isAdmin ? (
           <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
@@ -643,106 +664,113 @@ export default function MissionsPage() {
             </button>
             <NewMissionSplitButton />
           </div>
-        </div>
+        ) : null}
       </div>
 
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="space-y-3">
-          <input
-            type="search"
-            value={searchQuery}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            placeholder="Rechercher une mission"
-            className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
-          />
-          <div className="flex flex-wrap gap-2">
+      {/* Cartes-filtres par statut */}
+      <div className="mt-5 flex flex-wrap gap-3">
+        {adminStatusCards.map((card) => {
+          const active = effectiveSelectedStatus === card.key;
+          return (
             <button
+              key={card.key}
               type="button"
-              onClick={() => updateMainFilters('all', effectiveSelectedStatus)}
-              className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                selectedTypeId === 'all'
-                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              onClick={() => updateMainFilters(selectedTypeId, card.key)}
+              className={`flex-1 basis-[150px] rounded-[14px] bg-white px-4 py-[14px] text-left transition ${
+                active ? 'border-[1.5px] border-[#0f172a] shadow-[0_2px_8px_rgba(15,23,42,0.06)]' : 'border border-[#e7e9ee]'
               }`}
             >
-              Toutes {missions.length}
+              <div className="text-[26px] font-bold leading-none" style={{ color: card.color }}>
+                {card.count}
+              </div>
+              <div className={`mt-1.5 text-[12.5px] font-semibold ${active ? 'text-[#0f172a]' : 'text-[#64748b]'}`}>{card.label}</div>
             </button>
-            {missionTypes.map((mt) => (
-              <button
-                key={mt.id}
-                type="button"
-                onClick={() => updateMainFilters(mt.id, effectiveSelectedStatus)}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                  selectedTypeId === mt.id
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {mt.name} {missionCountsByTypeId[mt.id] ?? 0}
-              </button>
-            ))}
-          </div>
-          <div className="flex flex-wrap gap-2">
+          );
+        })}
+      </div>
+
+      {/* Chips par type */}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => updateMainFilters('all', effectiveSelectedStatus)}
+          className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
+            selectedTypeId === 'all' ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
+          }`}
+        >
+          <span className="h-[7px] w-[7px] rounded-full bg-[#94a3b8]" />
+          Tous les types
+        </button>
+        {missionTypes.map((missionType) => {
+          const active = selectedTypeId === missionType.id;
+          return (
             <button
+              key={missionType.id}
               type="button"
-              onClick={() => updateMainFilters(selectedTypeId, 'all')}
-              className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                effectiveSelectedStatus === 'all'
-                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              onClick={() => updateMainFilters(missionType.id, effectiveSelectedStatus)}
+              className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
+                active ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
               }`}
             >
-              Tous statuts {missions.length}
+              <span className="h-[7px] w-[7px] rounded-full" style={{ background: typeColorById.get(missionType.id) ?? '#64748b' }} />
+              {missionType.name} {missionCountsByTypeId[missionType.id] ?? 0}
             </button>
-            {STATUS_FILTER_OPTIONS.map((status) => (
-              <button
-                key={status}
-                type="button"
-                onClick={() => updateMainFilters(selectedTypeId, status)}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                  effectiveSelectedStatus === status
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                }`}
-              >
-                {MISSION_STATUS_LABELS[status]} {missionCountsByStatus[status]}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
+          );
+        })}
+      </div>
 
-      <div className="space-y-3">
-        {filteredMissions.map((mission) => (
-          <div key={mission.id}>
-            <MissionCard
-              mission={mission}
-              missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
-              requiredSkills={mission.mission_required_skills ?? []}
-              currentUserId={profile?.id ?? ''}
-              canPropose={false}
-              proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
-              canEdit={profile?.role === 'admin' || canManageMissionTypeIds.includes(mission.mission_type_id)}
-              availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
-              unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-              availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
-              onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
-              onResponse={() => void loadData()}
-            />
-          </div>
-        ))}
+      {/* Recherche */}
+      <input
+        type="search"
+        value={searchQuery}
+        onChange={(event) => setSearchQuery(event.target.value)}
+        placeholder="Rechercher une mission"
+        className="mt-3 w-full rounded-full border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+      />
+
+      {/* Frise */}
+      <div className="relative mt-6">
+        <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-[#e3e7ee]" />
 
         {missions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+          <div className="ml-14 rounded-[14px] border border-dashed border-[#cbd5e1] bg-white p-7 text-center text-sm text-[#94a3b8]">
             Aucune mission disponible pour le moment.
           </div>
-        ) : filteredMissions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+        ) : adminMonthGroups.length === 0 ? (
+          <div className="ml-14 rounded-[14px] border border-dashed border-[#cbd5e1] bg-white p-7 text-center text-sm text-[#94a3b8]">
             Aucun résultat avec les filtres sélectionnés.
           </div>
-        ) : null}
+        ) : (
+          adminMonthGroups.map((group) => (
+            <div key={group.key}>
+              <div className="relative py-2 pl-14 text-[12px] font-bold uppercase tracking-[0.14em] text-[#94a3b8]">
+                {capitalize(group.label)}
+              </div>
+              <div className="space-y-4">
+                {group.missions.map((mission) => {
+                  const typeColor = typeColorById.get(mission.mission_type_id) ?? '#64748b';
+                  return (
+                    <div key={mission.id} className="relative pl-14">
+                      <AdminTimelineNode status={mission.status} />
+                      <MissionTimelineCard
+                        mission={mission}
+                        missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
+                        typeColor={typeColor}
+                        requiredSkills={mission.mission_required_skills ?? []}
+                        variant="admin"
+                        canEdit={isAdmin || canManageMissionTypeIds.includes(mission.mission_type_id)}
+                        availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
+                        expanded={Boolean(expanded[mission.id])}
+                        onToggle={() => setExpanded((prev) => ({ ...prev, [mission.id]: !prev[mission.id] }))}
+                        onPublishDraft={isAdmin ? publishDraftMission : undefined}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
