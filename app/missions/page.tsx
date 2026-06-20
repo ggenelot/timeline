@@ -4,16 +4,26 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { MissionCard } from '@/components/missions/mission-card';
+import { MissionTimelineCard } from '@/components/missions/mission-timeline-card';
 import { NewMissionSplitButton } from '@/components/missions/new-mission-split-button';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
 import { MISSION_STATUS_LABELS } from '@/lib/missions';
+import {
+  MissionRelation,
+  missionMonthKey,
+  missionMonthLabel,
+  relationForProposal,
+  resolveMissionTypeColor
+} from '@/lib/mission-timeline';
 
-type MissionType = { id: string; name: string };
+type MissionType = { id: string; name: string; color?: string | null };
 
 type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
 };
+
+type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
 
 const STATUS_FILTER_VALUES: Array<'all' | MissionStatus> = ['all', 'draft', 'proposed', 'closed', 'confirmed', 'cancelled'];
 const STATUS_FILTER_OPTIONS: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
@@ -30,11 +40,58 @@ function parseStatusFilter(value: string | null): 'all' | MissionStatus {
   return 'all';
 }
 
+function capitalize(value: string): string {
+  return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function TimelineNode({ relation, typeColor }: { relation: MissionRelation; typeColor: string }) {
+  const shadow = '0 0 0 4px #f1f5f9';
+  const base = 'absolute -translate-x-1/2 -translate-y-1/2';
+  const position = { left: 24, top: 28 } as const;
+
+  if (relation === 'retenu') {
+    return (
+      <span
+        className={`${base} flex items-center justify-center rounded-full text-[11px] font-bold text-white`}
+        style={{ ...position, width: 20, height: 20, background: '#059669', boxShadow: shadow }}
+      >
+        ✓
+      </span>
+    );
+  }
+
+  if (relation === 'engaged') {
+    return (
+      <span
+        className={`${base} rounded-full bg-white`}
+        style={{ ...position, width: 16, height: 16, border: '3px solid #059669', boxShadow: shadow }}
+      />
+    );
+  }
+
+  if (relation === 'declined') {
+    return (
+      <span
+        className={`${base} rounded-full`}
+        style={{ ...position, width: 14, height: 14, background: '#f1f5f9', border: '2px solid #cbd5e1', boxShadow: shadow }}
+      />
+    );
+  }
+
+  return (
+    <span
+      className={`${base} rounded-full`}
+      style={{ ...position, width: 14, height: 14, background: typeColor, boxShadow: shadow }}
+    />
+  );
+}
+
 export default function MissionsPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [missions, setMissions] = useState<MissionWithRequiredSkills[]>([]);
   const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
+  const [retainedMissionIds, setRetainedMissionIds] = useState<Set<string>>(new Set());
   const [canCreateMissionTypeIds, setCanCreateMissionTypeIds] = useState<string[]>([]);
   const [canManageMissionTypeIds, setCanManageMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<
@@ -51,6 +108,8 @@ export default function MissionsPage() {
   const [loading, setLoading] = useState(true);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [benevoleStatusFilter, setBenevoleStatusFilter] = useState<BenevoleStatusFilter>('all');
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const router = useRouter();
   const pathname = usePathname();
@@ -173,6 +232,20 @@ export default function MissionsPage() {
     const allMissionProposals = proposalData ?? [];
     setProposals(allMissionProposals.filter((proposal) => proposal.volunteer_id === authData.user.id));
 
+    // My retained (selected/confirmed) assignments → "retenu" relation
+    const { data: assignmentData } = await supabase
+      .from('mission_assignments')
+      .select('mission_id,assignment_status')
+      .eq('volunteer_id', authData.user.id);
+
+    setRetainedMissionIds(
+      new Set(
+        (assignmentData ?? [])
+          .filter((row) => row.assignment_status === 'selected' || row.assignment_status === 'confirmed')
+          .map((row) => row.mission_id)
+      )
+    );
+
     const availableVolunteerIds = Array.from(
       new Set(allMissionProposals.filter((proposal) => proposal.response === 'available').map((proposal) => proposal.volunteer_id))
     );
@@ -268,6 +341,11 @@ export default function MissionsPage() {
     [missionTypes]
   );
 
+  const typeColorById = useMemo(
+    () => new Map(missionTypes.map((t) => [t.id, resolveMissionTypeColor(t.name, t.color)])),
+    [missionTypes]
+  );
+
   const missionCountsByStatus = useMemo(
     () =>
       missions.reduce<Record<MissionStatus, number>>(
@@ -306,56 +384,99 @@ export default function MissionsPage() {
 
         return true;
       }),
-    [
-      missions,
-      searchQuery,
-      selectedTypeId,
-      effectiveSelectedStatus
-    ]
+    [missions, searchQuery, selectedTypeId, effectiveSelectedStatus]
   );
 
-  const prioritizedMissions = useMemo(() => {
-    if (profile?.role !== 'benevole') {
-      return { pendingResponse: [] as MissionWithRequiredSkills[], others: filteredMissions };
-    }
+  // ── Bénévole timeline derivations ──────────────────────────────────────────
+  const relationByMission = useMemo(() => {
+    const map = new Map<string, MissionRelation>();
+    missions.forEach((mission) => {
+      map.set(mission.id, relationForProposal(proposalByMission.get(mission.id), retainedMissionIds.has(mission.id)));
+    });
+    return map;
+  }, [missions, proposalByMission, retainedMissionIds]);
 
-    const pendingResponse = filteredMissions.filter((mission) => !proposalByMission.has(mission.id));
-    const others = filteredMissions.filter((mission) => proposalByMission.has(mission.id));
+  const proposedMissions = useMemo(() => missions.filter((mission) => mission.status === 'proposed'), [missions]);
 
-    return { pendingResponse, others };
-  }, [filteredMissions, proposalByMission, profile?.role]);
+  const benevoleCounts = useMemo(() => {
+    const scoped = proposedMissions.filter((mission) => selectedTypeId === 'all' || mission.mission_type_id === selectedTypeId);
+    let pending = 0;
+    let engaged = 0;
+    let retenu = 0;
+    scoped.forEach((mission) => {
+      const relation = relationByMission.get(mission.id) ?? 'pending';
+      if (relation === 'pending') pending += 1;
+      if (relation === 'engaged' || relation === 'retenu') engaged += 1;
+      if (relation === 'retenu') retenu += 1;
+    });
+    return { total: scoped.length, pending, engaged, retenu };
+  }, [proposedMissions, selectedTypeId, relationByMission]);
+
+  const subtitleStats = useMemo(() => {
+    const pending = proposedMissions.filter((mission) => (relationByMission.get(mission.id) ?? 'pending') === 'pending').length;
+    return { total: proposedMissions.length, pending };
+  }, [proposedMissions, relationByMission]);
+
+  const benevoleVisibleMissions = useMemo(
+    () =>
+      proposedMissions.filter((mission) => {
+        if (selectedTypeId !== 'all' && mission.mission_type_id !== selectedTypeId) return false;
+        const relation = relationByMission.get(mission.id) ?? 'pending';
+        if (benevoleStatusFilter === 'pending') return relation === 'pending';
+        if (benevoleStatusFilter === 'engaged') return relation === 'engaged' || relation === 'retenu';
+        if (benevoleStatusFilter === 'retenu') return relation === 'retenu';
+        return true;
+      }),
+    [proposedMissions, selectedTypeId, relationByMission, benevoleStatusFilter]
+  );
+
+  const monthGroups = useMemo(() => {
+    const groups: Array<{ key: string; label: string; missions: MissionWithRequiredSkills[] }> = [];
+    const indexByKey = new Map<string, number>();
+    benevoleVisibleMissions.forEach((mission) => {
+      const key = missionMonthKey(mission.starts_at);
+      let index = indexByKey.get(key);
+      if (index === undefined) {
+        index = groups.length;
+        indexByKey.set(key, index);
+        groups.push({ key, label: missionMonthLabel(mission.starts_at), missions: [] });
+      }
+      groups[index].missions.push(mission);
+    });
+    return groups;
+  }, [benevoleVisibleMissions]);
 
   if (loading) {
     return <p className="text-sm text-slate-600">Chargement des missions...</p>;
   }
 
-  return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+  // ── Bénévole : vue frise chronologique ─────────────────────────────────────
+  if (profile?.role === 'benevole') {
+    const today = new Date();
+    const todayLabel = today.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' });
+
+    const draftProposals = missions.filter((mission) => mission.status === 'draft' && mission.created_by === profile.id);
+
+    const filterCards: Array<{ key: BenevoleStatusFilter; label: string; count: number; color: string }> = [
+      { key: 'all', label: 'Toutes', count: benevoleCounts.total, color: '#0f172a' },
+      { key: 'pending', label: 'Réponses en attente', count: benevoleCounts.pending, color: '#b45309' },
+      { key: 'engaged', label: 'Mes engagements', count: benevoleCounts.engaged, color: '#047857' },
+      { key: 'retenu', label: 'Mes missions', count: benevoleCounts.retenu, color: '#059669' }
+    ];
+
+    return (
+      <div className="mx-auto w-full max-w-[880px]">
+        {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
-            {profile?.role === 'admin' ? (
-              <>
-                <p className="mt-1 text-sm text-slate-600">
-                  Connecté en tant que <span className="font-medium">{profile?.full_name ?? profile?.email ?? 'Utilisateur'}</span> ({profile?.role ?? 'profil incomplet'})
-                </p>
-                <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
-              </>
-            ) : null}
+            <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#0f172a]">Missions</h1>
+            <p className="mt-1 text-sm text-[#64748b]">
+              {subtitleStats.total} mission{subtitleStats.total > 1 ? 's' : ''} proposée{subtitleStats.total > 1 ? 's' : ''} ·{' '}
+              {subtitleStats.pending} en attente de votre réponse
+            </p>
           </div>
-          {profile?.role === 'admin' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <button
-                type="button"
-                onClick={() => router.push('/admin/missions/import')}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Importer des missions
-              </button>
-              <NewMissionSplitButton />
-            </div>
-          ) : profile?.role === 'benevole' && canCreateMissionTypeIds.length > 0 ? (
+          {canCreateMissionTypeIds.length > 0 ? (
             <button
               type="button"
               onClick={() => router.push('/missions/create')}
@@ -364,6 +485,164 @@ export default function MissionsPage() {
               Proposer une mission
             </button>
           ) : null}
+        </div>
+
+        {/* Cartes-filtres */}
+        <div className="mt-5 flex flex-wrap gap-3">
+          {filterCards.map((card) => {
+            const active = benevoleStatusFilter === card.key;
+            return (
+              <button
+                key={card.key}
+                type="button"
+                onClick={() => setBenevoleStatusFilter(card.key)}
+                className={`flex-1 basis-[160px] rounded-[14px] bg-white px-4 py-[14px] text-left transition ${
+                  active
+                    ? 'border-[1.5px] border-[#0f172a] shadow-[0_2px_8px_rgba(15,23,42,0.06)]'
+                    : 'border border-[#e7e9ee]'
+                }`}
+              >
+                <div className="text-[26px] font-bold leading-none" style={{ color: card.color }}>
+                  {card.count}
+                </div>
+                <div className={`mt-1.5 text-[12.5px] font-semibold ${active ? 'text-[#0f172a]' : 'text-[#64748b]'}`}>{card.label}</div>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Chips par type */}
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => updateMainFilters('all', 'all')}
+            className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
+              selectedTypeId === 'all' ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
+            }`}
+          >
+            <span className="h-[7px] w-[7px] rounded-full bg-[#94a3b8]" />
+            Tous les types
+          </button>
+          {missionTypes.map((missionType) => {
+            const active = selectedTypeId === missionType.id;
+            return (
+              <button
+                key={missionType.id}
+                type="button"
+                onClick={() => updateMainFilters(missionType.id, 'all')}
+                className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
+                  active ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
+                }`}
+              >
+                <span className="h-[7px] w-[7px] rounded-full" style={{ background: typeColorById.get(missionType.id) ?? '#64748b' }} />
+                {missionType.name}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Brouillons proposés par le bénévole (en attente de validation) */}
+        {draftProposals.length > 0 ? (
+          <section className="mt-5 space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
+            <h2 className="text-sm font-semibold text-amber-900">Mes propositions en attente de validation ({draftProposals.length})</h2>
+            {draftProposals.map((mission) => (
+              <MissionCard
+                key={mission.id}
+                mission={mission}
+                missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
+                requiredSkills={mission.mission_required_skills ?? []}
+                currentUserId={profile.id}
+                canPropose={false}
+                proposalResponse={null}
+                canEdit={false}
+                availableVolunteersCount={0}
+                unavailableVolunteersCount={0}
+                availableVolunteers={[]}
+              />
+            ))}
+          </section>
+        ) : null}
+
+        {/* Frise */}
+        <div className="relative mt-6">
+          <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-[#e3e7ee]" />
+
+          {/* Repère Aujourd'hui */}
+          <div className="relative pb-6 pl-14">
+            <span
+              className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f1f5f9]"
+              style={{ left: 24, top: 11, width: 12, height: 12, border: '2px solid #94a3b8' }}
+            />
+            <div className="flex flex-wrap items-baseline gap-2">
+              <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#94a3b8]">Aujourd&apos;hui</span>
+              <span className="text-[13px] text-[#94a3b8]">{todayLabel}</span>
+            </div>
+          </div>
+
+          {monthGroups.length === 0 ? (
+            <div className="ml-14 rounded-[14px] border border-dashed border-[#cbd5e1] bg-white p-7 text-center text-sm text-[#94a3b8]">
+              Aucune mission dans cette catégorie.
+            </div>
+          ) : (
+            monthGroups.map((group) => (
+              <div key={group.key}>
+                <div className="relative py-2 pl-14 text-[12px] font-bold uppercase tracking-[0.14em] text-[#94a3b8]">
+                  {capitalize(group.label)}
+                </div>
+                <div className="space-y-4">
+                  {group.missions.map((mission) => {
+                    const relation = relationByMission.get(mission.id) ?? 'pending';
+                    const typeColor = typeColorById.get(mission.mission_type_id) ?? '#64748b';
+                    return (
+                      <div key={mission.id} className="relative pl-14">
+                        <TimelineNode relation={relation} typeColor={typeColor} />
+                        <MissionTimelineCard
+                          mission={mission}
+                          missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
+                          typeColor={typeColor}
+                          requiredSkills={mission.mission_required_skills ?? []}
+                          relation={relation}
+                          currentUserId={profile.id}
+                          canPropose
+                          availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
+                          expanded={Boolean(expanded[mission.id])}
+                          onToggle={() => setExpanded((prev) => ({ ...prev, [mission.id]: !prev[mission.id] }))}
+                          onResponse={() => void loadData()}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── Admin : vue liste existante ────────────────────────────────────────────
+  return (
+    <div className="space-y-6">
+      <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-semibold text-slate-900">Missions</h1>
+            <p className="mt-1 text-sm text-slate-600">
+              Connecté en tant que <span className="font-medium">{profile?.full_name ?? profile?.email ?? 'Utilisateur'}</span> ({profile?.role ?? 'profil incomplet'})
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{filteredMissions.length} mission(s) affichée(s) / {missions.length}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => router.push('/admin/missions/import')}
+              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Importer des missions
+            </button>
+            <NewMissionSplitButton />
+          </div>
         </div>
       </div>
 
@@ -405,96 +684,45 @@ export default function MissionsPage() {
               </button>
             ))}
           </div>
-          {profile?.role === 'admin' ? (
-            <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => updateMainFilters(selectedTypeId, 'all')}
+              className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                effectiveSelectedStatus === 'all'
+                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
+                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+              }`}
+            >
+              Tous statuts {missions.length}
+            </button>
+            {STATUS_FILTER_OPTIONS.map((status) => (
               <button
+                key={status}
                 type="button"
-                onClick={() => updateMainFilters(selectedTypeId, 'all')}
+                onClick={() => updateMainFilters(selectedTypeId, status)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                  effectiveSelectedStatus === 'all'
+                  effectiveSelectedStatus === status
                     ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
                     : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
                 }`}
               >
-                Tous statuts {missions.length}
+                {MISSION_STATUS_LABELS[status]} {missionCountsByStatus[status]}
               </button>
-              {STATUS_FILTER_OPTIONS.map((status) => (
-                <button
-                  key={status}
-                  type="button"
-                  onClick={() => updateMainFilters(selectedTypeId, status)}
-                  className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                    effectiveSelectedStatus === status
-                      ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                      : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                  }`}
-                >
-                  {MISSION_STATUS_LABELS[status]} {missionCountsByStatus[status]}
-                </button>
-              ))}
-            </div>
-          ) : null}
+            ))}
+          </div>
         </div>
       </section>
 
       <div className="space-y-3">
-        {/* Draft missions created by this volunteer — awaiting admin validation */}
-        {profile?.role === 'benevole' && missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).length > 0 ? (
-          <section className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-            <h2 className="text-sm font-semibold text-amber-900">
-              Mes propositions en attente de validation ({missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).length})
-            </h2>
-            {missions.filter((m) => m.status === 'draft' && m.created_by === profile.id).map((mission) => (
-              <div key={mission.id}>
-                <MissionCard
-                  mission={mission}
-                  missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
-                  requiredSkills={mission.mission_required_skills ?? []}
-                  currentUserId={profile.id}
-                  canPropose={false}
-                  proposalResponse={null}
-                  canEdit={false}
-                  availableVolunteersCount={0}
-                  unavailableVolunteersCount={0}
-                  availableVolunteers={[]}
-                />
-              </div>
-            ))}
-          </section>
-        ) : null}
-
-        {profile?.role === 'benevole' && prioritizedMissions.pendingResponse.length > 0 ? (
-          <section className="space-y-2 rounded-lg border border-emerald-200 bg-emerald-50/40 p-3">
-            <h2 className="text-sm font-semibold text-emerald-900">Nouvelles missions ({prioritizedMissions.pendingResponse.length})</h2>
-            {prioritizedMissions.pendingResponse.map((mission) => (
-              <div key={mission.id}>
-                <MissionCard
-                  mission={mission}
-                  missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
-                  requiredSkills={mission.mission_required_skills ?? []}
-                  currentUserId={profile?.id ?? ''}
-                  canPropose={profile?.role === 'benevole'}
-                  proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
-                  canEdit={profile?.role === 'admin' || canManageMissionTypeIds.includes(mission.mission_type_id)}
-                  availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}
-                  unavailableVolunteersCount={proposalStatsByMission.get(mission.id)?.unavailableCount ?? 0}
-                  availableVolunteers={proposalStatsByMission.get(mission.id)?.availableVolunteers ?? []}
-                  onPublishDraft={profile?.role === 'admin' ? publishDraftMission : undefined}
-                  onResponse={() => void loadData()}
-                />
-              </div>
-            ))}
-          </section>
-        ) : null}
-
-        {(profile?.role === 'benevole' ? prioritizedMissions.others : filteredMissions).map((mission) => (
+        {filteredMissions.map((mission) => (
           <div key={mission.id}>
             <MissionCard
               mission={mission}
               missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
               requiredSkills={mission.mission_required_skills ?? []}
               currentUserId={profile?.id ?? ''}
-              canPropose={profile?.role === 'benevole'}
+              canPropose={false}
               proposalResponse={proposalByMission.get(mission.id)?.response ?? null}
               canEdit={profile?.role === 'admin' || canManageMissionTypeIds.includes(mission.mission_type_id)}
               availableVolunteersCount={proposalStatsByMission.get(mission.id)?.availableCount ?? 0}

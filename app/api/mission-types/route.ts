@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('mission_types')
-    .select('id,name,default_required_volunteers,default_start_time,default_end_time')
+    .select('id,name,color,default_required_volunteers,default_start_time,default_end_time')
     .order('name', { ascending: true });
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
