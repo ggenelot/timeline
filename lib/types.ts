@@ -233,3 +233,13 @@ export type ProfileRole = {
   role_id: string;
   created_at: string;
 };
+
+export type ActivityAct = {
+  profileId: string;
+  profileName: string;
+  typeName: string;
+  missionId: string;
+  missionTitle: string;
+  missionDate: string;
+  hours: number;
+};

@@ -9,6 +9,7 @@ import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { supabase } from '@/lib/supabase/client';
 import {
+  ActivityAct,
   ActivityLog,
   getMissionCategory,
   MISSION_CATEGORY_LABELS,
@@ -22,6 +23,8 @@ import {
   RoleBehavior
 } from '@/lib/types';
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
+import { getCandidateActivity } from '@/lib/queries/activity';
+import { MissionActivityPanel } from '@/components/activity/MissionActivityPanel';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -126,6 +129,8 @@ export default function MissionDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [canManageByRole, setCanManageByRole] = useState(false);
+  const [activityActs, setActivityActs] = useState<ActivityAct[]>([]);
+  const [isActivityExpanded, setIsActivityExpanded] = useState(false);
 
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
 
@@ -601,6 +606,15 @@ export default function MissionDetailPage() {
         })
     );
     setVolunteerActivityStats(Object.fromEntries(assignmentRows));
+
+    if (profileData.role === 'admin' || profileData.role === 'responsable') {
+      try {
+        const acts = await getCandidateActivity(missionId);
+        setActivityActs(acts);
+      } catch {
+        // activité non critique, on ne bloque pas le chargement
+      }
+    }
 
     if (profileData.role === 'admin') {
       await loadAdminVolunteerDirectory(missionId);
@@ -1339,6 +1353,31 @@ export default function MissionDetailPage() {
           </div>
         ) : null}
       </section>
+
+      {canManageMission ? (
+        <section className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-lg font-semibold text-slate-900">Activité des bénévoles</h2>
+            <button
+              type="button"
+              aria-expanded={isActivityExpanded}
+              aria-controls="mission-activity-content"
+              aria-label={isActivityExpanded ? "Masquer l'activité des bénévoles" : "Afficher l'activité des bénévoles"}
+              onClick={() => setIsActivityExpanded((current) => !current)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            >
+              <span className={`text-base leading-none transition-transform ${isActivityExpanded ? 'rotate-180' : ''}`}>▾</span>
+            </button>
+          </div>
+          <p className="mt-1 text-sm text-slate-600">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles — seuil 72 h.</p>
+
+          {isActivityExpanded ? (
+            <div id="mission-activity-content" className="mt-4">
+              <MissionActivityPanel acts={activityActs} />
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex items-center justify-between gap-3">
