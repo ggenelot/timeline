@@ -193,7 +193,7 @@ export async function deleteCursusRule(id: string): Promise<void> {
 }
 
 export async function upsertCursusPhase(
-  payload: Partial<CursusPhase> & { cursus_id: string; kind: 'pre' | 'post'; label: string }
+  payload: Partial<CursusPhase> & { cursus_id: string; label: string }
 ): Promise<CursusPhase> {
   const { competences: _c, ...rest } = payload as CursusPhase & {
     competences?: unknown;
@@ -205,6 +205,23 @@ export async function upsertCursusPhase(
     .single();
   if (error) throw error;
   return data;
+}
+
+export async function deleteCursusPhase(id: string): Promise<void> {
+  const { error } = await supabase.from('cursus_phases').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function reorderCursusPhases(
+  phases: Array<{ id: string; order_idx: number }>
+): Promise<void> {
+  const results = await Promise.all(
+    phases.map((p) =>
+      supabase.from('cursus_phases').update({ order_idx: p.order_idx }).eq('id', p.id)
+    )
+  );
+  const failure = results.find((res) => res.error);
+  if (failure?.error) throw failure.error;
 }
 
 export async function upsertCursusCompetence(

@@ -32,9 +32,11 @@ import {
   deleteCursus,
   reorderCursusRules,
   reorderCursusCompetences,
+  reorderCursusPhases,
   upsertCursusRule,
   deleteCursusRule,
   upsertCursusPhase,
+  deleteCursusPhase,
   upsertCursusCompetence,
   deleteCursusCompetence,
 } from '@/lib/queries/cursus';
@@ -67,6 +69,14 @@ type CompModal = {
   name: string;
   description: string;
   gardeOnly: boolean;
+};
+
+type PhaseModal = {
+  phaseId?: string;
+  label: string;
+  sub: string;
+  minDoublures: number;
+  minExterne: number;
 };
 
 // ── Toggle switch ─────────────────────────────────────────────
@@ -125,29 +135,6 @@ function DragHandle({
       style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
     >
       ⠿⠿
-    </span>
-  );
-}
-
-// ── Phase pill ─────────────────────────────────────────────────
-
-function PhasePill({ kind }: { kind: 'pre' | 'post' }) {
-  const isPre = kind === 'pre';
-  return (
-    <span
-      style={{
-        fontSize: 11,
-        fontWeight: 800,
-        letterSpacing: '.06em',
-        textTransform: 'uppercase' as const,
-        color: isPre ? '#b45309' : '#1d4ed8',
-        background: isPre ? '#fffbeb' : '#eff6ff',
-        border: `1px solid ${isPre ? '#fde68a' : '#bfdbfe'}`,
-        borderRadius: 6,
-        padding: '3px 9px',
-      }}
-    >
-      {isPre ? 'PRÉ-DOUBLURE' : 'POST-DOUBLURE'}
     </span>
   );
 }
@@ -400,6 +387,110 @@ function SortableCompetenceRow({
   );
 }
 
+// ── Sortable phase card ───────────────────────────────────────
+
+function SortablePhaseCard({
+  phase,
+  index,
+  sensors,
+  onEditPhase,
+  onDeletePhase,
+  onCompDragEnd,
+  onAddComp,
+  onEditComp,
+  onRemoveComp,
+}: {
+  phase: CursusPhase;
+  index: number;
+  sensors: ReturnType<typeof useSensors>;
+  onEditPhase: () => void;
+  onDeletePhase: () => void;
+  onCompDragEnd: (event: DragEndEvent) => void;
+  onAddComp: () => void;
+  onEditComp: (comp: CursusCompetence) => void;
+  onRemoveComp: (compId: string) => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: phase.id });
+  const comps = (phase.competences ?? []) as CursusCompetence[];
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        background: '#fff',
+        border: '1px solid #e7e9ee',
+        borderRadius: 16,
+        boxShadow: isDragging ? '0 12px 30px rgba(15,23,42,.16)' : '0 2px 10px rgba(15,23,42,.05)',
+        marginBottom: 16,
+        overflow: 'hidden',
+        opacity: isDragging ? 0.85 : 1,
+        zIndex: isDragging ? 5 : 'auto',
+        position: 'relative',
+      }}
+    >
+      {/* Phase header */}
+      <div style={{ padding: '16px 22px 15px', borderBottom: '1px solid #eef1f5' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}>
+          <DragHandle attributes={attributes} listeners={listeners} />
+          <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#0f172a', color: '#fff' }}>
+            {index + 1}
+          </span>
+          <span style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
+          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>
+              {comps.length} compétence{comps.length !== 1 ? 's' : ''}
+            </span>
+            <button type="button" onClick={onEditPhase}
+              style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+              Modifier
+            </button>
+            <button type="button" onClick={onDeletePhase} aria-label="Supprimer la phase"
+              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+          </span>
+        </div>
+        {phase.sub ? (
+          <div style={{ marginTop: 9, fontSize: 12.5, color: '#64748b', lineHeight: 1.5 }}>{phase.sub}</div>
+        ) : null}
+        {/* Doublure requirements summary */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: '4px 10px' }}>
+            {phase.min_doublures} doublure{phase.min_doublures !== 1 ? 's' : ''} min.
+          </span>
+          {phase.min_externe > 0 ? (
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '4px 10px' }}>
+              dont {phase.min_externe} extérieure{phase.min_externe !== 1 ? 's' : ''}
+            </span>
+          ) : null}
+        </div>
+      </div>
+
+      {/* Competences */}
+      <div style={{ padding: '14px 22px 18px' }}>
+        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
+          Compétences à valider
+        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onCompDragEnd}>
+          <SortableContext items={comps.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {comps.length === 0 ? (
+                <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
+              ) : comps.map((c) => (
+                <SortableCompetenceRow key={c.id} comp={c} onEdit={() => onEditComp(c)} onRemove={() => onRemoveComp(c.id)} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
+        <button type="button" onClick={onAddComp}
+          style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+          + Ajouter une compétence
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────
 
 export default function AdminCursusPage() {
@@ -421,6 +512,8 @@ export default function AdminCursusPage() {
   const [deletingCursus, setDeletingCursus] = useState(false);
   const [compModal, setCompModal] = useState<CompModal | null>(null);
   const [savingComp, setSavingComp] = useState(false);
+  const [phaseModal, setPhaseModal] = useState<PhaseModal | null>(null);
+  const [savingPhase, setSavingPhase] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -489,10 +582,8 @@ export default function AdminCursusPage() {
     setCreating(true);
     try {
       const created = await upsertCursus({ ...deriveFromSkill(newSkill), signoff_role: 'Président-Délégué' });
-      const prePh = await upsertCursusPhase({ cursus_id: created.id, kind: 'pre', label: 'Pré-doublure', order_idx: 0 });
-      const postPh = await upsertCursusPhase({ cursus_id: created.id, kind: 'post', label: 'Post-doublure', order_idx: 1 });
       setAllCursus((prev) => [...prev, created]);
-      setDetail({ ...created, rules: [], phases: [{ ...prePh, competences: [] }, { ...postPh, competences: [] }] });
+      setDetail({ ...created, rules: [], phases: [] });
       setSelectedId(created.id);
       setShowNewModal(false);
       setNewSkill(null);
@@ -592,24 +683,73 @@ export default function AdminCursusPage() {
     }
   }
 
-  async function setPhaseMinDoublures(phase: CursusPhase, val: number) {
-    if (!detail) return;
-    const cappedExterne = Math.min(phase.min_externe, val);
-    const updated = await upsertCursusPhase({ ...phase, min_doublures: val, min_externe: cappedExterne, cursus_id: detail.id });
-    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
+  function openAddPhase() {
+    setPhaseModal({ label: '', sub: '', minDoublures: 1, minExterne: 0 });
   }
 
-  async function setPhaseMinExterne(phase: CursusPhase, val: number) {
-    if (!detail) return;
-    const updated = await upsertCursusPhase({ ...phase, min_externe: val, cursus_id: detail.id });
-    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
+  function openEditPhase(phase: CursusPhase) {
+    setPhaseModal({ phaseId: phase.id, label: phase.label, sub: phase.sub ?? '', minDoublures: phase.min_doublures, minExterne: phase.min_externe });
   }
 
-  async function addPhase(kind: 'pre' | 'post') {
+  async function submitPhase() {
+    if (!phaseModal || !phaseModal.label.trim() || !detail) return;
+    setSavingPhase(true);
+    try {
+      const existing = phaseModal.phaseId ? detail.phases.find((p) => p.id === phaseModal.phaseId) : undefined;
+      const minExterne = Math.min(phaseModal.minExterne, phaseModal.minDoublures);
+      const saved = await upsertCursusPhase({
+        ...(phaseModal.phaseId ? { id: phaseModal.phaseId } : {}),
+        cursus_id: detail.id,
+        label: phaseModal.label.trim(),
+        sub: phaseModal.sub.trim() || null,
+        min_doublures: phaseModal.minDoublures,
+        min_externe: minExterne,
+        order_idx: existing?.order_idx ?? detail.phases.length,
+      });
+      setDetail((d) => {
+        if (!d) return d;
+        if (phaseModal.phaseId) {
+          return { ...d, phases: d.phases.map((p) => p.id === phaseModal.phaseId ? { ...saved, competences: p.competences } : p) };
+        }
+        return { ...d, phases: [...d.phases, { ...saved, competences: [] }] };
+      });
+      setPhaseModal(null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSavingPhase(false);
+    }
+  }
+
+  async function deletePhase(phase: CursusPhase) {
     if (!detail) return;
-    const label = kind === 'pre' ? 'Pré-doublure' : 'Post-doublure';
-    const created = await upsertCursusPhase({ cursus_id: detail.id, kind, label, order_idx: detail.phases.filter((p) => p.kind === kind).length });
-    setDetail((d) => d ? { ...d, phases: [...d.phases, { ...created, competences: [] }] } : d);
+    const compCount = phase.competences?.length ?? 0;
+    const warning = compCount > 0
+      ? `Supprimer la phase « ${phase.label} » et ses ${compCount} compétence${compCount !== 1 ? 's' : ''} ? Cette action est irréversible.`
+      : `Supprimer la phase « ${phase.label} » ?`;
+    if (!window.confirm(warning)) return;
+    try {
+      await deleteCursusPhase(phase.id);
+      setDetail((d) => d ? { ...d, phases: d.phases.filter((p) => p.id !== phase.id) } : d);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handlePhaseDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id || !detail) return;
+    const ordered = [...detail.phases].sort((a, b) => a.order_idx - b.order_idx);
+    const oldIndex = ordered.findIndex((p) => p.id === active.id);
+    const newIndex = ordered.findIndex((p) => p.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(ordered, oldIndex, newIndex).map((p, i) => ({ ...p, order_idx: i }));
+    setDetail((d) => d ? { ...d, phases: next } : d);
+    try {
+      await reorderCursusPhases(next.map((p) => ({ id: p.id, order_idx: p.order_idx })));
+    } catch (e) {
+      setError((e as Error).message);
+    }
   }
 
   async function saveSignoff(role: string) {
@@ -671,11 +811,7 @@ export default function AdminCursusPage() {
     );
   }
 
-  const sortedPhases = [...(detail?.phases ?? [])].sort((a, b) => a.order_idx - b.order_idx);
-  const orderedPhases = [
-    ...sortedPhases.filter((p) => p.kind === 'pre'),
-    ...sortedPhases.filter((p) => p.kind === 'post'),
-  ];
+  const orderedPhases = [...(detail?.phases ?? [])].sort((a, b) => a.order_idx - b.order_idx);
 
   return (
     <div style={{ paddingBottom: 80 }}>
@@ -686,7 +822,7 @@ export default function AdminCursusPage() {
           Cursus de doublure
         </h1>
         <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Définissez les cursus, leurs règles, le nombre de doublures requises et les compétences à valider en pré-doublure et en post-doublure. L&apos;ordre des compétences détermine leur niveau dans la fiche.
+          Définissez les cursus, leurs règles, puis composez librement leurs phases : nom, description, doublures requises et compétences à valider. L&apos;ordre des phases et des compétences détermine leur progression dans la fiche.
         </p>
       </div>
 
@@ -781,69 +917,43 @@ export default function AdminCursusPage() {
           </div>
 
           {/* ── Phases ── */}
-          {orderedPhases.map((phase) => {
-            const comps = (phase.competences ?? []) as CursusCompetence[];
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 }}>
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+              Phases du cursus
+            </span>
+            <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Glissez les phases <strong>⠿⠿</strong> pour changer leur ordre</span>
+          </div>
 
-            return (
-              <div key={phase.id}>
-                <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', marginBottom: 16, overflow: 'hidden' }}>
-                  {/* Phase header */}
-                  <div style={{ padding: '16px 22px 15px', borderBottom: '1px solid #eef1f5' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                      <PhasePill kind={phase.kind} />
-                      <span style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
-                      <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: '#64748b' }}>
-                        {comps.length} compétence{comps.length !== 1 ? 's' : ''}
-                      </span>
-                    </div>
-                    {/* Config row */}
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap', marginTop: 14 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nombre minimum de doublures</span>
-                        <Stepper value={phase.min_doublures} onChange={(v) => setPhaseMinDoublures(phase, v)} />
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>dont extérieure</span>
-                        <Stepper value={phase.min_externe} onChange={(v) => setPhaseMinExterne(phase, v)} max={phase.min_doublures} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Competences */}
-                  <div style={{ padding: '14px 22px 18px' }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
-                      Compétences à valider
-                    </div>
-                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCompDragEnd(phase.id, e)}>
-                      <SortableContext items={comps.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                          {comps.length === 0 ? (
-                            <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
-                          ) : comps.map((c) => (
-                            <SortableCompetenceRow key={c.id} comp={c} onEdit={() => openEditComp(phase.id, c)} onRemove={() => deleteComp(phase.id, c.id)} />
-                          ))}
-                        </div>
-                      </SortableContext>
-                    </DndContext>
-                    <button type="button" onClick={() => openAddComp(phase.id)}
-                      style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
-                      + Ajouter une compétence
-                    </button>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {orderedPhases.length === 0 ? (
+            <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
+              <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucune phase pour l&apos;instant. Ajoutez-en une pour commencer.</p>
+            </div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhaseDragEnd}>
+              <SortableContext items={orderedPhases.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+                {orderedPhases.map((phase, index) => (
+                  <SortablePhaseCard
+                    key={phase.id}
+                    phase={phase}
+                    index={index}
+                    sensors={sensors}
+                    onEditPhase={() => openEditPhase(phase)}
+                    onDeletePhase={() => deletePhase(phase)}
+                    onCompDragEnd={(e) => handleCompDragEnd(phase.id, e)}
+                    onAddComp={() => openAddComp(phase.id)}
+                    onEditComp={(c) => openEditComp(phase.id, c)}
+                    onRemoveComp={(compId) => deleteComp(phase.id, compId)}
+                  />
+                ))}
+              </SortableContext>
+            </DndContext>
+          )}
 
           {/* Add phase */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-            <button type="button" onClick={() => addPhase('pre')}
-              style={{ cursor: 'pointer', border: '1px dashed #fde68a', background: '#fffbeb', color: '#b45309', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-              + Pré-doublure
-            </button>
-            <button type="button" onClick={() => addPhase('post')}
-              style={{ cursor: 'pointer', border: '1px dashed #bfdbfe', background: '#eff6ff', color: '#1d4ed8', borderRadius: 10, padding: '9px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-              + Post-doublure
+          <div style={{ marginBottom: 16 }}>
+            <button type="button" onClick={openAddPhase}
+              style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+              + Nouvelle phase
             </button>
           </div>
 
@@ -910,6 +1020,37 @@ export default function AdminCursusPage() {
               <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Validable en garde uniquement</div>
               <div style={{ fontSize: 12, color: '#94a3b8' }}>Ne peut être validée que sur un événement de type Garde.</div>
             </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {/* ── Phase modal ── */}
+      {phaseModal ? (
+        <Modal
+          title={phaseModal.phaseId ? 'Modifier la phase' : 'Nouvelle phase'}
+          subtitle="Une phase regroupe des doublures à réaliser et des compétences à valider."
+          onClose={() => setPhaseModal(null)}
+          onSubmit={submitPhase}
+          submitLabel={savingPhase ? 'Enregistrement…' : phaseModal.phaseId ? 'Enregistrer' : 'Ajouter la phase'}
+          submitDisabled={savingPhase || !phaseModal.label.trim()}
+        >
+          <div>
+            <FieldLabel>Nom de la phase</FieldLabel>
+            <input value={phaseModal.label} onChange={(e) => setPhaseModal((m) => m ? { ...m, label: e.target.value } : m)} placeholder="Ex : Pré-doublure, Doublures opérationnelles…"
+              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+          </div>
+          <div>
+            <FieldLabel>Description <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnelle)</span></FieldLabel>
+            <textarea value={phaseModal.sub} onChange={(e) => setPhaseModal((m) => m ? { ...m, sub: e.target.value } : m)} placeholder="Ex : Doublures d'observation avant la formation." rows={2}
+              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nombre minimum de doublures</span>
+            <Stepper value={phaseModal.minDoublures} onChange={(v) => setPhaseModal((m) => m ? { ...m, minDoublures: v, minExterne: Math.min(m.minExterne, v) } : m)} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>dont à l&apos;extérieur</span>
+            <Stepper value={phaseModal.minExterne} onChange={(v) => setPhaseModal((m) => m ? { ...m, minExterne: v } : m)} max={phaseModal.minDoublures} />
           </div>
         </Modal>
       ) : null}
