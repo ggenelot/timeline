@@ -687,10 +687,14 @@ export default function CompetencesPage() {
   async function handleConfirm() {
     if (!modal || !selectedVCId || !profileId) return;
     setSubmitting(true);
+    // Track what we persisted so we can roll back if a later insert fails,
+    // keeping the doublure + its validations atomic from the user's point of view.
+    let createdDoublure: Doublure | null = null;
+    const createdVals: CompetenceValidation[] = [];
     try {
       const ev = getEventData(modal);
       const sup = getSupData(modal);
-      const dbl = await declareDoublure({
+      createdDoublure = await declareDoublure({
         volunteer_cursus_id: selectedVCId,
         phase_id: modal.phaseId,
         ...ev,
@@ -700,22 +704,29 @@ export default function CompetencesPage() {
         is_pending: false,
         declared_by: profileId,
       });
-      setDoublures((prev) => [dbl, ...prev]);
-      const newVals: CompetenceValidation[] = [];
       for (const compId of modal.selectedCompetences) {
         const val = await declareCompetenceValidation({
           volunteer_cursus_id: selectedVCId,
           competence_id: compId,
-          doublure_id: dbl.id,
+          doublure_id: createdDoublure.id,
           ...ev,
           ...sup,
           declared_by: profileId,
         });
-        newVals.push(val);
+        createdVals.push(val);
       }
-      if (newVals.length > 0) setValidations((prev) => [...prev, ...newVals]);
+      // Everything persisted — commit to local state in one go.
+      setDoublures((prev) => [createdDoublure as Doublure, ...prev]);
+      if (createdVals.length > 0) setValidations((prev) => [...prev, ...createdVals]);
       setModal(null);
     } catch (e) {
+      // Roll back partial inserts so a retry doesn't leave duplicate/orphan rows.
+      for (const val of createdVals) {
+        try { await deleteCompetenceValidation(val.id); } catch { /* best-effort rollback */ }
+      }
+      if (createdDoublure) {
+        try { await deleteDoublure(createdDoublure.id); } catch { /* best-effort rollback */ }
+      }
       setError((e as Error).message);
     } finally {
       setSubmitting(false);
