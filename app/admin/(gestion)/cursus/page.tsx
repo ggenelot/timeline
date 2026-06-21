@@ -1,6 +1,23 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
 import type {
   Cursus,
@@ -12,12 +29,24 @@ import {
   getAllCursus,
   getCursusWithDetails,
   upsertCursus,
+  deleteCursus,
+  reorderCursusRules,
+  reorderCursusCompetences,
   upsertCursusRule,
   deleteCursusRule,
   upsertCursusPhase,
   upsertCursusCompetence,
   deleteCursusCompetence,
 } from '@/lib/queries/cursus';
+
+// ── Constants ─────────────────────────────────────────────────
+
+const SIGNOFF_ROLES = [
+  'Président-Délégué',
+  'Responsable de filière',
+  'Chef de centre',
+  'Référent formation',
+];
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -77,6 +106,29 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
   );
 }
 
+// ── Drag handle ───────────────────────────────────────────────
+
+function DragHandle({
+  attributes,
+  listeners,
+  style,
+}: {
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span
+      {...attributes}
+      {...listeners}
+      title="Glisser pour réordonner"
+      style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
+    >
+      ⠿⠿
+    </span>
+  );
+}
+
 // ── Phase pill ─────────────────────────────────────────────────
 
 function PhasePill({ kind }: { kind: 'pre' | 'post' }) {
@@ -102,7 +154,8 @@ function PhasePill({ kind }: { kind: 'pre' | 'post' }) {
 
 // ── Stepper ────────────────────────────────────────────────────
 
-function Stepper({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+function Stepper({ value, onChange, max }: { value: number; onChange: (v: number) => void; max?: number }) {
+  const atMax = max !== undefined && value >= max;
   return (
     <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: 9, overflow: 'hidden' }}>
       <button
@@ -117,8 +170,9 @@ function Stepper({ value, onChange }: { value: number; onChange: (v: number) => 
       </span>
       <button
         type="button"
-        onClick={() => onChange(value + 1)}
-        style={{ cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700 }}
+        onClick={() => { if (!atMax) onChange(value + 1); }}
+        disabled={atMax}
+        style={{ cursor: atMax ? 'not-allowed' : 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700, opacity: atMax ? 0.4 : 1 }}
       >
         +
       </button>
@@ -253,6 +307,99 @@ function SkillPicker({
   );
 }
 
+// ── Sortable rule row ─────────────────────────────────────────
+
+function SortableRuleRow({
+  rule,
+  onToggleAuto,
+  onRemove,
+}: {
+  rule: CursusRule;
+  onToggleAuto: () => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: rule.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+        border: '1px solid #eef1f5',
+        borderRadius: 11,
+        padding: '10px 13px',
+        background: '#fcfcfd',
+        opacity: isDragging ? 0.6 : 1,
+        boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none',
+        zIndex: isDragging ? 1 : 'auto',
+      }}
+    >
+      <DragHandle attributes={attributes} listeners={listeners} />
+      <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, background: rule.auto ? '#4338ca' : '#e2e8f0', color: rule.auto ? '#fff' : '#94a3b8' }}>
+        {rule.auto ? '⚡' : '·'}
+      </span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#334155', lineHeight: 1.45 }}>{rule.text}</span>
+      <button type="button" onClick={onToggleAuto} style={{ flexShrink: 0, cursor: 'pointer', border: `1px solid ${rule.auto ? '#6d28d9' : '#e2e8f0'}`, background: rule.auto ? '#f5f3ff' : '#fff', color: rule.auto ? '#6d28d9' : '#94a3b8', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Auto</button>
+      <button type="button" onClick={onRemove} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '3px 6px' }} aria-label="Supprimer">✕</button>
+    </div>
+  );
+}
+
+// ── Sortable competence row ───────────────────────────────────
+
+function SortableCompetenceRow({
+  comp,
+  onEdit,
+  onRemove,
+}: {
+  comp: CursusCompetence;
+  onEdit: () => void;
+  onRemove: () => void;
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: comp.id });
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Transform.toString(transform),
+        transition,
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 10,
+        border: '1px solid #eef1f5',
+        borderRadius: 12,
+        padding: '11px 13px',
+        background: '#fcfcfd',
+        opacity: isDragging ? 0.6 : 1,
+        boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none',
+        zIndex: isDragging ? 1 : 'auto',
+      }}
+    >
+      <DragHandle attributes={attributes} listeners={listeners} style={{ marginTop: 3 }} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{comp.name}</span>
+          {comp.garde_only ? (
+            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px' }}>Garde uniquement</span>
+          ) : null}
+        </div>
+        {comp.description ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div> : null}
+      </div>
+      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+        <button type="button" onClick={onEdit}
+          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+          Modifier
+        </button>
+        <button type="button" onClick={onRemove} aria-label="Supprimer"
+          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+      </span>
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────
 
 export default function AdminCursusPage() {
@@ -267,15 +414,15 @@ export default function AdminCursusPage() {
   const [rules, setRules] = useState<CursusRule[]>([]);
   const [ruleDraft, setRuleDraft] = useState('');
   const [addingRule, setAddingRule] = useState(false);
-  const [formationLabel, setFormationLabel] = useState('');
-  const [formationRequired, setFormationRequired] = useState(true);
   const [signoffRole, setSignoffRole] = useState('Président-Délégué');
-  const [showNewForm, setShowNewForm] = useState(false);
-  const [newCode, setNewCode] = useState('');
-  const [newName, setNewName] = useState('');
+  const [showNewModal, setShowNewModal] = useState(false);
+  const [newSkill, setNewSkill] = useState<SkillOption | null>(null);
   const [creating, setCreating] = useState(false);
+  const [deletingCursus, setDeletingCursus] = useState(false);
   const [compModal, setCompModal] = useState<CompModal | null>(null);
   const [savingComp, setSavingComp] = useState(false);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
     async function load() {
@@ -300,8 +447,6 @@ export default function AdminCursusPage() {
         setDetail(d);
         if (d) {
           setRules(d.rules);
-          setFormationLabel(d.formation_label ?? '');
-          setFormationRequired(d.formation_required);
           setSignoffRole(d.signoff_role ?? 'Président-Délégué');
           if (d.skill_id) {
             const { data } = await supabase
@@ -334,20 +479,23 @@ export default function AdminCursusPage() {
   const totalComps = detail?.phases.reduce((s, p) => s + (p.competences?.length ?? 0), 0) ?? 0;
   const totalMinDoublures = detail?.phases.reduce((s, p) => s + p.min_doublures, 0) ?? 0;
 
-  async function createCursus(e: React.FormEvent) {
-    e.preventDefault();
-    if (!newCode.trim() || !newName.trim()) return;
+  function deriveFromSkill(skill: SkillOption) {
+    const code = skill.code ?? skill.name.slice(0, 6).toUpperCase();
+    return { skill_id: skill.id, code, name: skill.name, category: skill.catLabel, level: skill.level };
+  }
+
+  async function createCursusFromSkill() {
+    if (!newSkill) return;
     setCreating(true);
     try {
-      const created = await upsertCursus({ code: newCode.trim(), name: newName.trim() });
+      const created = await upsertCursus({ ...deriveFromSkill(newSkill), signoff_role: 'Président-Délégué' });
       const prePh = await upsertCursusPhase({ cursus_id: created.id, kind: 'pre', label: 'Pré-doublure', order_idx: 0 });
       const postPh = await upsertCursusPhase({ cursus_id: created.id, kind: 'post', label: 'Post-doublure', order_idx: 1 });
       setAllCursus((prev) => [...prev, created]);
       setDetail({ ...created, rules: [], phases: [{ ...prePh, competences: [] }, { ...postPh, competences: [] }] });
       setSelectedId(created.id);
-      setShowNewForm(false);
-      setNewCode('');
-      setNewName('');
+      setShowNewModal(false);
+      setNewSkill(null);
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -360,10 +508,32 @@ export default function AdminCursusPage() {
     setLinkedSkill(skill);
     setSavingSkill(true);
     try {
-      const updated = await upsertCursus({ ...detail, skill_id: skill?.id ?? null });
+      const derived = skill ? deriveFromSkill(skill) : { skill_id: null };
+      const updated = await upsertCursus({ ...detail, ...derived });
       setDetail((d) => d ? { ...d, ...updated } : d);
+      setAllCursus((prev) => prev.map((c) => c.id === updated.id ? updated : c));
     } finally {
       setSavingSkill(false);
+    }
+  }
+
+  async function handleDeleteCursus() {
+    if (!detail) return;
+    if (allCursus.length <= 1) {
+      setError('Impossible de supprimer le dernier cursus restant.');
+      return;
+    }
+    if (!window.confirm(`Supprimer le cursus « ${detail.name} » ? Cette action est irréversible.`)) return;
+    setDeletingCursus(true);
+    try {
+      await deleteCursus(detail.id);
+      const remaining = allCursus.filter((c) => c.id !== detail.id);
+      setAllCursus(remaining);
+      setSelectedId(remaining[0]?.id ?? null);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setDeletingCursus(false);
     }
   }
 
@@ -389,15 +559,49 @@ export default function AdminCursusPage() {
     setRules((prev) => prev.filter((r) => r.id !== id));
   }
 
+  async function handleRuleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = rules.findIndex((r) => r.id === active.id);
+    const newIndex = rules.findIndex((r) => r.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(rules, oldIndex, newIndex).map((r, i) => ({ ...r, order_idx: i }));
+    setRules(next);
+    try {
+      await reorderCursusRules(next.map((r) => ({ id: r.id, order_idx: r.order_idx })));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  async function handleCompDragEnd(phaseId: string, event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const phase = detail?.phases.find((p) => p.id === phaseId);
+    if (!phase) return;
+    const comps = (phase.competences ?? []) as CursusCompetence[];
+    const oldIndex = comps.findIndex((c) => c.id === active.id);
+    const newIndex = comps.findIndex((c) => c.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(comps, oldIndex, newIndex).map((c, i) => ({ ...c, order_idx: i }));
+    setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phaseId ? { ...p, competences: next } : p) } : d);
+    try {
+      await reorderCursusCompetences(next.map((c) => ({ id: c.id, order_idx: c.order_idx })));
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
   async function setPhaseMinDoublures(phase: CursusPhase, val: number) {
     if (!detail) return;
-    const updated = await upsertCursusPhase({ ...phase, min_doublures: val, cursus_id: detail.id });
+    const cappedExterne = Math.min(phase.min_externe, val);
+    const updated = await upsertCursusPhase({ ...phase, min_doublures: val, min_externe: cappedExterne, cursus_id: detail.id });
     setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
   }
 
-  async function setPhaseExterne(phase: CursusPhase, val: boolean) {
+  async function setPhaseMinExterne(phase: CursusPhase, val: number) {
     if (!detail) return;
-    const updated = await upsertCursusPhase({ ...phase, require_externe: val, cursus_id: detail.id });
+    const updated = await upsertCursusPhase({ ...phase, min_externe: val, cursus_id: detail.id });
     setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id === phase.id ? { ...updated, competences: p.competences } : p) } : d);
   }
 
@@ -406,11 +610,6 @@ export default function AdminCursusPage() {
     const label = kind === 'pre' ? 'Pré-doublure' : 'Post-doublure';
     const created = await upsertCursusPhase({ cursus_id: detail.id, kind, label, order_idx: detail.phases.filter((p) => p.kind === kind).length });
     setDetail((d) => d ? { ...d, phases: [...d.phases, { ...created, competences: [] }] } : d);
-  }
-
-  async function saveFormation(label?: string, required?: boolean) {
-    if (!detail) return;
-    await upsertCursus({ ...detail, formation_label: (label ?? formationLabel) || null, formation_required: required ?? formationRequired });
   }
 
   async function saveSignoff(role: string) {
@@ -511,25 +710,10 @@ export default function AdminCursusPage() {
             </button>
           );
         })}
-        {showNewForm ? (
-          <form onSubmit={createCursus} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-            <input value={newCode} onChange={(e) => setNewCode(e.target.value)} placeholder="Code" autoFocus
-              style={{ width: 70, border: '1px solid #cbd5e1', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', outline: 'none', color: '#0f172a' }} />
-            <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Nom du cursus"
-              style={{ width: 200, border: '1px solid #cbd5e1', borderRadius: 9, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', outline: 'none', color: '#0f172a' }} />
-            <button type="submit" disabled={creating || !newCode.trim() || !newName.trim()}
-              style={{ cursor: 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: creating ? 0.6 : 1 }}>
-              {creating ? '…' : 'Créer'}
-            </button>
-            <button type="button" onClick={() => setShowNewForm(false)}
-              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 20, padding: '0 4px' }}>✕</button>
-          </form>
-        ) : (
-          <button type="button" onClick={() => setShowNewForm(true)}
-            style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#475569', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-            + Nouveau cursus
-          </button>
-        )}
+        <button type="button" onClick={() => { setShowNewModal(true); setNewSkill(null); }}
+          style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#475569', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+          + Nouveau cursus
+        </button>
       </div>
 
       {!detail ? (
@@ -560,6 +744,11 @@ export default function AdminCursusPage() {
                     <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>doublures min.</div>
                   </div>
                 </div>
+                <button type="button" onClick={handleDeleteCursus} disabled={deletingCursus || allCursus.length <= 1}
+                  title={allCursus.length <= 1 ? 'Impossible de supprimer le dernier cursus' : undefined}
+                  style={{ cursor: allCursus.length <= 1 || deletingCursus ? 'not-allowed' : 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 9, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: allCursus.length <= 1 ? 0.5 : 1 }}>
+                  {deletingCursus ? 'Suppression…' : 'Supprimer le cursus'}
+                </button>
               </div>
             </div>
           </div>
@@ -570,21 +759,17 @@ export default function AdminCursusPage() {
               <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>Règles du cursus</span>
               <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Le badge <strong style={{ color: '#4338ca' }}>Auto</strong> = vérifiée automatiquement par l&apos;app</span>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
-              {rules.length === 0 ? (
-                <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune règle pour l&apos;instant.</div>
-              ) : rules.map((r) => (
-                <div key={r.id} style={{ display: 'flex', alignItems: 'center', gap: 11, border: '1px solid #eef1f5', borderRadius: 11, padding: '10px 13px', background: '#fcfcfd' }}>
-                  <span style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3 }} title="Glisser pour réordonner">⠿⠿</span>
-                  <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, background: r.auto ? '#4338ca' : '#e2e8f0', color: r.auto ? '#fff' : '#94a3b8' }}>
-                    {r.auto ? '⚡' : '·'}
-                  </span>
-                  <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#334155', lineHeight: 1.45 }}>{r.text}</span>
-                  <button type="button" onClick={() => toggleRuleAuto(r)} style={{ flexShrink: 0, cursor: 'pointer', border: `1px solid ${r.auto ? '#6d28d9' : '#e2e8f0'}`, background: r.auto ? '#f5f3ff' : '#fff', color: r.auto ? '#6d28d9' : '#94a3b8', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Auto</button>
-                  <button type="button" onClick={() => removeRule(r.id)} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '3px 6px' }} aria-label="Supprimer">✕</button>
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRuleDragEnd}>
+              <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                  {rules.length === 0 ? (
+                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune règle pour l&apos;instant.</div>
+                  ) : rules.map((r) => (
+                    <SortableRuleRow key={r.id} rule={r} onToggleAuto={() => toggleRuleAuto(r)} onRemove={() => removeRule(r.id)} />
+                  ))}
                 </div>
-              ))}
-            </div>
+              </SortableContext>
+            </DndContext>
             <div style={{ display: 'flex', gap: 9 }}>
               <input value={ruleDraft} onChange={(e) => setRuleDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRule(); } }} placeholder="Ajouter une règle…"
                 style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
@@ -596,9 +781,8 @@ export default function AdminCursusPage() {
           </div>
 
           {/* ── Phases ── */}
-          {orderedPhases.map((phase, i) => {
+          {orderedPhases.map((phase) => {
             const comps = (phase.competences ?? []) as CursusCompetence[];
-            const isLastPre = phase.kind === 'pre' && orderedPhases[i + 1]?.kind === 'post';
 
             return (
               <div key={phase.id}>
@@ -618,9 +802,9 @@ export default function AdminCursusPage() {
                         <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nombre minimum de doublures</span>
                         <Stepper value={phase.min_doublures} onChange={(v) => setPhaseMinDoublures(phase, v)} />
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <Toggle value={phase.require_externe} onChange={(v) => setPhaseExterne(phase, v)} />
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Exiger une doublure en antenne extérieure</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 11 }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>dont extérieure</span>
+                        <Stepper value={phase.min_externe} onChange={(v) => setPhaseMinExterne(phase, v)} max={phase.min_doublures} />
                       </div>
                     </div>
                   </div>
@@ -630,52 +814,21 @@ export default function AdminCursusPage() {
                     <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
                       Compétences à valider
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {comps.length === 0 ? (
-                        <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
-                      ) : comps.map((c, ci) => (
-                        <div key={c.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef1f5', borderRadius: 12, padding: '11px 13px', background: '#fcfcfd' }}>
-                          <span style={{ flexShrink: 0, marginTop: 3, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3 }} title="Glisser pour réordonner">⠿⠿</span>
-                          <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: 7, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#f1f5f9', color: '#64748b' }}>{ci + 1}</span>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
-                              {c.garde_only ? (
-                                <span style={{ fontSize: 10.5, fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px' }}>Garde uniquement</span>
-                              ) : null}
-                            </div>
-                            {c.description ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div> : null}
-                          </div>
-                          <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                            <button type="button" onClick={() => openEditComp(phase.id, c)}
-                              style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
-                              Modifier
-                            </button>
-                            <button type="button" onClick={() => deleteComp(phase.id, c.id)} aria-label="Supprimer"
-                              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
-                          </span>
+                    <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => handleCompDragEnd(phase.id, e)}>
+                      <SortableContext items={comps.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                          {comps.length === 0 ? (
+                            <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
+                          ) : comps.map((c) => (
+                            <SortableCompetenceRow key={c.id} comp={c} onEdit={() => openEditComp(phase.id, c)} onRemove={() => deleteComp(phase.id, c.id)} />
+                          ))}
                         </div>
-                      ))}
-                    </div>
+                      </SortableContext>
+                    </DndContext>
                     <button type="button" onClick={() => openAddComp(phase.id)}
                       style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
                       + Ajouter une compétence
                     </button>
-
-                    {/* Formation marker */}
-                    {isLastPre ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginTop: 16, padding: '13px 15px', border: '1px dashed #e2e8f0', borderRadius: 12, background: '#f8fafc' }}>
-                        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#475569', background: '#fff', border: '1px solid #e2e8f0', borderRadius: 6, padding: '3px 9px', flexShrink: 0 }}>
-                          Étape intermédiaire
-                        </span>
-                        <input value={formationLabel} onChange={(e) => setFormationLabel(e.target.value)} onBlur={() => saveFormation()} placeholder="Ex : Formation CE (BSPP)"
-                          style={{ flex: 1, minWidth: 200, border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 13.5, fontWeight: 600, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                          <Toggle value={formationRequired} onChange={(v) => { setFormationRequired(v); saveFormation(undefined, v); }} />
-                          <span style={{ fontSize: 12.5, fontWeight: 700, color: '#334155' }}>Formation requise</span>
-                        </div>
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               </div>
@@ -703,15 +856,33 @@ export default function AdminCursusPage() {
               <span style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>Avis favorable de</span>
               <select value={signoffRole} onChange={(e) => saveSignoff(e.target.value)}
                 style={{ border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 14, fontWeight: 600, color: '#0f172a', outline: 'none', background: '#fff', fontFamily: 'inherit' }}>
-                <option value="Président-Délégué">Président-Délégué</option>
-                <option value="Responsable de filière">Responsable de filière</option>
-                <option value="Directeur des opérations">Directeur des opérations</option>
+                {SIGNOFF_ROLES.map((role) => (
+                  <option key={role} value={role}>{role}</option>
+                ))}
               </select>
               <span style={{ fontSize: 12.5, color: '#94a3b8' }}>débloqué une fois toutes les compétences validées.</span>
             </div>
           </div>
         </>
       )}
+
+      {/* ── New cursus modal ── */}
+      {showNewModal ? (
+        <Modal
+          title="Nouveau cursus"
+          subtitle="Choisissez la compétence du référentiel associée à ce cursus."
+          onClose={() => { setShowNewModal(false); setNewSkill(null); }}
+          onSubmit={createCursusFromSkill}
+          submitLabel={creating ? 'Création…' : 'Créer le cursus'}
+          submitDisabled={creating || !newSkill}
+        >
+          <div>
+            <FieldLabel>Compétence du référentiel</FieldLabel>
+            <SkillPicker chosenSkillId={newSkill?.id ?? null} chosenSkill={newSkill} onPick={setNewSkill} />
+            <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Le code, le nom et la catégorie du cursus sont repris de la compétence choisie.</p>
+          </div>
+        </Modal>
+      ) : null}
 
       {/* ── Competence modal ── */}
       {compModal ? (
