@@ -899,7 +899,7 @@ export default function CompetencesPage() {
                   const phDoublures = doublures.filter((d) => d.phase_id === ph.id);
                   const phComps = ph.competences ?? [];
                   const done = phComps.filter((c) => validatedIds.has(c.id)).length;
-                  const isComplete = done === phComps.length && phComps.length > 0 && phDoublures.length >= ph.min_doublures;
+                  const isComplete = done === phComps.length && phComps.length > 0 && phDoublures.length >= ph.min_doublures && phDoublures.filter((d) => d.is_external).length >= ph.min_externe;
                   const isActive = !isComplete && (i === 0 || cursusDetail.phases.slice(0, i).every((p) => {
                     const pc = p.competences ?? [];
                     return pc.length > 0 && pc.every((c) => validatedIds.has(c.id));
@@ -978,7 +978,7 @@ export default function CompetencesPage() {
                   const phComps = (phase.competences ?? []) as CursusCompetence[];
                   const doneComps = phComps.filter((c) => validatedIds.has(c.id));
                   const todoComps = phComps.filter((c) => !validatedIds.has(c.id));
-                  const isComplete = doneComps.length === phComps.length && phComps.length > 0 && phDoublures.length >= phase.min_doublures;
+                  const isComplete = doneComps.length === phComps.length && phComps.length > 0 && phDoublures.length >= phase.min_doublures && phDoublures.filter((d) => d.is_external).length >= phase.min_externe;
                   const nodeBg = isComplete ? '#059669' : i === 0 ? '#0f172a' : '#e2e8f0';
                   const cardBorderColor = isComplete ? '#a7f3d0' : '#e7e9ee';
                   const pillBg = isComplete ? '#d1fae5' : doneComps.length > 0 ? '#eff6ff' : '#f1f5f9';

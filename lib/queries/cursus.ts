@@ -154,21 +154,25 @@ export async function deleteCursus(id: string): Promise<void> {
 export async function reorderCursusRules(
   rules: Array<{ id: string; order_idx: number }>
 ): Promise<void> {
-  await Promise.all(
+  const results = await Promise.all(
     rules.map((r) =>
       supabase.from('cursus_rules').update({ order_idx: r.order_idx }).eq('id', r.id)
     )
   );
+  const failure = results.find((res) => res.error);
+  if (failure?.error) throw failure.error;
 }
 
 export async function reorderCursusCompetences(
   competences: Array<{ id: string; order_idx: number }>
 ): Promise<void> {
-  await Promise.all(
+  const results = await Promise.all(
     competences.map((c) =>
       supabase.from('cursus_competences').update({ order_idx: c.order_idx }).eq('id', c.id)
     )
   );
+  const failure = results.find((res) => res.error);
+  if (failure?.error) throw failure.error;
 }
 
 export async function upsertCursusRule(
