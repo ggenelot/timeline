@@ -30,15 +30,16 @@ import {
 type CursusDetail = Cursus & { rules: CursusRule[]; phases: CursusPhase[] };
 type ViewMode = 'parcours' | 'carnet';
 
-type ModalKind = 'doublure' | 'validation';
-
 type EventOption = { id: string; name: string; sub: string; date?: string };
 type SupOption = { id: string; name: string; sub: string };
 
+// Déclaration d'une doublure en 4 étapes : événement, doubleur, commentaires,
+// compétences validées.
+const STEP_LABELS = ['Événement', 'Doubleur', 'Commentaires', 'Compétences validées'];
+
 type ModalState = {
-  kind: ModalKind;
-  phaseId?: string;
-  competenceId?: string;
+  phaseId: string;
+  step: number;
   // event
   eventMode: 'search' | 'manual' | 'chosen';
   eventQuery: string;
@@ -48,7 +49,7 @@ type ModalState = {
   evName: string;
   evDate: string;
   evAntenne: string;
-  // supervisor
+  // supervisor / doubleur
   supMode: 'search' | 'manual' | 'chosen';
   supQuery: string;
   supResults: SupOption[];
@@ -56,12 +57,15 @@ type ModalState = {
   // manual sup
   supName: string;
   supAntenne: string;
-  // message
-  message: string;
+  // comments
+  supervisorComment: string;
+  personalComment: string;
+  // validated competences
+  selectedCompetences: string[];
 };
 
-const MODAL_INIT: ModalState = {
-  kind: 'doublure',
+const MODAL_INIT: Omit<ModalState, 'phaseId'> = {
+  step: 0,
   eventMode: 'search',
   eventQuery: '',
   eventResults: [],
@@ -75,7 +79,9 @@ const MODAL_INIT: ModalState = {
   chosenSup: null,
   supName: '',
   supAntenne: '',
-  message: '',
+  supervisorComment: '',
+  personalComment: '',
+  selectedCompetences: [],
 };
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -150,14 +156,16 @@ function Modal({
   onSubmit,
   submitLabel,
   submitDisabled,
+  footer,
 }: {
   title: string;
   subtitle?: string;
   onClose: () => void;
   children: React.ReactNode;
-  onSubmit: () => void;
-  submitLabel: string;
+  onSubmit?: () => void;
+  submitLabel?: string;
   submitDisabled?: boolean;
+  footer?: React.ReactNode;
 }) {
   return (
     <div
@@ -235,49 +243,53 @@ function Modal({
           style={{
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'flex-end',
+            justifyContent: footer ? 'space-between' : 'flex-end',
             gap: 10,
             padding: '14px 20px',
             borderTop: '1px solid #eef1f5',
             background: '#fafbfc',
           }}
         >
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              cursor: 'pointer',
-              border: '1px solid #e2e8f0',
-              background: '#fff',
-              color: '#64748b',
-              borderRadius: 9,
-              padding: '9px 16px',
-              fontSize: 13,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-            }}
-          >
-            Annuler
-          </button>
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={submitDisabled}
-            style={{
-              cursor: submitDisabled ? 'not-allowed' : 'pointer',
-              border: 'none',
-              background: '#059669',
-              color: '#fff',
-              borderRadius: 9,
-              padding: '9px 18px',
-              fontSize: 13,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-              opacity: submitDisabled ? 0.5 : 1,
-            }}
-          >
-            {submitLabel}
-          </button>
+          {footer ?? (
+            <>
+              <button
+                type="button"
+                onClick={onClose}
+                style={{
+                  cursor: 'pointer',
+                  border: '1px solid #e2e8f0',
+                  background: '#fff',
+                  color: '#64748b',
+                  borderRadius: 9,
+                  padding: '9px 16px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={submitDisabled}
+                style={{
+                  cursor: submitDisabled ? 'not-allowed' : 'pointer',
+                  border: 'none',
+                  background: '#059669',
+                  color: '#fff',
+                  borderRadius: 9,
+                  padding: '9px 18px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                  opacity: submitDisabled ? 0.5 : 1,
+                }}
+              >
+                {submitLabel}
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
@@ -672,34 +684,36 @@ export default function CompetencesPage() {
     return { supervisor_id: null as string | null, supervisor_name: m.supName || null, supervisor_antenne: m.supAntenne || null };
   }
 
-  async function handleSubmit() {
+  async function handleConfirm() {
     if (!modal || !selectedVCId || !profileId) return;
     setSubmitting(true);
     try {
       const ev = getEventData(modal);
       const sup = getSupData(modal);
-      if (modal.kind === 'doublure') {
-        const dbl = await declareDoublure({
-          volunteer_cursus_id: selectedVCId,
-          phase_id: modal.phaseId!,
-          ...ev,
-          ...sup,
-          message: modal.message || null,
-          is_pending: false,
-          declared_by: profileId,
-        });
-        setDoublures((prev) => [dbl, ...prev]);
-      } else {
+      const dbl = await declareDoublure({
+        volunteer_cursus_id: selectedVCId,
+        phase_id: modal.phaseId,
+        ...ev,
+        ...sup,
+        message: modal.personalComment || null,
+        supervisor_comment: modal.supervisorComment || null,
+        is_pending: false,
+        declared_by: profileId,
+      });
+      setDoublures((prev) => [dbl, ...prev]);
+      const newVals: CompetenceValidation[] = [];
+      for (const compId of modal.selectedCompetences) {
         const val = await declareCompetenceValidation({
           volunteer_cursus_id: selectedVCId,
-          competence_id: modal.competenceId!,
-          doublure_id: null,
+          competence_id: compId,
+          doublure_id: dbl.id,
           ...ev,
           ...sup,
           declared_by: profileId,
         });
-        setValidations((prev) => [...prev, val]);
+        newVals.push(val);
       }
+      if (newVals.length > 0) setValidations((prev) => [...prev, ...newVals]);
       setModal(null);
     } catch (e) {
       setError((e as Error).message);
@@ -709,11 +723,37 @@ export default function CompetencesPage() {
   }
 
   function openDoublureModal(phaseId: string) {
-    setModal({ ...MODAL_INIT, kind: 'doublure', phaseId });
+    setModal({ ...MODAL_INIT, phaseId });
   }
 
-  function openValidationModal(competenceId: string) {
-    setModal({ ...MODAL_INIT, kind: 'validation', competenceId });
+  // Compétences proposées à la validation pour la phase de la doublure :
+  // celles non encore validées.
+  function selectableComps(phaseId: string): CursusCompetence[] {
+    const phase = cursusDetail?.phases.find((p) => p.id === phaseId);
+    return ((phase?.competences ?? []) as CursusCompetence[]).filter((c) => !validatedIds.has(c.id));
+  }
+
+  function toggleSelectedComp(compId: string) {
+    setModal((m) => {
+      if (!m) return m;
+      const has = m.selectedCompetences.includes(compId);
+      return {
+        ...m,
+        selectedCompetences: has
+          ? m.selectedCompetences.filter((id) => id !== compId)
+          : [...m.selectedCompetences, compId],
+      };
+    });
+  }
+
+  function canProceed(m: ModalState): boolean {
+    if (m.step === 0) {
+      return (m.eventMode === 'chosen' && !!m.chosenEvent) || m.evName.trim().length > 0;
+    }
+    if (m.step === 1) {
+      return (m.supMode === 'chosen' && !!m.chosenSup) || m.supName.trim().length > 0;
+    }
+    return true;
   }
 
   async function handleDeleteDoublure(id: string) {
@@ -724,13 +764,6 @@ export default function CompetencesPage() {
   async function handleDeleteValidation(id: string) {
     try { await deleteCompetenceValidation(id); setValidations((prev) => prev.filter((v) => v.id !== id)); }
     catch (e) { setError((e as Error).message); }
-  }
-
-  function isModalSubmittable() {
-    if (!modal) return false;
-    if (modal.kind === 'validation' && !modal.competenceId) return false;
-    if (modal.kind === 'doublure' && !modal.phaseId) return false;
-    return true;
   }
 
   // ── Render ─────────────────────────────────────────────────
@@ -1095,6 +1128,16 @@ export default function CompetencesPage() {
                                           {d.supervisor_antenne ? ` · ${d.supervisor_antenne}` : ''}
                                         </div>
                                       ) : null}
+                                      {d.supervisor_comment ? (
+                                        <div style={{ marginTop: 6, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
+                                          « {d.supervisor_comment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                                        </div>
+                                      ) : null}
+                                      {d.message ? (
+                                        <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                                          Note perso : {d.message}
+                                        </div>
+                                      ) : null}
                                     </div>
                                     <button
                                       type="button"
@@ -1147,11 +1190,14 @@ export default function CompetencesPage() {
                           </div>
                         </div>
 
-                        {/* Compétences à valider */}
+                        {/* Compétences à valider (lecture seule — validées via une doublure) */}
                         {todoComps.length > 0 ? (
                           <div style={{ padding: '14px 18px 18px' }}>
-                            <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
-                              Compétences à valider
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 11 }}>
+                              <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+                                Compétences à valider
+                              </div>
+                              <span style={{ fontSize: 11.5, color: '#94a3b8' }}>À cocher lors d&apos;une doublure</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {todoComps.map((c) => (
@@ -1169,13 +1215,6 @@ export default function CompetencesPage() {
                                       <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div>
                                     ) : null}
                                   </div>
-                                  <button
-                                    type="button"
-                                    onClick={() => openValidationModal(c.id)}
-                                    style={{ flexShrink: 0, cursor: 'pointer', border: '1px solid #059669', background: '#059669', color: '#fff', borderRadius: 9, padding: '8px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                                  >
-                                    Déclarer validée
-                                  </button>
                                 </div>
                               ))}
                             </div>
@@ -1307,13 +1346,7 @@ export default function CompetencesPage() {
                                   <div style={{ fontSize: 11.5, color: '#94a3b8' }}>déclarée par moi</div>
                                 </>
                               ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => openValidationModal(c.id)}
-                                  style={{ cursor: 'pointer', border: '1px solid #059669', background: '#059669', color: '#fff', borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', whiteSpace: 'nowrap' }}
-                                >
-                                  Déclarer validée
-                                </button>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>À valider en doublure</span>
                               )}
                             </div>
                           </div>
@@ -1386,53 +1419,134 @@ export default function CompetencesPage() {
         </div>
       ) : null}
 
-      {/* ── Declare modal ── */}
-      {modal ? (
-        <Modal
-          title={modal.kind === 'doublure' ? 'Déclarer une doublure' : 'Valider une compétence'}
-          subtitle={
-            modal.kind === 'validation' && modal.competenceId
-              ? allComps.find((c) => c.id === modal.competenceId)?.name
-              : cursusDetail?.phases.find((p) => p.id === modal.phaseId)?.label
-          }
-          onClose={() => setModal(null)}
-          onSubmit={handleSubmit}
-          submitLabel={submitting ? 'Enregistrement…' : modal.kind === 'doublure' ? 'Déclarer la doublure' : 'Valider la compétence'}
-          submitDisabled={submitting || !isModalSubmittable()}
-        >
-          {modal.kind === 'validation' && !modal.competenceId ? (
-            <div>
-              <FieldLabel>Compétence</FieldLabel>
-              <select
-                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
-                value={modal.competenceId ?? ''}
-                onChange={(e) => setModal((m) => m ? { ...m, competenceId: e.target.value } : m)}
-              >
-                <option value="">— Choisir —</option>
-                {allComps.filter((c) => !validatedIds.has(c.id)).map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
+      {/* ── Declare doublure wizard ── */}
+      {modal ? (() => {
+        const setModalDoublure = setModal as React.Dispatch<React.SetStateAction<ModalState>>;
+        const isLast = modal.step === STEP_LABELS.length - 1;
+        const comps = selectableComps(modal.phaseId);
+        return (
+          <Modal
+            title="Déclarer une doublure"
+            subtitle={`Étape ${modal.step + 1}/${STEP_LABELS.length} · ${STEP_LABELS[modal.step]}`}
+            onClose={() => setModal(null)}
+            footer={
+              <>
+                <button
+                  type="button"
+                  onClick={() => modal.step === 0 ? setModal(null) : setModal((m) => m ? { ...m, step: m.step - 1 } : m)}
+                  style={{ cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+                >
+                  {modal.step === 0 ? 'Annuler' : '‹ Précédent'}
+                </button>
+                {isLast ? (
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={submitting}
+                    style={{ cursor: submitting ? 'not-allowed' : 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
+                  >
+                    {submitting ? 'Enregistrement…' : 'Confirmer la doublure'}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setModal((m) => m && canProceed(m) ? { ...m, step: m.step + 1 } : m)}
+                    disabled={!canProceed(modal)}
+                    style={{ cursor: !canProceed(modal) ? 'not-allowed' : 'pointer', border: 'none', background: '#0f172a', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: !canProceed(modal) ? 0.5 : 1 }}
+                  >
+                    Suivant ›
+                  </button>
+                )}
+              </>
+            }
+          >
+            {/* Step progress */}
+            <div style={{ display: 'flex', gap: 5 }}>
+              {STEP_LABELS.map((_, i) => (
+                <div
+                  key={i}
+                  style={{ flex: 1, height: 5, borderRadius: 4, background: i <= modal.step ? '#059669' : '#e2e8f0' }}
+                />
+              ))}
             </div>
-          ) : null}
 
-          <EventField modal={modal} setModal={setModal as React.Dispatch<React.SetStateAction<ModalState>>} />
-          <SupervisorField modal={modal} setModal={setModal as React.Dispatch<React.SetStateAction<ModalState>>} />
+            {/* Page 1 — Événement */}
+            {modal.step === 0 ? (
+              <EventField modal={modal} setModal={setModalDoublure} />
+            ) : null}
 
-          {modal.kind === 'doublure' ? (
-            <div>
-              <FieldLabel>Message (optionnel)</FieldLabel>
-              <textarea
-                value={modal.message}
-                onChange={(e) => setModal((m) => m ? { ...m, message: e.target.value } : m)}
-                placeholder="Remarques, contexte…"
-                rows={3}
-                style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
-              />
-            </div>
-          ) : null}
-        </Modal>
-      ) : null}
+            {/* Page 2 — Doubleur */}
+            {modal.step === 1 ? (
+              <SupervisorField modal={modal} setModal={setModalDoublure} />
+            ) : null}
+
+            {/* Page 3 — Commentaires */}
+            {modal.step === 2 ? (
+              <>
+                <div>
+                  <FieldLabel>Commentaire du doubleur <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
+                  <textarea
+                    value={modal.supervisorComment}
+                    onChange={(e) => setModal((m) => m ? { ...m, supervisorComment: e.target.value } : m)}
+                    placeholder="Retour du doubleur sur la doublure…"
+                    rows={3}
+                    style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Commentaire personnel <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
+                  <textarea
+                    value={modal.personalComment}
+                    onChange={(e) => setModal((m) => m ? { ...m, personalComment: e.target.value } : m)}
+                    placeholder="Vos remarques, ressenti, points à retravailler…"
+                    rows={3}
+                    style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
+                  />
+                </div>
+              </>
+            ) : null}
+
+            {/* Page 4 — Compétences validées */}
+            {modal.step === 3 ? (
+              <div>
+                <FieldLabel>Compétences validées lors de cette doublure <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
+                {comps.length === 0 ? (
+                  <p style={{ fontSize: 13, color: '#94a3b8', margin: '4px 0 0' }}>
+                    Toutes les compétences de cette phase sont déjà validées.
+                  </p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                    {comps.map((c) => {
+                      const checked = modal.selectedCompetences.includes(c.id);
+                      return (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => toggleSelectedComp(c.id)}
+                          style={{ cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 11, border: `1.5px solid ${checked ? '#a7f3d0' : '#e7e9ee'}`, background: checked ? '#f6fdfa' : '#fff', borderRadius: 11, padding: '11px 13px', fontFamily: 'inherit' }}
+                        >
+                          <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, background: checked ? '#059669' : '#f1f5f9', color: checked ? '#fff' : '#cbd5e1', border: `1.5px solid ${checked ? '#059669' : '#e2e8f0'}` }}>
+                            {checked ? '✓' : ''}
+                          </span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                              {c.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                            </div>
+                            {c.description ? (
+                              <div style={{ marginTop: 2, fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div>
+                            ) : null}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : null}
+          </Modal>
+        );
+      })() : null}
     </div>
   );
 }

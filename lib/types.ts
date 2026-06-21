@@ -314,6 +314,7 @@ export type Doublure = {
   supervisor_name: string | null;
   supervisor_antenne: string | null;
   message: string | null;
+  supervisor_comment: string | null;
   is_pending: boolean;
   declared_by: string;
   created_at: string;
