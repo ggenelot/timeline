@@ -857,12 +857,6 @@ export default function CompetencesPage() {
                       {cursusDetail.code}
                     </span>
                   </div>
-                  {cursusDetail.formation_label ? (
-                    <div style={{ marginTop: 9, fontSize: 13.5, color: '#64748b' }}>
-                      Formation : {cursusDetail.formation_label}
-                      {cursusDetail.formation_required ? ' (obligatoire)' : ' (optionnelle)'}
-                    </div>
-                  ) : null}
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
                   <div style={{ fontSize: 30, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>
@@ -1051,7 +1045,7 @@ export default function CompetencesPage() {
                           {phase.sub ? (
                             <div style={{ marginTop: 5, fontSize: 13, color: '#64748b' }}>
                               {phase.sub} · {phDoublures.length}/{phase.min_doublures} doublure{phase.min_doublures > 1 ? 's' : ''}
-                              {phase.require_externe ? ' (dont 1 externe)' : ''}
+                              {phase.min_externe > 0 ? ` (dont ${phase.min_externe} externe${phase.min_externe > 1 ? 's' : ''})` : ''}
                             </div>
                           ) : null}
                         </div>

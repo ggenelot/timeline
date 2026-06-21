@@ -146,6 +146,31 @@ export async function upsertCursus(
   return data;
 }
 
+export async function deleteCursus(id: string): Promise<void> {
+  const { error } = await supabase.from('cursus').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function reorderCursusRules(
+  rules: Array<{ id: string; order_idx: number }>
+): Promise<void> {
+  await Promise.all(
+    rules.map((r) =>
+      supabase.from('cursus_rules').update({ order_idx: r.order_idx }).eq('id', r.id)
+    )
+  );
+}
+
+export async function reorderCursusCompetences(
+  competences: Array<{ id: string; order_idx: number }>
+): Promise<void> {
+  await Promise.all(
+    competences.map((c) =>
+      supabase.from('cursus_competences').update({ order_idx: c.order_idx }).eq('id', c.id)
+    )
+  );
+}
+
 export async function upsertCursusRule(
   payload: Partial<CursusRule> & { cursus_id: string; text: string }
 ): Promise<CursusRule> {

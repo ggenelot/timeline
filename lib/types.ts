@@ -253,8 +253,6 @@ export type Cursus = {
   category: string | null;
   level: number | null;
   skill_id: string | null;
-  formation_label: string | null;
-  formation_required: boolean;
   signoff_role: string;
   created_by: string | null;
   created_at: string;
@@ -278,7 +276,7 @@ export type CursusPhase = {
   sub: string | null;
   provisional: boolean;
   min_doublures: number;
-  require_externe: boolean;
+  min_externe: number;
   order_idx: number;
   created_at: string;
   competences?: CursusCompetence[];
