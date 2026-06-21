@@ -12,11 +12,12 @@ import { ActivityCalendar } from './ActivityCalendar';
 type Props = {
   acts: ActivityAct[];
   seuilHours?: number;
+  error?: string | null;
 };
 
-export function MissionActivityPanel({ acts, seuilHours = SEUIL_HOURS }: Props) {
+export function MissionActivityPanel({ acts, seuilHours = SEUIL_HOURS, error = null }: Props) {
   const [view, setView] = useState<'graphe' | 'calendrier'>('graphe');
-  const [period, setPeriod] = useState<Period>('6m');
+  const [period, setPeriod] = useState<Period>('12m');
   const [hiddenVols, setHiddenVols] = useState<Set<string>>(new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
@@ -43,6 +44,14 @@ export function MissionActivityPanel({ acts, seuilHours = SEUIL_HOURS }: Props) 
       else next.add(name);
       return next;
     });
+  }
+
+  if (error) {
+    return (
+      <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+        Impossible de charger l&apos;activité des bénévoles : {error}
+      </div>
+    );
   }
 
   if (acts.length === 0) {

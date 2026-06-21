@@ -23,6 +23,11 @@ function getPeriodStart(period: Period): Date {
       d.setMonth(d.getMonth() - 6);
       return d;
     }
+    case '12m': {
+      const d = new Date(now);
+      d.setMonth(d.getMonth() - 12);
+      return d;
+    }
     case 'ytd':
       return new Date(now.getFullYear(), 0, 1);
   }

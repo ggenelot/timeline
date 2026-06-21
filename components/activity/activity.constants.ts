@@ -4,10 +4,11 @@ export const PERIOD_OPTIONS = [
   { value: '1m', label: '1 mois' },
   { value: '3m', label: '3 mois' },
   { value: '6m', label: '6 mois' },
+  { value: '12m', label: '12 mois' },
   { value: 'ytd', label: 'Année en cours' },
 ] as const;
 
-export type Period = '1m' | '3m' | '6m' | 'ytd';
+export type Period = '1m' | '3m' | '6m' | '12m' | 'ytd';
 
 export const TYPE_COLORS: Record<string, string> = {
   Maraude: '#10b981',
