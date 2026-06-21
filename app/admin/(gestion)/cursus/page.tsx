@@ -856,7 +856,7 @@ export default function AdminCursusPage() {
               <span style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>Avis favorable de</span>
               <select value={signoffRole} onChange={(e) => saveSignoff(e.target.value)}
                 style={{ border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 14, fontWeight: 600, color: '#0f172a', outline: 'none', background: '#fff', fontFamily: 'inherit' }}>
-                {SIGNOFF_ROLES.map((role) => (
+                {(SIGNOFF_ROLES.includes(signoffRole) ? SIGNOFF_ROLES : [signoffRole, ...SIGNOFF_ROLES]).map((role) => (
                   <option key={role} value={role}>{role}</option>
                 ))}
               </select>
