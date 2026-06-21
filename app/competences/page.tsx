@@ -969,7 +969,7 @@ export default function CompetencesPage() {
                           {isComplete ? '✓' : i + 1}
                         </span>
                         <span style={{ fontSize: 13.5, fontWeight: 700, color: titleColor }}>
-                          {ph.kind === 'pre' ? 'Pré-doublure' : 'Post-doublure'}
+                          {ph.label}
                         </span>
                       </div>
                       {ph.sub ? (

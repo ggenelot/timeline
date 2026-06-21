@@ -271,7 +271,7 @@ export type CursusRule = {
 export type CursusPhase = {
   id: string;
   cursus_id: string;
-  kind: 'pre' | 'post';
+  kind: 'pre' | 'post' | null;
   label: string;
   sub: string | null;
   provisional: boolean;
