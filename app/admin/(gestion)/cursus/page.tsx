@@ -41,15 +41,6 @@ import {
   deleteCursusCompetence,
 } from '@/lib/queries/cursus';
 
-// ── Constants ─────────────────────────────────────────────────
-
-const SIGNOFF_ROLES = [
-  'Président-Délégué',
-  'Responsable de filière',
-  'Chef de centre',
-  'Référent formation',
-];
-
 // ── Types ─────────────────────────────────────────────────────
 
 type CursusDetail = Cursus & { rules: CursusRule[]; phases: CursusPhase[] };
@@ -505,7 +496,6 @@ export default function AdminCursusPage() {
   const [rules, setRules] = useState<CursusRule[]>([]);
   const [ruleDraft, setRuleDraft] = useState('');
   const [addingRule, setAddingRule] = useState(false);
-  const [signoffRole, setSignoffRole] = useState('Président-Délégué');
   const [showNewModal, setShowNewModal] = useState(false);
   const [newSkill, setNewSkill] = useState<SkillOption | null>(null);
   const [creating, setCreating] = useState(false);
@@ -540,7 +530,6 @@ export default function AdminCursusPage() {
         setDetail(d);
         if (d) {
           setRules(d.rules);
-          setSignoffRole(d.signoff_role ?? 'Président-Délégué');
           if (d.skill_id) {
             const { data } = await supabase
               .from('skills')
@@ -581,7 +570,7 @@ export default function AdminCursusPage() {
     if (!newSkill) return;
     setCreating(true);
     try {
-      const created = await upsertCursus({ ...deriveFromSkill(newSkill), signoff_role: 'Président-Délégué' });
+      const created = await upsertCursus({ ...deriveFromSkill(newSkill) });
       setAllCursus((prev) => [...prev, created]);
       setDetail({ ...created, rules: [], phases: [] });
       setSelectedId(created.id);
@@ -723,11 +712,6 @@ export default function AdminCursusPage() {
 
   async function deletePhase(phase: CursusPhase) {
     if (!detail) return;
-    const compCount = phase.competences?.length ?? 0;
-    const warning = compCount > 0
-      ? `Supprimer la phase « ${phase.label} » et ses ${compCount} compétence${compCount !== 1 ? 's' : ''} ? Cette action est irréversible.`
-      : `Supprimer la phase « ${phase.label} » ?`;
-    if (!window.confirm(warning)) return;
     try {
       await deleteCursusPhase(phase.id);
       setDetail((d) => d ? { ...d, phases: d.phases.filter((p) => p.id !== phase.id) } : d);
@@ -750,12 +734,6 @@ export default function AdminCursusPage() {
     } catch (e) {
       setError((e as Error).message);
     }
-  }
-
-  async function saveSignoff(role: string) {
-    if (!detail) return;
-    setSignoffRole(role);
-    await upsertCursus({ ...detail, signoff_role: role });
   }
 
   function openAddComp(phaseId: string) {
@@ -955,23 +933,6 @@ export default function AdminCursusPage() {
               style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
               + Nouvelle phase
             </button>
-          </div>
-
-          {/* ── Final sign-off ── */}
-          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '18px 22px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.06em', textTransform: 'uppercase', color: '#047857', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 6, padding: '3px 9px' }}>
-                Signature finale
-              </span>
-              <span style={{ fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>Avis favorable de</span>
-              <select value={signoffRole} onChange={(e) => saveSignoff(e.target.value)}
-                style={{ border: '1px solid #cbd5e1', borderRadius: 9, padding: '8px 11px', fontSize: 14, fontWeight: 600, color: '#0f172a', outline: 'none', background: '#fff', fontFamily: 'inherit' }}>
-                {(SIGNOFF_ROLES.includes(signoffRole) ? SIGNOFF_ROLES : [signoffRole, ...SIGNOFF_ROLES]).map((role) => (
-                  <option key={role} value={role}>{role}</option>
-                ))}
-              </select>
-              <span style={{ fontSize: 12.5, color: '#94a3b8' }}>débloqué une fois toutes les compétences validées.</span>
-            </div>
           </div>
         </>
       )}

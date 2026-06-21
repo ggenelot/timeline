@@ -1368,30 +1368,6 @@ export default function CompetencesPage() {
                     </div>
                   );
                 })}
-
-                {/* Final sign-off */}
-                {cursusDetail.signoff_role ? (() => {
-                  const allDone = allComps.length > 0 && allComps.every((c) => validatedIds.has(c.id));
-                  return (
-                    <div
-                      style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', background: allDone ? '#f0fdf4' : '#f8fafc', border: `1px solid ${allDone ? '#bbf7d0' : '#e2e8f0'}`, borderRadius: 14, padding: '15px 18px' }}
-                    >
-                      <div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: allDone ? '#15803d' : '#64748b' }}>
-                          Avis favorable du {cursusDetail.signoff_role}
-                        </div>
-                        <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>
-                          {allDone ? 'Toutes les compétences ont été validées.' : 'En attente de la validation de toutes les compétences.'}
-                        </div>
-                      </div>
-                      <div
-                        style={{ fontSize: 12, fontWeight: 700, color: allDone ? '#059669' : '#94a3b8', background: allDone ? '#d1fae5' : '#f1f5f9', border: `1px solid ${allDone ? '#a7f3d0' : '#e2e8f0'}`, borderRadius: 6, padding: '4px 11px', whiteSpace: 'nowrap' }}
-                      >
-                        {allDone ? 'Éligible à la validation' : 'Non éligible'}
-                      </div>
-                    </div>
-                  );
-                })() : null}
               </div>
             ) : null}
           </>
