@@ -41,7 +41,7 @@ The goal is to make `schema_migrations` contain **exactly** the set of versions
 present as files in `supabase/migrations/`, without re-running DDL (the schema is
 already applied).
 
-### Preferred: Supabase CLI (`migration repair`)
+Use the Supabase CLI (`migration repair`) — this is the only supported method:
 
 ```bash
 supabase migration list   # shows local vs remote, Local/Remote columns
@@ -55,33 +55,22 @@ supabase migration repair --status reverted <version>
 supabase migration list   # re-check: every row should line up
 ```
 
-### Last resort: direct reconciliation (no local CLI/DB password)
+After reconciling, the version set tracked by `schema_migrations` must equal the
+set of file prefixes in `supabase/migrations/`. Then `supabase db push` is a
+no-op and future merges deploy normally.
 
-`migration repair` is just `INSERT`/`DELETE` on `schema_migrations`. If you only
-have SQL access (e.g. via the Supabase MCP), back up first, then align the table:
-
-```sql
--- 1. Back up
-create table supabase_migrations.schema_migrations_backup_<date> as
-  select * from supabase_migrations.schema_migrations;
-
--- 2. Delete orphan rows (remote versions with no local file)
-delete from supabase_migrations.schema_migrations where version in (...);
-
--- 3. Insert rows for local files missing from the history (schema already applied)
-insert into supabase_migrations.schema_migrations (version, name, statements)
-values ('<version>', '<name>', array['-- history reconciled']::text[])
-on conflict (version) do nothing;
-```
-
-After reconciling, the version set in `schema_migrations` must equal the set of
-file prefixes in `supabase/migrations/`. Then `supabase db push` is a no-op and
-future merges deploy normally.
+> **Do not hand-edit `supabase_migrations.schema_migrations`.** Per `AGENTS.md`
+> §2, never `INSERT`/`DELETE`/`UPDATE` that table directly and never use a
+> workaround that bypasses the migration system. History reconciliation must go
+> through the official Supabase flow (`supabase migration repair` +
+> `supabase db pull`). If you lack the CLI or DB password locally, run the repair
+> from CI (the `supabase-prod.yml` job already has the credentials) or via
+> `workflow_dispatch`, rather than editing the table by hand.
 
 ## Notes
 
-- Prefer `migration repair` over hand-editing `schema_migrations` whenever the
-  CLI and DB credentials are available.
+- Reconcile **only** with `supabase migration repair`; never hand-edit
+  `schema_migrations` (see `AGENTS.md` §2).
 - Some orphan history rows (e.g. a fix/revert pair, or a refactor that was later
   squashed) legitimately have no local file. Deleting their history rows is
   correct — their net effect already lives in the current schema via later
