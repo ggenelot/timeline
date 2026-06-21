@@ -130,6 +130,7 @@ export default function MissionDetailPage() {
   const [success, setSuccess] = useState<string | null>(null);
   const [canManageByRole, setCanManageByRole] = useState(false);
   const [activityActs, setActivityActs] = useState<ActivityAct[]>([]);
+  const [activityError, setActivityError] = useState<string | null>(null);
   const [isActivityExpanded, setIsActivityExpanded] = useState(false);
 
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
@@ -611,8 +612,12 @@ export default function MissionDetailPage() {
       try {
         const acts = await getCandidateActivity(missionId);
         setActivityActs(acts);
-      } catch {
-        // activité non critique, on ne bloque pas le chargement
+        setActivityError(null);
+      } catch (err) {
+        // L'activité n'est pas critique : on ne bloque pas le chargement de la page,
+        // mais on remonte l'erreur dans le panneau plutôt que de la masquer.
+        setActivityActs([]);
+        setActivityError((err as Error).message || 'Erreur inconnue');
       }
     }
 
@@ -1373,7 +1378,7 @@ export default function MissionDetailPage() {
 
           {isActivityExpanded ? (
             <div id="mission-activity-content" className="mt-4">
-              <MissionActivityPanel acts={activityActs} />
+              <MissionActivityPanel acts={activityActs} error={activityError} />
             </div>
           ) : null}
         </section>
