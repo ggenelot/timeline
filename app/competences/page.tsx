@@ -686,6 +686,7 @@ export default function CompetencesPage() {
 
   async function handleConfirm() {
     if (!modal || !selectedVCId || !profileId) return;
+    setError(null);
     setSubmitting(true);
     // Track what we persisted so we can roll back if a later insert fails,
     // keeping the doublure + its validations atomic from the user's point of view.
@@ -734,6 +735,7 @@ export default function CompetencesPage() {
   }
 
   function openDoublureModal(phaseId: string) {
+    setError(null);
     setModal({ ...MODAL_INIT, phaseId });
   }
 
@@ -1480,6 +1482,12 @@ export default function CompetencesPage() {
                 />
               ))}
             </div>
+
+            {error ? (
+              <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 13px', fontSize: 12.5, color: '#dc2626' }}>
+                {error}
+              </div>
+            ) : null}
 
             {/* Page 1 — Événement */}
             {modal.step === 0 ? (
