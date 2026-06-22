@@ -171,7 +171,7 @@ async function main() {
   const { error: profileUpsertError } = await supabase
     .from('profiles')
     .upsert(
-      profiles.map((p) => ({ id: p.id, full_name: p.fullName, email: p.email, role: p.role, sector: p.sector })),
+      profiles.map((p) => ({ id: p.id, full_name: p.fullName, email: p.email, role: p.role, sector: p.sector, identifier: p.email.split('@')[0] })),
       { onConflict: 'id' }
     );
   if (profileUpsertError) throw profileUpsertError;
@@ -183,7 +183,7 @@ async function main() {
   const managers = [...admins, ...responsables];
 
   // --- Skills & skill domain progress ---
-  const { data: skills, error: skillsError } = await supabase.from('skills').select('id, label');
+  const { data: skills, error: skillsError } = await supabase.from('skills').select('id, name');
   if (skillsError) throw skillsError;
 
   const profileSkillRows = [];

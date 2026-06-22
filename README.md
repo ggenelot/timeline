@@ -6,6 +6,80 @@ Application web de gestion des missions de protection civile. Elle couvre le cyc
 
 ---
 
+## Vue d'ensemble
+
+Timeline remplace la coordination manuelle des missions de bénévoles (appels, e-mails, tableurs) par une application centralisée où chaque rôle ne voit et n'agit que sur ce qui le concerne.
+
+### Les rôles et leur périmètre
+
+```mermaid
+flowchart LR
+    subgraph Admin["👤 Admin"]
+        A1["Toutes les missions"]
+        A2["Tous les bénévoles"]
+        A3["Configuration (rôles, compétences, types)"]
+        A4["Statistiques globales"]
+    end
+
+    subgraph Responsable["👤 Responsable"]
+        R1["Crée ses missions"]
+        R2["Consulte les réponses"]
+        R3["Sélectionne l'équipe"]
+    end
+
+    subgraph Benevole["👤 Bénévole"]
+        B1["Voit les missions proposées"]
+        B2["Répond : disponible / indisponible"]
+        B3["Suit ses engagements"]
+    end
+```
+
+### Cycle de vie d'une mission
+
+```mermaid
+stateDiagram-v2
+    [*] --> draft : création
+    draft --> proposed : publication
+    proposed --> confirmed : équipe sélectionnée
+    proposed --> cancelled : annulation
+    confirmed --> closed : mission réalisée
+    confirmed --> cancelled : annulation
+    closed --> [*]
+    cancelled --> [*]
+```
+
+### Du besoin à la mission Slack
+
+```mermaid
+sequenceDiagram
+    participant R as Responsable
+    participant B as Bénévole
+    participant S as Système
+    participant Sl as Slack
+
+    R->>S: Crée la mission (brouillon)
+    R->>S: Publie la mission (proposée)
+    S->>B: Affiche la mission dans /missions
+    B->>S: Répond (disponible / indisponible)
+    R->>S: Consulte les disponibilités
+    R->>S: Sélectionne l'équipe finale
+    R->>S: Confirme la mission
+    S->>Sl: Crée le canal privé de l'équipe
+    Sl->>B: Notifie les bénévoles sélectionnés
+```
+
+### En images
+
+| Bénévole : liste des missions proposées | Responsable : détail d'une mission (réponses + sélection) |
+|---|---|
+| ![Liste des missions, vue bénévole](docs/images/missions-liste-benevole.png) | ![Détail d'une mission, vue responsable](docs/images/mission-detail-responsable.png) |
+
+| Bénévole : suivi de ses engagements | Admin : gestion des bénévoles |
+|---|---|
+| ![Mes engagements, vue bénévole](docs/images/my-missions-benevole.png) | ![Gestion des bénévoles, vue admin](docs/images/admin-volunteers.png) |
+
+---
+
 ## Sommaire
 
 1. [Fonctionnalités](#fonctionnalités)
