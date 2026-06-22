@@ -71,18 +71,34 @@ export function SidebarMenu({
         aria-hidden="true"
       />
       <aside
+        aria-hidden={!open}
         className={`fixed inset-y-0 left-0 z-50 w-64 transform overflow-y-auto bg-white shadow-xl transition-transform ${
           open ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
         <nav className="flex flex-col gap-1 p-4 text-sm">
-          <Link href="/missions" onClick={onClose} className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50">
+          <Link
+            href="/missions"
+            onClick={onClose}
+            tabIndex={open ? 0 : -1}
+            className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+          >
             Mission
           </Link>
-          <Link href="/competences" onClick={onClose} className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50">
+          <Link
+            href="/competences"
+            onClick={onClose}
+            tabIndex={open ? 0 : -1}
+            className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+          >
             Compétences
           </Link>
-          <Link href="/competences" onClick={onClose} className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50">
+          <Link
+            href="/competences"
+            onClick={onClose}
+            tabIndex={open ? 0 : -1}
+            className="rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50"
+          >
             Cursus
           </Link>
 
@@ -94,6 +110,7 @@ export function SidebarMenu({
                   key={item.href}
                   href={item.href}
                   onClick={onClose}
+                  tabIndex={open ? 0 : -1}
                   className="rounded-md px-3 py-2 text-slate-700 hover:bg-slate-50"
                 >
                   {item.label}
