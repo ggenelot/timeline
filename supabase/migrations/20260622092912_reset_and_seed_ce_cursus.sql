@@ -17,6 +17,7 @@ declare
   v_cursus_id uuid;
   v_pre       uuid;
   v_post      uuid;
+  v_final     uuid;
 begin
   -- 2. Associated competence "du même nom": reuse the existing "CE" skill,
   --    creating it under the Opérationnel category if it is missing.
@@ -73,11 +74,18 @@ begin
     (v_post, 'Gestion de l''équipe cellule arrière', 'Communication, donne des ordres, capacité d''écoute, contrôle des gestes et techniques réalisées. Validable uniquement en garde.', true, 5),
     (v_post, 'Maîtrise des bilans et bilans spécifiques', 'Exhaustivité et rigueur. Validable uniquement en garde.', true, 6);
 
-  -- 4c. Validation finale (avis du Président-Délégué)
+  -- 4c. Validation finale (avis du Président-Délégué).
+  -- The volunteer fiche only marks a phase complete when it has at least one
+  -- validated competence, so the final phase needs an explicit "Avis favorable"
+  -- sign-off competence (mirrors 20260622000648_final_validation_signoff_competence).
   insert into public.cursus_phases
     (cursus_id, kind, label, sub, provisional, min_doublures, min_externe, order_idx)
   values
-    (v_cursus_id, null, 'Validation finale', 'Avis favorable du Président-Délégué.', false, 0, 0, 2);
+    (v_cursus_id, null, 'Validation finale', 'Avis favorable du Président-Délégué.', false, 0, 0, 2)
+  returning id into v_final;
+
+  insert into public.cursus_competences (phase_id, name, description, garde_only, order_idx)
+  values (v_final, 'Avis favorable', 'Avis favorable du Président-Délégué.', false, 0);
 
   -- 5. Règles du cursus
   insert into public.cursus_rules (cursus_id, text, auto, order_idx) values
