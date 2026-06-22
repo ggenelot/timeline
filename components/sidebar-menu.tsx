@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, RoleBehavior, RoleBehaviorResourceType } from '@/lib/types';
 
@@ -26,12 +27,23 @@ export function SidebarMenu({
   open,
   onClose,
   profile,
+  session,
+  className,
 }: {
   open: boolean;
   onClose: () => void;
   profile: Profile | null;
+  session: Session | null;
+  className?: string;
 }) {
   const [behaviors, setBehaviors] = useState<RoleBehavior[]>([]);
+  const firstLinkRef = useRef<HTMLAnchorElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      firstLinkRef.current?.focus();
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open || !profile) return;
@@ -64,7 +76,7 @@ export function SidebarMenu({
     window.location.href = '/login';
   }
 
-  if (!profile) return null;
+  if (!session) return null;
 
   const linkClass = 'rounded-md px-3 py-2 font-medium text-slate-700 hover:bg-slate-50';
   const tab = open ? 0 : -1;
@@ -74,10 +86,10 @@ export function SidebarMenu({
       aria-hidden={!open}
       className={`flex shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-[width] duration-200 ${
         open ? 'w-64' : 'w-0'
-      }`}
+      } ${className ?? ''}`}
     >
       <nav className="flex h-full w-64 flex-col gap-1 p-4 text-sm">
-        <Link href="/missions" onClick={onClose} tabIndex={tab} className={linkClass}>
+        <Link href="/missions" ref={firstLinkRef} onClick={onClose} tabIndex={tab} className={linkClass}>
           Mission
         </Link>
         <Link href="/competences" onClick={onClose} tabIndex={tab} className={linkClass}>

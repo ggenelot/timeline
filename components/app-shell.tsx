@@ -47,11 +47,17 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen">
-      <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} profile={profile} />
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="order-2 flex min-w-0 flex-1 flex-col">
         <Header session={session} profile={profile} menuOpen={menuOpen} onToggleMenu={() => setMenuOpen((o) => !o)} />
         <main className="mx-auto w-full max-w-4xl px-4 py-8">{children}</main>
       </div>
+      <SidebarMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        profile={profile}
+        session={session}
+        className="order-1"
+      />
     </div>
   );
 }
