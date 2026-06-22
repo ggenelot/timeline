@@ -62,9 +62,22 @@ export function StatsPageClient() {
         .eq('id', authData.user.id)
         .single();
 
-      if (!profileData || !['admin', 'responsable'].includes(profileData.role as string)) {
+      if (!profileData) {
         setError('Accès réservé aux administrateurs et responsables.');
         setLoading(false);
+        return;
+      }
+
+      if (profileData.role !== 'admin') {
+        const { data: canManage } = await supabase.rpc('has_role_behavior', {
+          _user_id: authData.user.id,
+          _resource_type: 'mission',
+          _behavior: 'can_manage',
+        });
+        if (!canManage) {
+          setError('Accès réservé aux administrateurs et responsables.');
+          setLoading(false);
+        }
       }
     }
     void checkAuth();

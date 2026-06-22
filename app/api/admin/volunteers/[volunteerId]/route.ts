@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { notifyVolunteerRoleUpdatedByAdmin } from '@/lib/slack/workflows';
 
 type UpdateVolunteerPayload = {
   full_name?: string;
   identifier?: string;
   sector?: string;
-  role?: 'benevole' | 'responsable';
   skill_ids?: string[];
   password?: string;
 };
@@ -99,7 +97,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const fullName = payload.full_name?.trim() ?? '';
   const identifier = payload.identifier?.trim().toLowerCase() ?? '';
   const sector = payload.sector?.trim() ?? '';
-  const role = payload.role ?? 'benevole';
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
   const password = payload.password?.trim() ?? '';
 
@@ -115,10 +112,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     return NextResponse.json({ error: "L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores." }, { status: 400 });
   }
 
-  if (!['benevole', 'responsable'].includes(role)) {
-    return NextResponse.json({ error: 'Rôle invalide.' }, { status: 400 });
-  }
-
   if (password && password.length < 10) {
     return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 10 caractères.' }, { status: 400 });
   }
@@ -127,7 +120,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
 
   const { data: existingVolunteer, error: existingVolunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,role,slack_user_id')
+    .select('id,full_name')
     .eq('id', volunteerId)
     .single();
 
@@ -157,8 +150,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
       full_name: fullName,
       identifier,
       email: authEmail,
-      sector: sector || null,
-      role
+      sector: sector || null
     })
     .eq('id', volunteerId);
 
@@ -200,24 +192,6 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     if (insertSkillsError) {
       return NextResponse.json({ error: `Impossible d'enregistrer les compétences : ${insertSkillsError.message}` }, { status: 400 });
     }
-  }
-
-  try {
-    await notifyVolunteerRoleUpdatedByAdmin({
-      profileId: volunteerId,
-      fullName,
-      slackUserId: existingVolunteer.slack_user_id,
-      previousRole: existingVolunteer.role,
-      nextRole: role
-    });
-  } catch (error) {
-    return NextResponse.json(
-      {
-        message: 'Bénévole modifié avec succès, mais échec de notification Slack.',
-        slackError: error instanceof Error ? error.message : 'Erreur inconnue'
-      },
-      { status: 202 }
-    );
   }
 
   return NextResponse.json({ message: 'Bénévole modifié avec succès.' });

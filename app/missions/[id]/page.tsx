@@ -608,7 +608,22 @@ export default function MissionDetailPage() {
     );
     setVolunteerActivityStats(Object.fromEntries(assignmentRows));
 
-    if (profileData.role === 'admin' || profileData.role === 'responsable') {
+    let canManage = false;
+    if (profileData.role !== 'admin' && mappedMission) {
+      const tok = await getAccessToken();
+      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
+      if (rolesRes.ok) {
+        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
+        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
+        const hasManageAll = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0);
+        canManage = hasManageAll || canManageBehaviors.some((b) =>
+          (b.mission_type_ids ?? []).includes(mappedMission.mission_type_id)
+        );
+        setCanManageByRole(canManage);
+      }
+    }
+
+    if (profileData.role === 'admin' || canManage) {
       try {
         const acts = await getCandidateActivity(missionId);
         setActivityActs(acts);
@@ -621,23 +636,8 @@ export default function MissionDetailPage() {
       }
     }
 
-    if (profileData.role === 'admin') {
+    if (profileData.role === 'admin' || canManage) {
       await loadAdminVolunteerDirectory(missionId);
-    } else if (profileData.role === 'benevole' && mappedMission) {
-      const tok = await getAccessToken();
-      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-      if (rolesRes.ok) {
-        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
-        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
-        const hasManageAll = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0);
-        const canManage = hasManageAll || canManageBehaviors.some((b) =>
-          (b.mission_type_ids ?? []).includes(mappedMission.mission_type_id)
-        );
-        setCanManageByRole(canManage);
-        if (canManage) {
-          await loadAdminVolunteerDirectory(missionId);
-        }
-      }
     }
 
     setLoading(false);
@@ -673,7 +673,7 @@ export default function MissionDetailPage() {
     );
   }
 
-  const canManageMission = profile?.role === 'admin' || (profile?.role === 'responsable' && mission.created_by === user?.id) || canManageByRole;
+  const canManageMission = profile?.role === 'admin' || (canManageByRole && mission.created_by === user?.id);
   const missionBlocksSelection = mission.status === 'cancelled' || mission.status === 'confirmed';
   const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
 

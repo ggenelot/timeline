@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { SupabaseClient } from '@supabase/supabase-js';
 import { createServerSupabaseAnonClient } from '@/lib/supabase/server';
+import { RoleBehaviorResourceType, RoleBehaviorType } from '@/lib/types';
 
 export function getBearerToken(request: NextRequest): string {
   const authorization = request.headers.get('authorization');
@@ -38,4 +40,18 @@ export async function requireAuthenticatedUser(token: string) {
   }
 
   return { client, user, profile, errorResponse: null };
+}
+
+export async function hasRoleBehavior(
+  client: SupabaseClient,
+  userId: string,
+  resourceType: RoleBehaviorResourceType,
+  behavior: RoleBehaviorType
+): Promise<boolean> {
+  const { data, error } = await client.rpc('has_role_behavior', {
+    _user_id: userId,
+    _resource_type: resourceType,
+    _behavior: behavior
+  });
+  return !error && Boolean(data);
 }

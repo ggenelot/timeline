@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   DndContext,
   closestCenter,
@@ -24,6 +25,7 @@ import type {
   CursusRule,
   CursusPhase,
   CursusCompetence,
+  RoleBehavior,
 } from '@/lib/types';
 import {
   getAllCursus,
@@ -485,6 +487,8 @@ function SortablePhaseCard({
 // ── Main page ─────────────────────────────────────────────────
 
 export default function AdminCursusPage() {
+  const router = useRouter();
+  const [allowed, setAllowed] = useState<boolean | null>(null);
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CursusDetail | null>(null);
@@ -506,6 +510,36 @@ export default function AdminCursusPage() {
   const [savingPhase, setSavingPhase] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
+
+  useEffect(() => {
+    async function checkAccess() {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) {
+        router.replace('/login');
+        return;
+      }
+      const { data: profileData } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', authData.user.id)
+        .single();
+      if (profileData?.role === 'admin') {
+        setAllowed(true);
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const tok = sessionData.session?.access_token ?? '';
+      const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
+      if (res.ok) {
+        const { behaviors } = (await res.json()) as { behaviors: RoleBehavior[] };
+        setAllowed(behaviors.some((b) => b.resource_type === 'cursus' && b.behavior_type === 'can_manage'));
+      } else {
+        setAllowed(false);
+      }
+    }
+    void checkAccess();
+  }, [router]);
 
   useEffect(() => {
     async function load() {
@@ -779,6 +813,22 @@ export default function AdminCursusPage() {
   async function deleteComp(phaseId: string, compId: string) {
     await deleteCursusCompetence(compId);
     setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id !== phaseId ? p : { ...p, competences: (p.competences ?? []).filter((c) => c.id !== compId) }) } : d);
+  }
+
+  if (allowed === null) {
+    return (
+      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
+        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      </div>
+    );
+  }
+
+  if (!allowed) {
+    return (
+      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+        Accès refusé.
+      </div>
+    );
   }
 
   if (loading) {

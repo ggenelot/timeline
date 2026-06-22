@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { RoleBehaviorType } from '@/lib/types';
+import { RoleBehaviorResourceType, RoleBehaviorType } from '@/lib/types';
 
 // POST: add a behavior to this role
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
@@ -14,6 +14,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   const body = (await request.json().catch(() => ({}))) as {
     behavior_type?: RoleBehaviorType;
+    resource_type?: RoleBehaviorResourceType;
     mission_type_ids?: string[];
     mission_statuses?: string[];
   };
@@ -23,16 +24,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({ error: 'behavior_type invalide.' }, { status: 400 });
   }
 
+  const resourceType: RoleBehaviorResourceType = body.resource_type ?? 'mission';
+  if (!['mission', 'cursus'].includes(resourceType)) {
+    return NextResponse.json({ error: 'resource_type invalide.' }, { status: 400 });
+  }
+  if (resourceType === 'cursus' && body.behavior_type !== 'can_manage') {
+    return NextResponse.json({ error: 'Pour le domaine cursus, seul le comportement "Peut gérer" est autorisé.' }, { status: 400 });
+  }
+
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('role_behaviors')
     .insert({
       role_id: params.id,
       behavior_type: body.behavior_type,
-      mission_type_ids: body.mission_type_ids ?? [],
-      mission_statuses: body.mission_statuses ?? [],
+      resource_type: resourceType,
+      mission_type_ids: resourceType === 'cursus' ? [] : (body.mission_type_ids ?? []),
+      mission_statuses: resourceType === 'cursus' ? [] : (body.mission_statuses ?? []),
     })
-    .select('id,role_id,behavior_type,mission_type_ids,mission_statuses,created_at')
+    .select('id,role_id,resource_type,behavior_type,mission_type_ids,mission_statuses,created_at')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

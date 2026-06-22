@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { getBearerToken, hasRoleBehavior, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { SlackApiClientError, SlackService } from '@/lib/slack/service';
 
@@ -25,7 +25,9 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: 'Mission introuvable.' }, { status: 404 });
   }
 
-  const canManage = auth.profile.role === 'admin' || (auth.profile.role === 'responsable' && mission.created_by === auth.user.id);
+  const canManage =
+    auth.profile.role === 'admin' ||
+    (mission.created_by === auth.user.id && (await hasRoleBehavior(auth.client, auth.user.id, 'mission', 'can_manage')));
   if (!canManage) {
     return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
