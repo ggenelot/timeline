@@ -40,20 +40,19 @@ set
   role = excluded.role,
   sector = excluded.sector;
 
-insert into public.skills (label, name)
+insert into public.skills (name)
 values
-  ('PSC1', 'PSC1'),
-  ('PSE1', 'PSE1'),
-  ('PSE2', 'PSE2'),
-  ('Logistique', 'Logistique'),
-  ('Transmission', 'Transmission'),
-  ('Conduite', 'Conduite'),
-  ('Chef d''équipe', 'Chef d''équipe'),
-  ('Régulation', 'Régulation'),
-  ('Radio', 'Radio'),
-  ('Soutien opérationnel', 'Soutien opérationnel')
-on conflict (label) do update
-set name = excluded.name;
+  ('PSC1'),
+  ('PSE1'),
+  ('PSE2'),
+  ('Logistique'),
+  ('Transmission'),
+  ('Conduite'),
+  ('Chef d''équipe'),
+  ('Régulation'),
+  ('Radio'),
+  ('Soutien opérationnel')
+on conflict (name) do nothing;
 
 insert into public.missions (
   title,
@@ -170,42 +169,42 @@ and not exists (
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.label in ('PSE2', 'Conduite')
+join public.skills s on s.name in ('PSE2', 'Conduite')
 where p.email = 'benevole@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.label in ('PSC1', 'Transmission')
+join public.skills s on s.name in ('PSC1', 'Transmission')
 where p.email = 'benevole2@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.profile_skills (profile_id, skill_id)
 select p.id, s.id
 from public.profiles p
-join public.skills s on s.label in ('Régulation', 'Radio')
+join public.skills s on s.name in ('Régulation', 'Radio')
 where p.email = 'benevole3@pcivile.test'
 on conflict (profile_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.label in ('PSE1', 'Soutien opérationnel')
+join public.skills s on s.name in ('PSE1', 'Soutien opérationnel')
 where m.title = 'Poste de secours - Marathon de Lille'
 on conflict (mission_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.label in ('Logistique', 'Conduite')
+join public.skills s on s.name in ('Logistique', 'Conduite')
 where m.title = 'Renfort logistique - Inondations'
 on conflict (mission_id, skill_id) do nothing;
 
 insert into public.mission_required_skills (mission_id, skill_id)
 select m.id, s.id
 from public.missions m
-join public.skills s on s.label in ('Radio')
+join public.skills s on s.name in ('Radio')
 where m.title = 'Soutien radio - Exercice départemental'
 on conflict (mission_id, skill_id) do nothing;
 
