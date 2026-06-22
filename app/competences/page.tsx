@@ -303,17 +303,23 @@ function ModalInput({
   onChange,
   placeholder,
   style,
+  type = 'text',
+  ariaLabel,
 }: {
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   style?: React.CSSProperties;
+  type?: string;
+  ariaLabel?: string;
 }) {
   return (
     <input
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
+      type={type}
+      aria-label={ariaLabel}
       style={{
         width: '100%',
         border: '1px solid #cbd5e1',
@@ -405,7 +411,7 @@ function EventField({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
           <ModalInput value={modal.evName} onChange={(v) => setModal((m) => ({ ...m, evName: v }))} placeholder="Nom de l'événement" />
           <div style={{ display: 'flex', gap: 9 }}>
-            <ModalInput value={modal.evDate} onChange={(v) => setModal((m) => ({ ...m, evDate: v }))} placeholder="Date (jj/mm/aaaa)" style={{ flex: '1' }} />
+            <ModalInput value={modal.evDate} onChange={(v) => setModal((m) => ({ ...m, evDate: v }))} type="date" ariaLabel="Date de l'événement" style={{ flex: '1' }} />
             <ModalInput value={modal.evAntenne} onChange={(v) => setModal((m) => ({ ...m, evAntenne: v }))} placeholder="Antenne / lieu" style={{ flex: '1' }} />
           </div>
         </div>
