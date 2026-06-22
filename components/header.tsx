@@ -4,19 +4,19 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
-import { AppRole, Profile } from '@/lib/types';
+import { Profile } from '@/lib/types';
+import { SidebarMenu } from '@/components/sidebar-menu';
 
 export function Header() {
   const [session, setSession] = useState<Session | null>(null);
-  const [role, setRole] = useState<AppRole | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
     async function loadUserState(currentSession: Session | null) {
       setSession(currentSession);
 
       if (!currentSession?.user) {
-        setRole(null);
         setProfile(null);
         return;
       }
@@ -27,7 +27,6 @@ export function Header() {
         .eq('id', currentSession.user.id)
         .single();
 
-      setRole(data?.role ?? null);
       setProfile(data ?? null);
     }
 
@@ -63,6 +62,18 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
       <div className="mx-auto flex w-full max-w-4xl items-center gap-4 overflow-x-auto px-4 py-3">
+        {session ? (
+          <button
+            type="button"
+            onClick={() => setMenuOpen(true)}
+            aria-label="Ouvrir le menu"
+            className="flex flex-col gap-1 rounded-md p-2 hover:bg-slate-50"
+          >
+            <span className="block h-0.5 w-5 bg-slate-700" />
+            <span className="block h-0.5 w-5 bg-slate-700" />
+            <span className="block h-0.5 w-5 bg-slate-700" />
+          </button>
+        ) : null}
         <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
           Timeline
         </Link>
@@ -71,14 +82,6 @@ export function Header() {
             <>
               <span className="whitespace-nowrap text-slate-600">Bonjour, {greetingName}</span>
               <div className="ml-auto flex items-center gap-4 whitespace-nowrap">
-                {role === 'admin' ? (
-                  <Link href="/admin/gestion" className="text-slate-700 hover:text-slate-900">
-                    Gestion
-                  </Link>
-                ) : null}
-                <Link href="/competences" className="text-slate-700 hover:text-slate-900">
-                  Compétences
-                </Link>
                 <Link href="/profile" className="text-slate-700 hover:text-slate-900">
                   Profil
                 </Link>
@@ -98,6 +101,7 @@ export function Header() {
           )}
         </nav>
       </div>
+      <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} profile={profile} />
     </header>
   );
 }
