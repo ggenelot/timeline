@@ -82,13 +82,21 @@ export function SidebarMenu({
   const tab = open ? 0 : -1;
 
   return (
-    <aside
-      aria-hidden={!open}
-      className={`flex shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-[width] duration-200 ${
-        open ? 'w-64' : 'w-0'
-      } ${className ?? ''}`}
-    >
-      <nav className="flex h-full w-64 flex-col gap-1 p-4 text-sm">
+    <>
+      <div
+        aria-hidden="true"
+        onClick={onClose}
+        className={`fixed inset-0 z-40 bg-black/30 transition-opacity duration-200 ${
+          open ? 'opacity-100' : 'pointer-events-none opacity-0'
+        }`}
+      />
+      <aside
+        aria-hidden={!open}
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white transition-transform duration-200 ${
+          open ? 'translate-x-0' : '-translate-x-full'
+        } ${className ?? ''}`}
+      >
+        <nav className="flex h-full w-64 flex-col gap-1 p-4 text-sm">
         <Link href="/missions" ref={firstLinkRef} onClick={onClose} tabIndex={tab} className={linkClass}>
           Mission
         </Link>
@@ -121,7 +129,8 @@ export function SidebarMenu({
         >
           Se déconnecter
         </button>
-      </nav>
-    </aside>
+        </nav>
+      </aside>
+    </>
   );
 }
