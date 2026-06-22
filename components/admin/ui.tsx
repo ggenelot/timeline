@@ -129,12 +129,20 @@ export function AdminSectionLabel({ children, style }: { children: ReactNode; st
   );
 }
 
-export function AdminFieldLabel({ children, hint }: { children: ReactNode; hint?: ReactNode }) {
-  return (
-    <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>
+export function AdminFieldLabel({ children, hint, htmlFor }: { children: ReactNode; hint?: ReactNode; htmlFor?: string }) {
+  const labelStyle: CSSProperties = { display: 'block', fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 };
+  const content = (
+    <>
       {children}
       {hint ? <span style={{ color: '#94a3b8', fontWeight: 600 }}> {hint}</span> : null}
-    </div>
+    </>
+  );
+  // Render a real <label htmlFor> when an input id is provided so the control is
+  // programmatically named for screen readers / voice control; fall back to <div>.
+  return htmlFor ? (
+    <label htmlFor={htmlFor} style={labelStyle}>{content}</label>
+  ) : (
+    <div style={labelStyle}>{content}</div>
   );
 }
 

@@ -124,8 +124,9 @@ export function MissionForm({
   return (
     <form style={{ display: 'flex', flexDirection: 'column', gap: 18 }} onSubmit={onSubmit}>
       <div>
-        <AdminFieldLabel>Titre *</AdminFieldLabel>
+        <AdminFieldLabel htmlFor="mission-title">Titre *</AdminFieldLabel>
         <input
+          id="mission-title"
           type="text"
           value={form.title}
           onChange={(event) => onChange({ ...form, title: event.target.value })}
@@ -137,8 +138,9 @@ export function MissionForm({
       </div>
 
       <div>
-        <AdminFieldLabel>Description</AdminFieldLabel>
+        <AdminFieldLabel htmlFor="mission-description">Description</AdminFieldLabel>
         <textarea
+          id="mission-description"
           value={form.description}
           onChange={(event) => onChange({ ...form, description: event.target.value })}
           style={{ ...adminTextareaStyle, minHeight: 112 }}
@@ -148,8 +150,9 @@ export function MissionForm({
       </div>
 
       <div>
-        <AdminFieldLabel>Lieu</AdminFieldLabel>
+        <AdminFieldLabel htmlFor="mission-location">Lieu</AdminFieldLabel>
         <input
+          id="mission-location"
           type="text"
           value={form.location}
           onChange={(event) => onChange({ ...form, location: event.target.value })}
@@ -173,6 +176,7 @@ export function MissionForm({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input
               type="date"
+              aria-label="Date de début"
               value={form.starts_at_date}
               onChange={(event) => onChange({ ...form, starts_at_date: event.target.value, ends_at_date: form.ends_at_date || event.target.value })}
               style={adminInputStyle}
@@ -181,6 +185,7 @@ export function MissionForm({
             />
             <input
               type="time"
+              aria-label="Heure de début"
               value={form.starts_at_time}
               onChange={(event) => onChange({ ...form, starts_at_time: event.target.value })}
               style={adminInputStyle}
@@ -195,6 +200,7 @@ export function MissionForm({
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input
               type="date"
+              aria-label="Date de fin"
               value={form.ends_at_date}
               onChange={(event) => onChange({ ...form, ends_at_date: event.target.value })}
               style={adminInputStyle}
@@ -203,6 +209,7 @@ export function MissionForm({
             />
             <input
               type="time"
+              aria-label="Heure de fin"
               value={form.ends_at_time}
               onChange={(event) => onChange({ ...form, ends_at_time: event.target.value })}
               style={adminInputStyle}
@@ -322,8 +329,9 @@ export function MissionForm({
               ) : null}
 
               <div>
-                <div style={fieldLabelText}>Répéter jusqu&apos;au *</div>
+                <label htmlFor="mission-recurrence-end" style={fieldLabelText}>Répéter jusqu&apos;au *</label>
                 <input
+                  id="mission-recurrence-end"
                   type="date"
                   value={recurrence.end_date}
                   onChange={(e) => onRecurrenceChange({ ...recurrence, end_date: e.target.value })}
@@ -339,8 +347,9 @@ export function MissionForm({
 
       {createdByLabel ? (
         <div>
-          <AdminFieldLabel>Créé par</AdminFieldLabel>
+          <AdminFieldLabel htmlFor="mission-created-by">Créé par</AdminFieldLabel>
           <input
+            id="mission-created-by"
             type="text"
             value={createdByLabel}
             style={{ ...adminInputStyle, background: '#f1f5f9', color: '#64748b' }}

@@ -130,12 +130,12 @@ export default function AdminProposalsPage() {
           <AdminSectionLabel style={{ marginBottom: 13 }}>Filtres</AdminSectionLabel>
           <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
             <div>
-              <AdminFieldLabel>Date début min</AdminFieldLabel>
-              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} style={adminInputStyle} />
+              <AdminFieldLabel htmlFor="proposals-date-from">Date début min</AdminFieldLabel>
+              <input id="proposals-date-from" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} style={adminInputStyle} />
             </div>
             <div>
-              <AdminFieldLabel>Date début max</AdminFieldLabel>
-              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} style={adminInputStyle} />
+              <AdminFieldLabel htmlFor="proposals-date-to">Date début max</AdminFieldLabel>
+              <input id="proposals-date-to" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} style={adminInputStyle} />
             </div>
           </div>
         </AdminCard>

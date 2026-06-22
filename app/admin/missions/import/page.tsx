@@ -957,6 +957,7 @@ export default function AdminMissionImportPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <input
                 type="search"
+                aria-label="Rechercher une mission"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Rechercher une mission"
