@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { MissionStatus, MissionType, Profile, RoleBehaviorType } from '@/lib/types';
+import { MissionStatus, MissionType, Profile, RoleBehaviorResourceType, RoleBehaviorType } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
 
 type Role = {
@@ -17,6 +17,7 @@ type Role = {
 type RoleBehavior = {
   id: string;
   role_id: string;
+  resource_type: RoleBehaviorResourceType;
   behavior_type: RoleBehaviorType;
   mission_type_ids: string[];
   mission_statuses: string[];
@@ -73,6 +74,12 @@ const ALL_MISSION_STATUSES: { value: MissionStatus; label: string }[] = [
 ];
 
 const ALL_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_see', 'can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
+const CURSUS_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_manage'];
+
+const RESOURCE_TYPE_LABELS: Record<RoleBehaviorResourceType, string> = {
+  mission: 'Mission',
+  cursus: 'Cursus',
+};
 
 export default function AdminRolesPage() {
   const router = useRouter();
@@ -99,7 +106,7 @@ export default function AdminRolesPage() {
   const [assigning, setAssigning] = useState<Record<string, boolean>>({});
 
   // Add behavior per role (roleId -> form state)
-  const [behaviorForms, setBehaviorForms] = useState<Record<string, { type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>>({});
+  const [behaviorForms, setBehaviorForms] = useState<Record<string, { resourceType: RoleBehaviorResourceType; type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>>({});
   const [addingBehavior, setAddingBehavior] = useState<Record<string, boolean>>({});
   const [settingDefault, setSettingDefault] = useState<Record<string, boolean>>({});
 
@@ -258,10 +265,10 @@ export default function AdminRolesPage() {
   // ---- Behaviors ----
 
   function getBehaviorForm(roleId: string) {
-    return behaviorForms[roleId] ?? { type: '', missionTypeIds: [], missionStatuses: [] };
+    return behaviorForms[roleId] ?? { resourceType: 'mission' as RoleBehaviorResourceType, type: '', missionTypeIds: [], missionStatuses: [] };
   }
 
-  function setBehaviorForm(roleId: string, update: Partial<{ type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>) {
+  function setBehaviorForm(roleId: string, update: Partial<{ resourceType: RoleBehaviorResourceType; type: RoleBehaviorType | ''; missionTypeIds: string[]; missionStatuses: string[] }>) {
     setBehaviorForms((prev) => ({
       ...prev,
       [roleId]: { ...getBehaviorForm(roleId), ...update },
@@ -297,12 +304,13 @@ export default function AdminRolesPage() {
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         behavior_type: form.type,
-        mission_type_ids: form.missionTypeIds,
-        mission_statuses: form.type === 'can_see' ? form.missionStatuses : [],
+        resource_type: form.resourceType,
+        mission_type_ids: form.resourceType === 'cursus' ? [] : form.missionTypeIds,
+        mission_statuses: form.resourceType === 'cursus' || form.type !== 'can_see' ? [] : form.missionStatuses,
       }),
     });
     if (res.ok) {
-      setBehaviorForms((prev) => ({ ...prev, [roleId]: { type: '', missionTypeIds: [], missionStatuses: [] } }));
+      setBehaviorForms((prev) => ({ ...prev, [roleId]: { resourceType: 'mission', type: '', missionTypeIds: [], missionStatuses: [] } }));
       await fetchData(token);
       flash('Comportement ajouté.');
     } else {
@@ -564,29 +572,36 @@ export default function AdminRolesPage() {
                           className="flex flex-col gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0 flex-1">
-                            <p className="text-xs font-semibold text-violet-800">{BEHAVIOR_LABELS[b.behavior_type]}</p>
-                            <div className="mt-1 flex flex-wrap gap-1">
-                              {b.mission_type_ids.length === 0 ? (
-                                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">Tous les types</span>
-                              ) : (
-                                b.mission_type_ids.map((id) => (
-                                  <span key={id} className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
-                                    {missionTypeById.get(id)?.name ?? id}
-                                  </span>
-                                ))
-                              )}
-                              {b.behavior_type === 'can_see' && (
-                                b.mission_statuses.length === 0 ? (
-                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Tous les statuts</span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-white">
+                                {RESOURCE_TYPE_LABELS[b.resource_type]}
+                              </span>
+                              <p className="text-xs font-semibold text-violet-800">{BEHAVIOR_LABELS[b.behavior_type]}</p>
+                            </div>
+                            {b.resource_type === 'mission' && (
+                              <div className="mt-1 flex flex-wrap gap-1">
+                                {b.mission_type_ids.length === 0 ? (
+                                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">Tous les types</span>
                                 ) : (
-                                  b.mission_statuses.map((s) => (
-                                    <span key={s} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
-                                      {ALL_MISSION_STATUSES.find((ms) => ms.value === s)?.label ?? s}
+                                  b.mission_type_ids.map((id) => (
+                                    <span key={id} className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                                      {missionTypeById.get(id)?.name ?? id}
                                     </span>
                                   ))
-                                )
-                              )}
-                            </div>
+                                )}
+                                {b.behavior_type === 'can_see' && (
+                                  b.mission_statuses.length === 0 ? (
+                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Tous les statuts</span>
+                                  ) : (
+                                    b.mission_statuses.map((s) => (
+                                      <span key={s} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                                        {ALL_MISSION_STATUSES.find((ms) => ms.value === s)?.label ?? s}
+                                      </span>
+                                    ))
+                                  )
+                                )}
+                              </div>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -608,12 +623,28 @@ export default function AdminRolesPage() {
                     <p className="mb-2 text-xs font-medium text-slate-600">Ajouter un comportement</p>
                     <div className="mb-3">
                       <select
+                        value={behaviorForm.resourceType}
+                        onChange={(e) => setBehaviorForm(role.id, {
+                          resourceType: e.target.value as RoleBehaviorResourceType,
+                          type: '',
+                          missionTypeIds: [],
+                          missionStatuses: [],
+                        })}
+                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                      >
+                        {(['mission', 'cursus'] as RoleBehaviorResourceType[]).map((rt) => (
+                          <option key={rt} value={rt}>{RESOURCE_TYPE_LABELS[rt]}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="mb-3">
+                      <select
                         value={behaviorForm.type}
                         onChange={(e) => setBehaviorForm(role.id, { type: e.target.value as RoleBehaviorType | '', missionTypeIds: [], missionStatuses: [] })}
                         className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
                       >
                         <option value="">— Choisir un type de comportement —</option>
-                        {ALL_BEHAVIOR_TYPES.map((bt) => (
+                        {(behaviorForm.resourceType === 'cursus' ? CURSUS_BEHAVIOR_TYPES : ALL_BEHAVIOR_TYPES).map((bt) => (
                           <option key={bt} value={bt}>{BEHAVIOR_LABELS[bt]}</option>
                         ))}
                       </select>
@@ -622,7 +653,7 @@ export default function AdminRolesPage() {
                       ) : null}
                     </div>
 
-                    {behaviorForm.type ? (
+                    {behaviorForm.type && behaviorForm.resourceType === 'mission' ? (
                       <div className="mb-3 space-y-3">
                         <div>
                           <p className="mb-1.5 text-xs font-medium text-slate-600">Types de missions concernés</p>

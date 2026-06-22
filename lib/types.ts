@@ -209,6 +209,7 @@ export type MissionType = {
 };
 
 export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack' | 'can_see';
+export type RoleBehaviorResourceType = 'mission' | 'cursus';
 
 export type Role = {
   id: string;
@@ -221,6 +222,7 @@ export type Role = {
 export type RoleBehavior = {
   id: string;
   role_id: string;
+  resource_type: RoleBehaviorResourceType;
   behavior_type: RoleBehaviorType;
   mission_type_ids: string[];
   mission_statuses: string[];

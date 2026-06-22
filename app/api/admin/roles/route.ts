@@ -27,7 +27,7 @@ export async function GET(request: NextRequest) {
 
   const { data: roleBehaviors, error: behaviorsError } = await serviceClient
     .from('role_behaviors')
-    .select('id,role_id,behavior_type,mission_type_ids,mission_statuses,created_at');
+    .select('id,role_id,resource_type,behavior_type,mission_type_ids,mission_statuses,created_at');
 
   if (behaviorsError) return NextResponse.json({ error: behaviorsError.message }, { status: 500 });
 

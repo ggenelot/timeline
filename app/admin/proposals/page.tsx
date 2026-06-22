@@ -39,10 +39,17 @@ export default function AdminProposalsPage() {
         return;
       }
 
-      if (!['admin', 'responsable'].includes(profileData.role)) {
-        setError('Accès réservé aux responsables.');
-        setLoading(false);
-        return;
+      if (profileData.role !== 'admin') {
+        const { data: canManage } = await supabase.rpc('has_role_behavior', {
+          _user_id: authData.user.id,
+          _resource_type: 'mission',
+          _behavior: 'can_manage',
+        });
+        if (!canManage) {
+          setError('Accès réservé aux responsables.');
+          setLoading(false);
+          return;
+        }
       }
 
       setProfile(profileData);

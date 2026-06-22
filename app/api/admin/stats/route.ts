@@ -26,8 +26,19 @@ async function assertAdminOrResponsable(req: NextRequest) {
 
   const serviceClient = createServerSupabaseServiceClient();
   const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || !['admin', 'responsable'].includes(profile.role as string)) {
+  if (!profile) {
     return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
+  }
+
+  if (profile.role !== 'admin') {
+    const { data: canManage } = await serviceClient.rpc('has_role_behavior', {
+      _user_id: user.id,
+      _resource_type: 'mission',
+      _behavior: 'can_manage'
+    });
+    if (!canManage) {
+      return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
+    }
   }
 
   return { client: serviceClient, error: null };
