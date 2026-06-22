@@ -228,7 +228,7 @@ async function main() {
 
   const { data: existingDemoMissions, error: existingMissionsError } = await supabase
     .from('missions')
-    .select('id, title')
+    .select('id, title, status, created_by')
     .like('title', `${TITLE_PREFIX}%`);
   if (existingMissionsError) throw existingMissionsError;
   const existingMissionTitles = new Set(existingDemoMissions.map((m) => m.title));
@@ -238,7 +238,7 @@ async function main() {
   const MISSION_COUNT = 25;
   for (let i = 1; i <= MISSION_COUNT; i++) {
     const status = statuses[i % statuses.length];
-    const title = `${TITLE_PREFIX}Mission démo ${String(i).padStart(2, '0')} - ${randomItem(CITIES)}`;
+    const title = `${TITLE_PREFIX}Mission démo ${String(i).padStart(2, '0')}`;
     if (existingMissionTitles.has(title)) continue;
     const isPast = i % 2 === 0;
     const startOffset = isPast ? randomInt(-60, -1) : randomInt(1, 60);
@@ -335,6 +335,15 @@ async function main() {
     profile_id: volunteer.id,
     cursus_id: randomItem(cursusList).id
   }));
+  const { data: existingVolunteerCursus, error: existingVolunteerCursusError } = await supabase
+    .from('volunteer_cursus')
+    .select('profile_id, cursus_id')
+    .in('profile_id', enrolledVolunteers.map((v) => v.id));
+  if (existingVolunteerCursusError) throw existingVolunteerCursusError;
+  const existingVolunteerCursusKeys = new Set(
+    existingVolunteerCursus.map((vc) => `${vc.profile_id}:${vc.cursus_id}`)
+  );
+
   let volunteerCursus = [];
   if (volunteerCursusRows.length) {
     const { data, error } = await supabase
@@ -346,8 +355,14 @@ async function main() {
   }
   log('volunteer_cursus_upserted', { count: volunteerCursus.length });
 
+  // Doublures have no natural unique key, so only generate them for
+  // newly-created enrollments to keep reruns from piling up duplicates.
+  const newVolunteerCursus = volunteerCursus.filter(
+    (vc) => !existingVolunteerCursusKeys.has(`${vc.profile_id}:${vc.cursus_id}`)
+  );
+
   const doublureRows = [];
-  for (const vc of volunteerCursus) {
+  for (const vc of newVolunteerCursus) {
     const cursusPhases = phases.filter((p) => p.cursus_id === vc.cursus_id);
     if (!cursusPhases.length) continue;
     for (const phase of randomItems(cursusPhases, randomInt(1, cursusPhases.length))) {
