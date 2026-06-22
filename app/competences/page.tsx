@@ -641,6 +641,10 @@ export default function CompetencesPage() {
   const currentVC = volunteerCursus.find((v) => v.id === selectedVCId);
   const currentCursusData = currentVC ? (allCursus.find((c) => c.id === currentVC.cursus_id) ?? null) : null;
 
+  function scrollToPhase(phaseId: string) {
+    document.getElementById(`phase-anchor-${phaseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   // ── Enroll ────────────────────────────────────────────────
 
   async function handleEnroll(cursusId: string) {
@@ -695,6 +699,9 @@ export default function CompetencesPage() {
     try {
       const ev = getEventData(modal);
       const sup = getSupData(modal);
+      // `competence_validations` has no `is_external` column (it lives on `doublures`),
+      // so omit it from the validation payload.
+      const { is_external: _omitExternal, ...evForValidation } = ev;
       createdDoublure = await declareDoublure({
         volunteer_cursus_id: selectedVCId,
         phase_id: modal.phaseId,
@@ -710,7 +717,7 @@ export default function CompetencesPage() {
           volunteer_cursus_id: selectedVCId,
           competence_id: compId,
           doublure_id: createdDoublure.id,
-          ...ev,
+          ...evForValidation,
           ...sup,
           declared_by: profileId,
         });
@@ -935,10 +942,11 @@ export default function CompetencesPage() {
             {cursusDetail.phases.length > 0 ? (
               <div
                 style={{
-                  display: 'grid',
-                  gridTemplateColumns: `repeat(${cursusDetail.phases.length}, 1fr)`,
+                  display: 'flex',
                   gap: 10,
                   marginBottom: 22,
+                  overflowX: 'auto',
+                  paddingBottom: 4,
                 }}
               >
                 {cursusDetail.phases.map((ph, i) => {
@@ -960,7 +968,12 @@ export default function CompetencesPage() {
                   return (
                     <div
                       key={ph.id}
-                      style={{ background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 13, padding: '13px 14px' }}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => scrollToPhase(ph.id)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); scrollToPhase(ph.id); } }}
+                      title={`Aller à la phase « ${ph.label} »`}
+                      style={{ flex: '0 0 auto', width: 184, display: 'flex', flexDirection: 'column', background: '#fff', border: `1px solid ${borderColor}`, borderRadius: 13, padding: '13px 14px', cursor: 'pointer' }}
                     >
                       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
                         <span
@@ -975,10 +988,12 @@ export default function CompetencesPage() {
                       {ph.sub ? (
                         <div style={{ marginTop: 8, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.4 }}>{ph.sub}</div>
                       ) : null}
-                      <div
-                        style={{ marginTop: 9, display: 'inline-block', fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 8px', background: pillBg, color: pillColor }}
-                      >
-                        {done}/{phComps.length} compétences
+                      <div style={{ marginTop: 'auto', paddingTop: 9 }}>
+                        <span
+                          style={{ display: 'inline-block', fontSize: 11, fontWeight: 700, borderRadius: 6, padding: '2px 8px', background: pillBg, color: pillColor }}
+                        >
+                          {done}/{phComps.length} compétences
+                        </span>
                       </div>
                     </div>
                   );
@@ -1039,7 +1054,7 @@ export default function CompetencesPage() {
                   }
 
                   return (
-                    <div key={phase.id} style={{ position: 'relative', paddingBottom: 18 }}>
+                    <div key={phase.id} id={`phase-anchor-${phase.id}`} style={{ position: 'relative', paddingBottom: 18, scrollMarginTop: 80 }}>
                       {/* timeline node */}
                       <div
                         style={{
@@ -1276,7 +1291,8 @@ export default function CompetencesPage() {
                   return (
                     <div
                       key={phase.id}
-                      style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 1px 3px rgba(15,23,42,.04)', marginBottom: 16, overflow: 'hidden' }}
+                      id={`phase-anchor-${phase.id}`}
+                      style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 1px 3px rgba(15,23,42,.04)', marginBottom: 16, overflow: 'hidden', scrollMarginTop: 80 }}
                     >
                       {/* Phase header */}
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid #eef1f5' }}>
