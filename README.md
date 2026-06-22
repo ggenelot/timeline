@@ -196,9 +196,11 @@ Cette commande applique toutes les migrations du dossier `supabase/migrations/` 
 
 ### 6. Créer les comptes de test
 
-Accéder à l'interface d'administration Supabase locale : **http://localhost:54323** (onglet **Authentication → Users**).
+```bash
+npm run demo:create-test-accounts
+```
 
-Créer les comptes suivants (mot de passe conseillé : `DemoPass123!`) :
+Crée (de façon idempotente) les 5 comptes `auth.users` fixes utilisés par les tests E2E et les captures d'écran de démo, mot de passe `DemoPass123!` (configurable via `E2E_TEST_PASSWORD`) :
 
 | Email | Rôle applicatif |
 |---|---|
@@ -208,7 +210,7 @@ Créer les comptes suivants (mot de passe conseillé : `DemoPass123!`) :
 | `benevole2@pcivile.test` | Bénévole |
 | `benevole3@pcivile.test` | Bénévole |
 
-> Les rôles sont assignés via les seeds (étape suivante). Le premier compte créé peut nécessiter une assignation manuelle si les triggers ne sont pas encore en place.
+Relancer ce script est sans danger : les comptes déjà existants sont simplement réinitialisés sur ce mot de passe. Les rôles applicatifs sont ensuite assignés via les seeds (étape suivante).
 
 ### 7. Charger les données de seed
 
@@ -248,6 +250,18 @@ npm run db:seed:demo -- --force
 ```
 
 Pour repartir d'une base propre : `npm run supabase:db:reset` puis relancer le script.
+
+> Astuce : `npm run demo:setup` enchaîne `supabase:db:reset`, `demo:create-test-accounts`, `supabase:db:seed` et `db:seed:demo` en une seule commande.
+
+### 7ter. Régénérer les captures d'écran de démo (optionnel)
+
+Une fois l'application lancée (étape suivante) et les comptes de test créés, les 4 captures d'écran de la section [Vue d'ensemble](#vue-densemble) peuvent être régénérées automatiquement :
+
+```bash
+npm run demo:screenshots
+```
+
+Le script se connecte avec chaque rôle (`admin`, `responsable`, `bénévole`) et capture les vues illustrées dans ce README, en écrasant les fichiers dans `docs/images/`. À relancer après un changement d'UI notable pour garder les captures à jour, sans étape manuelle.
 
 ### 8. Lancer le serveur de développement
 
@@ -354,7 +368,7 @@ Les migrations se trouvent dans `supabase/migrations/` et sont appliquées dans 
 | `benevole2@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
 | `benevole3@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
 
-Ce sont les comptes stables utilisés par les tests E2E. Si le script de démo (voir [étape 7bis](#installation-depuis-zéro)) a été exécuté, de nombreux autres comptes `demo-*@timeline.demo` existent également — pour les parcourir, utiliser Supabase Studio (Authentication → Users) ou la page `/admin/volunteers` de l'application.
+Ce sont les comptes stables utilisés par les tests E2E, provisionnés via `npm run demo:create-test-accounts` (voir [étape 6](#installation-depuis-zéro)). Si le script de démo (voir [étape 7bis](#installation-depuis-zéro)) a été exécuté, de nombreux autres comptes `demo-*@timeline.demo` existent également — pour les parcourir, utiliser Supabase Studio (Authentication → Users) ou la page `/admin/volunteers` de l'application.
 
 ---
 
@@ -428,6 +442,11 @@ npm run supabase:db:push        # Appliquer les migrations
 npm run supabase:db:seed        # Charger les seeds
 npm run supabase:migration:new  # Créer une migration
 npm run db:seed:demo            # Peupler la base avec des données de démo riches (comptes, missions, cursus)
+
+# Démo / captures d'écran
+npm run demo:create-test-accounts  # Créer les 5 comptes de test fixes (idempotent)
+npm run demo:setup                 # Reset complet + comptes de test + seeds + données de démo, en une commande
+npm run demo:screenshots            # Régénérer les captures d'écran du README (app démarrée requise)
 
 # Utilitaires
 npm run diagnose:slack-oauth    # Diagnostiquer la configuration OAuth Slack

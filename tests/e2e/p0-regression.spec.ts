@@ -1,20 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-
-const PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'DemoPass123!';
-
-const USERS = {
-  admin: 'admin@pcivile.test',
-  responsable: 'responsable@pcivile.test',
-  benevole: 'benevole@pcivile.test'
-} as const;
-
-async function login(page: Page, email: string) {
-  await page.goto('/login');
-  await page.getByLabel('Email').fill(email);
-  await page.getByLabel('Mot de passe').fill(PASSWORD);
-  await page.getByRole('button', { name: 'Se connecter' }).click();
-  await page.waitForURL('**/missions');
-}
+import { login, TEST_USERS as USERS } from './helpers';
 
 async function openFirstProposedMission(page: Page) {
   await page.goto('/missions?status=proposed');
