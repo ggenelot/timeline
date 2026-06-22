@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ProposalList, ProposalListItem } from '@/components/missions/proposal-list';
+import { AdminBanner, AdminCard, AdminFieldLabel, AdminPageHeader, AdminSectionLabel, adminInputStyle, ghostButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 
@@ -100,78 +101,57 @@ export default function AdminProposalsPage() {
   );
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des propositions...</p>;
+    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement des propositions…</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
   return (
-    <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Validation des propositions</h1>
-            <p className="mt-1 text-sm text-slate-600">Acceptez ou refusez les bénévoles qui se proposent sur vos missions.</p>
-          </div>
-          {profile.role === 'admin' ? (
-            <div className="flex flex-wrap items-center gap-2">
-              <Link
-                href="/admin/volunteers"
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Ajouter un bénévole
-              </Link>
-              <Link
-                href="/admin/events/create"
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Créer un événement
-              </Link>
+    <div style={{ paddingBottom: 40 }}>
+      <AdminPageHeader
+        title="Validation des propositions"
+        subtitle="Acceptez ou refusez les bénévoles qui se proposent sur vos missions."
+        actions={
+          profile.role === 'admin' ? (
+            <>
+              <Link href="/admin/volunteers" style={ghostButtonStyle}>Ajouter un bénévole</Link>
+              <Link href="/admin/events/create" style={ghostButtonStyle}>Créer un événement</Link>
+            </>
+          ) : null
+        }
+      />
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error ? <AdminBanner tone="error">{error}</AdminBanner> : null}
+
+        <AdminCard padding="18px 22px">
+          <AdminSectionLabel style={{ marginBottom: 13 }}>Filtres</AdminSectionLabel>
+          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+            <div>
+              <AdminFieldLabel>Date début min</AdminFieldLabel>
+              <input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} style={adminInputStyle} />
             </div>
-          ) : null}
-        </div>
+            <div>
+              <AdminFieldLabel>Date début max</AdminFieldLabel>
+              <input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} style={adminInputStyle} />
+            </div>
+          </div>
+        </AdminCard>
+
+        {proposals.length === 0 ? (
+          <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', fontSize: 13.5, color: '#94a3b8' }}>
+            Aucune proposition reçue sur vos missions.
+          </div>
+        ) : filteredProposals.length === 0 ? (
+          <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', fontSize: 13.5, color: '#94a3b8' }}>
+            Aucun résultat avec les filtres actuels.
+          </div>
+        ) : (
+          <ProposalList proposals={filteredProposals} managerId={profile.id} />
+        )}
       </div>
-
-      {error ? <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
-        <h2 className="text-sm font-semibold text-slate-900">Filtres</h2>
-        <div className="mt-3 grid gap-3 md:grid-cols-2">
-          <label className="text-sm text-slate-700">
-            Date début min
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(event) => setDateFrom(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-
-          <label className="text-sm text-slate-700">
-            Date début max
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(event) => setDateTo(event.target.value)}
-              className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-            />
-          </label>
-        </div>
-      </section>
-
-      {proposals.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          Aucune proposition reçue sur vos missions.
-        </div>
-      ) : filteredProposals.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
-          Aucun résultat avec les filtres actuels.
-        </div>
-      ) : (
-        <ProposalList proposals={filteredProposals} managerId={profile.id} />
-      )}
     </div>
   );
 }

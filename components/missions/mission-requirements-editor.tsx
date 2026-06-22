@@ -1,5 +1,6 @@
 import { MissionRequirementFormState } from '@/components/missions/mission-form';
 import { getSkillColorClass } from '@/components/skills/skill-badge';
+import { AdminSectionLabel } from '@/components/admin/ui';
 
 type SkillOption = {
   id: string;
@@ -43,32 +44,33 @@ export function MissionRequirementsEditor({
   }
 
   const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-sm text-slate-700';
+  const stepBtn = { cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 32, fontSize: 16, fontWeight: 700, fontFamily: 'inherit' } as const;
 
   return (
-    <section className="space-y-3 rounded-md border border-slate-200 bg-slate-50/60 p-3">
-      <div className="flex items-center justify-between gap-2">
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #eef1f5', background: '#fcfcfd', borderRadius: 12, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
-          <h2 className="text-sm font-semibold text-slate-900">Besoins en bénévoles</h2>
-          <p className="text-xs text-slate-600">Optionnel. Définissez plusieurs besoins avec ou sans compétence spécifique.</p>
+          <AdminSectionLabel>Besoins en bénévoles</AdminSectionLabel>
+          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#94a3b8' }}>Optionnel. Définissez plusieurs besoins avec ou sans compétence spécifique.</p>
         </div>
         <button
           type="button"
           onClick={addRequirement}
           disabled={submitting || requirements.length >= availableSkills.length + 1}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-50"
+          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting || requirements.length >= availableSkills.length + 1 ? 0.5 : 1 }}
         >
           Ajouter un besoin
         </button>
       </div>
 
       {requirements.length > 0 ? (
-        <div className="space-y-2">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {requirements.map((requirement, index) => {
             const usedSkillIdsByOtherRows = new Set(selectedSkillIds.filter((skillId, selectedIndex) => selectedIndex !== index));
 
             return (
-              <div key={`${index}-${requirement.skill_id || 'generic'}`} className="space-y-3 rounded-md border border-slate-200 bg-white p-3">
-                <div className="flex flex-wrap items-center gap-2">
+              <div key={`${index}-${requirement.skill_id || 'generic'}`} style={{ display: 'flex', flexDirection: 'column', gap: 11, border: '1px solid #eef1f5', background: '#fff', borderRadius: 11, padding: 13 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                   <button
                     type="button"
                     onClick={() => updateRequirement(index, { skill_id: '' })}
@@ -95,27 +97,27 @@ export function MissionRequirementsEditor({
                   })}
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="inline-flex items-center overflow-hidden rounded-full border border-slate-300">
-                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) - 1)} disabled={submitting} className="px-2 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">-</button>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden', borderRadius: 9, border: '1px solid #cbd5e1' }}>
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) - 1)} disabled={submitting} style={{ ...stepBtn, opacity: submitting ? 0.5 : 1 }}>−</button>
                     <input
                       type="number"
                       min={1}
                       step={1}
                       value={requirement.quantity}
                       onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
-                      className="w-12 border-x border-slate-300 px-1 py-1 text-center text-sm"
+                      style={{ width: 48, borderTop: 'none', borderBottom: 'none', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1', padding: '7px 4px', textAlign: 'center', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
                       disabled={submitting}
                       required
                     />
-                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) + 1)} disabled={submitting} className="px-2 py-1 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">+</button>
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) + 1)} disabled={submitting} style={{ ...stepBtn, opacity: submitting ? 0.5 : 1 }}>+</button>
                   </div>
 
                   <button
                     type="button"
                     onClick={() => removeRequirement(index)}
                     disabled={submitting}
-                    className="rounded-md border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+                    style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
                   >
                     Supprimer
                   </button>
@@ -125,10 +127,10 @@ export function MissionRequirementsEditor({
           })}
         </div>
       ) : (
-        <p className="text-xs text-slate-600">Aucun besoin spécifique défini.</p>
+        <p style={{ margin: 0, fontSize: 12.5, color: '#94a3b8' }}>Aucun besoin spécifique défini.</p>
       )}
 
-      {requirementsError ? <p className="text-xs text-red-700">{requirementsError}</p> : null}
+      {requirementsError ? <p style={{ margin: 0, fontSize: 12.5, color: '#dc2626' }}>{requirementsError}</p> : null}
     </section>
   );
 }

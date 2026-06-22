@@ -1,5 +1,12 @@
 import { FormEvent, ReactNode } from 'react';
 import { MissionStatus } from '@/lib/types';
+import {
+  AdminButton,
+  AdminFieldLabel,
+  adminInputStyle,
+  adminTextareaStyle,
+  pillStyle,
+} from '@/components/admin/ui';
 
 export type MissionTypeOption = { id: string; name: string };
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
@@ -37,7 +44,7 @@ export const INITIAL_MISSION_FORM: MissionFormState = {
   title: '',
   description: '',
   location: '',
-  
+
   starts_at_date: '',
   starts_at_time: '',
   ends_at_date: '',
@@ -92,6 +99,8 @@ const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = 
   { value: 'monthly', label: 'Mensuelle' }
 ];
 
+const fieldLabelText = { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 7 } as const;
+
 export function MissionForm({
   form,
   onChange,
@@ -113,63 +122,60 @@ export function MissionForm({
   const canManageRequirements = Boolean(onRequirementsChange);
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
-      <label className="block text-sm text-slate-700">
-        Titre *
+    <form style={{ display: 'flex', flexDirection: 'column', gap: 18 }} onSubmit={onSubmit}>
+      <div>
+        <AdminFieldLabel>Titre *</AdminFieldLabel>
         <input
           type="text"
           value={form.title}
           onChange={(event) => onChange({ ...form, title: event.target.value })}
-          className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          style={adminInputStyle}
           placeholder="Ex: Distribution alimentaire secteur Nord"
           disabled={submitting}
           required
         />
-      </label>
+      </div>
 
-      <label className="block text-sm text-slate-700">
-        Description
+      <div>
+        <AdminFieldLabel>Description</AdminFieldLabel>
         <textarea
           value={form.description}
           onChange={(event) => onChange({ ...form, description: event.target.value })}
-          className="mt-1 min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+          style={{ ...adminTextareaStyle, minHeight: 112 }}
           placeholder="Détails opérationnels de la mission"
           disabled={submitting}
         />
-      </label>
-
-      <div className="grid gap-4">
-        <label className="block text-sm text-slate-700">
-          Lieu
-          <input
-            type="text"
-            value={form.location}
-            onChange={(event) => onChange({ ...form, location: event.target.value })}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Ex: Maison des associations"
-            disabled={submitting}
-            list="mission-location-suggestions"
-          />
-          {locationSuggestions.length > 0 ? (
-            <datalist id="mission-location-suggestions">
-              {locationSuggestions.map((suggestion) => (
-                <option key={suggestion} value={suggestion} />
-              ))}
-            </datalist>
-          ) : null}
-        </label>
-
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm text-slate-700">Début *</p>
-          <div className="grid grid-cols-2 gap-2">
+      <div>
+        <AdminFieldLabel>Lieu</AdminFieldLabel>
+        <input
+          type="text"
+          value={form.location}
+          onChange={(event) => onChange({ ...form, location: event.target.value })}
+          style={adminInputStyle}
+          placeholder="Ex: Maison des associations"
+          disabled={submitting}
+          list="mission-location-suggestions"
+        />
+        {locationSuggestions.length > 0 ? (
+          <datalist id="mission-location-suggestions">
+            {locationSuggestions.map((suggestion) => (
+              <option key={suggestion} value={suggestion} />
+            ))}
+          </datalist>
+        ) : null}
+      </div>
+
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <div>
+          <AdminFieldLabel>Début *</AdminFieldLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input
               type="date"
               value={form.starts_at_date}
               onChange={(event) => onChange({ ...form, starts_at_date: event.target.value, ends_at_date: form.ends_at_date || event.target.value })}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              style={adminInputStyle}
               disabled={submitting}
               required
             />
@@ -177,21 +183,21 @@ export function MissionForm({
               type="time"
               value={form.starts_at_time}
               onChange={(event) => onChange({ ...form, starts_at_time: event.target.value })}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              style={adminInputStyle}
               disabled={submitting}
               required
             />
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-sm text-slate-700">Fin *</p>
-          <div className="grid grid-cols-2 gap-2">
+        <div>
+          <AdminFieldLabel>Fin *</AdminFieldLabel>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
             <input
               type="date"
               value={form.ends_at_date}
               onChange={(event) => onChange({ ...form, ends_at_date: event.target.value })}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              style={adminInputStyle}
               disabled={submitting}
               required
             />
@@ -199,7 +205,7 @@ export function MissionForm({
               type="time"
               value={form.ends_at_time}
               onChange={(event) => onChange({ ...form, ends_at_time: event.target.value })}
-              className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              style={adminInputStyle}
               disabled={submitting}
               required
             />
@@ -207,10 +213,10 @@ export function MissionForm({
         </div>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <div className="space-y-2">
-          <p className="text-sm text-slate-700">Catégorie *</p>
-          <div className="flex flex-wrap gap-2">
+      <div style={{ display: 'grid', gap: 16, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))' }}>
+        <div>
+          <AdminFieldLabel>Catégorie *</AdminFieldLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {missionTypes.map((option) => (
               <button
                 key={option.id}
@@ -218,24 +224,20 @@ export function MissionForm({
                 onClick={() => onChange({ ...form, mission_type_id: option.id })}
                 disabled={submitting}
                 aria-pressed={form.mission_type_id === option.id}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.mission_type_id === option.id
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                } disabled:cursor-not-allowed disabled:opacity-60`}
+                style={{ ...pillStyle(form.mission_type_id === option.id), ...(submitting ? { opacity: 0.6, cursor: 'not-allowed' } : null) }}
               >
                 {option.name}
               </button>
             ))}
             {missionTypes.length === 0 && (
-              <p className="text-sm text-slate-400">Chargement des types de mission...</p>
+              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>Chargement des types de mission...</p>
             )}
           </div>
         </div>
 
-        <div className="space-y-2">
-          <p className="text-sm text-slate-700">Statut *</p>
-          <div className="flex flex-wrap gap-2">
+        <div>
+          <AdminFieldLabel>Statut *</AdminFieldLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
             {MISSION_STATUS_OPTIONS.map((option) => (
               <button
                 key={option.value}
@@ -243,11 +245,7 @@ export function MissionForm({
                 onClick={() => onChange({ ...form, status: option.value })}
                 disabled={submitting}
                 aria-pressed={form.status === option.value}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
-                  form.status === option.value
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                } disabled:cursor-not-allowed disabled:opacity-60`}
+                style={{ ...pillStyle(form.status === option.value), ...(submitting ? { opacity: 0.6, cursor: 'not-allowed' } : null) }}
               >
                 {option.label}
               </button>
@@ -267,23 +265,22 @@ export function MissionForm({
       ) : null}
 
       {recurrence !== undefined && onRecurrenceChange ? (
-        <div className="space-y-3 rounded-md border border-slate-200 bg-slate-50 p-3">
-          <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-slate-700">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #eef1f5', background: '#fcfcfd', borderRadius: 12, padding: 14 }}>
+          <label style={{ display: 'flex', cursor: 'pointer', alignItems: 'center', gap: 9, fontSize: 13.5, fontWeight: 700, color: '#334155' }}>
             <input
               type="checkbox"
               checked={recurrence.enabled}
               onChange={(e) => onRecurrenceChange({ ...recurrence, enabled: e.target.checked })}
               disabled={submitting}
-              className="rounded"
             />
             Répéter cette mission
           </label>
 
           {recurrence.enabled ? (
-            <div className="space-y-3 pl-6">
-              <div className="space-y-1">
-                <p className="text-sm text-slate-600">Fréquence</p>
-                <div className="flex flex-wrap gap-2">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 13, paddingLeft: 24 }}>
+              <div>
+                <div style={fieldLabelText}>Fréquence</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                   {FREQUENCY_OPTIONS.map((option) => (
                     <button
                       key={option.value}
@@ -291,11 +288,7 @@ export function MissionForm({
                       onClick={() => onRecurrenceChange({ ...recurrence, frequency: option.value })}
                       disabled={submitting}
                       aria-pressed={recurrence.frequency === option.value}
-                      className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
-                        recurrence.frequency === option.value
-                          ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                          : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                      } disabled:cursor-not-allowed disabled:opacity-60`}
+                      style={{ ...pillStyle(recurrence.frequency === option.value), ...(submitting ? { opacity: 0.6, cursor: 'not-allowed' } : null) }}
                     >
                       {option.label}
                     </button>
@@ -304,9 +297,9 @@ export function MissionForm({
               </div>
 
               {recurrence.frequency === 'weekly' ? (
-                <div className="space-y-1">
-                  <p className="text-sm text-slate-600">Jours de la semaine</p>
-                  <div className="flex flex-wrap gap-2">
+                <div>
+                  <div style={fieldLabelText}>Jours de la semaine</div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                     {DAYS_OF_WEEK.map((day, index) => (
                       <button
                         key={index}
@@ -319,11 +312,7 @@ export function MissionForm({
                         }}
                         disabled={submitting}
                         aria-pressed={recurrence.days_of_week.includes(index)}
-                        className={`rounded-full border px-3 py-1 text-sm font-medium transition ${
-                          recurrence.days_of_week.includes(index)
-                            ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                            : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-100'
-                        } disabled:cursor-not-allowed disabled:opacity-60`}
+                        style={{ ...pillStyle(recurrence.days_of_week.includes(index)), ...(submitting ? { opacity: 0.6, cursor: 'not-allowed' } : null) }}
                       >
                         {day}
                       </button>
@@ -332,43 +321,39 @@ export function MissionForm({
                 </div>
               ) : null}
 
-              <label className="block text-sm text-slate-600">
-                Répéter jusqu&apos;au *
+              <div>
+                <div style={fieldLabelText}>Répéter jusqu&apos;au *</div>
                 <input
                   type="date"
                   value={recurrence.end_date}
                   onChange={(e) => onRecurrenceChange({ ...recurrence, end_date: e.target.value })}
                   disabled={submitting}
-                  className="mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                  style={adminInputStyle}
                   required={recurrence.enabled}
                 />
-              </label>
+              </div>
             </div>
           ) : null}
         </div>
       ) : null}
 
       {createdByLabel ? (
-        <label className="block text-sm text-slate-700">
-          Créé par
+        <div>
+          <AdminFieldLabel>Créé par</AdminFieldLabel>
           <input
             type="text"
             value={createdByLabel}
-            className="mt-1 w-full rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-600"
+            style={{ ...adminInputStyle, background: '#f1f5f9', color: '#64748b' }}
             disabled
             readOnly
           />
-        </label>
+        </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', gap: 10 }}>
+        <AdminButton type="submit" disabled={submitting}>
           {submitting ? submittingLabel : submitLabel}
-        </button>
+        </AdminButton>
         {footerActions}
       </div>
     </form>

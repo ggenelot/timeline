@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionTypeOption, MissionRequirementFormState } from '@/components/missions/mission-form';
+import { AdminBanner, AdminCard, AdminPageHeader, ghostButtonStyle, dangerButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, Profile } from '@/lib/types';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
@@ -140,11 +141,19 @@ export default function AdminEditMissionPage() {
         return;
       }
 
-      const { data: missionData, error: missionError } = await supabase
-        .from('missions')
-        .select('id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
-        .eq('id', missionId)
-        .single<MissionEditPayload>();
+      // Mission, skills, location suggestions and the session are independent: fetch in parallel.
+      const [missionResult, sessionResult, skillResult, locationsResult] = await Promise.all([
+        supabase
+          .from('missions')
+          .select('id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity)')
+          .eq('id', missionId)
+          .single<MissionEditPayload>(),
+        supabase.auth.getSession(),
+        supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
+        supabase.from('missions').select('location').not('location', 'is', null),
+      ]);
+
+      const { data: missionData, error: missionError } = missionResult;
 
       if (missionError || !missionData) {
         setError('Mission introuvable.');
@@ -163,18 +172,14 @@ export default function AdminEditMissionPage() {
         }))
       );
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
+      const tok = sessionResult.data.session?.access_token ?? '';
       const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
       if (typesRes.ok) {
         const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
         setMissionTypes(typesJson.missionTypes);
       }
 
-      const { data: skillData, error: skillError } = await supabase
-        .from('skills')
-        .select('id,name,skill_categories(color)')
-        .order('name', { ascending: true });
+      const { data: skillData, error: skillError } = skillResult;
 
       if (skillError) {
         setError(`Impossible de charger les compétences: ${skillError.message}`);
@@ -190,10 +195,7 @@ export default function AdminEditMissionPage() {
         }))
       );
 
-      const { data: locationsData, error: locationsError } = await supabase
-        .from('missions')
-        .select('location')
-        .not('location', 'is', null);
+      const { data: locationsData, error: locationsError } = locationsResult;
 
       if (locationsError) {
         setError(`Impossible de charger les suggestions de lieux: ${locationsError.message}`);
@@ -340,45 +342,41 @@ export default function AdminEditMissionPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
+    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
   if (profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        Accès refusé : cette page est réservée aux administrateurs.
-      </div>
+      <AdminBanner tone="error">Accès refusé : cette page est réservée aux administrateurs.</AdminBanner>
     );
   }
 
   if (!mission || !form) {
-    return <p className="text-sm text-red-600">{error ?? 'Mission introuvable.'}</p>;
+    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Mission introuvable.'}</p>;
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-900">Modifier la mission</h1>
-          <p className="mt-1 text-sm text-slate-600">Mettez à jour les champs de la mission puis enregistrez.</p>
-        </div>
+    <div style={{ paddingBottom: 40 }}>
+      <AdminPageHeader
+        title="Modifier la mission"
+        subtitle="Mettez à jour les informations de la mission puis enregistrez."
+        actions={
+          <Link href={`/missions/${mission.id}`} style={ghostButtonStyle}>
+            Voir la mission
+          </Link>
+        }
+      />
 
-        <Link
-          href={`/missions/${mission.id}`}
-          className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
-        >
-          Voir la mission
-        </Link>
-      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error ? <AdminBanner tone="error">{error}</AdminBanner> : null}
+        {success ? <AdminBanner tone="success">{success}</AdminBanner> : null}
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
-
-      <MissionForm
+        <AdminCard>
+          <MissionForm
         form={form}
         onChange={setForm}
         missionTypes={missionTypes}
@@ -389,22 +387,24 @@ export default function AdminEditMissionPage() {
         locationSuggestions={locationSuggestions}
         onSubmit={handleSubmit}
         submitting={submitting}
-        submitLabel="Enregistrer"
-        submittingLabel="Enregistrement..."
-        footerActions={
-          <AdminDeleteMissionButton
-            missionId={mission.id}
-            className="rounded-md bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-            onError={(message) => {
-              setError(message);
-              setSuccess(null);
-            }}
-            onDeleted={() => {
-              router.push('/missions');
-            }}
+          submitLabel="Enregistrer"
+          submittingLabel="Enregistrement..."
+          footerActions={
+            <AdminDeleteMissionButton
+              missionId={mission.id}
+              style={dangerButtonStyle}
+              onError={(message) => {
+                setError(message);
+                setSuccess(null);
+              }}
+              onDeleted={() => {
+                router.push('/missions');
+              }}
+            />
+          }
           />
-        }
-      />
-    </section>
+        </AdminCard>
+      </div>
+    </div>
   );
 }
