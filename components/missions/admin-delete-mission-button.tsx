@@ -1,16 +1,17 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, type CSSProperties } from 'react';
 import { supabase } from '@/lib/supabase/client';
 
 type AdminDeleteMissionButtonProps = {
   missionId: string;
   className?: string;
+  style?: CSSProperties;
   onDeleted?: () => void;
   onError?: (message: string) => void;
 };
 
-export function AdminDeleteMissionButton({ missionId, className, onDeleted, onError }: AdminDeleteMissionButtonProps) {
+export function AdminDeleteMissionButton({ missionId, className, style, onDeleted, onError }: AdminDeleteMissionButtonProps) {
   const [deleting, setDeleting] = useState(false);
 
   async function handleDelete() {
@@ -47,7 +48,8 @@ export function AdminDeleteMissionButton({ missionId, className, onDeleted, onEr
       type="button"
       onClick={handleDelete}
       disabled={deleting}
-      className={className ?? 'fixed bottom-6 right-6 z-50 rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60'}
+      style={style ? { ...style, ...(deleting ? { opacity: 0.55, cursor: 'not-allowed' } : null) } : undefined}
+      className={style ? undefined : (className ?? 'fixed bottom-6 right-6 z-50 rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60')}
     >
       {deleting ? 'Suppression...' : 'Supprimer la mission'}
     </button>

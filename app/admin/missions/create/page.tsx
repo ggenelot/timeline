@@ -3,6 +3,7 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionTypeOption, INITIAL_MISSION_FORM, MissionRequirementFormState, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
+import { AdminBanner, AdminCard, AdminPageHeader } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 import { getEventTemplateById } from '@/lib/event-templates';
@@ -149,8 +150,14 @@ export default function AdminCreateMissionPage() {
 
       setProfile(profileData);
 
-      const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
+      // Independent reads run in parallel to avoid a request waterfall.
+      const [sessionResult, skillResult, locationsResult] = await Promise.all([
+        supabase.auth.getSession(),
+        supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
+        supabase.from('missions').select('location').not('location', 'is', null),
+      ]);
+
+      const tok = sessionResult.data.session?.access_token ?? '';
       const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
       if (typesRes.ok) {
         const typesJson = (await typesRes.json()) as { missionTypes: MissionTypeOption[] };
@@ -160,10 +167,7 @@ export default function AdminCreateMissionPage() {
         }
       }
 
-      const { data: skillData, error: skillError } = await supabase
-        .from('skills')
-        .select('id,name,skill_categories(color)')
-        .order('name', { ascending: true });
+      const { data: skillData, error: skillError } = skillResult;
 
       if (skillError) {
         setError(`Impossible de charger les compétences: ${skillError.message}`);
@@ -179,10 +183,7 @@ export default function AdminCreateMissionPage() {
         }))
       );
 
-      const { data: locationsData, error: locationsError } = await supabase
-        .from('missions')
-        .select('location')
-        .not('location', 'is', null);
+      const { data: locationsData, error: locationsError } = locationsResult;
 
       if (locationsError) {
         setError(`Impossible de charger les suggestions de lieux: ${locationsError.message}`);
@@ -399,32 +400,32 @@ export default function AdminCreateMissionPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
+    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
   if (profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-        Accès refusé : cette page est réservée aux administrateurs.
-      </div>
+      <AdminBanner tone="error">Accès refusé : cette page est réservée aux administrateurs.</AdminBanner>
     );
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Créer une mission</h1>
-        <p className="mt-1 text-sm text-slate-600">Renseignez les champs de la table <code>public.missions</code> hors colonnes techniques auto-générées.</p>
-      </div>
+    <div style={{ paddingBottom: 40 }}>
+      <AdminPageHeader
+        title="Créer une mission"
+        subtitle="Renseignez les informations de la mission. Vous pouvez aussi définir les besoins en bénévoles et une récurrence."
+      />
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error ? <AdminBanner tone="error">{error}</AdminBanner> : null}
+        {success ? <AdminBanner tone="success">{success}</AdminBanner> : null}
 
-      <MissionForm
+        <AdminCard>
+          <MissionForm
         form={form}
         onChange={setForm}
         missionTypes={missionTypes}
@@ -437,10 +438,12 @@ export default function AdminCreateMissionPage() {
         onRecurrenceChange={setRecurrence}
         onSubmit={handleSubmit}
         submitting={submitting}
-        submitLabel="Créer la mission"
-        submittingLabel="Création..."
-        createdByLabel={profile.full_name ? `${profile.full_name} (${profile.email})` : profile.email}
-      />
-    </section>
+          submitLabel="Créer la mission"
+          submittingLabel="Création..."
+          createdByLabel={profile.full_name ? `${profile.full_name} (${profile.email})` : profile.email}
+          />
+        </AdminCard>
+      </div>
+    </div>
   );
 }

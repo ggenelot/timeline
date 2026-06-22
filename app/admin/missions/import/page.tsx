@@ -15,6 +15,7 @@ import {
 import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, MissionStatus, Profile } from '@/lib/types';
 import { supabase } from '@/lib/supabase/client';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
+import { AdminBanner, AdminCard, AdminPageHeader, AdminSectionLabel, adminInputStyle, ghostButtonStyle, primaryButtonStyle, pillStyle } from '@/components/admin/ui';
 
 type ImportFilter = 'nouveau' | 'modifié' | 'doublon' | 'invalide';
 
@@ -910,101 +911,100 @@ export default function AdminMissionImportPage() {
   }, [importStatus]);
 
   if (loadingProfile) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
+    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
   }
 
   if (!profile || profile.role !== 'admin') {
-    return <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">Accès refusé : page réservée aux admins.</p>;
+    return <AdminBanner tone="error">Accès refusé : page réservée aux admins.</AdminBanner>;
   }
 
   return (
-    <section className="space-y-5 rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Importer des missions</h1>
-      </header>
+    <div style={{ paddingBottom: 40 }}>
+      <AdminPageHeader
+        title="Importer des missions"
+        subtitle="Importez des missions depuis un fichier (.csv, .xlsx, .xls) ou un Google Sheet public, vérifiez, corrigez puis enregistrez."
+      />
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {error ? <AdminBanner tone="error">{error}</AdminBanner> : null}
+        {success ? <AdminBanner tone="success">{success}</AdminBanner> : null}
 
-      <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <label className="block text-sm font-medium text-slate-700">Fichier (.csv, .xlsx, .xls)</label>
-        <div className="mt-2 flex flex-wrap items-center gap-3">
-          <input
-            type="file"
-            accept=".csv,.xlsx,.xls"
-            onChange={handleFileChange}
-            disabled={analyzing || importing}
-            className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-slate-800"
-          />
-          <button
-            type="button"
-            onClick={handleImportFromGoogleSheet}
-            disabled={analyzing || importing || loadingFromGoogleSheet}
-            className="inline-flex items-center rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 transition hover:-translate-y-0.5 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loadingFromGoogleSheet ? 'Chargement du Google Sheet...' : 'Importer depuis Google Sheet public'}
-          </button>
-        </div>
-        {fileName ? <p className="mt-2 text-xs text-slate-500">Fichier sélectionné : <span className="font-medium text-slate-700">{fileName}</span></p> : null}
-      </div>
+        <AdminCard padding="18px 22px">
+          <AdminSectionLabel style={{ marginBottom: 11 }}>Fichier (.csv, .xlsx, .xls)</AdminSectionLabel>
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
+            <input
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileChange}
+              disabled={analyzing || importing}
+              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-emerald-700"
+            />
+            <button
+              type="button"
+              onClick={handleImportFromGoogleSheet}
+              disabled={analyzing || importing || loadingFromGoogleSheet}
+              style={{ ...ghostButtonStyle, ...(analyzing || importing || loadingFromGoogleSheet ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
+            >
+              {loadingFromGoogleSheet ? 'Chargement du Google Sheet…' : 'Importer depuis Google Sheet public'}
+            </button>
+          </div>
+          {fileName ? <p style={{ margin: '10px 0 0', fontSize: 12, color: '#94a3b8' }}>Fichier sélectionné : <span style={{ fontWeight: 700, color: '#334155' }}>{fileName}</span></p> : null}
+        </AdminCard>
 
       {rows.length > 0 ? (
-        <div className="space-y-4">
-          <section className="rounded-lg border border-slate-200 bg-white p-4">
-            <div className="space-y-3">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <AdminCard padding="18px 22px">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <input
                 type="search"
+                aria-label="Rechercher une mission"
                 value={searchQuery}
                 onChange={(event) => setSearchQuery(event.target.value)}
                 placeholder="Rechercher une mission"
-                className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                style={adminInputStyle}
               />
-              <div className="flex flex-wrap gap-2">
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                 {(['nouveau', 'modifié', 'doublon', 'invalide'] as ImportFilter[]).map((filter) => (
                   <button
                     key={filter}
                     type="button"
                     onClick={() => setActiveFilter(filter)}
-                    className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
-                      activeFilter === filter
-                        ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                        : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
-                    }`}
+                    style={pillStyle(activeFilter === filter)}
                   >
                     {IMPORT_STATUS_LABELS[filter]} {filterCounts[filter]}
                   </button>
                 ))}
               </div>
-              {checkingDuplicates ? <p className="text-xs text-slate-500">Vérification des doublons en base en cours...</p> : null}
-              {duplicateCheckError ? <p className="text-xs text-amber-700">{duplicateCheckError}</p> : null}
+              {checkingDuplicates ? <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Vérification des doublons en base en cours…</p> : null}
+              {duplicateCheckError ? <p style={{ margin: 0, fontSize: 12, color: '#b45309' }}>{duplicateCheckError}</p> : null}
             </div>
-          </section>
+          </AdminCard>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12 }}>
             <button
               type="button"
               onClick={handleImport}
               disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
-              className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ ...primaryButtonStyle, ...(importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
             >
-              {importing ? 'Import en cours...' : `Importer toutes les nouvelles missions (${dedupAnalysis.readyMissions.length})`}
+              {importing ? 'Import en cours…' : `Importer toutes les nouvelles missions (${dedupAnalysis.readyMissions.length})`}
             </button>
             <button
               type="button"
               onClick={handleUpdateModified}
               disabled={importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates}
-              className="rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-60"
+              style={{ cursor: 'pointer', border: 'none', background: '#d97706', color: '#fff', borderRadius: 9, padding: '10px 18px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', ...(importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
             >
-              {importing ? 'Mise à jour en cours...' : `Mettre à jour les missions modifiées (${dedupAnalysis.modifiedMissions.length})`}
+              {importing ? 'Mise à jour en cours…' : `Mettre à jour les missions modifiées (${dedupAnalysis.modifiedMissions.length})`}
             </button>
-            <div className="inline-flex items-center gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 shadow-sm">
-              <span className="text-xs font-medium uppercase tracking-wide text-slate-500">Statut import</span>
-              <div className="inline-flex rounded-full border border-slate-200 bg-slate-100 p-0.5">
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '8px 12px', boxShadow: '0 2px 10px rgba(15,23,42,.05)' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>Statut import</span>
+              <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', background: '#f1f5f9', borderRadius: 999, padding: 2 }}>
                 <button
                   type="button"
                   onClick={() => setImportStatus('draft')}
                   disabled={importing}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${importStatus === 'draft' ? 'bg-white text-slate-900 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'draft' ? '#fff' : 'transparent', color: importStatus === 'draft' ? '#0f172a' : '#64748b', boxShadow: importStatus === 'draft' ? '0 1px 2px rgba(15,23,42,.12)' : 'none' }}
                 >
                   Brouillon
                 </button>
@@ -1012,7 +1012,7 @@ export default function AdminMissionImportPage() {
                   type="button"
                   onClick={() => setImportStatus('proposed')}
                   disabled={importing}
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${importStatus === 'proposed' ? 'bg-emerald-50 text-emerald-700 shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'proposed' ? '#ecfdf5' : 'transparent', color: importStatus === 'proposed' ? '#047857' : '#64748b', boxShadow: importStatus === 'proposed' ? '0 1px 2px rgba(15,23,42,.12)' : 'none' }}
                 >
                   Proposé
                 </button>
@@ -1038,30 +1038,30 @@ export default function AdminMissionImportPage() {
             })}
 
             {visibleRows.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+              <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', fontSize: 13.5, color: '#94a3b8' }}>
                 Aucune mission avec le filtre &quot;{IMPORT_STATUS_LABELS[activeFilter]}&quot;
                 {searchQuery.trim() ? ` et la recherche "${searchQuery}"` : ''}.
               </div>
             ) : null}
 
             {totalPages > 1 ? (
-              <div className="flex items-center justify-center gap-2 pt-2">
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, paddingTop: 4 }}>
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                   disabled={page === 0}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ ...ghostButtonStyle, ...(page === 0 ? { opacity: 0.45, cursor: 'not-allowed' } : null) }}
                 >
                   ← Précédent
                 </button>
-                <span className="text-sm text-slate-500">
+                <span style={{ fontSize: 13, color: '#64748b' }}>
                   Page {page + 1} / {totalPages} ({visibleRows.length} missions)
                 </span>
                 <button
                   type="button"
                   onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
                   disabled={page >= totalPages - 1}
-                  className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                  style={{ ...ghostButtonStyle, ...(page >= totalPages - 1 ? { opacity: 0.45, cursor: 'not-allowed' } : null) }}
                 >
                   Suivant →
                 </button>
@@ -1069,7 +1069,7 @@ export default function AdminMissionImportPage() {
             ) : null}
           </div>
 
-          <div className="flex items-center gap-2">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <button
               type="button"
               onClick={() => {
@@ -1082,13 +1082,14 @@ export default function AdminMissionImportPage() {
                 setPage(0);
               }}
               disabled={importing}
-              className="rounded-md border border-slate-300 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50"
+              style={{ ...ghostButtonStyle, ...(importing ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
             >
               Annuler
             </button>
           </div>
         </div>
       ) : null}
-    </section>
+      </div>
+    </div>
   );
 }
