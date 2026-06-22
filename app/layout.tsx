@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 import { Hanken_Grotesk } from 'next/font/google';
 import './globals.css';
-import { Header } from '@/components/header';
+import { AppShell } from '@/components/app-shell';
 import { AuthGuard } from '@/components/auth-guard';
 import { HelpButton } from '@/components/help-button';
 
@@ -21,8 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="fr" className={hanken.variable}>
       <body>
         <AuthGuard>
-          <Header />
-          <main className="mx-auto max-w-4xl px-4 py-8">{children}</main>
+          <AppShell>{children}</AppShell>
           <HelpButton />
         </AuthGuard>
       </body>
