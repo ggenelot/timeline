@@ -158,115 +158,112 @@ export default function MissionsPage() {
   async function loadData() {
     setError(null);
 
-    const { data: authData } = await supabase.auth.getUser();
-    if (!authData.user) {
+    // Single auth read (local session) instead of a network getUser() + a second
+    // getSession() call. RLS still enforces access on every query below.
+    const { data: sessionData } = await supabase.auth.getSession();
+    const session = sessionData.session;
+    if (!session?.user) {
       router.replace('/login');
       return;
     }
+    const userId = session.user.id;
+    const tok = session.access_token ?? '';
+    const authHeaders = { Authorization: `Bearer ${tok}` };
 
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('id,full_name,email,role,sector,created_at')
-      .eq('id', authData.user.id)
-      .single();
+    // ── Wave 1 : everything that only needs the user id, in parallel ──────────
+    const [profileRes, typesRes, missionsRes, assignmentsRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id,full_name,email,role,sector,created_at')
+        .eq('id', userId)
+        .single(),
+      fetch('/api/mission-types', { headers: authHeaders }),
+      supabase
+        .from('missions')
+        .select(
+          'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
+        )
+        .order('starts_at', { ascending: true }),
+      supabase
+        .from('mission_assignments')
+        .select('mission_id,assignment_status')
+        .eq('volunteer_id', userId)
+    ]);
 
+    const profileData = profileRes.data;
     if (!profileData) {
       setError('Profil introuvable.');
       setLoading(false);
       return;
     }
-
     setProfile(profileData);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const tok = sessionData.session?.access_token ?? '';
-
-    // Fetch all mission types
     let allTypeIds: string[] = [];
-    const typesRes = await fetch('/api/mission-types', { headers: { Authorization: `Bearer ${tok}` } });
     if (typesRes.ok) {
       const typesJson = (await typesRes.json()) as { missionTypes: MissionType[] };
       setMissionTypes(typesJson.missionTypes);
       allTypeIds = typesJson.missionTypes.map((t) => t.id);
     }
 
-    if (profileData.role === 'benevole') {
-      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-      if (rolesRes.ok) {
-        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
-
-        const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
-        const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
-          ? allTypeIds
-          : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
-
-        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
-        const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
-          ? allTypeIds
-          : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
-
-        setCanCreateMissionTypeIds(createIds);
-        setCanManageMissionTypeIds(manageIds);
-      }
-    }
-
-    let missionQuery = supabase
-      .from('missions')
-      .select(
-        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
-      );
-
-    if (profileData.role === 'benevole') {
-      // RLS already filters: proposed missions + own drafts — no extra filter needed
-    }
-
-    const { data: missionData, error: missionError } = await missionQuery.order('starts_at', { ascending: true });
-
-    if (missionError) {
-      setError(`Erreur chargement missions: ${missionError.message}`);
+    if (missionsRes.error) {
+      setError(`Erreur chargement missions: ${missionsRes.error.message}`);
       setLoading(false);
       return;
     }
 
-    const mappedMissions: MissionWithRequiredSkills[] = (missionData ?? []).map((mission) => ({
+    const mappedMissions: MissionWithRequiredSkills[] = (missionsRes.data ?? []).map((mission) => ({
       ...mission,
       mission_required_skills: (mission.mission_required_skills ?? []).map((requiredSkill) => ({
         ...requiredSkill,
         skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
       }))
     }));
-
     setMissions(mappedMissions);
-
-    const { data: proposalData } = await supabase
-      .from('mission_proposals')
-      .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
-      .in(
-        'mission_id',
-        mappedMissions.map((mission) => mission.id)
-      );
-
-    const allMissionProposals = proposalData ?? [];
-    setProposals(allMissionProposals.filter((proposal) => proposal.volunteer_id === authData.user.id));
-
-    // My retained (selected/confirmed) assignments → "retenu" relation
-    const { data: assignmentData } = await supabase
-      .from('mission_assignments')
-      .select('mission_id,assignment_status')
-      .eq('volunteer_id', authData.user.id);
 
     setRetainedMissionIds(
       new Set(
-        (assignmentData ?? [])
+        (assignmentsRes.data ?? [])
           .filter((row) => row.assignment_status === 'selected' || row.assignment_status === 'confirmed')
           .map((row) => row.mission_id)
       )
     );
 
+    // ── Wave 2 : proposals (need mission ids) + role behaviors (benevole) ─────
+    const [proposalsRes, rolesRes] = await Promise.all([
+      supabase
+        .from('mission_proposals')
+        .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
+        .in('mission_id', mappedMissions.map((mission) => mission.id)),
+      profileData.role === 'benevole'
+        ? fetch('/api/roles/mine', { headers: authHeaders })
+        : Promise.resolve(null)
+    ]);
+
+    if (rolesRes && rolesRes.ok) {
+      const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
+
+      const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+      const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+        ? allTypeIds
+        : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
+      const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
+      const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
+        ? allTypeIds
+        : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
+
+      setCanCreateMissionTypeIds(createIds);
+      setCanManageMissionTypeIds(manageIds);
+    }
+
+    const allMissionProposals = proposalsRes.data ?? [];
+    setProposals(allMissionProposals.filter((proposal) => proposal.volunteer_id === userId));
+
     const availableVolunteerIds = Array.from(
       new Set(allMissionProposals.filter((proposal) => proposal.response === 'available').map((proposal) => proposal.volunteer_id))
     );
 
+    // ── Wave 3 : skill chips for available volunteers (need their ids) ────────
     const { data: availableProfiles } = availableVolunteerIds.length
       ? await supabase
         .from('profiles')
