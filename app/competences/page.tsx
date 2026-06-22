@@ -335,6 +335,30 @@ function ModalInput({
   );
 }
 
+// Chronological order (oldest first): by event date, undated last, then creation.
+function compareDoublureChrono(a: Doublure, b: Doublure): number {
+  const da = a.event_date ?? '';
+  const db = b.event_date ?? '';
+  if (da && db) return da < db ? -1 : da > db ? 1 : 0;
+  if (da) return -1;
+  if (db) return 1;
+  return (a.created_at ?? '') < (b.created_at ?? '') ? -1 : 1;
+}
+
+// Prominent "+" button to declare a doublure (more legible than a plain link).
+function DeclareDoublureButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', background: '#0f172a', color: '#fff', borderRadius: 11, padding: '10px 18px', fontSize: 14, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 1px 3px rgba(15,23,42,.12)' }}
+    >
+      <span aria-hidden style={{ fontSize: 21, lineHeight: 0.7, fontWeight: 400 }}>+</span>
+      Déclarer une doublure
+    </button>
+  );
+}
+
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>
@@ -579,6 +603,7 @@ export default function CompetencesPage() {
   const [doublures, setDoublures] = useState<Doublure[]>([]);
   const [validations, setValidations] = useState<CompetenceValidation[]>([]);
   const [view, setView] = useState<ViewMode>('parcours');
+  const [collapsedDoublures, setCollapsedDoublures] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -750,6 +775,15 @@ export default function CompetencesPage() {
   function openDoublureModal(phaseId: string) {
     setError(null);
     setModal({ ...MODAL_INIT, phaseId });
+  }
+
+  function toggleDoublureCollapsed(id: string) {
+    setCollapsedDoublures((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
 
   // Compétences proposées à la validation pour la phase de la doublure :
@@ -1041,7 +1075,7 @@ export default function CompetencesPage() {
                 <div style={{ position: 'absolute', left: 13, top: 6, bottom: 14, width: 2, background: '#e3e7ee' }} />
 
                 {cursusDetail.phases.map((phase, i) => {
-                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id);
+                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id).sort(compareDoublureChrono);
                   const phComps = (phase.competences ?? []) as CursusCompetence[];
                   const doneComps = phComps.filter((c) => validatedIds.has(c.id));
                   const todoComps = phComps.filter((c) => !validatedIds.has(c.id));
@@ -1123,15 +1157,7 @@ export default function CompetencesPage() {
                             <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
                               Doublures &amp; événements
                             </span>
-                            <span style={{ display: 'inline-flex', gap: 8 }}>
-                              <button
-                                type="button"
-                                onClick={() => openDoublureModal(phase.id)}
-                                style={{ cursor: 'pointer', border: '1px solid #0f172a', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
-                              >
-                                Déclarer une doublure
-                              </button>
-                            </span>
+                            <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} />
                           </div>
 
                           {/* Events with their competences */}
@@ -1140,10 +1166,11 @@ export default function CompetencesPage() {
                               const dVals = validations.filter(
                                 (v) => v.doublure_id === d.id || (d.event_name && v.event_name === d.event_name)
                               );
+                              const collapsed = collapsedDoublures.has(d.id);
                               return (
                                 <div key={d.id} style={{ border: '1px solid #e7e9ee', borderRadius: 13, background: '#fff', overflow: 'hidden' }}>
                                   {/* event header */}
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 14px', background: '#f8fafc', borderBottom: '1px solid #eef1f5' }}>
+                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 14px', background: '#f8fafc', borderBottom: collapsed ? 'none' : '1px solid #eef1f5' }}>
                                     <span style={{ flexShrink: 0, marginTop: 1, width: 26, height: 26, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13 }}>📅</span>
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
@@ -1173,17 +1200,38 @@ export default function CompetencesPage() {
                                         </div>
                                       ) : null}
                                     </div>
-                                    <button
-                                      type="button"
-                                      onClick={() => handleDeleteDoublure(d.id)}
-                                      style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
-                                      aria-label="Supprimer"
-                                    >
-                                      ✕
-                                    </button>
+                                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                      {dVals.length > 0 ? (
+                                        <span
+                                          aria-label={`${dVals.length} compétence${dVals.length > 1 ? 's' : ''} signée${dVals.length > 1 ? 's' : ''} sur cette doublure`}
+                                          style={{ fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#059669', borderRadius: 999, padding: '2px 9px', fontVariantNumeric: 'tabular-nums' }}
+                                        >
+                                          +{dVals.length}
+                                        </span>
+                                      ) : null}
+                                      {dVals.length > 0 ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => toggleDoublureCollapsed(d.id)}
+                                          aria-expanded={!collapsed}
+                                          aria-label={collapsed ? 'Afficher les compétences signées' : 'Masquer les compétences signées'}
+                                          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#64748b', padding: '2px 5px', fontSize: 13, fontFamily: 'inherit', lineHeight: 1 }}
+                                        >
+                                          {collapsed ? '▾' : '▴'}
+                                        </button>
+                                      ) : null}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteDoublure(d.id)}
+                                        style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
+                                        aria-label="Supprimer"
+                                      >
+                                        ✕
+                                      </button>
+                                    </div>
                                   </div>
                                   {/* Competences validated at this event */}
-                                  {dVals.map((val) => {
+                                  {!collapsed && dVals.map((val) => {
                                     const comp = allComps.find((c) => c.id === val.competence_id);
                                     if (!comp) return null;
                                     return (
@@ -1211,7 +1259,7 @@ export default function CompetencesPage() {
                                       </div>
                                     );
                                   })}
-                                  {dVals.length === 0 ? (
+                                  {!collapsed && dVals.length === 0 ? (
                                     <div style={{ padding: '11px 14px', fontSize: 12.5, color: '#94a3b8' }}>Aucune compétence validée sur cet événement.</div>
                                   ) : null}
                                 </div>
@@ -1287,7 +1335,7 @@ export default function CompetencesPage() {
 
                 {/* Per-phase carnet */}
                 {cursusDetail.phases.map((phase) => {
-                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id);
+                  const phDoublures = doublures.filter((d) => d.phase_id === phase.id).sort(compareDoublureChrono);
                   const phComps = (phase.competences ?? []) as CursusCompetence[];
                   const doneComps = phComps.filter((c) => validatedIds.has(c.id));
                   const isComplete = doneComps.length === phComps.length && phComps.length > 0;
@@ -1309,15 +1357,7 @@ export default function CompetencesPage() {
                           </span>
                           {phase.provisional ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">Provisoire</Pill> : null}
                         </div>
-                        <span style={{ display: 'inline-flex', gap: 8 }}>
-                          <button
-                            type="button"
-                            onClick={() => openDoublureModal(phase.id)}
-                            style={{ cursor: 'pointer', border: '1px solid #0f172a', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '6px 12px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
-                          >
-                            Déclarer une doublure
-                          </button>
-                        </span>
+                        <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} />
                       </div>
 
                       {/* Doublures compact */}
