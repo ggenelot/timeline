@@ -59,7 +59,7 @@ insert into public.missions (
   title,
   description,
   location,
-  sector,
+  mission_type_id,
   starts_at,
   ends_at,
   required_volunteers,
@@ -70,13 +70,14 @@ select
   'Poste de secours - Marathon de Lille',
   'Couverture préventive sur la zone d''arrivée, équipe secourisme légère.',
   'Lille Grand Place',
-  'Nord',
+  mt.id,
   timezone('utc', now()) + interval '2 days',
   timezone('utc', now()) + interval '2 days 6 hours',
   6,
   'proposed'::public.mission_status,
   p.id
 from public.profiles p
+join public.mission_types mt on mt.name = 'Poste de secours'
 where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Poste de secours - Marathon de Lille'
@@ -86,7 +87,7 @@ insert into public.missions (
   title,
   description,
   location,
-  sector,
+  mission_type_id,
   starts_at,
   ends_at,
   required_volunteers,
@@ -97,13 +98,14 @@ select
   'Renfort logistique - Inondations',
   'Préparation matériel et coordination point de distribution.',
   'Dunkerque',
-  'Nord',
+  mt.id,
   timezone('utc', now()) + interval '5 days',
   timezone('utc', now()) + interval '5 days 8 hours',
   4,
   'closed'::public.mission_status,
   p.id
 from public.profiles p
+join public.mission_types mt on mt.name = 'Maraude'
 where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Renfort logistique - Inondations'
@@ -113,7 +115,7 @@ insert into public.missions (
   title,
   description,
   location,
-  sector,
+  mission_type_id,
   starts_at,
   ends_at,
   required_volunteers,
@@ -124,13 +126,14 @@ select
   'Soutien radio - Exercice départemental',
   'Gestion des communications entre les points de rassemblement.',
   'Montpellier',
-  'Sud',
+  mt.id,
   timezone('utc', now()) + interval '9 days',
   timezone('utc', now()) + interval '9 days 4 hours',
   3,
   'cancelled'::public.mission_status,
   p.id
 from public.profiles p
+join public.mission_types mt on mt.name = 'Formation'
 where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Soutien radio - Exercice départemental'
@@ -140,7 +143,7 @@ insert into public.missions (
   title,
   description,
   location,
-  sector,
+  mission_type_id,
   starts_at,
   ends_at,
   required_volunteers,
@@ -151,13 +154,14 @@ select
   'Dispositif nuit - Festival communal',
   'Equipe déjà confirmée pour la couverture de nuit.',
   'Roubaix',
-  'Nord',
+  mt.id,
   timezone('utc', now()) + interval '12 days',
   timezone('utc', now()) + interval '12 days 7 hours',
   2,
   'confirmed'::public.mission_status,
   p.id
 from public.profiles p
+join public.mission_types mt on mt.name = 'Garde'
 where p.email = 'responsable@pcivile.test'
 and not exists (
   select 1 from public.missions m where m.title = 'Dispositif nuit - Festival communal'

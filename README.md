@@ -151,6 +151,30 @@ Le seed insère :
 - Types de missions par défaut (Maraude, Garde, Formation, Vie d'antenne, Poste de secours).
 - Événements d'historique initiaux.
 
+### 7bis. Peupler la base avec des données de démo (optionnel)
+
+Pour voir tout de suite le potentiel de l'application (beaucoup de bénévoles, de missions variées, de cursus en cours...), un script génère automatiquement un jeu de données riche, en plus des 5 comptes fixes ci-dessus :
+
+```bash
+npm run db:seed:demo
+```
+
+Ce script crée (idempotent — relancer ne duplique pas les données) :
+
+- ~36 comptes (`auth.users` + profils) répartis admin / responsable / bénévole, avec emails `demo-*@timeline.demo` et le même mot de passe `DemoPass123!`.
+- Des compétences et niveaux de progression variés par bénévole.
+- ~25 missions couvrant tous les statuts, types et plages de dates (passées et futures).
+- Des propositions et affectations d'équipe réalistes sur ces missions.
+- Des inscriptions aux cursus CE/CP/CEPS avec doublures et compétences partiellement validées.
+
+Par sécurité, le script refuse de s'exécuter si `NEXT_PUBLIC_SUPABASE_URL` ne ressemble pas à une instance locale (`127.0.0.1`/`localhost`). Pour forcer l'exécution sur un autre projet (déconseillé sur un projet de production), ajouter `--force` :
+
+```bash
+npm run db:seed:demo -- --force
+```
+
+Pour repartir d'une base propre : `npm run supabase:db:reset` puis relancer le script.
+
 ### 8. Lancer le serveur de développement
 
 ```bash
@@ -256,6 +280,8 @@ Les migrations se trouvent dans `supabase/migrations/` et sont appliquées dans 
 | `benevole2@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
 | `benevole3@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
 
+Ce sont les comptes stables utilisés par les tests E2E. Si le script de démo (voir [étape 7bis](#installation-depuis-zéro)) a été exécuté, de nombreux autres comptes `demo-*@timeline.demo` existent également — pour les parcourir, utiliser Supabase Studio (Authentication → Users) ou la page `/admin/volunteers` de l'application.
+
 ---
 
 ## Lancer l'application
@@ -327,6 +353,7 @@ npm run supabase:db:reset       # Remettre la base à zéro
 npm run supabase:db:push        # Appliquer les migrations
 npm run supabase:db:seed        # Charger les seeds
 npm run supabase:migration:new  # Créer une migration
+npm run db:seed:demo            # Peupler la base avec des données de démo riches (comptes, missions, cursus)
 
 # Utilitaires
 npm run diagnose:slack-oauth    # Diagnostiquer la configuration OAuth Slack
@@ -492,6 +519,39 @@ Variables GitHub Secrets requises pour la CI/CD :
 | `SUPABASE_ACCESS_TOKEN` | Token d'accès Supabase CLI |
 | `SUPABASE_DB_PASSWORD` | Mot de passe de la base de données |
 | `SUPABASE_PROJECT_ID` | ID du projet Supabase de production |
+
+### Serveur auto-hébergé (Docker)
+
+Pour héberger l'application sur son propre serveur (VPS, etc.) plutôt que sur Vercel, l'app Next.js peut être conteneurisée avec le `Dockerfile` et le `docker-compose.yml` fournis à la racine. La base de données reste **Supabase Cloud** (le même projet que pour Vercel/local) — il n'y a pas de conteneur Postgres, uniquement le frontend/les API routes.
+
+**Prérequis** : Docker + Docker Compose installés sur le serveur, et un projet Supabase Cloud déjà créé (voir la sous-section précédente).
+
+```bash
+# Créer le fichier d'environnement (mêmes variables que .env.local, voir .env.example)
+cp .env.example .env
+
+# Builder l'image (les NEXT_PUBLIC_* sont passés en build args automatiquement)
+docker compose build
+
+# Démarrer le conteneur
+docker compose up -d
+```
+
+L'application écoute sur `http://localhost:3000` (ou l'IP du serveur). Ce conteneur ne sert que du HTTP brut : pour exposer le site en HTTPS, le placer derrière un reverse proxy comme Caddy ou Nginx, par exemple avec Caddy :
+
+```
+votre-domaine.fr {
+  reverse_proxy localhost:3000
+}
+```
+
+**Mise à jour** : comme les variables `NEXT_PUBLIC_*` sont injectées au moment du build, un rebuild est nécessaire à chaque déploiement :
+
+```bash
+git pull && docker compose build && docker compose up -d
+```
+
+Les migrations de base de données restent indépendantes de Docker : elles s'appliquent toujours via `npx supabase db push` ou le workflow GitHub Actions `supabase-prod.yml` décrit ci-dessus.
 
 ### Checklist post-déploiement
 

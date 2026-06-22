@@ -1,0 +1,21 @@
+# Self-hosted deployment of the Next.js app only.
+# The database/auth backend is Supabase Cloud — same project as used for
+# local dev / Vercel. There is intentionally no Postgres/Supabase service here.
+#
+# Usage:
+#   cp .env.example .env   # fill in the same variables as for local/Vercel
+#   docker compose build
+#   docker compose up -d
+
+services:
+  app:
+    build:
+      context: .
+      args:
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+    env_file:
+      - .env
+    ports:
+      - "3000:3000"
+    restart: unless-stopped

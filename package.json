@@ -14,6 +14,7 @@
     "supabase:db:push": "npx supabase db push",
     "supabase:migration:new": "npx supabase migration new",
     "supabase:db:seed": "npx supabase db seed",
+    "db:seed:demo": "node scripts/seed-demo-data.mjs",
     "test:e2e:slack-sso": "playwright test tests/e2e/slack-sso.spec.ts",
     "diagnose:slack-oauth": "node scripts/diagnose-slack-oauth.mjs",
     "test": "npm run typecheck && npm run test:e2e:p0",
