@@ -10,6 +10,13 @@ declare
   v_doublure  uuid;
   v_final     uuid;
 begin
+  -- Non-destructive: if a CH VPS cursus already exists (possibly with enrolled
+  -- volunteers, doublures and validated competences), leave it untouched rather
+  -- than deleting it — a cascade delete would wipe that user progress.
+  if exists (select 1 from public.cursus where code = 'CH VPS') then
+    return;
+  end if;
+
   -- Associated competence "du même nom": reuse the existing "CH VPS" skill,
   -- creating it under the Conduite category if it is missing.
   select id into v_skill_id from public.skills where name = 'CH VPS' limit 1;
@@ -18,9 +25,6 @@ begin
     values ('CH VPS', (select id from public.skill_categories where name = 'Conduite' limit 1))
     returning id into v_skill_id;
   end if;
-
-  -- Idempotent: drop any previous CH VPS cursus before reseeding.
-  delete from public.cursus where code = 'CH VPS';
 
   insert into public.cursus (code, name, category, level, skill_id, signoff_role)
   values ('CH VPS', 'CH VPS', 'Conduite', null, v_skill_id, 'Président-Délégué')
