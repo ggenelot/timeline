@@ -27,8 +27,13 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      - name: Enable auto-merge (squash)
+      # `gh pr merge --auto` only blocks on CI if the base branch has required
+      # status checks configured. `staging` has no such ruleset, so we wait on
+      # the checks ourselves before merging instead of relying on that config.
+      - name: Wait for checks, then merge (squash)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: |
+          gh pr checks "$PR_URL" --watch --fail-fast
+          gh pr merge --squash "$PR_URL"
