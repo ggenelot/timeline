@@ -947,10 +947,21 @@ export default function CompetencesDashboardPage() {
             overflow: 'hidden',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          {/* Hauteur bornée + défilement interne pour rendre l'en-tête (et la
+              colonne Bénévole) persistants au scroll. */}
+          <div style={{ overflow: 'auto', maxHeight: 'calc(100vh - 220px)' }}>
             <div style={{ minWidth: 'max-content' }}>
               {/* header row */}
-              <div style={{ display: 'flex', borderBottom: '1px solid #e7e9ee', background: '#f8fafc' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  borderBottom: '1px solid #e7e9ee',
+                  background: '#f8fafc',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                }}
+              >
                 <div
                   style={{
                     flex: 'none',
@@ -963,6 +974,7 @@ export default function CompetencesDashboardPage() {
                     color: '#94a3b8',
                     position: 'sticky',
                     left: 0,
+                    zIndex: 3,
                     background: '#f8fafc',
                     borderRight: '1px solid #eef1f5',
                   }}
@@ -1000,6 +1012,7 @@ export default function CompetencesDashboardPage() {
                       padding: '11px 16px',
                       position: 'sticky',
                       left: 0,
+                      zIndex: 1,
                       background: row.bg,
                       borderRight: '1px solid #eef1f5',
                       display: 'flex',
