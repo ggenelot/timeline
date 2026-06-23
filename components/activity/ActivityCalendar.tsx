@@ -8,7 +8,6 @@ import { getTypeColor } from './activity.constants';
 type Props = {
   rows: CalendarRow[];
   months: Date[];
-  seuilHours: number;
 };
 
 type TooltipState = {
@@ -21,7 +20,7 @@ type TooltipState = {
 
 const MONTH_FR = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
 
-export function ActivityCalendar({ rows, months, seuilHours }: Props) {
+export function ActivityCalendar({ rows, months }: Props) {
   const [tooltip, setTooltip] = useState<TooltipState>(null);
 
   if (rows.length === 0) {
@@ -95,17 +94,8 @@ export function ActivityCalendar({ rows, months, seuilHours }: Props) {
                 </td>
               ))}
               <td className="py-1 pl-3 text-center">
-                <span
-                  className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold ${
-                    row.overSeuil ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-700'
-                  }`}
-                >
+                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 font-semibold text-slate-700">
                   {row.totalHours.toFixed(0)}h
-                  {row.overSeuil ? (
-                    <span aria-label={`Seuil ${seuilHours}h dépassé`} title={`Seuil ${seuilHours}h dépassé`}>
-                      ⚠
-                    </span>
-                  ) : null}
                 </span>
               </td>
             </tr>
