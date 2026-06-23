@@ -38,6 +38,16 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     return NextResponse.json({ error: 'Aucune modification.' }, { status: 400 });
   }
 
+  if (patch.is_validating === false) {
+    const { data: target } = await client.from('skill_statuses').select('protected').eq('id', params.id).single();
+    if (target?.protected) {
+      return NextResponse.json(
+        { error: 'Ce statut est protégé : il doit toujours compter comme « validé ».' },
+        { status: 400 }
+      );
+    }
+  }
+
   const { data, error } = await client
     .from('skill_statuses')
     .update(patch)
