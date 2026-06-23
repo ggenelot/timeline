@@ -131,6 +131,7 @@ type EditorState = {
   skillName: string;
   profileName: string;
   current: StatusKey | null;
+  implied: boolean;
   x: number;
   y: number;
 };
@@ -274,6 +275,46 @@ export default function CompetencesDashboardPage() {
     [q, profileById]
   );
 
+  // Cascade hiérarchique : dans une catégorie, une formation supérieure validée
+  // implique que toutes les inférieures (display_order plus petit) le sont aussi.
+  // `display_order` croissant = compétence de plus en plus haute.
+  const skillOrderById = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const sk of cat?.skills ?? []) m[sk.id] = sk.display_order;
+    return m;
+  }, [cat]);
+
+  // Pour chaque bénévole, le display_order le plus haut où il a un 'valide' explicite.
+  const maxValideOrderByProfile = useMemo(() => {
+    const m: Record<string, number> = {};
+    if (cat && data) {
+      for (const sk of cat.skills) {
+        for (const p of data.profiles) {
+          if (normalizeStatus(statusMap[`${p.id}|${sk.id}`]) === 'valide') {
+            if (m[p.id] === undefined || sk.display_order > m[p.id]) m[p.id] = sk.display_order;
+          }
+        }
+      }
+    }
+    return m;
+  }, [cat, data, statusMap]);
+
+  // Statut effectif d'une cellule, implication comprise. Un statut explicite prime
+  // toujours ; à défaut, 'valide' est déduit si une compétence supérieure est validée.
+  const effInfo = useCallback(
+    (pid: string, skillId: string): { status: StatusKey | null; implied: boolean } => {
+      const explicit = normalizeStatus(statusMap[`${pid}|${skillId}`]);
+      if (explicit) return { status: explicit, implied: false };
+      const order = skillOrderById[skillId];
+      const maxV = maxValideOrderByProfile[pid];
+      if (order !== undefined && maxV !== undefined && maxV > order) {
+        return { status: 'valide', implied: true };
+      }
+      return { status: null, implied: false };
+    },
+    [statusMap, skillOrderById, maxValideOrderByProfile]
+  );
+
   // Compteurs de la catégorie + bénévoles concernés.
   const catStats = useMemo(() => {
     let nValide = 0,
@@ -284,7 +325,7 @@ export default function CompetencesDashboardPage() {
     if (cat && data) {
       for (const sk of cat.skills) {
         for (const p of data.profiles) {
-          const st = eff(p.id, sk.id);
+          const st = effInfo(p.id, sk.id).status;
           if (!st) continue;
           people.add(p.id);
           if (st === 'valide') nValide++;
@@ -295,7 +336,7 @@ export default function CompetencesDashboardPage() {
       }
     }
     return { nValide, nFormation, nInteresse, nRecycler, peopleCount: people.size };
-  }, [cat, data, eff]);
+  }, [cat, data, effInfo]);
 
   // Compétence la plus haute (display_order = ordre hiérarchique) par bénévole.
   const highestIdx = useMemo(() => {
@@ -319,15 +360,16 @@ export default function CompetencesDashboardPage() {
     return cat.skills
       .map((sk, i) => {
         const allHolders = data.profiles
-          .map((p) => ({ pid: p.id, st: eff(p.id, sk.id) }))
-          .filter((x) => x.st && (!onlyHighest || highestIdx[x.pid] === i)) as Array<{
+          .map((p) => ({ pid: p.id, ...effInfo(p.id, sk.id) }))
+          .filter((x) => x.status && (!onlyHighest || highestIdx[x.pid] === i)) as Array<{
           pid: string;
-          st: StatusKey;
+          status: StatusKey;
+          implied: boolean;
         }>;
         const filtered = allHolders.filter(
-          (x) => matchPerson(x.pid) && (statusFilter === 'all' || x.st === statusFilter)
+          (x) => matchPerson(x.pid) && (statusFilter === 'all' || x.status === statusFilter)
         );
-        const holders = filtered.map(({ pid, st }) => {
+        const holders = filtered.map(({ pid, status: st, implied }) => {
           const p = profileById[pid];
           const ss = STATUS[st];
           const cursus = data.cursusBySkill[sk.id];
@@ -336,8 +378,11 @@ export default function CompetencesDashboardPage() {
             name: p?.full_name ?? p?.email ?? '—',
             sector: p?.sector ?? '',
             initials: initials(p?.full_name ?? p?.email ?? '?'),
-            statusLabel: ss.label,
+            // Validation implicite (héritée d'une formation supérieure) → libellé et
+            // contour pointillés pour la distinguer d'une validation directe.
+            statusLabel: implied ? 'Validée (implicite)' : ss.label,
             ring: ss.ring,
+            ringStyle: implied ? 'dashed' : 'solid',
             avatarBg: ss.soft,
             avatarColor: ss.text,
             text: ss.text,
@@ -345,7 +390,7 @@ export default function CompetencesDashboardPage() {
           };
         });
         const totalH = allHolders.length;
-        const vCount = allHolders.filter((x) => x.st === 'valide').length;
+        const vCount = allHolders.filter((x) => x.status === 'valide').length;
         const metaBits: string[] = [];
         if (sk.level && sk.level > 0) metaBits.push(`Niveau ${sk.level}`);
         metaBits.push(`${vCount}/${totalH} validées`);
@@ -368,17 +413,17 @@ export default function CompetencesDashboardPage() {
         if (filtering || onlyHighest) return sk.hasHolders;
         return true;
       });
-  }, [cat, data, eff, onlyHighest, highestIdx, matchPerson, statusFilter, profileById, filtering]);
+  }, [cat, data, effInfo, onlyHighest, highestIdx, matchPerson, statusFilter, profileById, filtering]);
 
   // ── Vue tableau ─────────────────────────────────────────────
 
   const tableCols = useMemo(() => {
     if (!cat || !data) return [];
     return cat.skills.map((sk) => {
-      const n = data.profiles.filter((p) => eff(p.id, sk.id)).length;
+      const n = data.profiles.filter((p) => effInfo(p.id, sk.id).status).length;
       return { id: sk.id, code: sk.code || sk.name, name: sk.name, count: `${n} bén.` };
     });
-  }, [cat, data, eff]);
+  }, [cat, data, effInfo]);
 
   const tableRows = useMemo(() => {
     if (!cat || !data) return [];
@@ -401,13 +446,17 @@ export default function CompetencesDashboardPage() {
     sk: { id: string; code: string; name: string }
   ) {
     const r = e.currentTarget.getBoundingClientRect();
+    const info = effInfo(profileId, sk.id);
     setEditor({
       profileId,
       skillId: sk.id,
       skillCode: sk.code,
       skillName: sk.name,
       profileName: profileById[profileId]?.full_name ?? profileById[profileId]?.email ?? '—',
+      // Statut explicite stocké (l'implication ne crée pas de ligne) ; on note si
+      // la cellule est validée par héritage pour l'afficher dans le popover.
       current: eff(profileId, sk.id),
+      implied: info.implied,
       x: r.left + r.width / 2,
       y: r.bottom,
     });
@@ -812,7 +861,7 @@ export default function CompetencesDashboardPage() {
                               alignItems: 'center',
                               gap: 10,
                               background: '#fff',
-                              border: `1.5px solid ${h.ring}`,
+                              border: `1.5px ${h.ringStyle} ${h.ring}`,
                               borderRadius: 12,
                               padding: '8px 10px 8px 9px',
                             }}
@@ -846,7 +895,7 @@ export default function CompetencesDashboardPage() {
                             alignItems: 'center',
                             gap: 10,
                             background: '#fff',
-                            border: `1.5px solid ${h.ring}`,
+                            border: `1.5px ${h.ringStyle} ${h.ring}`,
                             borderRadius: 12,
                             padding: '8px 13px 8px 9px',
                           }}
@@ -961,14 +1010,21 @@ export default function CompetencesDashboardPage() {
                     </div>
                   </div>
                   {tableCols.map((col) => {
-                    const st = eff(row.pid, col.id);
+                    const { status: st, implied } = effInfo(row.pid, col.id);
                     const ss = st ? STATUS[st] : null;
                     let bg = 'transparent';
                     let border = '1px dashed #e5e9f0';
                     let color = '#cbd5e1';
                     let mark = '·';
                     if (ss) {
-                      if (st === 'valide') {
+                      if (st === 'valide' && implied) {
+                        // Validée par héritage d'une formation supérieure : vert « soft »
+                        // + contour pointillé pour la distinguer d'une validation directe.
+                        bg = ss.soft;
+                        border = `1.5px dashed ${ss.ring}`;
+                        color = ss.text;
+                        mark = '✓';
+                      } else if (st === 'valide') {
                         bg = ss.ring;
                         border = 'none';
                         color = '#fff';
@@ -984,7 +1040,7 @@ export default function CompetencesDashboardPage() {
                       <button
                         key={col.id}
                         type="button"
-                        title={`${col.name}${ss ? ` — ${ss.label}` : ' — cliquer pour définir'}`}
+                        title={`${col.name}${ss ? ` — ${ss.label}${implied ? ' (implicite)' : ''}` : ' — cliquer pour définir'}`}
                         onClick={(e) => openEditor(e, row.pid, col)}
                         style={{
                           flex: 'none',
@@ -1053,6 +1109,11 @@ export default function CompetencesDashboardPage() {
                 {editor.skillCode} · {editor.profileName}
               </div>
               <div style={{ marginTop: 2, fontSize: 11, color: '#94a3b8' }}>{editor.skillName}</div>
+              {editor.implied && !editor.current ? (
+                <div style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: '#047857' }}>
+                  Validée par une formation supérieure. Définir un statut ici le forcera pour cette compétence.
+                </div>
+              ) : null}
             </div>
             <div style={{ padding: 6 }}>
               {EDITOR_OPTIONS.map((o) => {
