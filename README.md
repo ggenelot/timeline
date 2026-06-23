@@ -98,6 +98,8 @@ sequenceDiagram
 14. [Limites connues](#limites-connues)
 15. [Licence](#licence)
 
+Pour contribuer (branches, PR, environnements), voir [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ---
 
 ## Fonctionnalités
@@ -595,23 +597,32 @@ Le script retourne un code non-zéro en cas de correspondance à investiguer.
 
 ## Déploiement
 
+Le projet utilise deux environnements : **staging** (intégration, branche `staging`) et **production** (branche `main`). Voir `AGENTS.md` § 7 pour le détail des workflows et des conventions de branches.
+
 ### Vercel (frontend)
 
 1. Connecter le dépôt à un projet Vercel.
-2. Configurer toutes les variables d'environnement de production dans les paramètres Vercel.
-3. Chaque push sur `main` déclenche un déploiement automatique.
+2. Configurer les variables d'environnement séparément par environnement Vercel :
+   - **Production** (branche `main`) → pointe sur le projet Supabase de production.
+   - **Preview** (branche `staging` + toutes les autres branches/PR) → pointe sur le projet Supabase staging.
+3. Chaque push sur `main` déclenche un déploiement de production. Chaque push sur `staging` déclenche un déploiement sur une URL stable dédiée. Chaque PR génère en plus son propre Preview Deployment.
 
 ### Supabase (base de données)
 
-Les migrations de production sont appliquées automatiquement via GitHub Actions à chaque push sur `main` (workflow `.github/workflows/supabase-prod.yml`).
+Il existe deux projets Supabase distincts : un projet **staging** et un projet **production**. Les migrations sont d'abord validées sur staging, puis rejouées sur production lors de la promotion `staging → main`.
+
+- Push sur `staging` → CI verte → `.github/workflows/supabase-staging.yml` applique les migrations sur le projet Supabase staging.
+- Push sur `main` → CI verte → `.github/workflows/supabase-prod.yml` applique les migrations sur le projet Supabase production.
 
 Variables GitHub Secrets requises pour la CI/CD :
 
 | Secret | Description |
 |---|---|
-| `SUPABASE_ACCESS_TOKEN` | Token d'accès Supabase CLI |
-| `SUPABASE_DB_PASSWORD` | Mot de passe de la base de données |
+| `SUPABASE_ACCESS_TOKEN` | Token d'accès Supabase CLI (compte, partagé entre les deux projets) |
+| `SUPABASE_DB_PASSWORD` | Mot de passe de la base de données de production |
 | `SUPABASE_PROJECT_ID` | ID du projet Supabase de production |
+| `STAGING_SUPABASE_DB_PASSWORD` | Mot de passe de la base de données staging |
+| `STAGING_SUPABASE_PROJECT_ID` | ID du projet Supabase staging |
 
 ### Serveur auto-hébergé (Docker)
 

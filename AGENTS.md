@@ -172,29 +172,43 @@ Mot de passe via la variable d'env `E2E_TEST_PASSWORD` (défaut : `DemoPass123!`
 
 ## 7. CI/CD et branches
 
+### Environnements
+
+Le projet a deux environnements depuis le passage en prod multi-contributeurs :
+
+| Environnement | Branche | Déploiement Vercel | Base Supabase |
+|---|---|---|---|
+| **Staging** | `staging` | URL stable (déploiement de branche) | Projet Supabase staging |
+| **Production** | `main` | Domaine de production | Projet Supabase production |
+
+Chaque PR (quelle que soit sa branche source) génère en plus un **Preview Deployment** Vercel dédié, pointant vers la base staging.
+
 ### Workflows GitHub Actions
 
 | Workflow | Déclencheur | Rôle |
 |---|---|---|
-| `ci.yml` | PR + push main | Typecheck → Lint → Build |
+| `ci.yml` | PR + push main/staging | Typecheck → Lint → Build |
+| `supabase-staging.yml` | CI vert sur staging | Déploiement migrations sur le projet Supabase staging |
 | `supabase-prod.yml` | CI vert sur main | Déploiement migrations en production |
-| `supabase-migration-timestamp-guard.yml` | PR + push main | Bloque les collisions de timestamp |
-| `auto-merge.yml` | PR | Auto-merge des branches agents |
+| `supabase-migration-timestamp-guard.yml` | PR + push main/staging | Bloque les collisions de timestamp |
+| `auto-merge.yml` | PR dont la base est `staging` | Auto-merge des branches agents vers staging |
 
 Toute PR doit passer le workflow **CI** (typecheck → lint → build) avant de pouvoir être mergée.
 
 ### Conventions de branches
 
-| Préfixe | Usage |
-|---|---|
-| `feature/` | Nouvelles fonctionnalités |
-| `fix/` | Corrections de bugs |
-| `claude/` | Branches Claude Code (auto-merge éligible) |
-| `codex/` | Branches Codex (auto-merge éligible) |
+| Préfixe | Usage | Base de la PR |
+|---|---|---|
+| `feature/` | Nouvelles fonctionnalités | `staging` |
+| `fix/` | Corrections de bugs | `staging` |
+| `claude/` | Branches Claude Code (auto-merge éligible) | `staging` |
+| `codex/` | Branches Codex (auto-merge éligible) | `staging` |
 
-Les branches agents (`claude/`, `codex/`) sont auto-mergées en squash une fois tous les checks verts et sans label `do-not-merge`.
+Les branches agents (`claude/`, `codex/`) sont auto-mergées en squash sur **`staging`** une fois tous les checks verts et sans label `do-not-merge`. L'auto-merge ne se déclenche pas si la PR cible `main`.
 
-Ne **jamais** force-pusher sur `main`.
+`main` ne reçoit que des PR de promotion `staging → main`, ouvertes et mergées manuellement par un humain après validation sur l'environnement staging. Aucun auto-merge ni push direct n'est autorisé sur `main`.
+
+Ne **jamais** force-pusher sur `main` ni sur `staging`.
 
 ### Avant chaque PR
 
@@ -203,6 +217,13 @@ Ne **jamais** force-pusher sur `main`.
 3. `npm test` — tests P0 verts.
 4. Pas de collision de timestamp de migration.
 5. Pas de secret dans les fichiers modifiés.
+
+### Avant une promotion `staging → main`
+
+1. Vérifier que `staging` est vert (CI + migration staging appliquée sans erreur).
+2. Tester manuellement le parcours impacté sur l'URL staging.
+3. Ouvrir une PR `staging → main`, revue par un humain (pas d'auto-merge).
+4. Une fois mergée, `supabase-prod.yml` rejoue automatiquement les mêmes migrations déjà validées sur staging.
 
 ---
 
