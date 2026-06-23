@@ -950,7 +950,16 @@ export default function CompetencesDashboardPage() {
           <div style={{ overflowX: 'auto' }}>
             <div style={{ minWidth: 'max-content' }}>
               {/* header row */}
-              <div style={{ display: 'flex', borderBottom: '1px solid #e7e9ee', background: '#f8fafc' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  borderBottom: '1px solid #e7e9ee',
+                  background: '#f8fafc',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 2,
+                }}
+              >
                 <div
                   style={{
                     flex: 'none',
@@ -979,6 +988,7 @@ export default function CompetencesDashboardPage() {
                       padding: '12px 6px',
                       textAlign: 'center',
                       borderLeft: '1px solid #f1f5f9',
+                      background: '#f8fafc',
                     }}
                   >
                     <div style={{ fontSize: 12.5, fontWeight: 800, color: pal.accent }}>{col.code}</div>
