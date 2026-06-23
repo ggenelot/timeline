@@ -596,6 +596,10 @@ function SupervisorField({
 
 export default function CompetencesPage() {
   const [profileId, setProfileId] = useState<string | null>(null);
+  // Lecture seule : consultation du carnet d'un autre bénévole via
+  // ?profile=<id>&cursus=<id> (depuis le tableau de bord compétences).
+  const [readOnly, setReadOnly] = useState(false);
+  const [viewingName, setViewingName] = useState<string | null>(null);
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [volunteerCursus, setVolunteerCursus] = useState<VolunteerCursus[]>([]);
   const [selectedVCId, setSelectedVCId] = useState<string | null>(null);
@@ -620,13 +624,34 @@ export default function CompetencesPage() {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
-      const pid = session.user.id;
+      const viewerId = session.user.id;
+
+      // Cible : un autre bénévole si ?profile= est fourni et diffère du viewer.
+      const params = new URLSearchParams(window.location.search);
+      const targetParam = params.get('profile');
+      const cursusParam = params.get('cursus');
+      const isOther = !!targetParam && targetParam !== viewerId;
+      const pid = isOther ? targetParam! : viewerId;
       setProfileId(pid);
+      setReadOnly(isOther);
+
       try {
         const [cursusAll, vcAll] = await Promise.all([getAllCursus(), getVolunteerCursus(pid)]);
         setAllCursus(cursusAll);
         setVolunteerCursus(vcAll);
-        if (vcAll.length > 0) setSelectedVCId(vcAll[0].id);
+        // Présélection du cursus demandé, sinon le premier disponible.
+        const target = cursusParam ? vcAll.find((v) => v.cursus_id === cursusParam) : null;
+        if (target) setSelectedVCId(target.id);
+        else if (vcAll.length > 0) setSelectedVCId(vcAll[0].id);
+
+        if (isOther) {
+          const { data: targetProfile } = await supabase
+            .from('profiles')
+            .select('full_name,email')
+            .eq('id', pid)
+            .single();
+          setViewingName(targetProfile?.full_name ?? targetProfile?.email ?? 'ce bénévole');
+        }
       } catch (e) {
         setError((e as Error).message);
       } finally {
@@ -679,6 +704,7 @@ export default function CompetencesPage() {
   // ── Enroll ────────────────────────────────────────────────
 
   async function handleEnroll(cursusId: string) {
+    if (readOnly) return;
     if (!profileId) return;
     try {
       const vc = await enrollInCursus(profileId, cursusId);
@@ -720,6 +746,7 @@ export default function CompetencesPage() {
   }
 
   async function handleConfirm() {
+    if (readOnly) return;
     if (!modal || !selectedVCId || !profileId) return;
     setError(null);
     setSubmitting(true);
@@ -773,6 +800,7 @@ export default function CompetencesPage() {
   }
 
   function openDoublureModal(phaseId: string) {
+    if (readOnly) return;
     setError(null);
     setModal({ ...MODAL_INIT, phaseId });
   }
@@ -817,11 +845,13 @@ export default function CompetencesPage() {
   }
 
   async function handleDeleteDoublure(id: string) {
+    if (readOnly) return;
     try { await deleteDoublure(id); setDoublures((prev) => prev.filter((d) => d.id !== id)); }
     catch (e) { setError((e as Error).message); }
   }
 
   async function handleDeleteValidation(id: string) {
+    if (readOnly) return;
     try { await deleteCompetenceValidation(id); setValidations((prev) => prev.filter((v) => v.id !== id)); }
     catch (e) { setError((e as Error).message); }
   }
@@ -861,6 +891,12 @@ export default function CompetencesPage() {
           </div>
         ) : null}
 
+        {readOnly ? (
+          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1d4ed8', fontWeight: 600 }}>
+            Vous consultez le carnet de doublure de {viewingName ?? 'ce bénévole'} en lecture seule.
+          </div>
+        ) : null}
+
         {/* Cursus tab selector + enroll */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {volunteerCursus.map((vc) => {
@@ -887,37 +923,45 @@ export default function CompetencesPage() {
               </button>
             );
           })}
-          <button
-            type="button"
-            onClick={() => setEnrollModal(true)}
-            disabled={availableToEnroll.length === 0}
-            style={{
-              cursor: availableToEnroll.length === 0 ? 'not-allowed' : 'pointer',
-              border: '1px dashed #cbd5e1',
-              borderRadius: 99,
-              padding: '7px 16px',
-              fontSize: 13,
-              fontWeight: 700,
-              fontFamily: 'inherit',
-              background: 'transparent',
-              color: '#94a3b8',
-              opacity: availableToEnroll.length === 0 ? 0.5 : 1,
-            }}
-          >
-            + Rejoindre un cursus
-          </button>
+          {!readOnly ? (
+            <button
+              type="button"
+              onClick={() => setEnrollModal(true)}
+              disabled={availableToEnroll.length === 0}
+              style={{
+                cursor: availableToEnroll.length === 0 ? 'not-allowed' : 'pointer',
+                border: '1px dashed #cbd5e1',
+                borderRadius: 99,
+                padding: '7px 16px',
+                fontSize: 13,
+                fontWeight: 700,
+                fontFamily: 'inherit',
+                background: 'transparent',
+                color: '#94a3b8',
+                opacity: availableToEnroll.length === 0 ? 0.5 : 1,
+              }}
+            >
+              + Rejoindre un cursus
+            </button>
+          ) : null}
         </div>
 
         {volunteerCursus.length === 0 ? (
           <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 18, padding: '60px 24px' }}>
-            <p style={{ color: '#94a3b8', fontSize: 15 }}>Vous n&apos;êtes inscrit dans aucun cursus de doublure.</p>
-            <button
-              type="button"
-              onClick={() => setEnrollModal(true)}
-              style={{ marginTop: 16, cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
-            >
-              Rejoindre un cursus
-            </button>
+            <p style={{ color: '#94a3b8', fontSize: 15 }}>
+              {readOnly
+                ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
+                : "Vous n'êtes inscrit dans aucun cursus de doublure."}
+            </p>
+            {!readOnly ? (
+              <button
+                type="button"
+                onClick={() => setEnrollModal(true)}
+                style={{ marginTop: 16, cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+              >
+                Rejoindre un cursus
+              </button>
+            ) : null}
           </div>
         ) : cursusDetail ? (
           <>
@@ -1157,7 +1201,7 @@ export default function CompetencesPage() {
                             <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
                               Doublures &amp; événements
                             </span>
-                            <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} />
+                            {!readOnly ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
                           </div>
 
                           {/* Events with their competences */}
@@ -1220,14 +1264,16 @@ export default function CompetencesPage() {
                                           {collapsed ? '▾' : '▴'}
                                         </button>
                                       ) : null}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleDeleteDoublure(d.id)}
-                                        style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
-                                        aria-label="Supprimer"
-                                      >
-                                        ✕
-                                      </button>
+                                      {!readOnly ? (
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDeleteDoublure(d.id)}
+                                          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
+                                          aria-label="Supprimer"
+                                        >
+                                          ✕
+                                        </button>
+                                      ) : null}
                                     </div>
                                   </div>
                                   {/* Competences validated at this event */}
@@ -1249,13 +1295,15 @@ export default function CompetencesPage() {
                                             <div style={{ marginTop: 2, fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div>
                                           ) : null}
                                         </div>
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteValidation(val.id)}
-                                          style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit' }}
-                                        >
-                                          Annuler
-                                        </button>
+                                        {!readOnly ? (
+                                          <button
+                                            type="button"
+                                            onClick={() => handleDeleteValidation(val.id)}
+                                            style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit' }}
+                                          >
+                                            Annuler
+                                          </button>
+                                        ) : null}
                                       </div>
                                     );
                                   })}
@@ -1357,7 +1405,7 @@ export default function CompetencesPage() {
                           </span>
                           {phase.provisional ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">Provisoire</Pill> : null}
                         </div>
-                        <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} />
+                        {!readOnly ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
                       </div>
 
                       {/* Doublures compact */}

@@ -8,6 +8,7 @@ const navItems = [
   { href: '/admin/roles', label: 'Rôles' },
   { href: '/admin/skills', label: 'Compétences' },
   { href: '/admin/cursus', label: 'Cursus' },
+  { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences' },
   { href: '/admin/mission-types', label: 'Missions' },
   { href: '/admin/stats', label: 'Statistiques' },
   { href: '/admin/slack', label: 'Slack' },
