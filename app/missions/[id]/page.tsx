@@ -496,7 +496,7 @@ export default function MissionDetailPage() {
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
-        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,created_at,skill:skills(id,name,category_id,display_order)))'
+        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,status,created_at,skill:skills(id,name,category_id,display_order)))'
       )
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
@@ -564,10 +564,16 @@ export default function MissionDetailPage() {
         volunteer: volunteer
           ? {
               ...volunteer,
-              profile_skills: (volunteer.profile_skills ?? []).map((profileSkill) => ({
-                ...profileSkill,
-                skill: Array.isArray(profileSkill.skill) ? profileSkill.skill[0] ?? null : profileSkill.skill
-              }))
+              // Seules les compétences au statut 'valide' qualifient un bénévole
+              // (matching des compétences requises, visibilité). Les statuts
+              // tentatifs (formation/interesse/a_recycler) du tableau de bord ne
+              // doivent pas rendre un bénévole éligible.
+              profile_skills: (volunteer.profile_skills ?? [])
+                .filter((profileSkill) => profileSkill.status === 'valide')
+                .map((profileSkill) => ({
+                  ...profileSkill,
+                  skill: Array.isArray(profileSkill.skill) ? profileSkill.skill[0] ?? null : profileSkill.skill
+                }))
             }
           : null
       };
