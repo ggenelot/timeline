@@ -3,10 +3,6 @@ name: Codex Auto Merge
 on:
   pull_request:
     types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
-  pull_request_review:
-    types: [submitted]
-  check_suite:
-    types: [completed]
 
 permissions:
   contents: write
@@ -14,6 +10,10 @@ permissions:
 
 jobs:
   enable-auto-merge:
+    # claude/ PRs are opened under the human GitHub account (no dedicated bot
+    # login), so branch prefix is the only reliable signal for them — this
+    # isn't an oversight, codex's extra login/title checks exist because
+    # codex can author PRs under different identities.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&

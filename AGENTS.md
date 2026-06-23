@@ -225,6 +225,17 @@ Ne **jamais** force-pusher sur `main` ni sur `staging`.
 3. Ouvrir une PR `staging → main`, revue par un humain (pas d'auto-merge).
 4. Une fois mergée, `supabase-prod.yml` rejoue automatiquement les mêmes migrations déjà validées sur staging.
 
+### Déploiement d'urgence (bypass CI)
+
+`supabase-staging.yml` et `supabase-prod.yml` exposent aussi un déclencheur manuel (`workflow_dispatch`) qui **bypasse la vérification CI verte** :
+
+```bash
+gh workflow run supabase-staging.yml
+gh workflow run supabase-prod.yml
+```
+
+À n'utiliser qu'en cas d'urgence (ex. CI cassée par un problème d'infra sans rapport avec le code, hotfix critique) et seulement après avoir vérifié manuellement que le code à déployer est sain — ce mode ne revalide rien automatiquement.
+
 ---
 
 ## 8. Documentation

@@ -43,3 +43,20 @@ npm test
 ```
 
 Voir `AGENTS.md` § 7 pour le détail des workflows CI/CD.
+
+## Configuration GitHub à appliquer manuellement
+
+Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées. À configurer dans **Settings → Branches** :
+
+**Branche `main` :**
+- Require a pull request before merging — 1 approbation minimum.
+- Require status checks to pass before merging — checks requis : `Typecheck · Lint · Build` et `check-duplicate-migration-timestamps`.
+- Require branches to be up to date before merging.
+- Do not allow force pushes.
+- Do not allow deletions.
+- (Optionnel) Restreindre qui peut merger, si l'équipe grossit.
+
+**Branche `staging` :**
+- Require status checks to pass before merging — mêmes checks que ci-dessus. C'est de la défense en profondeur : `auto-merge.yml` attend déjà lui-même la fin des checks (`gh pr checks --watch`), mais ce réglage empêche aussi qu'un merge manuel par un humain contourne la vérification.
+- Do not allow force pushes.
+- Pas de "require pull request review" : l'auto-merge des agents doit continuer à fonctionner sans approbation humaine.
