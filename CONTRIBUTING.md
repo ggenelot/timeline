@@ -60,3 +60,19 @@ Les workflows ne suffisent pas seuls à empêcher un contournement humain (force
 - Require status checks to pass before merging — mêmes checks que ci-dessus. C'est de la défense en profondeur : `auto-merge.yml` attend déjà lui-même la fin des checks (`gh pr checks --watch`), mais ce réglage empêche aussi qu'un merge manuel par un humain contourne la vérification.
 - Do not allow force pushes.
 - Pas de "require pull request review" : l'auto-merge des agents doit continuer à fonctionner sans approbation humaine.
+
+## Configuration du projet Supabase staging
+
+Le déploiement des migrations passe par les workflows GitHub Actions (`supabase-staging.yml` / `supabase-prod.yml`, voir `AGENTS.md` § 7), pas par l'intégration GitHub native de Supabase. Lors de la création du projet Supabase staging :
+
+1. Sur l'écran **GitHub Integration** du dashboard Supabase, désactiver le toggle **"Deploy to production"**. Le repo et le working directory peuvent rester liés (utile pour le lien visuel migrations ↔ commits), mais Supabase ne doit pas déployer lui-même — sinon double déploiement, avec ce projet staging pointant en plus sur la mauvaise branche (`main`).
+2. Récupérer la référence du projet : **Settings → General → Reference ID**.
+3. Récupérer/réinitialiser le mot de passe DB : **Settings → Database → Database password**.
+4. Ajouter dans **Settings → Secrets and variables → Actions** du repo :
+   - `STAGING_SUPABASE_PROJECT_ID` (reference ID de l'étape 2).
+   - `STAGING_SUPABASE_DB_PASSWORD` (mot de passe de l'étape 3).
+   - Vérifier que `SUPABASE_ACCESS_TOKEN` existe déjà (token de compte, partagé avec le projet production).
+5. Déclencher un premier déploiement manuel pour valider le lien et appliquer tout le schéma existant : `gh workflow run supabase-staging.yml` (pas besoin d'attendre un push sur `staging`).
+6. Dans **Auth → URL Configuration** du projet staging, renseigner le Site URL et les Redirect URLs avec l'URL stable de la branche `staging` sur Vercel (et un wildcard pour les Preview Deployments par PR si besoin).
+7. Répliquer manuellement depuis le projet production ce qui n'est pas couvert par les migrations : providers Auth (ex. Slack SSO), buckets Storage, extensions activées hors migration.
+8. Dans Vercel, ajouter les variables d'environnement (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) pointant vers ce projet staging, scopées à l'environnement Preview — distinctes des variables Production.
