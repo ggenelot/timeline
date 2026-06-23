@@ -132,6 +132,9 @@ type EditorState = {
   profileName: string;
   current: StatusKey | null;
   implied: boolean;
+  // Une formation supérieure validée couvre cette compétence : « Non acquise »
+  // ne peut pas la vider (l'implication la revalide aussitôt).
+  lockedByHigher: boolean;
   x: number;
   y: number;
 };
@@ -447,6 +450,9 @@ export default function CompetencesDashboardPage() {
   ) {
     const r = e.currentTarget.getBoundingClientRect();
     const info = effInfo(profileId, sk.id);
+    const order = skillOrderById[sk.id];
+    const maxV = maxValideOrderByProfile[profileId];
+    const lockedByHigher = order !== undefined && maxV !== undefined && maxV > order;
     setEditor({
       profileId,
       skillId: sk.id,
@@ -457,6 +463,7 @@ export default function CompetencesDashboardPage() {
       // la cellule est validée par héritage pour l'afficher dans le popover.
       current: eff(profileId, sk.id),
       implied: info.implied,
+      lockedByHigher,
       x: r.left + r.width / 2,
       y: r.bottom,
     });
@@ -680,7 +687,20 @@ export default function CompetencesDashboardPage() {
           }}
         />
 
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, marginLeft: 'auto' }}>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 7,
+            marginLeft: 'auto',
+            // Reste dans la largeur de la page : pas de retour à la ligne, et
+            // défilement horizontal si les pills dépassent (mobile notamment).
+            flexWrap: 'nowrap',
+            minWidth: 0,
+            maxWidth: '100%',
+            overflowX: 'auto',
+          }}
+        >
           {STATUS_FILTERS.map((s) => {
             const active = statusFilter === s.key;
             return (
@@ -690,9 +710,11 @@ export default function CompetencesDashboardPage() {
                 onClick={() => setStatusFilter(s.key)}
                 style={{
                   cursor: 'pointer',
+                  flex: 'none',
                   display: 'inline-flex',
                   alignItems: 'center',
                   gap: 7,
+                  whiteSpace: 'nowrap',
                   border: `1px solid ${active ? '#0f172a' : '#e2e8f0'}`,
                   background: active ? '#0f172a' : '#fff',
                   color: active ? '#fff' : '#475569',
@@ -703,7 +725,7 @@ export default function CompetencesDashboardPage() {
                   fontFamily: 'inherit',
                 }}
               >
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: s.dot }} />
+                <span style={{ flex: 'none', width: 9, height: 9, borderRadius: '50%', background: s.dot }} />
                 {s.label}
               </button>
             );
@@ -1109,25 +1131,30 @@ export default function CompetencesDashboardPage() {
                 {editor.skillCode} · {editor.profileName}
               </div>
               <div style={{ marginTop: 2, fontSize: 11, color: '#94a3b8' }}>{editor.skillName}</div>
-              {editor.implied && !editor.current ? (
+              {editor.lockedByHigher ? (
                 <div style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: '#047857' }}>
-                  Validée par une formation supérieure. Définir un statut ici le forcera pour cette compétence.
+                  Couverte par une formation supérieure validée. Pour la retirer, modifiez cette formation ; « Non acquise » est indisponible ici.
                 </div>
               ) : null}
             </div>
             <div style={{ padding: 6 }}>
               {EDITOR_OPTIONS.map((o) => {
                 const active = (editor.current ?? 'none') === o.key;
+                // « Non acquise » est sans effet quand une formation supérieure
+                // validée couvre la cellule (l'implication la revalide aussitôt).
+                const disabled = o.key === 'none' && editor.lockedByHigher;
                 return (
                   <button
                     key={o.key}
                     type="button"
+                    disabled={disabled}
                     onClick={() => {
+                      if (disabled) return;
                       void setStatus(editor.profileId, editor.skillId, o.key);
                       setEditor(null);
                     }}
                     style={{
-                      cursor: 'pointer',
+                      cursor: disabled ? 'not-allowed' : 'pointer',
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
@@ -1139,7 +1166,7 @@ export default function CompetencesDashboardPage() {
                       fontSize: 13,
                       fontWeight: 700,
                       fontFamily: 'inherit',
-                      color: '#334155',
+                      color: disabled ? '#cbd5e1' : '#334155',
                       textAlign: 'left',
                     }}
                   >
@@ -1151,6 +1178,7 @@ export default function CompetencesDashboardPage() {
                         borderRadius: 4,
                         background: o.dotBg,
                         border: o.dotBorder === 'none' ? 'none' : o.dotBorder,
+                        opacity: disabled ? 0.4 : 1,
                       }}
                     />
                     <span style={{ flex: 1 }}>{o.label}</span>
