@@ -947,7 +947,7 @@ export default function CompetencesDashboardPage() {
             overflow: 'hidden',
           }}
         >
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh' }}>
             <div style={{ minWidth: 'max-content' }}>
               {/* header row */}
               <div
