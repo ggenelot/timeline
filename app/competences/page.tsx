@@ -609,6 +609,7 @@ export default function CompetencesPage() {
   const [validations, setValidations] = useState<CompetenceValidation[]>([]);
   const [view, setView] = useState<ViewMode>('parcours');
   const [expandedDoublures, setExpandedDoublures] = useState<Set<string>>(new Set());
+  const [expandedCompetences, setExpandedCompetences] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -808,6 +809,15 @@ export default function CompetencesPage() {
 
   function toggleDoublureExpanded(id: string) {
     setExpandedDoublures((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleCompetenceExpanded(id: string) {
+    setExpandedCompetences((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -1261,18 +1271,24 @@ export default function CompetencesPage() {
                                   {expanded && dVals.map((val) => {
                                     const comp = allComps.find((c) => c.id === val.competence_id);
                                     if (!comp) return null;
+                                    const compExpanded = expandedCompetences.has(val.id);
                                     return (
                                       <div
                                         key={val.id}
-                                        style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 16px 11px 40px', borderTop: '1px solid #f4f6f9', borderLeft: '3px solid #d1fae5' }}
+                                        role="button"
+                                        tabIndex={0}
+                                        onClick={() => toggleCompetenceExpanded(val.id)}
+                                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCompetenceExpanded(val.id); } }}
+                                        aria-expanded={compExpanded}
+                                        style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 11, padding: '11px 16px 11px 40px', borderTop: '1px solid #f4f6f9', borderLeft: '3px solid #d1fae5' }}
                                       >
                                         <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, background: '#059669', color: '#fff', border: '1.5px solid #059669' }}>✓</span>
                                         <div style={{ flex: 1, minWidth: 0 }}>
                                           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                             <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{comp.name}</span>
-                                            {comp.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                                            {compExpanded && comp.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
                                           </div>
-                                          {comp.description ? (
+                                          {compExpanded && comp.description ? (
                                             <div style={{ marginTop: 2, fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div>
                                           ) : null}
                                         </div>
@@ -1302,23 +1318,31 @@ export default function CompetencesPage() {
                               <span style={{ fontSize: 11.5, color: '#94a3b8' }}>À cocher lors d&apos;une doublure</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                              {todoComps.map((c) => (
-                                <div
-                                  key={c.id}
-                                  style={{ display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 12, padding: '12px 14px' }}
-                                >
-                                  <span style={{ flexShrink: 0, marginTop: 1, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#f1f5f9', color: '#94a3b8', border: '1.5px solid #e2e8f0' }}>–</span>
-                                  <div style={{ flex: 1, minWidth: 0 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                      <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
-                                      {c.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                              {todoComps.map((c) => {
+                                const compExpanded = expandedCompetences.has(c.id);
+                                return (
+                                  <div
+                                    key={c.id}
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => toggleCompetenceExpanded(c.id)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleCompetenceExpanded(c.id); } }}
+                                    aria-expanded={compExpanded}
+                                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 12, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 12, padding: '12px 14px' }}
+                                  >
+                                    <span style={{ flexShrink: 0, marginTop: 1, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#f1f5f9', color: '#94a3b8', border: '1.5px solid #e2e8f0' }}>–</span>
+                                    <div style={{ flex: 1, minWidth: 0 }}>
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                                        <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                        {compExpanded && c.garde_only ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Garde uniquement</Pill> : null}
+                                      </div>
+                                      {compExpanded && c.description ? (
+                                        <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div>
+                                      ) : null}
                                     </div>
-                                    {c.description ? (
-                                      <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{c.description}</div>
-                                    ) : null}
                                   </div>
-                                </div>
-                              ))}
+                                );
+                              })}
                             </div>
                           </div>
                         ) : null}
