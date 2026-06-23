@@ -32,10 +32,28 @@ jobs:
       # `gh pr merge --auto` only blocks on CI if the base branch has required
       # status checks configured. `staging` has no such ruleset, so we wait on
       # the checks ourselves before merging instead of relying on that config.
+      #
+      # `gh pr checks --watch` lists every check on the PR's head commit,
+      # which includes this very job's own check run ("enable-auto-merge").
+      # That check stays in_progress until this job finishes, so `--watch`
+      # would wait on itself forever. Poll manually and ignore our own check.
       - name: Wait for checks, then merge (squash)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
         run: |
-          gh pr checks "$PR_URL" --watch --fail-fast
+          while true; do
+            checks=$(gh pr checks "$PR_URL" --json name,bucket | jq '[.[] | select(.name != "enable-auto-merge")]')
+            failed=$(echo "$checks" | jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length')
+            if [ "$failed" -gt 0 ]; then
+              echo "$checks" | jq -r '.[] | select(.bucket == "fail" or .bucket == "cancel") | .name'
+              echo "A required check failed or was cancelled."
+              exit 1
+            fi
+            pending=$(echo "$checks" | jq '[.[] | select(.bucket == "pending")] | length')
+            if [ "$pending" -eq 0 ]; then
+              break
+            fi
+            sleep 15
+          done
           gh pr merge --squash "$PR_URL"
