@@ -345,16 +345,17 @@ function compareDoublureChrono(a: Doublure, b: Doublure): number {
   return (a.created_at ?? '') < (b.created_at ?? '') ? -1 : 1;
 }
 
-// Prominent "+" button to declare a doublure (more legible than a plain link).
+// Discreet round "+" button to declare a doublure.
 function DeclareDoublureButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, border: 'none', background: '#0f172a', color: '#fff', borderRadius: 11, padding: '10px 18px', fontSize: 14, fontWeight: 800, fontFamily: 'inherit', boxShadow: '0 1px 3px rgba(15,23,42,.12)' }}
+      aria-label="Déclarer une doublure"
+      title="Déclarer une doublure"
+      style={{ cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: '50%', fontSize: 17, fontWeight: 500, fontFamily: 'inherit', lineHeight: 1 }}
     >
-      <span aria-hidden style={{ fontSize: 21, lineHeight: 0.7, fontWeight: 400 }}>+</span>
-      Déclarer une doublure
+      +
     </button>
   );
 }
@@ -607,7 +608,7 @@ export default function CompetencesPage() {
   const [doublures, setDoublures] = useState<Doublure[]>([]);
   const [validations, setValidations] = useState<CompetenceValidation[]>([]);
   const [view, setView] = useState<ViewMode>('parcours');
-  const [collapsedDoublures, setCollapsedDoublures] = useState<Set<string>>(new Set());
+  const [expandedDoublures, setExpandedDoublures] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -805,8 +806,8 @@ export default function CompetencesPage() {
     setModal({ ...MODAL_INIT, phaseId });
   }
 
-  function toggleDoublureCollapsed(id: string) {
-    setCollapsedDoublures((prev) => {
+  function toggleDoublureExpanded(id: string) {
+    setExpandedDoublures((prev) => {
       const next = new Set(prev);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -842,18 +843,6 @@ export default function CompetencesPage() {
       return (m.supMode === 'chosen' && !!m.chosenSup) || m.supName.trim().length > 0;
     }
     return true;
-  }
-
-  async function handleDeleteDoublure(id: string) {
-    if (readOnly) return;
-    try { await deleteDoublure(id); setDoublures((prev) => prev.filter((d) => d.id !== id)); }
-    catch (e) { setError((e as Error).message); }
-  }
-
-  async function handleDeleteValidation(id: string) {
-    if (readOnly) return;
-    try { await deleteCompetenceValidation(id); setValidations((prev) => prev.filter((v) => v.id !== id)); }
-    catch (e) { setError((e as Error).message); }
   }
 
   // ── Render ─────────────────────────────────────────────────
@@ -1210,74 +1199,66 @@ export default function CompetencesPage() {
                               const dVals = validations.filter(
                                 (v) => v.doublure_id === d.id || (d.event_name && v.event_name === d.event_name)
                               );
-                              const collapsed = collapsedDoublures.has(d.id);
+                              const expanded = expandedDoublures.has(d.id);
                               return (
                                 <div key={d.id} style={{ border: '1px solid #e7e9ee', borderRadius: 13, background: '#fff', overflow: 'hidden' }}>
-                                  {/* event header */}
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 14px', background: '#f8fafc', borderBottom: collapsed ? 'none' : '1px solid #eef1f5' }}>
-                                    <span style={{ flexShrink: 0, marginTop: 1, width: 26, height: 26, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#eff6ff', border: '1px solid #bfdbfe', fontSize: 13 }}>📅</span>
+                                  {/* event header — click anywhere to expand/collapse */}
+                                  <div
+                                    role="button"
+                                    tabIndex={0}
+                                    onClick={() => toggleDoublureExpanded(d.id)}
+                                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleDoublureExpanded(d.id); } }}
+                                    aria-expanded={expanded}
+                                    style={{ cursor: 'pointer', display: 'flex', alignItems: 'flex-start', gap: 11, padding: '12px 14px', background: '#f8fafc', borderBottom: expanded ? '1px solid #eef1f5' : 'none' }}
+                                  >
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                                         <span style={{ fontSize: 14, fontWeight: 800, color: '#0f172a' }}>{d.event_name ?? 'Doublure'}</span>
-                                        {d.is_external ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Externe</Pill> : null}
-                                        {d.mission_id ? <Pill color="#1d4ed8" bg="#eff6ff" border="#bfdbfe">Événement timeline</Pill> : null}
-                                        {d.is_pending ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">En attente</Pill> : null}
-                                        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
+                                        {expanded ? (
+                                          <>
+                                            {d.is_external ? <Pill color="#6d28d9" bg="#f5f3ff" border="#ddd6fe">Externe</Pill> : null}
+                                            {d.mission_id ? <Pill color="#1d4ed8" bg="#eff6ff" border="#bfdbfe">Événement timeline</Pill> : null}
+                                            {d.is_pending ? <Pill color="#b45309" bg="#fffbeb" border="#fde68a">En attente</Pill> : null}
+                                            <span style={{ marginLeft: 'auto', fontSize: 12, color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
+                                          </>
+                                        ) : (
+                                          dVals.length > 0 ? (
+                                            <span
+                                              aria-label={`${dVals.length} compétence${dVals.length > 1 ? 's' : ''} signée${dVals.length > 1 ? 's' : ''} sur cette doublure`}
+                                              style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#059669', borderRadius: 999, padding: '2px 9px', fontVariantNumeric: 'tabular-nums' }}
+                                            >
+                                              +{dVals.length}
+                                            </span>
+                                          ) : null
+                                        )}
                                       </div>
-                                      {d.event_lieu ? (
-                                        <div style={{ marginTop: 3, fontSize: 12, color: '#94a3b8' }}>{d.event_lieu}</div>
-                                      ) : null}
-                                      {d.supervisor_name ? (
-                                        <div style={{ marginTop: 5, fontSize: 12, color: '#475569' }}>
-                                          Encadré par <strong>{d.supervisor_name}</strong>
-                                          {d.supervisor_antenne ? ` · ${d.supervisor_antenne}` : ''}
-                                        </div>
-                                      ) : null}
-                                      {d.supervisor_comment ? (
-                                        <div style={{ marginTop: 6, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
-                                          « {d.supervisor_comment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
-                                        </div>
-                                      ) : null}
-                                      {d.message ? (
-                                        <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
-                                          Note perso : {d.message}
-                                        </div>
-                                      ) : null}
-                                    </div>
-                                    <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      {dVals.length > 0 ? (
-                                        <span
-                                          aria-label={`${dVals.length} compétence${dVals.length > 1 ? 's' : ''} signée${dVals.length > 1 ? 's' : ''} sur cette doublure`}
-                                          style={{ fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#059669', borderRadius: 999, padding: '2px 9px', fontVariantNumeric: 'tabular-nums' }}
-                                        >
-                                          +{dVals.length}
-                                        </span>
-                                      ) : null}
-                                      {dVals.length > 0 ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => toggleDoublureCollapsed(d.id)}
-                                          aria-expanded={!collapsed}
-                                          aria-label={collapsed ? 'Afficher les compétences signées' : 'Masquer les compétences signées'}
-                                          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#64748b', padding: '2px 5px', fontSize: 13, fontFamily: 'inherit', lineHeight: 1 }}
-                                        >
-                                          {collapsed ? '▾' : '▴'}
-                                        </button>
-                                      ) : null}
-                                      {!readOnly ? (
-                                        <button
-                                          type="button"
-                                          onClick={() => handleDeleteDoublure(d.id)}
-                                          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', padding: '4px', fontSize: 11.5, fontFamily: 'inherit' }}
-                                          aria-label="Supprimer"
-                                        >
-                                          ✕
-                                        </button>
+                                      {expanded ? (
+                                        <>
+                                          {d.event_lieu ? (
+                                            <div style={{ marginTop: 3, fontSize: 12, color: '#94a3b8' }}>{d.event_lieu}</div>
+                                          ) : null}
+                                          {d.supervisor_name ? (
+                                            <div style={{ marginTop: 5, fontSize: 12, color: '#475569' }}>
+                                              Encadré par <strong>{d.supervisor_name}</strong>
+                                              {d.supervisor_antenne ? ` · ${d.supervisor_antenne}` : ''}
+                                            </div>
+                                          ) : null}
+                                          {d.supervisor_comment ? (
+                                            <div style={{ marginTop: 6, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
+                                              « {d.supervisor_comment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                                            </div>
+                                          ) : null}
+                                          {d.message ? (
+                                            <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                                              Note perso : {d.message}
+                                            </div>
+                                          ) : null}
+                                        </>
                                       ) : null}
                                     </div>
                                   </div>
                                   {/* Competences validated at this event */}
-                                  {!collapsed && dVals.map((val) => {
+                                  {expanded && dVals.map((val) => {
                                     const comp = allComps.find((c) => c.id === val.competence_id);
                                     if (!comp) return null;
                                     return (
@@ -1295,19 +1276,10 @@ export default function CompetencesPage() {
                                             <div style={{ marginTop: 2, fontSize: 12, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div>
                                           ) : null}
                                         </div>
-                                        {!readOnly ? (
-                                          <button
-                                            type="button"
-                                            onClick={() => handleDeleteValidation(val.id)}
-                                            style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 11.5, fontWeight: 600, fontFamily: 'inherit' }}
-                                          >
-                                            Annuler
-                                          </button>
-                                        ) : null}
                                       </div>
                                     );
                                   })}
-                                  {!collapsed && dVals.length === 0 ? (
+                                  {expanded && dVals.length === 0 ? (
                                     <div style={{ padding: '11px 14px', fontSize: 12.5, color: '#94a3b8' }}>Aucune compétence validée sur cet événement.</div>
                                   ) : null}
                                 </div>
