@@ -17,6 +17,7 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/roles', label: 'Rôles', domain: 'admin-only' },
   { href: '/admin/skills', label: 'Compétences', domain: 'admin-only' },
   { href: '/admin/cursus', label: 'Cursus', domain: 'cursus' },
+  { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', domain: 'cursus' },
   { href: '/admin/mission-types', label: 'Missions', domain: 'admin-only' },
   { href: '/admin/stats', label: 'Statistiques', domain: 'mission' },
   { href: '/admin/slack', label: 'Slack', domain: 'admin-only' },

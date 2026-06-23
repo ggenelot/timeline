@@ -6,6 +6,7 @@ export type Profile = {
   email: string;
   identifier?: string | null;
   role: AppRole;
+  sector?: string | null;
   created_at: string;
   slack_user_id?: string | null;
   slack_team_id?: string | null;
@@ -26,13 +27,27 @@ export type Skill = {
   name: string;
   category_id: string | null;
   display_order: number;
+  code?: string | null;
+  level?: number | null;
   created_at: string;
   category?: SkillCategory | null;
 };
 
+// Statuts métier du carnet de compétences. Les valeurs 'a_faire' / 'exempte'
+// sont historiques ; le tableau de bord écrit uniquement les quatre statuts
+// ci-dessous (et supprime la ligne pour « non acquise »).
+export type ProfileSkillStatus =
+  | 'valide'
+  | 'formation'
+  | 'interesse'
+  | 'a_recycler'
+  | 'a_faire'
+  | 'exempte';
+
 export type ProfileSkill = {
   profile_id: string;
   skill_id: string;
+  status?: ProfileSkillStatus;
   created_at: string;
   skill: Pick<Skill, 'id' | 'name' | 'category_id' | 'display_order'> | null;
 };
