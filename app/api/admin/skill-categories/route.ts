@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
   const { data, error: dbError } = await client!
     .from('skill_categories')
-    .select('*, skills(id, name, display_order, category_id, created_at)')
+    .select('*, skills(id, name, code, description, display_order, category_id, created_at)')
     .order('display_order', { ascending: true })
     .order('display_order', { referencedTable: 'skills', ascending: true });
 

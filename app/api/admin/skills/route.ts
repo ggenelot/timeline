@@ -20,9 +20,9 @@ export async function POST(req: NextRequest) {
   const client = await getAdminClient(req);
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
-  const body = (await req.json()) as { name?: string; category_id?: string };
+  const body = (await req.json()) as { name?: string; code?: string; description?: string; category_id?: string };
   const name = body.name?.trim();
-  if (!name) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
+  if (!name) return NextResponse.json({ error: 'Le titre est obligatoire.' }, { status: 400 });
   if (!body.category_id) return NextResponse.json({ error: 'La catégorie est obligatoire.' }, { status: 400 });
 
   const { data: maxRow } = await client
@@ -37,7 +37,13 @@ export async function POST(req: NextRequest) {
 
   const { data, error } = await client
     .from('skills')
-    .insert({ name, category_id: body.category_id, display_order: nextOrder })
+    .insert({
+      name,
+      code: body.code?.trim() || null,
+      description: body.description?.trim() || null,
+      category_id: body.category_id,
+      display_order: nextOrder,
+    })
     .select()
     .single();
 

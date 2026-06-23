@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react';
 import type { ActivityAct } from '@/lib/types';
 import type { Period } from './activity.constants';
-import { SEUIL_HOURS } from './activity.constants';
 import { useActivityModel } from './useActivityModel';
 import { ActivityFilters } from './ActivityFilters';
 import { ActivityBarChart } from './ActivityBarChart';
@@ -11,17 +10,16 @@ import { ActivityCalendar } from './ActivityCalendar';
 
 type Props = {
   acts: ActivityAct[];
-  seuilHours?: number;
   error?: string | null;
 };
 
-export function MissionActivityPanel({ acts, seuilHours = SEUIL_HOURS, error = null }: Props) {
+export function MissionActivityPanel({ acts, error = null }: Props) {
   const [view, setView] = useState<'graphe' | 'calendrier'>('graphe');
   const [period, setPeriod] = useState<Period>('12m');
   const [hiddenVols, setHiddenVols] = useState<Set<string>>(new Set());
   const [hiddenTypes, setHiddenTypes] = useState<Set<string>>(new Set());
 
-  const model = useActivityModel(acts, period, hiddenVols, hiddenTypes, seuilHours);
+  const model = useActivityModel(acts, period, hiddenVols, hiddenTypes);
 
   const profileNames = useMemo(
     () => new Map(acts.map((a) => [a.profileId, a.profileName])),
@@ -83,14 +81,11 @@ export function MissionActivityPanel({ acts, seuilHours = SEUIL_HOURS, error = n
           rows={model.barRows}
           scaleMax={model.scaleMax}
           ticks={model.ticks}
-          seuilPercent={model.seuilPercent}
-          seuilHours={seuilHours}
         />
       ) : (
         <ActivityCalendar
           rows={model.calendarRows}
           months={model.months}
-          seuilHours={seuilHours}
         />
       )}
     </div>

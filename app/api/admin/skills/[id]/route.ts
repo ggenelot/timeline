@@ -20,9 +20,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const client = await getAdminClient(req);
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
-  const body = (await req.json()) as { name?: string; display_order?: number };
+  const body = (await req.json()) as { name?: string; code?: string; description?: string; display_order?: number };
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) patch.name = body.name.trim();
+  if (body.code !== undefined) patch.code = body.code.trim() || null;
+  if (body.description !== undefined) patch.description = body.description.trim() || null;
   if (body.display_order !== undefined) patch.display_order = body.display_order;
 
   if (Object.keys(patch).length === 0) {

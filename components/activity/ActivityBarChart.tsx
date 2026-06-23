@@ -8,9 +8,10 @@ type Props = {
   rows: BarRow[];
   scaleMax: number;
   ticks: number[];
-  seuilPercent: number;
-  seuilHours: number;
 };
+
+const MIN_CHART_WIDTH_PX = 320;
+const PX_PER_SCALE_UNIT = 5;
 
 type TooltipState = {
   x: number;
@@ -22,7 +23,7 @@ type TooltipState = {
   acts: { missionTitle: string; missionDate: string; hours: number }[];
 } | null;
 
-export function ActivityBarChart({ rows, scaleMax, ticks, seuilPercent, seuilHours }: Props) {
+export function ActivityBarChart({ rows, scaleMax, ticks }: Props) {
   const [tooltip, setTooltip] = useState<TooltipState>(null);
 
   if (rows.length === 0) {
@@ -34,7 +35,11 @@ export function ActivityBarChart({ rows, scaleMax, ticks, seuilPercent, seuilHou
   }
 
   return (
-    <div className="relative select-none" onMouseLeave={() => setTooltip(null)}>
+    <div
+      className="relative select-none"
+      style={{ width: `min(100%, max(${MIN_CHART_WIDTH_PX}px, ${scaleMax * PX_PER_SCALE_UNIT}px))` }}
+      onMouseLeave={() => setTooltip(null)}
+    >
       {/* Axe ticks */}
       <div className="relative mb-2 ml-36 h-4" aria-hidden="true">
         {ticks.map((tick) => (
@@ -59,13 +64,6 @@ export function ActivityBarChart({ rows, scaleMax, ticks, seuilPercent, seuilHou
               {row.typeName}
             </span>
             <div className="relative flex h-7 min-w-0 flex-1 overflow-hidden rounded bg-slate-100">
-              {/* Repère seuil */}
-              <div
-                aria-label={`Seuil ${seuilHours}h`}
-                className="pointer-events-none absolute top-0 z-10 h-full border-l-2 border-dashed border-orange-400"
-                style={{ left: `${seuilPercent}%` }}
-              />
-              {/* Segments */}
               {row.segments.map((seg) => (
                 <button
                   key={seg.profileId}
@@ -104,11 +102,6 @@ export function ActivityBarChart({ rows, scaleMax, ticks, seuilPercent, seuilHou
           </div>
         ))}
       </div>
-
-      <p className="mt-3 text-xs text-orange-500">
-        <span aria-hidden="true">— </span>
-        Seuil {seuilHours}h
-      </p>
 
       {tooltip ? (
         <ActivityTooltip
