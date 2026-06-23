@@ -15,6 +15,7 @@ import {
   MISSION_CATEGORY_LABELS,
   Mission,
   MissionAssignment,
+  MissionAssignmentStatus,
   MissionProposal,
   MissionProposalResponse,
   MissionRequiredSkill,
@@ -595,24 +596,31 @@ export default function MissionDetailPage() {
 
     const since = new Date();
     since.setMonth(since.getMonth() - 1);
-    const assignmentRows = await Promise.all(
-      mappedProposals
-        .map((proposal) => proposal.volunteer_id)
-        .filter((value, index, list) => list.indexOf(value) === index)
-        .map(async (volunteerId) => {
-          const { data } = await supabase
-            .from('mission_assignments')
-            .select('created_at')
-            .eq('volunteer_id', volunteerId)
-            .order('created_at', { ascending: false })
-            .limit(100);
+    const uniqueVolunteerIds = mappedProposals
+      .map((proposal) => proposal.volunteer_id)
+      .filter((value, index, list) => list.indexOf(value) === index);
 
-          const lastActivityAt = data?.[0]?.created_at ?? null;
-          const monthlyCount = (data ?? []).filter((entry) => new Date(entry.created_at) >= since).length;
-          return [volunteerId, { lastActivityAt, monthlyCount }] as const;
-        })
-    );
-    setVolunteerActivityStats(Object.fromEntries(assignmentRows));
+    const nextVolunteerActivityStats: Record<string, { lastActivityAt: string | null; monthlyCount: number }> = {};
+    uniqueVolunteerIds.forEach((volunteerId) => {
+      nextVolunteerActivityStats[volunteerId] = { lastActivityAt: null, monthlyCount: 0 };
+    });
+
+    if (uniqueVolunteerIds.length > 0) {
+      const { data: activityRows } = await supabase
+        .from('mission_assignments')
+        .select('volunteer_id, created_at')
+        .in('volunteer_id', uniqueVolunteerIds)
+        .order('created_at', { ascending: false });
+
+      (activityRows ?? []).forEach((row) => {
+        const stat = nextVolunteerActivityStats[row.volunteer_id];
+        if (!stat) return;
+        if (!stat.lastActivityAt) stat.lastActivityAt = row.created_at;
+        if (new Date(row.created_at) >= since) stat.monthlyCount += 1;
+      });
+    }
+
+    setVolunteerActivityStats(nextVolunteerActivityStats);
 
     let canManage = false;
     if (profileData.role !== 'admin' && mappedMission) {
@@ -721,13 +729,22 @@ export default function MissionDetailPage() {
 
     if (payload.proposal) {
       setProposals((current) => {
-        const existingIndex = current.findIndex((proposal) => proposal.volunteer_id === payload.proposal?.volunteer_id);
+        const updatedProposal = payload.proposal as ProposalWithVolunteer;
+        const existingIndex = current.findIndex((proposal) => proposal.volunteer_id === updatedProposal.volunteer_id);
         if (existingIndex === -1) {
-          return [...current, payload.proposal as ProposalWithVolunteer];
+          return [...current, updatedProposal];
         }
 
+        // L'API ne renvoie pas profile_skills sur le volontaire : on les conserve depuis l'état précédent
+        // pour éviter de perdre les badges de compétences déjà chargés.
+        const previousSkills = current[existingIndex].volunteer?.profile_skills ?? null;
         const next = [...current];
-        next[existingIndex] = payload.proposal as ProposalWithVolunteer;
+        next[existingIndex] = {
+          ...updatedProposal,
+          volunteer: updatedProposal.volunteer
+            ? { ...updatedProposal.volunteer, profile_skills: updatedProposal.volunteer.profile_skills ?? previousSkills }
+            : current[existingIndex].volunteer
+        };
         return next;
       });
     }
@@ -739,7 +756,6 @@ export default function MissionDetailPage() {
 
     setSuccess(payload.message ?? 'Statut bénévole mis à jour.');
     setActionLoading(null);
-    await loadData();
   }
 
   async function addVolunteerWithStatus() {
@@ -794,26 +810,38 @@ export default function MissionDetailPage() {
       }
     }
 
+    let insertedRows: Array<{
+      id: string;
+      volunteer_id: string;
+      mission_required_skill_id: string | null;
+      assignment_status: MissionAssignmentStatus;
+      created_at: string;
+    }> = [];
     if (toInsert.length > 0) {
-      const { error: insertError } = await supabase.from('mission_assignments').insert(
-        toInsert.map((volunteerId) => ({
-          mission_id: mission.id,
-          volunteer_id: volunteerId,
-          ...(supportsMissionRequiredSkillReference
-            ? {
-                mission_required_skill_id:
-                  pendingAssignments.get(volunteerId) === NO_SKILL_SELECTION_ID ? null : pendingAssignments.get(volunteerId) ?? null
-              }
-            : {}),
-          assignment_status: 'selected'
-        }))
-      );
+      const { data: inserted, error: insertError } = await supabase
+        .from('mission_assignments')
+        .insert(
+          toInsert.map((volunteerId) => ({
+            mission_id: mission.id,
+            volunteer_id: volunteerId,
+            ...(supportsMissionRequiredSkillReference
+              ? {
+                  mission_required_skill_id:
+                    pendingAssignments.get(volunteerId) === NO_SKILL_SELECTION_ID ? null : pendingAssignments.get(volunteerId) ?? null
+                }
+              : {}),
+            assignment_status: 'selected'
+          }))
+        )
+        .select('id,volunteer_id,mission_required_skill_id,assignment_status,created_at');
       if (insertError) {
         setError(`Impossible de mettre à jour la sélection : ${insertError.message}`);
         setActionLoading(null);
         return;
       }
+      insertedRows = inserted ?? [];
     }
+
     for (const assignment of toUpdate) {
       const { error: updateError } = await supabase
         .from('mission_assignments')
@@ -831,9 +859,32 @@ export default function MissionDetailPage() {
       }
     }
 
+    const volunteerLookup = new Map<string, Pick<Profile, 'id' | 'full_name' | 'email'>>();
+    proposals.forEach((proposal) => {
+      if (proposal.volunteer) volunteerLookup.set(proposal.volunteer_id, proposal.volunteer);
+    });
+    allVolunteers.forEach((volunteer) => volunteerLookup.set(volunteer.id, volunteer));
+
+    setAssignments((current) => {
+      const withoutDeleted = current.filter((assignment) => !toDelete.includes(assignment.volunteer_id));
+      const withUpdates = withoutDeleted.map((assignment) => {
+        const pendingSkillId = pendingAssignments.get(assignment.volunteer_id);
+        if (pendingSkillId === undefined) return assignment;
+        const resolvedSkillId = pendingSkillId === NO_SKILL_SELECTION_ID ? null : pendingSkillId;
+        if (resolvedSkillId === assignment.mission_required_skill_id) return assignment;
+        return { ...assignment, mission_required_skill_id: resolvedSkillId };
+      });
+      const inserted: AssignmentWithVolunteer[] = insertedRows.map((row) => ({
+        ...row,
+        mission_id: mission.id,
+        mission_required_skill_id: row.mission_required_skill_id ?? null,
+        volunteer: volunteerLookup.get(row.volunteer_id) ?? null
+      }));
+      return [...withUpdates, ...inserted];
+    });
+
     setActionLoading(null);
     setSuccess('Sélection de l’équipage mise à jour.');
-    await loadData();
   }
 
   async function syncSlackChannel() {
@@ -864,7 +915,11 @@ export default function MissionDetailPage() {
       })
     });
 
-    const payload = (await response.json()) as { error?: string; message?: string };
+    const payload = (await response.json()) as {
+      error?: string;
+      message?: string;
+      channel?: { channelId: string | null; channelName: string; created: boolean };
+    };
 
     if (!response.ok) {
       setError(payload.error ?? 'Synchronisation Slack impossible.');
@@ -873,10 +928,24 @@ export default function MissionDetailPage() {
       return;
     }
 
+    if (payload.channel) {
+      setMission((current) =>
+        current
+          ? {
+              ...current,
+              slack_channel_id: payload.channel?.channelId ?? current.slack_channel_id,
+              slack_channel_name: payload.channel?.channelName ?? current.slack_channel_name,
+              slack_channel_created_at: payload.channel?.created
+                ? new Date().toISOString()
+                : current.slack_channel_created_at
+            }
+          : current
+      );
+    }
+
     setSuccess(payload.message ?? 'Synchronisation Slack terminée.');
     setActionLoading(null);
     setSlackCreationState('created');
-    await loadData();
   }
 
 
@@ -942,27 +1011,41 @@ export default function MissionDetailPage() {
       setActionLoading(null);
       return;
     }
+    setMission((current) => (current ? { ...current, status: 'confirmed' } : current));
+
+    const { data: logData } = await supabase
+      .from('activity_logs')
+      .select('id,mission_id,actor_id,action_type,entity_type,entity_id,description,created_at,actor:profiles!activity_logs_actor_id_fkey(id,full_name,email)')
+      .eq('mission_id', mission.id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    setActivityLogs(
+      (logData ?? []).map((log) => ({
+        ...log,
+        actor: Array.isArray(log.actor) ? log.actor[0] ?? null : log.actor
+      }))
+    );
+
     setSuccess(payload.message ?? 'Mission confirmée.');
     setIsSkillsDirectoryExpanded(false);
     setIsSlackCardExpanded(true);
     setActionLoading(null);
-    await loadData();
   }
 
   return (
     <div className="space-y-6">
-      {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
       {success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
 
-      <article className="overflow-hidden rounded-3xl border border-slate-200 bg-slate-50/70 shadow-sm">
-        <div className="p-5">
+      <article className="rounded-lg border border-slate-200 bg-white p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-semibold text-slate-900">{mission.title}</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#0f172a]">{mission.title}</h1>
           <div className="flex items-center gap-2">
             {isAdmin ? (
               <Link
                 href={`/admin/missions/${mission.id}/edit`}
-                className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100"
+                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Modifier
               </Link>
@@ -971,8 +1054,8 @@ export default function MissionDetailPage() {
             <MissionStatusBadge status={mission.status} />
           </div>
         </div>
-        <p className="mt-2 text-sm text-slate-700">{mission.description ?? 'Aucune description'}</p>
-        <dl className="mt-3 grid gap-1 text-sm text-slate-600 md:grid-cols-2">
+        <p className="mt-2 text-sm text-[#64748b]">{mission.description ?? 'Aucune description'}</p>
+        <dl className="mt-3 grid gap-1 text-sm text-[#64748b] md:grid-cols-2">
           <div>
             <dt className="inline font-medium text-slate-700">Lieu :</dt> {mission.location ?? 'Non défini'}
           </div>
@@ -987,8 +1070,8 @@ export default function MissionDetailPage() {
         </dl>
 
         {(mission.mission_required_skills ?? []).length > 0 ? (
-          <div className="mt-3 text-sm text-slate-700">
-            <p className="font-medium">Compétences requises :</p>
+          <div className="mt-3 text-sm text-[#64748b]">
+            <p className="font-medium text-slate-700">Compétences requises :</p>
             <ul className="mt-2 flex flex-wrap gap-1">
               {(mission.mission_required_skills ?? []).map((requiredSkill) => (
                 <li key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700">
@@ -1003,10 +1086,9 @@ export default function MissionDetailPage() {
           <div className="mt-4 flex flex-col items-start gap-3">
             <ProposalButton missionId={mission.id} volunteerId={profile.id} disabled={false} missionStatus={mission.status} currentResponse={myProposal?.response ?? null} />
             {myProposal ? <StatusBadge status={myProposal.status} /> : null}
-            {!myProposal ? <p className="text-xs text-slate-600">Aucune réponse enregistrée pour cette mission.</p> : null}
+            {!myProposal ? <p className="text-xs text-[#64748b]">Aucune réponse enregistrée pour cette mission.</p> : null}
           </div>
         ) : null}
-        </div>
       </article>
 
       {canManageMission ? (
@@ -1034,16 +1116,16 @@ export default function MissionDetailPage() {
               value={availabilitySearchQuery}
               onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
               placeholder="Rechercher un bénévole"
-              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-full border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
             />
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 onClick={() => setAvailabilityStatusFilter('all')}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'all'
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
                 }`}
               >
                 Tous statuts {proposalsTableRows.length}
@@ -1051,10 +1133,10 @@ export default function MissionDetailPage() {
               <button
                 type="button"
                 onClick={() => setAvailabilityStatusFilter('available')}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'available'
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
                 }`}
               >
                 Disponibles {proposalsByStatus.available}
@@ -1062,10 +1144,10 @@ export default function MissionDetailPage() {
               <button
                 type="button"
                 onClick={() => setAvailabilityStatusFilter('unavailable')}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'unavailable'
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
                 }`}
               >
                 Indisponibles {proposalsByStatus.unavailable}
@@ -1073,10 +1155,10 @@ export default function MissionDetailPage() {
               <button
                 type="button"
                 onClick={() => setAvailabilityStatusFilter('no_response')}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium ${
+                className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'no_response'
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
                 }`}
               >
                 Sans réponse {proposalsByStatus.no_response}
@@ -1269,8 +1351,8 @@ export default function MissionDetailPage() {
                   type="button"
                   onClick={confirmCrewSelection}
                   disabled={missionBlocksSelection || actionLoading === 'confirm-selection' || actionLoading === 'save-selection'}
-                  className={`rounded-full px-4 py-2 text-sm font-medium text-white shadow ${
-                    areSkillConstraintsMet ? 'bg-emerald-700 hover:bg-emerald-800' : 'bg-slate-400 hover:bg-slate-500'
+                  className={`rounded-md px-4 py-2 text-sm font-medium text-white shadow ${
+                    areSkillConstraintsMet ? 'bg-slate-900 hover:bg-slate-800' : 'bg-slate-400 hover:bg-slate-500'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {actionLoading === 'confirm-selection' || actionLoading === 'save-selection'
@@ -1404,7 +1486,7 @@ export default function MissionDetailPage() {
             <span className={`text-base leading-none transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
         </div>
-        <p className="mt-1 text-sm text-slate-600">Événements récents de la mission, du plus récent au plus ancien.</p>
+        <p className="mt-1 text-sm text-[#64748b]">Événements récents de la mission, du plus récent au plus ancien.</p>
 
         {isHistoryExpanded ? (
           <div id="mission-history-content" className="mt-3 space-y-3">
@@ -1415,17 +1497,17 @@ export default function MissionDetailPage() {
               value={activitySearch}
               onChange={(event) => setActivitySearch(event.target.value)}
               placeholder="Rechercher dans l'historique"
-              className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+              className="w-full rounded-full border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
             />
           </label>
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => setSelectedActivityType('all')}
-              className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+              className={`rounded-full border px-4 py-1.5 text-sm transition ${
                 selectedActivityType === 'all'
-                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                  : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                  ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                  : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
               }`}
             >
               Toutes {activityLogs.length}
@@ -1435,10 +1517,10 @@ export default function MissionDetailPage() {
                 key={type}
                 type="button"
                 onClick={() => setSelectedActivityType(type as ActivityLog['action_type'])}
-                className={`rounded-full border px-4 py-1.5 text-sm font-medium transition ${
+                className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   selectedActivityType === type
-                    ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-300 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
+                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
                 }`}
               >
                 {label} {activityTypeCounts[type as ActivityLog['action_type']]}
