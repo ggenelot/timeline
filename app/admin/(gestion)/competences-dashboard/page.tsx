@@ -38,6 +38,17 @@ type ApiProfileSkill = {
   status: string;
 };
 
+type ApiStatus = {
+  id: string;
+  key: string;
+  label: string;
+  color: string;
+  mark: string;
+  is_validating: boolean;
+  protected: boolean;
+  display_order: number;
+};
+
 type CursusRef = { id: string; code: string; name: string };
 
 type DashboardData = {
@@ -45,42 +56,12 @@ type DashboardData = {
   profiles: ApiProfile[];
   profileSkills: ApiProfileSkill[];
   cursusBySkill: Record<string, CursusRef>;
+  statuses: ApiStatus[];
 };
-
-// ── Statuts ───────────────────────────────────────────────────
-
-type StatusKey = 'valide' | 'formation' | 'interesse' | 'a_recycler';
-
-const STATUS: Record<
-  StatusKey,
-  { label: string; ring: string; dot: string; soft: string; text: string; mark: string }
-> = {
-  valide: { label: 'Validée', ring: '#059669', dot: '#059669', soft: '#ecfdf5', text: '#047857', mark: '✓' },
-  formation: { label: 'En formation', ring: '#2563eb', dot: '#2563eb', soft: '#eff6ff', text: '#1d4ed8', mark: '✓' },
-  interesse: { label: 'Intéressé·e', ring: '#7c3aed', dot: '#7c3aed', soft: '#f5f3ff', text: '#6d28d9', mark: '★' },
-  a_recycler: { label: 'À recycler', ring: '#ea580c', dot: '#ea580c', soft: '#fff7ed', text: '#c2410c', mark: '↻' },
-};
-
-// Normalise les statuts (y compris les valeurs historiques) vers les 4 statuts
-// métier du tableau de bord.
-function normalizeStatus(raw: string | null | undefined): StatusKey | null {
-  switch (raw) {
-    case 'valide':
-    case 'exempte':
-      return 'valide';
-    case 'formation':
-    case 'a_faire':
-      return 'formation';
-    case 'interesse':
-      return 'interesse';
-    case 'a_recycler':
-      return 'a_recycler';
-    default:
-      return null;
-  }
-}
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
+// Réutilisée aussi pour les statuts : ils partagent la même palette de
+// couleurs nommées, configurable depuis la page « Compétences ».
 
 const CATEGORY_PALETTE: Record<string, { accent: string; soft: string; softBorder: string }> = {
   slate: { accent: '#475569', soft: '#f1f5f9', softBorder: '#e2e8f0' },
@@ -108,33 +89,13 @@ function initials(name: string) {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-const STATUS_FILTERS: Array<{ key: 'all' | StatusKey; label: string; dot: string }> = [
-  { key: 'all', label: 'Tous', dot: '#94a3b8' },
-  { key: 'valide', label: 'Validée', dot: '#059669' },
-  { key: 'formation', label: 'En formation', dot: '#2563eb' },
-  { key: 'interesse', label: 'Intéressé·e', dot: '#7c3aed' },
-  { key: 'a_recycler', label: 'À recycler', dot: '#ea580c' },
-];
-
-const EDITOR_OPTIONS: Array<{ key: StatusKey | 'none'; label: string; dotBg: string; dotBorder: string }> = [
-  { key: 'valide', label: 'Validée', dotBg: '#059669', dotBorder: 'none' },
-  { key: 'formation', label: 'En formation', dotBg: '#eff6ff', dotBorder: '1.5px solid #2563eb' },
-  { key: 'interesse', label: 'Intéressé·e', dotBg: '#f5f3ff', dotBorder: '1.5px solid #7c3aed' },
-  { key: 'a_recycler', label: 'À recycler', dotBg: '#fff7ed', dotBorder: '1.5px solid #ea580c' },
-  { key: 'none', label: 'Non acquise', dotBg: '#fff', dotBorder: '1.5px dashed #cbd5e1' },
-];
-
 type EditorState = {
   profileId: string;
   skillId: string;
   skillCode: string;
   skillName: string;
   profileName: string;
-  current: StatusKey | null;
-  implied: boolean;
-  // Une formation supérieure validée couvre cette compétence : « Non acquise »
-  // ne peut pas la vider (l'implication la revalide aussitôt).
-  lockedByHigher: boolean;
+  current: string | null;
   x: number;
   y: number;
 };
@@ -151,9 +112,9 @@ export default function CompetencesDashboardPage() {
 
   const [catId, setCatId] = useState<string | null>(null);
   const [view, setView] = useState<'arbre' | 'tableau'>('arbre');
-  const [statusFilter, setStatusFilter] = useState<'all' | StatusKey>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
   const [query, setQuery] = useState('');
-  const [onlyHighest, setOnlyHighest] = useState(false);
+  const [expandedSkillIds, setExpandedSkillIds] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   // Statuts effectifs, clé `${profileId}|${skillId}` → statut brut.
@@ -217,7 +178,7 @@ export default function CompetencesDashboardPage() {
   // ── Mutation d'une cellule ──────────────────────────────────
 
   const setStatus = useCallback(
-    async (profileId: string, skillId: string, next: StatusKey | 'none') => {
+    async (profileId: string, skillId: string, next: string) => {
       const key = `${profileId}|${skillId}`;
       const prev = statusMap[key];
       // Optimistic UI
@@ -247,12 +208,6 @@ export default function CompetencesDashboardPage() {
     [statusMap, token]
   );
 
-  const eff = useCallback(
-    (profileId: string, skillId: string): StatusKey | null =>
-      normalizeStatus(statusMap[`${profileId}|${skillId}`]),
-    [statusMap]
-  );
-
   // ── Dérivés ─────────────────────────────────────────────────
 
   const cat = useMemo(
@@ -267,6 +222,15 @@ export default function CompetencesDashboardPage() {
     return m;
   }, [data]);
 
+  const statusByKey = useMemo(() => {
+    const m: Record<string, { key: string; label: string; mark: string; ring: string; soft: string; text: string; isValidating: boolean }> = {};
+    for (const s of data?.statuses ?? []) {
+      const p = palette(s.color);
+      m[s.key] = { key: s.key, label: s.label, mark: s.mark, ring: p.accent, soft: p.soft, text: p.accent, isValidating: s.is_validating };
+    }
+    return m;
+  }, [data]);
+
   const q = query.trim().toLowerCase();
   const matchPerson = useCallback(
     (pid: string) => {
@@ -278,68 +242,32 @@ export default function CompetencesDashboardPage() {
     [q, profileById]
   );
 
-  // Cascade hiérarchique : dans une catégorie, une formation supérieure validée
-  // implique que toutes les inférieures (display_order plus petit) le sont aussi.
-  // `display_order` croissant = compétence de plus en plus haute.
-  const skillOrderById = useMemo(() => {
-    const m: Record<string, number> = {};
-    for (const sk of cat?.skills ?? []) m[sk.id] = sk.display_order;
-    return m;
-  }, [cat]);
-
-  // Pour chaque bénévole, le display_order le plus haut où il a un 'valide' explicite.
-  const maxValideOrderByProfile = useMemo(() => {
-    const m: Record<string, number> = {};
-    if (cat && data) {
-      for (const sk of cat.skills) {
-        for (const p of data.profiles) {
-          if (normalizeStatus(statusMap[`${p.id}|${sk.id}`]) === 'valide') {
-            if (m[p.id] === undefined || sk.display_order > m[p.id]) m[p.id] = sk.display_order;
-          }
-        }
-      }
-    }
-    return m;
-  }, [cat, data, statusMap]);
-
-  // Statut effectif d'une cellule, implication comprise. Un statut explicite prime
-  // toujours ; à défaut, 'valide' est déduit si une compétence supérieure est validée.
-  const effInfo = useCallback(
-    (pid: string, skillId: string): { status: StatusKey | null; implied: boolean } => {
-      const explicit = normalizeStatus(statusMap[`${pid}|${skillId}`]);
-      if (explicit) return { status: explicit, implied: false };
-      const order = skillOrderById[skillId];
-      const maxV = maxValideOrderByProfile[pid];
-      if (order !== undefined && maxV !== undefined && maxV > order) {
-        return { status: 'valide', implied: true };
-      }
-      return { status: null, implied: false };
+  // Statut explicite d'une cellule (le seul mode désormais : pas d'héritage).
+  const eff = useCallback(
+    (pid: string, skillId: string): string | null => {
+      const raw = statusMap[`${pid}|${skillId}`];
+      return raw && statusByKey[raw] ? raw : null;
     },
-    [statusMap, skillOrderById, maxValideOrderByProfile]
+    [statusMap, statusByKey]
   );
 
-  // Compteurs de la catégorie + bénévoles concernés.
+  // Compteurs de la catégorie + bénévoles concernés, par statut.
   const catStats = useMemo(() => {
-    let nValide = 0,
-      nFormation = 0,
-      nInteresse = 0,
-      nRecycler = 0;
+    const counts: Record<string, number> = {};
     const people = new Set<string>();
     if (cat && data) {
       for (const sk of cat.skills) {
         for (const p of data.profiles) {
-          const st = effInfo(p.id, sk.id).status;
+          const st = eff(p.id, sk.id);
           if (!st) continue;
           people.add(p.id);
-          if (st === 'valide') nValide++;
-          else if (st === 'formation') nFormation++;
-          else if (st === 'interesse') nInteresse++;
-          else nRecycler++;
+          counts[st] = (counts[st] ?? 0) + 1;
         }
       }
     }
-    return { nValide, nFormation, nInteresse, nRecycler, peopleCount: people.size };
-  }, [cat, data, effInfo]);
+    const total = Object.values(counts).reduce((a, b) => a + b, 0);
+    return { counts, total, peopleCount: people.size };
+  }, [cat, data, eff]);
 
   // Compétence la plus haute (display_order = ordre hiérarchique) par bénévole.
   const highestIdx = useMemo(() => {
@@ -356,6 +284,15 @@ export default function CompetencesDashboardPage() {
 
   const filtering = statusFilter !== 'all' || q.length > 0;
 
+  function toggleExpanded(skillId: string) {
+    setExpandedSkillIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(skillId)) next.delete(skillId);
+      else next.add(skillId);
+      return next;
+    });
+  }
+
   // ── Vue arbre ───────────────────────────────────────────────
 
   const arbreSkills = useMemo(() => {
@@ -363,40 +300,41 @@ export default function CompetencesDashboardPage() {
     return cat.skills
       .map((sk, i) => {
         const allHolders = data.profiles
-          .map((p) => ({ pid: p.id, ...effInfo(p.id, sk.id) }))
-          .filter((x) => x.status && (!onlyHighest || highestIdx[x.pid] === i)) as Array<{
-          pid: string;
-          status: StatusKey;
-          implied: boolean;
-        }>;
-        const filtered = allHolders.filter(
+          .map((p) => ({ pid: p.id, status: eff(p.id, sk.id) }))
+          .filter((x) => x.status) as Array<{ pid: string; status: string }>;
+        const totalH = allHolders.length;
+        const expanded = expandedSkillIds.has(sk.id);
+        // Par défaut, un bénévole n'apparaît que sous sa compétence la plus
+        // haute ; le badge de comptage permet d'afficher tout le monde.
+        const baseHolders = expanded ? allHolders : allHolders.filter((x) => highestIdx[x.pid] === i);
+        const filtered = baseHolders.filter(
           (x) => matchPerson(x.pid) && (statusFilter === 'all' || x.status === statusFilter)
         );
-        const holders = filtered.map(({ pid, status: st, implied }) => {
+        const holders = filtered.map(({ pid, status: st }) => {
           const p = profileById[pid];
-          const ss = STATUS[st];
+          const ss = statusByKey[st];
           const cursus = data.cursusBySkill[sk.id];
           return {
             pid,
             name: p?.full_name ?? p?.email ?? '—',
             sector: p?.sector ?? '',
             initials: initials(p?.full_name ?? p?.email ?? '?'),
-            // Validation implicite (héritée d'une formation supérieure) → libellé et
-            // contour pointillés pour la distinguer d'une validation directe.
-            statusLabel: implied ? 'Validée (implicite)' : ss.label,
-            ring: ss.ring,
-            ringStyle: implied ? 'dashed' : 'solid',
-            avatarBg: ss.soft,
-            avatarColor: ss.text,
-            text: ss.text,
+            statusLabel: ss?.label ?? st,
+            ring: ss?.ring ?? '#cbd5e1',
+            avatarBg: ss?.soft ?? '#f1f5f9',
+            avatarColor: ss?.text ?? '#64748b',
+            text: ss?.text ?? '#64748b',
             cursus,
           };
         });
-        const totalH = allHolders.length;
-        const vCount = allHolders.filter((x) => x.status === 'valide').length;
         const metaBits: string[] = [];
         if (sk.level && sk.level > 0) metaBits.push(`Niveau ${sk.level}`);
-        metaBits.push(`${vCount}/${totalH} validées`);
+        const emptyLabel =
+          totalH === 0
+            ? 'Personne ne détient encore cette compétence.'
+            : filtering
+              ? 'Aucun bénévole ne correspond au filtre.'
+              : 'Tous les détenteurs ont une compétence plus haute. Cliquez sur le badge pour les afficher.';
         return {
           id: sk.id,
           code: sk.code || sk.name,
@@ -404,29 +342,27 @@ export default function CompetencesDashboardPage() {
           metaLine: metaBits.join(' · '),
           holders,
           hasHolders: holders.length > 0,
-          countLabel: filtering
-            ? `${holders.length} / ${totalH}`
-            : `${totalH} ${totalH > 1 ? 'bénévoles' : 'bénévole'}`,
-          emptyLabel: filtering
-            ? 'Aucun bénévole ne correspond au filtre.'
-            : 'Personne ne détient encore cette compétence.',
+          totalH,
+          expanded,
+          countLabel: `${totalH} ${totalH === 1 ? 'bénévole' : 'bénévoles'}`,
+          emptyLabel,
         };
       })
       .filter((sk) => {
-        if (filtering || onlyHighest) return sk.hasHolders;
+        if (filtering) return sk.hasHolders;
         return true;
       });
-  }, [cat, data, effInfo, onlyHighest, highestIdx, matchPerson, statusFilter, profileById, filtering]);
+  }, [cat, data, eff, highestIdx, matchPerson, statusFilter, profileById, filtering, expandedSkillIds, statusByKey]);
 
   // ── Vue tableau ─────────────────────────────────────────────
 
   const tableCols = useMemo(() => {
     if (!cat || !data) return [];
     return cat.skills.map((sk) => {
-      const n = data.profiles.filter((p) => effInfo(p.id, sk.id).status).length;
+      const n = data.profiles.filter((p) => eff(p.id, sk.id)).length;
       return { id: sk.id, code: sk.code || sk.name, name: sk.name, count: `${n} bén.` };
     });
-  }, [cat, data, effInfo]);
+  }, [cat, data, eff]);
 
   const tableRows = useMemo(() => {
     if (!cat || !data) return [];
@@ -449,21 +385,13 @@ export default function CompetencesDashboardPage() {
     sk: { id: string; code: string; name: string }
   ) {
     const r = e.currentTarget.getBoundingClientRect();
-    const info = effInfo(profileId, sk.id);
-    const order = skillOrderById[sk.id];
-    const maxV = maxValideOrderByProfile[profileId];
-    const lockedByHigher = order !== undefined && maxV !== undefined && maxV > order;
     setEditor({
       profileId,
       skillId: sk.id,
       skillCode: sk.code,
       skillName: sk.name,
       profileName: profileById[profileId]?.full_name ?? profileById[profileId]?.email ?? '—',
-      // Statut explicite stocké (l'implication ne crée pas de ligne) ; on note si
-      // la cellule est validée par héritage pour l'afficher dans le popover.
       current: eff(profileId, sk.id),
-      implied: info.implied,
-      lockedByHigher,
       x: r.left + r.width / 2,
       y: r.bottom,
     });
@@ -493,6 +421,10 @@ export default function CompetencesDashboardPage() {
   }
 
   const editorVw = typeof window !== 'undefined' ? window.innerWidth : 1080;
+  const statusTiles: Array<{ key: 'all' | string; label: string; n: number; color: string }> = [
+    { key: 'all', label: 'Tous', n: catStats.total, color: '#0f172a' },
+    ...data.statuses.map((s) => ({ key: s.key, label: s.label, n: catStats.counts[s.key] ?? 0, color: palette(s.color).accent })),
+  ];
 
   return (
     <div style={{ fontFamily: "'Hanken Grotesk', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" }}>
@@ -543,6 +475,7 @@ export default function CompetencesDashboardPage() {
                 setCatId(c.id);
                 setStatusFilter('all');
                 setQuery('');
+                setExpandedSkillIds(new Set());
               }}
               style={{
                 flex: 'none',
@@ -616,18 +549,43 @@ export default function CompetencesDashboardPage() {
               {cat.skills.length} compétences · {catStats.peopleCount} bénévoles concernés
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 22, flex: 'none' }}>
-            {[
-              { n: catStats.nValide, label: 'validées', color: '#059669' },
-              { n: catStats.nFormation, label: 'en formation', color: '#2563eb' },
-              { n: catStats.nInteresse, label: 'intéressé·es', color: '#7c3aed' },
-              { n: catStats.nRecycler, label: 'à recycler', color: '#ea580c' },
-            ].map((s) => (
-              <div key={s.label} style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 24, fontWeight: 800, color: s.color, lineHeight: 1 }}>{s.n}</div>
-                <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 600, color: '#64748b' }}>{s.label}</div>
-              </div>
-            ))}
+          <div
+            style={{
+              display: 'flex',
+              gap: 10,
+              flex: 'none',
+              maxWidth: '100%',
+              overflowX: 'auto',
+              paddingBottom: 2,
+            }}
+          >
+            {statusTiles.map((tile) => {
+              const active = statusFilter === tile.key;
+              return (
+                <button
+                  key={tile.key}
+                  type="button"
+                  onClick={() => setStatusFilter(tile.key)}
+                  title={`Filtrer sur « ${tile.label} »`}
+                  style={{
+                    flex: 'none',
+                    cursor: 'pointer',
+                    textAlign: 'center',
+                    minWidth: 66,
+                    border: `1px solid ${active ? tile.color : 'transparent'}`,
+                    borderRadius: 10,
+                    background: active ? `${tile.color}14` : 'transparent',
+                    padding: '4px 8px',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <div style={{ fontSize: 24, fontWeight: 800, color: tile.color, lineHeight: 1 }}>{tile.n}</div>
+                  <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>
+                    {tile.label}
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
@@ -686,254 +644,173 @@ export default function CompetencesDashboardPage() {
             fontFamily: 'inherit',
           }}
         />
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 7,
-            marginLeft: 'auto',
-            // Reste dans la largeur de la page : pas de retour à la ligne, et
-            // défilement horizontal si les pills dépassent (mobile notamment).
-            flexWrap: 'nowrap',
-            minWidth: 0,
-            maxWidth: '100%',
-            overflowX: 'auto',
-          }}
-        >
-          {STATUS_FILTERS.map((s) => {
-            const active = statusFilter === s.key;
-            return (
-              <button
-                key={s.key}
-                type="button"
-                onClick={() => setStatusFilter(s.key)}
-                style={{
-                  cursor: 'pointer',
-                  flex: 'none',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: 7,
-                  whiteSpace: 'nowrap',
-                  border: `1px solid ${active ? '#0f172a' : '#e2e8f0'}`,
-                  background: active ? '#0f172a' : '#fff',
-                  color: active ? '#fff' : '#475569',
-                  borderRadius: 99,
-                  padding: '6px 12px',
-                  fontSize: 12.5,
-                  fontWeight: 700,
-                  fontFamily: 'inherit',
-                }}
-              >
-                <span style={{ flex: 'none', width: 9, height: 9, borderRadius: '50%', background: s.dot }} />
-                {s.label}
-              </button>
-            );
-          })}
-        </div>
       </div>
 
       {/* ARBRE */}
       {view === 'arbre' ? (
-        <>
-          <div style={{ marginBottom: 14 }}>
-            <button
-              type="button"
-              onClick={() => setOnlyHighest((v) => !v)}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          {arbreSkills.map((sk) => (
+            <div
+              key={sk.id}
               style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 10,
-                cursor: 'pointer',
-                border: `1px solid ${onlyHighest ? '#cbd5e1' : '#e2e8f0'}`,
-                background: onlyHighest ? '#f8fafc' : '#fff',
-                borderRadius: 11,
-                padding: '9px 14px',
-                fontFamily: 'inherit',
+                background: '#fff',
+                border: '1px solid #e7e9ee',
+                borderRadius: 16,
+                boxShadow: '0 1px 3px rgba(15,23,42,.04)',
+                overflow: 'hidden',
               }}
             >
-              <span
-                style={{
-                  flex: 'none',
-                  width: 18,
-                  height: 18,
-                  borderRadius: 5,
-                  border: `1.5px solid ${onlyHighest ? '#0f172a' : '#cbd5e1'}`,
-                  background: onlyHighest ? '#0f172a' : '#fff',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: '#fff',
-                  fontSize: 12,
-                  fontWeight: 800,
-                }}
-              >
-                {onlyHighest ? '✓' : ''}
-              </span>
-              <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>
-                Afficher chaque bénévole uniquement sur sa compétence la plus haute
-              </span>
-            </button>
-          </div>
-
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {arbreSkills.map((sk) => (
               <div
-                key={sk.id}
                 style={{
-                  background: '#fff',
-                  border: '1px solid #e7e9ee',
-                  borderRadius: 16,
-                  boxShadow: '0 1px 3px rgba(15,23,42,.04)',
-                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '15px 18px',
+                  borderBottom: '1px solid #f1f5f9',
                 }}
               >
-                <div
+                <span
                   style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '15px 18px',
-                    borderBottom: '1px solid #f1f5f9',
+                    flex: 'none',
+                    minWidth: 52,
+                    textAlign: 'center',
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: pal.accent,
+                    background: pal.soft,
+                    border: `1px solid ${pal.softBorder}`,
+                    borderRadius: 8,
+                    padding: '5px 9px',
                   }}
                 >
-                  <span
-                    style={{
-                      flex: 'none',
-                      minWidth: 52,
-                      textAlign: 'center',
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: pal.accent,
-                      background: pal.soft,
-                      border: `1px solid ${pal.softBorder}`,
-                      borderRadius: 8,
-                      padding: '5px 9px',
-                    }}
-                  >
-                    {sk.code}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{sk.name}</div>
-                    <div style={{ marginTop: 2, fontSize: 12.5, color: '#94a3b8' }}>{sk.metaLine}</div>
-                  </div>
-                  <span
-                    style={{
-                      flex: 'none',
-                      fontSize: 13,
-                      fontWeight: 800,
-                      color: '#334155',
-                      background: '#f1f5f9',
-                      borderRadius: 8,
-                      padding: '5px 11px',
-                    }}
-                  >
-                    {sk.countLabel}
-                  </span>
+                  {sk.code}
+                </span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{sk.name}</div>
+                  {sk.metaLine ? <div style={{ marginTop: 2, fontSize: 12.5, color: '#94a3b8' }}>{sk.metaLine}</div> : null}
                 </div>
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(sk.id)}
+                  title={sk.expanded ? 'Afficher uniquement la compétence la plus haute' : 'Afficher tous les bénévoles ayant cette compétence'}
+                  style={{
+                    flex: 'none',
+                    cursor: 'pointer',
+                    border: `1px solid ${sk.expanded ? '#0f172a' : 'transparent'}`,
+                    fontSize: 13,
+                    fontWeight: 800,
+                    color: sk.expanded ? '#fff' : '#334155',
+                    background: sk.expanded ? '#0f172a' : '#f1f5f9',
+                    borderRadius: 8,
+                    padding: '5px 11px',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  {sk.countLabel}
+                </button>
+              </div>
 
-                {sk.hasHolders ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, padding: '15px 18px' }}>
-                    {sk.holders.map((h) => {
-                      const inner = (
-                        <>
-                          <span
-                            style={{
-                              flex: 'none',
-                              width: 32,
-                              height: 32,
-                              borderRadius: '50%',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 12,
-                              fontWeight: 800,
-                              background: h.avatarBg,
-                              color: h.avatarColor,
-                            }}
-                          >
-                            {h.initials}
-                          </span>
-                          <div style={{ minWidth: 0 }}>
-                            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
-                              {h.name}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                              {h.sector ? <span style={{ fontSize: 11.5, color: '#94a3b8' }}>{h.sector}</span> : null}
-                              <span style={{ fontSize: 11, fontWeight: 700, color: h.text }}>
-                                {h.sector ? '· ' : ''}
-                                {h.statusLabel}
-                              </span>
-                            </div>
-                          </div>
-                        </>
-                      );
-                      if (h.cursus) {
-                        return (
-                          <a
-                            key={h.pid}
-                            href={`/competences?profile=${encodeURIComponent(h.pid)}&cursus=${encodeURIComponent(
-                              h.cursus.id
-                            )}`}
-                            title={`Cahier de doublure de ${h.name} — ${h.cursus.name}`}
-                            style={{
-                              textDecoration: 'none',
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 10,
-                              background: '#fff',
-                              border: `1.5px ${h.ringStyle} ${h.ring}`,
-                              borderRadius: 12,
-                              padding: '8px 10px 8px 9px',
-                            }}
-                          >
-                            {inner}
-                            <span
-                              style={{
-                                flex: 'none',
-                                width: 24,
-                                height: 24,
-                                borderRadius: '50%',
-                                display: 'inline-flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: 13,
-                                fontWeight: 800,
-                                color: h.text,
-                                background: h.avatarBg,
-                              }}
-                            >
-                              ↗
-                            </span>
-                          </a>
-                        );
-                      }
-                      return (
-                        <div
-                          key={h.pid}
+              {sk.hasHolders ? (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, padding: '15px 18px' }}>
+                  {sk.holders.map((h) => {
+                    const inner = (
+                      <>
+                        <span
                           style={{
+                            flex: 'none',
+                            width: 32,
+                            height: 32,
+                            borderRadius: '50%',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 12,
+                            fontWeight: 800,
+                            background: h.avatarBg,
+                            color: h.avatarColor,
+                          }}
+                        >
+                          {h.initials}
+                        </span>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                            {h.name}
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            {h.sector ? <span style={{ fontSize: 11.5, color: '#94a3b8' }}>{h.sector}</span> : null}
+                            <span style={{ fontSize: 11, fontWeight: 700, color: h.text }}>
+                              {h.sector ? '· ' : ''}
+                              {h.statusLabel}
+                            </span>
+                          </div>
+                        </div>
+                      </>
+                    );
+                    if (h.cursus) {
+                      return (
+                        <a
+                          key={h.pid}
+                          href={`/competences?profile=${encodeURIComponent(h.pid)}&cursus=${encodeURIComponent(
+                            h.cursus.id
+                          )}`}
+                          title={`Cahier de doublure de ${h.name} — ${h.cursus.name}`}
+                          style={{
+                            textDecoration: 'none',
+                            cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
                             gap: 10,
                             background: '#fff',
-                            border: `1.5px ${h.ringStyle} ${h.ring}`,
+                            border: `1.5px solid ${h.ring}`,
                             borderRadius: 12,
-                            padding: '8px 13px 8px 9px',
+                            padding: '8px 10px 8px 9px',
                           }}
                         >
                           {inner}
-                        </div>
+                          <span
+                            style={{
+                              flex: 'none',
+                              width: 24,
+                              height: 24,
+                              borderRadius: '50%',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              fontSize: 13,
+                              fontWeight: 800,
+                              color: h.text,
+                              background: h.avatarBg,
+                            }}
+                          >
+                            ↗
+                          </span>
+                        </a>
                       );
-                    })}
-                  </div>
-                ) : (
-                  <div style={{ padding: '14px 18px', fontSize: 13, color: '#94a3b8' }}>{sk.emptyLabel}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </>
+                    }
+                    return (
+                      <div
+                        key={h.pid}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          background: '#fff',
+                          border: `1.5px solid ${h.ring}`,
+                          borderRadius: 12,
+                          padding: '8px 13px 8px 9px',
+                        }}
+                      >
+                        {inner}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ padding: '14px 18px', fontSize: 13, color: '#94a3b8' }}>{sk.emptyLabel}</div>
+              )}
+            </div>
+          ))}
+        </div>
       ) : null}
 
       {/* TABLEAU */}
@@ -1042,25 +919,18 @@ export default function CompetencesDashboardPage() {
                     </div>
                   </div>
                   {tableCols.map((col) => {
-                    const { status: st, implied } = effInfo(row.pid, col.id);
-                    const ss = st ? STATUS[st] : null;
+                    const st = eff(row.pid, col.id);
+                    const ss = st ? statusByKey[st] : null;
                     let bg = 'transparent';
                     let border = '1px dashed #e5e9f0';
                     let color = '#cbd5e1';
                     let mark = '·';
                     if (ss) {
-                      if (st === 'valide' && implied) {
-                        // Validée par héritage d'une formation supérieure : vert « soft »
-                        // + contour pointillé pour la distinguer d'une validation directe.
-                        bg = ss.soft;
-                        border = `1.5px dashed ${ss.ring}`;
-                        color = ss.text;
-                        mark = '✓';
-                      } else if (st === 'valide') {
+                      if (ss.isValidating) {
                         bg = ss.ring;
                         border = 'none';
                         color = '#fff';
-                        mark = '✓';
+                        mark = ss.mark;
                       } else {
                         bg = ss.soft;
                         border = `1.5px solid ${ss.ring}`;
@@ -1072,7 +942,7 @@ export default function CompetencesDashboardPage() {
                       <button
                         key={col.id}
                         type="button"
-                        title={`${col.name}${ss ? ` — ${ss.label}${implied ? ' (implicite)' : ''}` : ' — cliquer pour définir'}`}
+                        title={`${col.name}${ss ? ` — ${ss.label}` : ' — cliquer pour définir'}`}
                         onClick={(e) => openEditor(e, row.pid, col)}
                         style={{
                           flex: 'none',
@@ -1141,30 +1011,21 @@ export default function CompetencesDashboardPage() {
                 {editor.skillCode} · {editor.profileName}
               </div>
               <div style={{ marginTop: 2, fontSize: 11, color: '#94a3b8' }}>{editor.skillName}</div>
-              {editor.lockedByHigher ? (
-                <div style={{ marginTop: 6, fontSize: 11, fontWeight: 600, color: '#047857' }}>
-                  Couverte par une formation supérieure validée. Pour la retirer, modifiez cette formation ; « Non acquise » est indisponible ici.
-                </div>
-              ) : null}
             </div>
             <div style={{ padding: 6 }}>
-              {EDITOR_OPTIONS.map((o) => {
-                const active = (editor.current ?? 'none') === o.key;
-                // « Non acquise » est sans effet quand une formation supérieure
-                // validée couvre la cellule (l'implication la revalide aussitôt).
-                const disabled = o.key === 'none' && editor.lockedByHigher;
+              {data.statuses.map((s) => {
+                const p = palette(s.color);
+                const active = (editor.current ?? 'none') === s.key;
                 return (
                   <button
-                    key={o.key}
+                    key={s.key}
                     type="button"
-                    disabled={disabled}
                     onClick={() => {
-                      if (disabled) return;
-                      void setStatus(editor.profileId, editor.skillId, o.key);
+                      void setStatus(editor.profileId, editor.skillId, s.key);
                       setEditor(null);
                     }}
                     style={{
-                      cursor: disabled ? 'not-allowed' : 'pointer',
+                      cursor: 'pointer',
                       width: '100%',
                       display: 'flex',
                       alignItems: 'center',
@@ -1176,7 +1037,7 @@ export default function CompetencesDashboardPage() {
                       fontSize: 13,
                       fontWeight: 700,
                       fontFamily: 'inherit',
-                      color: disabled ? '#cbd5e1' : '#334155',
+                      color: '#334155',
                       textAlign: 'left',
                     }}
                   >
@@ -1186,16 +1047,51 @@ export default function CompetencesDashboardPage() {
                         width: 13,
                         height: 13,
                         borderRadius: 4,
-                        background: o.dotBg,
-                        border: o.dotBorder === 'none' ? 'none' : o.dotBorder,
-                        opacity: disabled ? 0.4 : 1,
+                        background: s.is_validating ? p.accent : p.soft,
+                        border: s.is_validating ? 'none' : `1.5px solid ${p.accent}`,
                       }}
                     />
-                    <span style={{ flex: 1 }}>{o.label}</span>
+                    <span style={{ flex: 1 }}>{s.label}</span>
                     {active ? <span style={{ color: '#059669', fontSize: 13 }}>✓</span> : null}
                   </button>
                 );
               })}
+              <button
+                type="button"
+                onClick={() => {
+                  void setStatus(editor.profileId, editor.skillId, 'none');
+                  setEditor(null);
+                }}
+                style={{
+                  cursor: 'pointer',
+                  width: '100%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 9,
+                  border: 'none',
+                  background: 'transparent',
+                  borderRadius: 8,
+                  padding: '9px 10px',
+                  fontSize: 13,
+                  fontWeight: 700,
+                  fontFamily: 'inherit',
+                  color: '#334155',
+                  textAlign: 'left',
+                }}
+              >
+                <span
+                  style={{
+                    flex: 'none',
+                    width: 13,
+                    height: 13,
+                    borderRadius: 4,
+                    background: '#fff',
+                    border: '1.5px dashed #cbd5e1',
+                  }}
+                />
+                <span style={{ flex: 1 }}>Non acquise</span>
+                {editor.current === null ? <span style={{ color: '#059669', fontSize: 13 }}>✓</span> : null}
+              </button>
             </div>
           </div>
         </>
@@ -1228,22 +1124,23 @@ export default function CompetencesDashboardPage() {
         >
           Statut
         </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 5, background: '#059669' }} />
-          Compétence validée
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 5, background: '#eff6ff', border: '1.5px solid #2563eb' }} />
-          En formation / doublure
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 5, background: '#f5f3ff', border: '1.5px solid #7c3aed' }} />
-          Intéressé·e
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
-          <span style={{ width: 14, height: 14, borderRadius: 5, background: '#fff7ed', border: '1.5px solid #ea580c' }} />
-          À recycler
-        </span>
+        {data.statuses.map((s) => {
+          const p = palette(s.color);
+          return (
+            <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+              <span
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: 5,
+                  background: s.is_validating ? p.accent : p.soft,
+                  border: s.is_validating ? 'none' : `1.5px solid ${p.accent}`,
+                }}
+              />
+              {s.label}
+            </span>
+          );
+        })}
         <span style={{ marginLeft: 'auto', fontSize: 12, color: '#cbd5e1' }}>
           Le contour de chaque bénévole reflète son statut.
         </span>

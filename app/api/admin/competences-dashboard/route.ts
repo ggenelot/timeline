@@ -4,10 +4,6 @@ import {
   createServerSupabaseServiceClient,
 } from '@/lib/supabase/server';
 
-// Statuts que le tableau de bord est autorisé à écrire.
-const WRITABLE_STATUSES = ['valide', 'formation', 'interesse', 'a_recycler'] as const;
-type WritableStatus = (typeof WRITABLE_STATUSES)[number];
-
 function getToken(req: NextRequest): string {
   const auth = req.headers.get('authorization') ?? '';
   return auth.replace(/^Bearer\s+/i, '').trim();
@@ -58,7 +54,7 @@ export async function GET(req: NextRequest) {
   const { client, error } = await authorize(req);
   if (error) return error;
 
-  const [categoriesRes, profilesRes, profileSkillsRes, cursusRes] = await Promise.all([
+  const [categoriesRes, profilesRes, profileSkillsRes, cursusRes, statusesRes] = await Promise.all([
     client!
       .from('skill_categories')
       .select('id,name,color,display_order,skills(id,name,code,level,category_id,display_order)')
@@ -70,12 +66,14 @@ export async function GET(req: NextRequest) {
       .order('full_name', { ascending: true }),
     client!.from('profile_skills').select('profile_id,skill_id,status'),
     client!.from('cursus').select('id,code,name,skill_id').not('skill_id', 'is', null),
+    client!.from('skill_statuses').select('*').order('display_order', { ascending: true }),
   ]);
 
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
   if (profilesRes.error) return NextResponse.json({ error: profilesRes.error.message }, { status: 500 });
   if (profileSkillsRes.error) return NextResponse.json({ error: profileSkillsRes.error.message }, { status: 500 });
   if (cursusRes.error) return NextResponse.json({ error: cursusRes.error.message }, { status: 500 });
+  if (statusesRes.error) return NextResponse.json({ error: statusesRes.error.message }, { status: 500 });
 
   // Map skill_id -> cursus (pour rendre les chips cliquables vers le carnet).
   const cursusBySkill: Record<string, { id: string; code: string; name: string }> = {};
@@ -88,6 +86,7 @@ export async function GET(req: NextRequest) {
     profiles: profilesRes.data ?? [],
     profileSkills: profileSkillsRes.data ?? [],
     cursusBySkill,
+    statuses: statusesRes.data ?? [],
   });
 }
 
@@ -117,7 +116,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, status: null });
   }
 
-  if (!WRITABLE_STATUSES.includes(status as WritableStatus)) {
+  const { data: statusRow } = await client!.from('skill_statuses').select('key').eq('key', status).single();
+  if (!statusRow) {
     return NextResponse.json({ error: 'Statut invalide.' }, { status: 400 });
   }
 

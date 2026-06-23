@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, Skill, SkillCategory } from '@/lib/types';
+import { Profile, Skill, SkillCategory, SkillStatus } from '@/lib/types';
 
 const AVAILABLE_COLORS = [
   { value: 'slate', label: 'Gris' },
@@ -54,6 +54,20 @@ export default function AdminSkillsPage() {
   const [newSkillName, setNewSkillName] = useState<Record<string, string>>({});
   const [addingSkill, setAddingSkill] = useState<string | null>(null);
 
+  const [statuses, setStatuses] = useState<SkillStatus[]>([]);
+  const [newStatusLabel, setNewStatusLabel] = useState('');
+  const [newStatusColor, setNewStatusColor] = useState('slate');
+  const [newStatusMark, setNewStatusMark] = useState('✓');
+  const [newStatusValidating, setNewStatusValidating] = useState(false);
+  const [creatingStatus, setCreatingStatus] = useState(false);
+
+  const [editingStatusId, setEditingStatusId] = useState<string | null>(null);
+  const [editStatusLabel, setEditStatusLabel] = useState('');
+  const [editStatusColor, setEditStatusColor] = useState('slate');
+  const [editStatusMark, setEditStatusMark] = useState('✓');
+  const [editStatusValidating, setEditStatusValidating] = useState(false);
+  const [savingStatus, setSavingStatus] = useState(false);
+
   function flash(msg: string) {
     setSuccessMsg(msg);
     setTimeout(() => setSuccessMsg(null), 3000);
@@ -66,6 +80,16 @@ export default function AdminSkillsPage() {
     if (res.ok) {
       const json = (await res.json()) as { categories: CategoryWithSkills[] };
       setCategories(json.categories);
+    }
+  }, []);
+
+  const fetchStatuses = useCallback(async (tok: string) => {
+    const res = await fetch('/api/admin/skill-statuses', {
+      headers: { Authorization: `Bearer ${tok}` },
+    });
+    if (res.ok) {
+      const json = (await res.json()) as { statuses: SkillStatus[] };
+      setStatuses(json.statuses);
     }
   }, []);
 
@@ -90,11 +114,11 @@ export default function AdminSkillsPage() {
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
-      await fetchCategories(tok);
+      await Promise.all([fetchCategories(tok), fetchStatuses(tok)]);
       setLoading(false);
     }
     void init();
-  }, [router, fetchCategories]);
+  }, [router, fetchCategories, fetchStatuses]);
 
   async function handleCreateCategory() {
     if (!newCatName.trim()) return;
@@ -248,6 +272,109 @@ export default function AdminSkillsPage() {
       }),
     ]);
     await fetchCategories(token);
+  }
+
+  async function handleCreateStatus() {
+    if (!newStatusLabel.trim()) return;
+    setCreatingStatus(true);
+    setError(null);
+    const res = await fetch('/api/admin/skill-statuses', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: newStatusLabel.trim(),
+        color: newStatusColor,
+        mark: newStatusMark,
+        is_validating: newStatusValidating,
+      }),
+    });
+    if (res.ok) {
+      setNewStatusLabel('');
+      setNewStatusColor('slate');
+      setNewStatusMark('✓');
+      setNewStatusValidating(false);
+      await fetchStatuses(token);
+      flash('Statut créé.');
+    } else {
+      const json = (await res.json()) as { error?: string };
+      setError(json.error ?? 'Erreur lors de la création.');
+    }
+    setCreatingStatus(false);
+  }
+
+  function startEditStatus(status: SkillStatus) {
+    setEditingStatusId(status.id);
+    setEditStatusLabel(status.label);
+    setEditStatusColor(status.color);
+    setEditStatusMark(status.mark);
+    setEditStatusValidating(status.is_validating);
+  }
+
+  async function handleSaveStatus(id: string) {
+    setSavingStatus(true);
+    setError(null);
+    const res = await fetch(`/api/admin/skill-statuses/${id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        label: editStatusLabel.trim(),
+        color: editStatusColor,
+        mark: editStatusMark,
+        is_validating: editStatusValidating,
+      }),
+    });
+    if (res.ok) {
+      setEditingStatusId(null);
+      await fetchStatuses(token);
+      flash('Statut modifié.');
+    } else {
+      const json = (await res.json()) as { error?: string };
+      setError(json.error ?? 'Erreur lors de la modification.');
+    }
+    setSavingStatus(false);
+  }
+
+  async function handleDeleteStatus(id: string, label: string) {
+    if (!confirm(`Supprimer le statut "${label}" ?`)) return;
+    setError(null);
+    const res = await fetch(`/api/admin/skill-statuses/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (res.ok) {
+      await fetchStatuses(token);
+      flash('Statut supprimé.');
+    } else {
+      const json = (await res.json()) as { error?: string };
+      setError(json.error ?? 'Erreur lors de la suppression.');
+    }
+  }
+
+  async function swapStatusOrder(a: SkillStatus, b: SkillStatus) {
+    setError(null);
+    await Promise.all([
+      fetch(`/api/admin/skill-statuses/${a.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_order: b.display_order }),
+      }),
+      fetch(`/api/admin/skill-statuses/${b.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ display_order: a.display_order }),
+      }),
+    ]);
+    await fetchStatuses(token);
+  }
+
+  async function handleMoveStatusUp(index: number) {
+    if (index === 0) return;
+    await swapStatusOrder(statuses[index - 1], statuses[index]);
+  }
+
+  async function handleMoveStatusDown(index: number) {
+    if (index === statuses.length - 1) return;
+    await swapStatusOrder(statuses[index], statuses[index + 1]);
   }
 
   if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
@@ -447,6 +574,169 @@ export default function AdminSkillsPage() {
             </div>
           ))
         )}
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <header className="border-b border-slate-100 p-4">
+          <h2 className="text-base font-semibold text-slate-800">Statuts de compétence</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            Statuts utilisables dans le tableau de bord de suivi des compétences (libellé, couleur, symbole). Le
+            statut <span className="font-medium text-slate-700">{statuses.find((s) => s.protected)?.label ?? 'protégé'}</span>{' '}
+            est protégé : sa clé qualifie l&apos;éligibilité aux missions, il ne peut pas être supprimé mais reste
+            modifiable.
+          </p>
+        </header>
+
+        <div className="divide-y divide-slate-50 p-3">
+          {statuses.length === 0 ? (
+            <p className="px-1 py-2 text-xs text-slate-400">Aucun statut défini.</p>
+          ) : (
+            statuses.map((status, index) =>
+              editingStatusId === status.id ? (
+                <div key={status.id} className="flex flex-wrap items-end gap-2 py-2 px-1">
+                  <input
+                    type="text"
+                    value={editStatusLabel}
+                    onChange={(e) => setEditStatusLabel(e.target.value)}
+                    className="flex-1 min-w-32 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  />
+                  <select
+                    value={editStatusColor}
+                    onChange={(e) => setEditStatusColor(e.target.value)}
+                    className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  >
+                    {AVAILABLE_COLORS.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  <input
+                    type="text"
+                    value={editStatusMark}
+                    onChange={(e) => setEditStatusMark(e.target.value)}
+                    maxLength={2}
+                    title="Symbole"
+                    className="w-12 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                  />
+                  <label className="flex items-center gap-1.5 text-xs text-slate-600">
+                    <input
+                      type="checkbox"
+                      checked={editStatusValidating}
+                      onChange={(e) => setEditStatusValidating(e.target.checked)}
+                    />
+                    Compte comme « validé »
+                  </label>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleSaveStatus(status.id)}
+                      disabled={savingStatus}
+                      className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                    >
+                      Enregistrer
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEditingStatusId(null)}
+                      className="rounded-md border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    >
+                      Annuler
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div key={status.id} className="flex items-center justify-between gap-2 py-1.5 px-1">
+                  <div className="flex items-center gap-2 text-sm text-slate-700">
+                    <span className={`h-3 w-3 rounded-full ${COLOR_DOT[status.color] ?? 'bg-slate-400'}`} />
+                    <span aria-hidden>{status.mark}</span>
+                    <span>{status.label}</span>
+                    {status.is_validating ? (
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700">
+                        validant
+                      </span>
+                    ) : null}
+                    {status.protected ? (
+                      <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                        protégé
+                      </span>
+                    ) : null}
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => void handleMoveStatusUp(index)}
+                      disabled={index === 0}
+                      className="rounded p-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                      title="Monter"
+                    >↑</button>
+                    <button
+                      type="button"
+                      onClick={() => void handleMoveStatusDown(index)}
+                      disabled={index === statuses.length - 1}
+                      className="rounded p-1 text-xs text-slate-400 hover:bg-slate-100 hover:text-slate-700 disabled:opacity-30"
+                      title="Descendre"
+                    >↓</button>
+                    <button
+                      type="button"
+                      onClick={() => startEditStatus(status)}
+                      className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                    >Modifier</button>
+                    {!status.protected && (
+                      <button
+                        type="button"
+                        onClick={() => void handleDeleteStatus(status.id, status.label)}
+                        className="rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                      >Supprimer</button>
+                    )}
+                  </div>
+                </div>
+              )
+            )
+          )}
+
+          <div className="flex flex-wrap items-end gap-2 pt-3 px-1">
+            <input
+              type="text"
+              placeholder="Nouveau statut…"
+              value={newStatusLabel}
+              onChange={(e) => setNewStatusLabel(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') void handleCreateStatus(); }}
+              className="flex-1 min-w-32 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            />
+            <select
+              value={newStatusColor}
+              onChange={(e) => setNewStatusColor(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            >
+              {AVAILABLE_COLORS.map((c) => (
+                <option key={c.value} value={c.value}>{c.label}</option>
+              ))}
+            </select>
+            <input
+              type="text"
+              value={newStatusMark}
+              onChange={(e) => setNewStatusMark(e.target.value)}
+              maxLength={2}
+              title="Symbole"
+              className="w-12 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-center text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            />
+            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <input
+                type="checkbox"
+                checked={newStatusValidating}
+                onChange={(e) => setNewStatusValidating(e.target.checked)}
+              />
+              Compte comme « validé »
+            </label>
+            <button
+              type="button"
+              onClick={handleCreateStatus}
+              disabled={creatingStatus || !newStatusLabel.trim()}
+              className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+            >
+              Ajouter
+            </button>
+          </div>
+        </div>
       </section>
     </div>
   );

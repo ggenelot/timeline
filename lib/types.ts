@@ -33,21 +33,25 @@ export type Skill = {
   category?: SkillCategory | null;
 };
 
-// Statuts métier du carnet de compétences. Les valeurs 'a_faire' / 'exempte'
-// sont historiques ; le tableau de bord écrit uniquement les quatre statuts
-// ci-dessous (et supprime la ligne pour « non acquise »).
-export type ProfileSkillStatus =
-  | 'valide'
-  | 'formation'
-  | 'interesse'
-  | 'a_recycler'
-  | 'a_faire'
-  | 'exempte';
+// Statuts de compétence configurables (page d'admin « Compétences »). La clé
+// 'valide' est protégée car d'autres parties du produit (éligibilité aux
+// missions, fonction SQL `user_has_cp_skill`) s'appuient sur `is_validating`.
+export type SkillStatus = {
+  id: string;
+  key: string;
+  label: string;
+  color: string;
+  mark: string;
+  is_validating: boolean;
+  protected: boolean;
+  display_order: number;
+  created_at: string;
+};
 
 export type ProfileSkill = {
   profile_id: string;
   skill_id: string;
-  status?: ProfileSkillStatus;
+  status?: string;
   created_at: string;
   skill: Pick<Skill, 'id' | 'name' | 'category_id' | 'display_order'> | null;
 };

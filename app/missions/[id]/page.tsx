@@ -494,6 +494,12 @@ export default function MissionDetailPage() {
 
     setMission(mappedMission);
 
+    const { data: statusData } = await supabase
+      .from('skill_statuses')
+      .select('key')
+      .eq('is_validating', true);
+    const validatingStatusKeys = new Set((statusData ?? []).map((s) => s.key));
+
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
@@ -565,12 +571,12 @@ export default function MissionDetailPage() {
         volunteer: volunteer
           ? {
               ...volunteer,
-              // Seules les compétences au statut 'valide' qualifient un bénévole
-              // (matching des compétences requises, visibilité). Les statuts
-              // tentatifs (formation/interesse/a_recycler) du tableau de bord ne
-              // doivent pas rendre un bénévole éligible.
+              // Seules les compétences dont le statut est marqué « validant »
+              // qualifient un bénévole (matching des compétences requises,
+              // visibilité). Les autres statuts du tableau de bord ne doivent
+              // pas rendre un bénévole éligible.
               profile_skills: (volunteer.profile_skills ?? [])
-                .filter((profileSkill) => profileSkill.status === 'valide')
+                .filter((profileSkill) => profileSkill.status && validatingStatusKeys.has(profileSkill.status))
                 .map((profileSkill) => ({
                   ...profileSkill,
                   skill: Array.isArray(profileSkill.skill) ? profileSkill.skill[0] ?? null : profileSkill.skill
