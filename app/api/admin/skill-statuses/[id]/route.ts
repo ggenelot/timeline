@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
+function toBoolean(value: unknown): boolean {
+  if (typeof value === 'string') return !['false', '0', ''].includes(value.toLowerCase());
+  return Boolean(value);
+}
+
 async function getAdminClient(req: NextRequest) {
   const auth = req.headers.get('authorization') ?? '';
   const token = auth.replace(/^Bearer\s+/i, '');
@@ -31,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.label !== undefined) patch.label = body.label.trim();
   if (body.color !== undefined) patch.color = body.color;
   if (body.mark !== undefined) patch.mark = body.mark.trim() || '✓';
-  if (body.is_validating !== undefined) patch.is_validating = body.is_validating;
+  if (body.is_validating !== undefined) patch.is_validating = toBoolean(body.is_validating);
   if (body.display_order !== undefined) patch.display_order = body.display_order;
 
   if (Object.keys(patch).length === 0) {
