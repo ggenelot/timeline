@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import type { ActivityAct } from '@/lib/types';
 import type { Period } from './activity.constants';
-import { SEUIL_HOURS, getVolunteerColor } from './activity.constants';
+import { getVolunteerColor } from './activity.constants';
 
 function getPeriodStart(period: Period): Date {
   const now = new Date();
@@ -57,7 +57,6 @@ export type CalendarRow = {
   profileId: string;
   profileName: string;
   totalHours: number;
-  overSeuil: boolean;
   cells: CalendarCell[];
 };
 
@@ -65,7 +64,6 @@ export type ActivityModel = {
   barRows: BarRow[];
   scaleMax: number;
   ticks: number[];
-  seuilPercent: number;
   months: Date[];
   calendarRows: CalendarRow[];
   allProfileIds: string[];
@@ -77,7 +75,6 @@ export function useActivityModel(
   period: Period,
   hiddenVols: Set<string>,
   hiddenTypes: Set<string>,
-  seuil: number = SEUIL_HOURS,
 ): ActivityModel {
   return useMemo(() => {
     const periodStart = getPeriodStart(period);
@@ -121,7 +118,6 @@ export function useActivityModel(
     const scaleMax = Math.max(Math.ceil(maxHours / 20) * 20, 80);
     const ticks: number[] = [];
     for (let t = 0; t <= scaleMax; t += 20) ticks.push(t);
-    const seuilPercent = Math.min((seuil / scaleMax) * 100, 100);
 
     // --- Calendar ---
     const now = new Date();
@@ -154,9 +150,9 @@ export function useActivityModel(
         });
 
         const totalHours = cells.reduce((sum, c) => sum + c.hours, 0);
-        return { profileId, profileName, totalHours, overSeuil: totalHours > seuil, cells };
+        return { profileId, profileName, totalHours, cells };
       });
 
-    return { barRows, scaleMax, ticks, seuilPercent, months, calendarRows, allProfileIds, allTypeNames };
-  }, [acts, period, hiddenVols, hiddenTypes, seuil]);
+    return { barRows, scaleMax, ticks, months, calendarRows, allProfileIds, allTypeNames };
+  }, [acts, period, hiddenVols, hiddenTypes]);
 }

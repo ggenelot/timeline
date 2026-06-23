@@ -28,6 +28,7 @@ export type Skill = {
   category_id: string | null;
   display_order: number;
   code?: string | null;
+  description?: string | null;
   level?: number | null;
   created_at: string;
   category?: SkillCategory | null;

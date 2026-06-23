@@ -3,20 +3,23 @@ name: Codex Auto Merge
 on:
   pull_request:
     types: [labeled, unlabeled, synchronize, reopened, ready_for_review]
-  pull_request_review:
-    types: [submitted]
-  check_suite:
-    types: [completed]
 
 permissions:
   contents: write
   pull-requests: write
+  checks: read
+  statuses: read
 
 jobs:
   enable-auto-merge:
+    # claude/ PRs are opened under the human GitHub account (no dedicated bot
+    # login), so branch prefix is the only reliable signal for them — this
+    # isn't an oversight, codex's extra login/title checks exist because
+    # codex can author PRs under different identities.
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.draft == false &&
+      github.event.pull_request.base.ref == 'staging' &&
       !contains(github.event.pull_request.labels.*.name, 'do-not-merge') &&
       (
         startsWith(github.event.pull_request.user.login, 'codex') ||
@@ -26,8 +29,13 @@ jobs:
       )
     runs-on: ubuntu-latest
     steps:
-      - name: Enable auto-merge (squash)
+      # `gh pr merge --auto` only blocks on CI if the base branch has required
+      # status checks configured. `staging` has no such ruleset, so we wait on
+      # the checks ourselves before merging instead of relying on that config.
+      - name: Wait for checks, then merge (squash)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_URL: ${{ github.event.pull_request.html_url }}
-        run: gh pr merge --auto --squash "$PR_URL"
+        run: |
+          gh pr checks "$PR_URL" --watch --fail-fast
+          gh pr merge --squash "$PR_URL"

@@ -305,8 +305,12 @@ export default function CompetencesDashboardPage() {
         const totalH = allHolders.length;
         const expanded = expandedSkillIds.has(sk.id);
         // Par défaut, un bénévole n'apparaît que sous sa compétence la plus
-        // haute ; le badge de comptage permet d'afficher tout le monde.
-        const baseHolders = expanded ? allHolders : allHolders.filter((x) => highestIdx[x.pid] === i);
+        // haute ; le badge de comptage permet d'afficher tout le monde. Un
+        // filtre de statut actif ignore cette restriction pour ne pas
+        // masquer une compétence qui correspond au filtre sous prétexte
+        // qu'une compétence plus haute (à un autre statut) existe aussi.
+        const baseHolders =
+          expanded || statusFilter !== 'all' ? allHolders : allHolders.filter((x) => highestIdx[x.pid] === i);
         const filtered = baseHolders.filter(
           (x) => matchPerson(x.pid) && (statusFilter === 'all' || x.status === statusFilter)
         );
