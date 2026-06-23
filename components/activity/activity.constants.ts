@@ -1,5 +1,3 @@
-export const SEUIL_HOURS = 72;
-
 export const PERIOD_OPTIONS = [
   { value: '1m', label: '1 mois' },
   { value: '3m', label: '3 mois' },

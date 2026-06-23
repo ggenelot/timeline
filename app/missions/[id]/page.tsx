@@ -1468,7 +1468,7 @@ export default function MissionDetailPage() {
               <span className={`text-base leading-none transition-transform ${isActivityExpanded ? 'rotate-180' : ''}`}>▾</span>
             </button>
           </div>
-          <p className="mt-1 text-sm text-slate-600">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles — seuil 72 h.</p>
+          <p className="mt-1 text-sm text-slate-600">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles.</p>
 
           {isActivityExpanded ? (
             <div id="mission-activity-content" className="mt-4">
