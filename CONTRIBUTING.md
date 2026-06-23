@@ -72,7 +72,7 @@ Le déploiement des migrations passe par les workflows GitHub Actions (`supabase
    - `STAGING_SUPABASE_PROJECT_ID` (reference ID de l'étape 2).
    - `STAGING_SUPABASE_DB_PASSWORD` (mot de passe de l'étape 3).
    - Vérifier que `SUPABASE_ACCESS_TOKEN` existe déjà (token de compte, partagé avec le projet production).
-5. Déclencher un premier déploiement manuel pour valider le lien et appliquer tout le schéma existant : `gh workflow run supabase-staging.yml` (pas besoin d'attendre un push sur `staging`).
+5. Déclencher un premier déploiement manuel pour valider le lien et appliquer tout le schéma existant : `gh workflow run supabase-staging.yml --ref staging` (sans `--ref`, la commande dispatche le workflow tel qu'il existe sur la branche par défaut du dépôt — `main` — et non sur `staging`).
 6. Dans **Auth → URL Configuration** du projet staging, renseigner le Site URL et les Redirect URLs avec l'URL stable de la branche `staging` sur Vercel (et un wildcard pour les Preview Deployments par PR si besoin).
 7. Répliquer manuellement depuis le projet production ce qui n'est pas couvert par les migrations : providers Auth (ex. Slack SSO), buckets Storage, extensions activées hors migration.
 8. Dans Vercel, ajouter les variables d'environnement (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) pointant vers ce projet staging, scopées à l'environnement Preview — distinctes des variables Production.
