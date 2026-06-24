@@ -357,3 +357,44 @@ export type CompetenceValidation = {
   declared_by: string;
   validated_at: string;
 };
+
+// ── Tableau de bord OPE ───────────────────────────────────────────
+// Données dénormalisées renvoyées par /api/admin/ope-dashboard pour le
+// board de pilotage opérationnel (un événement = une mission).
+export type OpeSkill = {
+  id: string;
+  name: string;
+  color: string | null; // couleur nommée de la catégorie (cf. SkillBadge)
+};
+
+export type OpeTeamMember = {
+  volunteer_id: string;
+  full_name: string | null;
+  assignment_status: string;
+  validatedSkills: OpeSkill[];
+};
+
+export type OpeRequiredSkill = {
+  id: string;
+  quantity: number;
+  skill: OpeSkill | null;
+};
+
+export type OpeMission = {
+  id: string;
+  title: string;
+  location: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: MissionStatus;
+  required_volunteers: number;
+  type: { name: string | null; color: string | null };
+  requiredSkills: OpeRequiredSkill[];
+  team: OpeTeamMember[];
+};
+
+export type OpeDashboardData = {
+  from: string;
+  days: number;
+  missions: OpeMission[];
+};
