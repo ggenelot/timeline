@@ -69,6 +69,36 @@ export const MISSION_CATEGORY_OPTIONS: Array<{ value: MissionCategory; label: st
   { value: 'poste_de_secours', label: 'Poste de secours' }
 ];
 
+// ── Matériel (catalogue générique, indépendant du domaine métier) ──────
+
+export type MaterielCategory = {
+  id: string;
+  name: string;
+  color: string;
+  display_order: number;
+  created_at: string;
+};
+
+export type MaterielType = {
+  id: string;
+  name: string;
+  category_id: string | null;
+  code?: string | null;
+  description?: string | null;
+  display_order: number;
+  created_at: string;
+  category?: MaterielCategory | null;
+};
+
+export type MaterielTypeContent = {
+  id: string;
+  parent_type_id: string;
+  child_type_id: string;
+  quantity: number;
+  created_at: string;
+  child_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+};
+
 export type HelpPage = {
   id: string;
   page_path: string;
