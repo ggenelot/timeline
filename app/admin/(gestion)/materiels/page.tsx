@@ -1,7 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -58,8 +57,36 @@ const AVAILABLE_COLORS = [
 type CategoryWithTypes = MaterielCategory & { materiel_types: MaterielType[] };
 
 type CategoryModalState = { id?: string; name: string; color: string };
-type TypeModalState = { categoryId: string; id?: string; code: string; name: string; description: string };
+type TypeModalState = { categoryId: string; id?: string; code: string; name: string; description: string; is_container: boolean };
 type ContentsModalState = { typeId: string; typeName: string };
+type ContainerFilter = 'all' | 'items' | 'containers';
+
+// ── Interrupteur on/off ────────────────────────────────────────────
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (checked: boolean) => void; label: string }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      aria-pressed={checked}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 9, cursor: 'pointer', border: 'none', background: 'transparent',
+        padding: 0, fontFamily: 'inherit',
+      }}
+    >
+      <span style={{
+        width: 38, height: 22, borderRadius: 99, background: checked ? '#059669' : '#cbd5e1',
+        position: 'relative', transition: 'background .15s', flexShrink: 0,
+      }}>
+        <span style={{
+          position: 'absolute', top: 2, left: checked ? 18 : 2, width: 18, height: 18, borderRadius: '50%',
+          background: '#fff', transition: 'left .15s', boxShadow: '0 1px 3px rgba(15,23,42,.25)',
+        }} />
+      </span>
+      <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>{label}</span>
+    </button>
+  );
+}
 
 // ── Poignée de glisser-déposer ───────────────────────────────────
 
@@ -178,16 +205,28 @@ function SortableTypeRow({ type, color, onEdit, onRemove, onEditContents }: {
         {type.code || '—'}
       </span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{type.name}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{type.name}</span>
+          <span style={{
+            fontSize: 10.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', borderRadius: 99, padding: '2px 8px',
+            color: type.is_container ? '#7c3aed' : '#64748b',
+            background: type.is_container ? '#f5f3ff' : '#f1f5f9',
+            border: `1px solid ${type.is_container ? '#ddd6fe' : '#e2e8f0'}`,
+          }}>
+            {type.is_container ? 'Contenant' : 'Item'}
+          </span>
+        </div>
         {type.description ? (
           <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{type.description}</div>
         ) : null}
       </div>
       <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <button type="button" onClick={onEditContents}
-          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
-          Contenu
-        </button>
+        {type.is_container ? (
+          <button type="button" onClick={onEditContents}
+            style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+            Contenu
+          </button>
+        ) : null}
         <button type="button" onClick={onEdit}
           style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
           Modifier
@@ -298,6 +337,11 @@ export default function AdminMaterielsPage() {
   const [contentsLoading, setContentsLoading] = useState(false);
   const [newContentTypeId, setNewContentTypeId] = useState('');
   const [newContentQuantity, setNewContentQuantity] = useState(1);
+  const [contentSearch, setContentSearch] = useState('');
+
+  const [search, setSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [containerFilter, setContainerFilter] = useState<ContainerFilter>('all');
 
   function flash(msg: string) {
     setSuccessMsg(msg);
@@ -342,6 +386,26 @@ export default function AdminMaterielsPage() {
   }, [router, fetchCategories]);
 
   const allTypes = categories.flatMap((c) => c.materiel_types);
+
+  const filteredCategories = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    return categories
+      .filter((cat) => categoryFilter === 'all' || cat.id === categoryFilter)
+      .map((cat) => ({
+        ...cat,
+        materiel_types: cat.materiel_types.filter((t) => {
+          if (containerFilter === 'items' && t.is_container) return false;
+          if (containerFilter === 'containers' && !t.is_container) return false;
+          if (!query) return true;
+          return (
+            t.name.toLowerCase().includes(query) ||
+            (t.code ?? '').toLowerCase().includes(query) ||
+            (t.description ?? '').toLowerCase().includes(query)
+          );
+        }),
+      }))
+      .filter((cat) => !search.trim() || cat.materiel_types.length > 0 || categoryFilter === cat.id);
+  }, [categories, search, categoryFilter, containerFilter]);
 
   // ── Catégories ──────────────────────────────────────────────
 
@@ -422,6 +486,7 @@ export default function AdminMaterielsPage() {
           name: typeModal.name.trim(),
           code: typeModal.code.trim(),
           description: typeModal.description.trim(),
+          is_container: typeModal.is_container,
           ...(isEdit ? {} : { category_id: typeModal.categoryId }),
         }),
       });
@@ -494,6 +559,8 @@ export default function AdminMaterielsPage() {
     setContentsModal({ typeId: type.id, typeName: type.name });
     setNewContentTypeId('');
     setNewContentQuantity(1);
+    setContentSearch('');
+    setError(null);
     void fetchContents(type.id);
   }
 
@@ -554,26 +621,47 @@ export default function AdminMaterielsPage() {
     );
   }
 
-  const availableForContents = allTypes.filter(
-    (t) => t.id !== contentsModal?.typeId && !contents.some((c) => c.child_type_id === t.id)
-  );
+  const contentSearchQuery = contentSearch.trim().toLowerCase();
+  const availableForContents = allTypes.filter((t) => {
+    if (t.id === contentsModal?.typeId) return false;
+    if (contents.some((c) => c.child_type_id === t.id)) return false;
+    if (!contentSearchQuery) return true;
+    return (
+      t.name.toLowerCase().includes(contentSearchQuery) ||
+      (t.code ?? '').toLowerCase().includes(contentSearchQuery)
+    );
+  });
 
   return (
     <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-            Matériel
-          </h1>
-          <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-            Définissez les catégories et les types de matériel, et pour chaque type le contenu de lot attendu
-            (les autres types qu&apos;il doit contenir, avec leur quantité).
-          </p>
-        </div>
-        <Link href="/admin/materiels/inventaire"
-          style={{ flexShrink: 0, cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
-          Voir l&apos;inventaire →
-        </Link>
+      <div style={{ marginBottom: 18 }}>
+        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+          Matériel
+        </h1>
+        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
+          Définissez les catégories et les types de matériel, et pour chaque contenant le contenu de lot attendu
+          (les items ou autres contenants qu&apos;il doit contenir, avec leur quantité).
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18, flexWrap: 'wrap' }}>
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Rechercher par nom, code ou description…"
+          style={{ ...inputStyle, flex: '1 1 240px', minWidth: 200 }}
+        />
+        <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)} style={{ ...inputStyle, width: 'auto', flex: '0 1 200px' }}>
+          <option value="all">Toutes les catégories</option>
+          {categories.map((cat) => (
+            <option key={cat.id} value={cat.id}>{cat.name}</option>
+          ))}
+        </select>
+        <select value={containerFilter} onChange={(e) => setContainerFilter(e.target.value as ContainerFilter)} style={{ ...inputStyle, width: 'auto', flex: '0 1 180px' }}>
+          <option value="all">Items et contenants</option>
+          <option value="items">Items uniquement</option>
+          <option value="containers">Contenants uniquement</option>
+        </select>
       </div>
 
       {error ? (
@@ -598,10 +686,14 @@ export default function AdminMaterielsPage() {
         <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucune catégorie pour l&apos;instant. Créez-en une ci-dessous.</p>
         </div>
+      ) : filteredCategories.length === 0 ? (
+        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
+          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucun résultat pour ces filtres.</p>
+        </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
-          <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-            {categories.map((cat) => (
+          <SortableContext items={filteredCategories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {filteredCategories.map((cat) => (
               <SortableCategoryCard
                 key={cat.id}
                 category={cat}
@@ -609,8 +701,8 @@ export default function AdminMaterielsPage() {
                 onTypeDragEnd={(e) => handleTypeDragEnd(cat.id, e)}
                 onEditCategory={() => setCategoryModal({ id: cat.id, name: cat.name, color: cat.color })}
                 onDeleteCategory={() => handleDeleteCategory(cat.id, cat.name)}
-                onAddType={() => setTypeModal({ categoryId: cat.id, code: '', name: '', description: '' })}
-                onEditType={(type) => setTypeModal({ categoryId: cat.id, id: type.id, code: type.code ?? '', name: type.name, description: type.description ?? '' })}
+                onAddType={() => setTypeModal({ categoryId: cat.id, code: '', name: '', description: '', is_container: false })}
+                onEditType={(type) => setTypeModal({ categoryId: cat.id, id: type.id, code: type.code ?? '', name: type.name, description: type.description ?? '', is_container: type.is_container })}
                 onRemoveType={(typeId) => void handleDeleteType(typeId)}
                 onEditContents={openContents}
               />
@@ -691,6 +783,13 @@ export default function AdminMaterielsPage() {
               style={{ ...inputStyle, resize: 'vertical' }}
             />
           </div>
+          <div>
+            <Toggle
+              checked={typeModal.is_container}
+              onChange={(checked) => setTypeModal((m) => (m ? { ...m, is_container: checked } : m))}
+              label="Ce type est un contenant (peut contenir d'autres types)"
+            />
+          </div>
         </Modal>
       ) : null}
 
@@ -701,6 +800,11 @@ export default function AdminMaterielsPage() {
           subtitle="Types de matériel que ce type contient, et en quelle quantité."
           onClose={() => setContentsModal(null)}
         >
+          {error ? (
+            <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '10px 14px', fontSize: 12.5, color: '#dc2626' }}>
+              {error}
+            </div>
+          ) : null}
           {contentsLoading ? (
             <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Chargement…</div>
           ) : (
@@ -725,28 +829,36 @@ export default function AdminMaterielsPage() {
               ))}
             </div>
           )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, paddingTop: 6, borderTop: '1px solid #eef1f5' }}>
-            <select
-              value={newContentTypeId}
-              onChange={(e) => setNewContentTypeId(e.target.value)}
-              style={{ ...inputStyle, flex: 1 }}
-            >
-              <option value="">Ajouter un type…</option>
-              {availableForContents.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, paddingTop: 10, borderTop: '1px solid #eef1f5' }}>
             <input
-              type="number"
-              min={1}
-              value={newContentQuantity}
-              onChange={(e) => setNewContentQuantity(Number(e.target.value) || 1)}
-              style={{ ...inputStyle, width: 64, textAlign: 'center' }}
+              value={contentSearch}
+              onChange={(e) => setContentSearch(e.target.value)}
+              placeholder="Rechercher un type à ajouter…"
+              style={inputStyle}
             />
-            <button type="button" onClick={handleAddContent} disabled={!newContentTypeId}
-              style={{ cursor: newContentTypeId ? 'pointer' : 'not-allowed', border: 'none', background: newContentTypeId ? '#059669' : '#94a3b8', color: '#fff', borderRadius: 9, padding: '10px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
-              Ajouter
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <select
+                value={newContentTypeId}
+                onChange={(e) => setNewContentTypeId(e.target.value)}
+                style={{ ...inputStyle, flex: 1 }}
+              >
+                <option value="">Ajouter un type…</option>
+                {availableForContents.map((t) => (
+                  <option key={t.id} value={t.id}>{t.name}{t.is_container ? ' (contenant)' : ''}</option>
+                ))}
+              </select>
+              <input
+                type="number"
+                min={1}
+                value={newContentQuantity}
+                onChange={(e) => setNewContentQuantity(Number(e.target.value) || 1)}
+                style={{ ...inputStyle, width: 64, textAlign: 'center' }}
+              />
+              <button type="button" onClick={handleAddContent} disabled={!newContentTypeId}
+                style={{ cursor: newContentTypeId ? 'pointer' : 'not-allowed', border: 'none', background: newContentTypeId ? '#059669' : '#94a3b8', color: '#fff', borderRadius: 9, padding: '10px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+                Ajouter
+              </button>
+            </div>
           </div>
         </Modal>
       ) : null}

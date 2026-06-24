@@ -56,6 +56,36 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'Un type ne peut pas se contenir lui-même.' }, { status: 400 });
   }
 
+  const { data: parentType } = await client!
+    .from('materiel_types')
+    .select('is_container')
+    .eq('id', params.id)
+    .single();
+
+  if (!parentType?.is_container) {
+    return NextResponse.json({ error: 'Seul un contenant peut recevoir du contenu.' }, { status: 400 });
+  }
+
+  const { data: edges } = await client!.from('materiel_type_contents').select('parent_type_id, child_type_id');
+  const childrenByParent = new Map<string, string[]>();
+  for (const edge of edges ?? []) {
+    const list = childrenByParent.get(edge.parent_type_id) ?? [];
+    list.push(edge.child_type_id);
+    childrenByParent.set(edge.parent_type_id, list);
+  }
+
+  const queue = [body.child_type_id];
+  const visited = new Set<string>();
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (current === params.id) {
+      return NextResponse.json({ error: 'Cet ajout créerait un cycle de composition.' }, { status: 400 });
+    }
+    if (visited.has(current)) continue;
+    visited.add(current);
+    queue.push(...(childrenByParent.get(current) ?? []));
+  }
+
   const { data, error: dbError } = await client!
     .from('materiel_type_contents')
     .insert({

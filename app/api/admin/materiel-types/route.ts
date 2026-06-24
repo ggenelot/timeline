@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
   const client = await getAdminClient(req);
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
-  const body = (await req.json()) as { name?: string; code?: string; description?: string; category_id?: string };
+  const body = (await req.json()) as { name?: string; code?: string; description?: string; category_id?: string; is_container?: boolean };
   const name = body.name?.trim();
   if (!name) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
   if (!body.category_id) return NextResponse.json({ error: 'La catégorie est obligatoire.' }, { status: 400 });
@@ -42,6 +42,7 @@ export async function POST(req: NextRequest) {
       code: body.code?.trim() || null,
       description: body.description?.trim() || null,
       category_id: body.category_id,
+      is_container: body.is_container ?? false,
       display_order: nextOrder,
     })
     .select()
