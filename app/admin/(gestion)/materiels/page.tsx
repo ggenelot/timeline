@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
@@ -559,14 +560,20 @@ export default function AdminMaterielsPage() {
 
   return (
     <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Matériel
-        </h1>
-        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Définissez les catégories et les types de matériel, et pour chaque type le contenu de lot attendu
-          (les autres types qu&apos;il doit contenir, avec leur quantité).
-        </p>
+      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+            Matériel
+          </h1>
+          <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
+            Définissez les catégories et les types de matériel, et pour chaque type le contenu de lot attendu
+            (les autres types qu&apos;il doit contenir, avec leur quantité).
+          </p>
+        </div>
+        <Link href="/admin/materiels/inventaire"
+          style={{ flexShrink: 0, cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, textDecoration: 'none' }}>
+          Voir l&apos;inventaire →
+        </Link>
       </div>
 
       {error ? (

@@ -26,7 +26,7 @@ create policy "admin_manage_materiel_categories"
 
 create table materiel_types (
   id uuid primary key default gen_random_uuid(),
-  category_id uuid references materiel_categories(id) on delete set null,
+  category_id uuid not null references materiel_categories(id) on delete cascade,
   name text not null,
   code text,
   description text,

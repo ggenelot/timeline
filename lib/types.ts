@@ -82,7 +82,7 @@ export type MaterielCategory = {
 export type MaterielType = {
   id: string;
   name: string;
-  category_id: string | null;
+  category_id: string;
   code?: string | null;
   description?: string | null;
   display_order: number;
@@ -97,6 +97,61 @@ export type MaterielTypeContent = {
   quantity: number;
   created_at: string;
   child_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+};
+
+// Statuts d'instance de matériel configurables (page d'admin « Matériel »),
+// sur le même modèle que SkillStatus.
+export type MaterielInstanceStatus = {
+  id: string;
+  key: string;
+  label: string;
+  color: string;
+  display_order: number;
+  is_available: boolean;
+  protected: boolean;
+  created_at: string;
+};
+
+export type MaterielInstance = {
+  id: string;
+  materiel_type_id: string;
+  parent_instance_id: string | null;
+  label: string;
+  location?: string | null;
+  status_id: string;
+  created_at: string;
+  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  status?: MaterielInstanceStatus | null;
+};
+
+export type MissionRequiredMateriel = {
+  id: string;
+  mission_id: string;
+  materiel_type_id: string;
+  quantity: number;
+  created_at: string;
+  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+};
+
+export type MissionTypeRequiredMateriel = {
+  id: string;
+  mission_type_id: string;
+  materiel_type_id: string;
+  quantity: number;
+  created_at: string;
+  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+};
+
+export type MissionMaterielAssignmentStatus = 'selected' | 'confirmed' | 'returned' | 'declined';
+
+export type MissionMaterielAssignment = {
+  id: string;
+  mission_id: string;
+  materiel_instance_id: string;
+  mission_required_materiel_id: string | null;
+  assignment_status: MissionMaterielAssignmentStatus;
+  created_at: string;
+  materiel_instance?: MaterielInstance | null;
 };
 
 export type HelpPage = {
@@ -256,6 +311,7 @@ export type MissionType = {
   created_at: string;
   color: string | null;
   required_skills?: MissionTypeRequiredSkill[];
+  required_materiels?: MissionTypeRequiredMateriel[];
 };
 
 export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack' | 'can_see';
