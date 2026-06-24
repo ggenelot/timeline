@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MissionForm, MissionFormState, MissionTypeOption, INITIAL_MISSION_FORM, MissionRequirementFormState, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
+import { MissionForm, MissionFormState, MissionTypeOption, INITIAL_MISSION_FORM, MissionRequirementFormState, MissionMaterielRequirementFormState, MaterielTypeOption, RecurrenceFormState, INITIAL_RECURRENCE_FORM } from '@/components/missions/mission-form';
 import { AdminBanner, AdminCard, AdminPageHeader } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
@@ -16,6 +16,11 @@ type MissionSkillOption = {
 
 type ParsedRequirement = {
   skill_id: string | null;
+  quantity: number;
+};
+
+type ParsedMaterielRequirement = {
+  materiel_type_id: string;
   quantity: number;
 };
 
@@ -108,6 +113,40 @@ function parseMissionRequirements(requirements: MissionRequirementFormState[]): 
   return { parsedRequirements, error: null };
 }
 
+function parseMissionMaterielRequirements(requirements: MissionMaterielRequirementFormState[]): { parsedRequirements: ParsedMaterielRequirement[]; error: string | null } {
+  const trimmedRequirements = requirements
+    .map((requirement) => ({
+      materiel_type_id: requirement.materiel_type_id.trim(),
+      quantity: requirement.quantity.trim()
+    }))
+    .filter((requirement) => requirement.materiel_type_id.length > 0 || requirement.quantity.length > 0);
+
+  const parsedRequirements: ParsedMaterielRequirement[] = [];
+  const selectedMaterielTypeIds = new Set<string>();
+
+  for (const requirement of trimmedRequirements) {
+    if (!requirement.materiel_type_id) {
+      return { parsedRequirements: [], error: 'Veuillez sélectionner un type de matériel pour chaque ligne.' };
+    }
+
+    if (!isPositiveInteger(requirement.quantity)) {
+      return { parsedRequirements: [], error: 'La quantité doit être un entier strictement positif.' };
+    }
+
+    if (selectedMaterielTypeIds.has(requirement.materiel_type_id)) {
+      return { parsedRequirements: [], error: 'Un même type de matériel ne peut pas être ajouté en double.' };
+    }
+
+    selectedMaterielTypeIds.add(requirement.materiel_type_id);
+    parsedRequirements.push({
+      materiel_type_id: requirement.materiel_type_id,
+      quantity: Number.parseInt(requirement.quantity, 10)
+    });
+  }
+
+  return { parsedRequirements, error: null };
+}
+
 export default function AdminCreateMissionPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -116,9 +155,12 @@ export default function AdminCreateMissionPage() {
   const [recurrence, setRecurrence] = useState<RecurrenceFormState>(INITIAL_RECURRENCE_FORM);
   const [requirements, setRequirements] = useState<MissionRequirementFormState[]>([]);
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
+  const [materielRequirements, setMaterielRequirements] = useState<MissionMaterielRequirementFormState[]>([]);
+  const [materielTypes, setMaterielTypes] = useState<MaterielTypeOption[]>([]);
   const [missionTypes, setMissionTypes] = useState<MissionTypeOption[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
+  const [materielRequirementsError, setMaterielRequirementsError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -151,9 +193,10 @@ export default function AdminCreateMissionPage() {
       setProfile(profileData);
 
       // Independent reads run in parallel to avoid a request waterfall.
-      const [sessionResult, skillResult, locationsResult] = await Promise.all([
+      const [sessionResult, skillResult, materielResult, locationsResult] = await Promise.all([
         supabase.auth.getSession(),
         supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
+        supabase.from('materiel_types').select('id,name,materiel_categories(color)').order('name', { ascending: true }),
         supabase.from('missions').select('location').not('location', 'is', null),
       ]);
 
@@ -180,6 +223,22 @@ export default function AdminCreateMissionPage() {
           id: s.id,
           name: s.name,
           color: (s.skill_categories as { color?: string } | null)?.color ?? null
+        }))
+      );
+
+      const { data: materielData, error: materielError } = materielResult;
+
+      if (materielError) {
+        setError(`Impossible de charger les types de matériel: ${materielError.message}`);
+        setLoading(false);
+        return;
+      }
+
+      setMaterielTypes(
+        (materielData ?? []).map((m) => ({
+          id: m.id,
+          name: m.name,
+          color: (m.materiel_categories as { color?: string } | null)?.color ?? null
         }))
       );
 
@@ -243,6 +302,7 @@ export default function AdminCreateMissionPage() {
     event.preventDefault();
     setError(null);
     setRequirementsError(null);
+    setMaterielRequirementsError(null);
     setSuccess(null);
 
     if (!profile) {
@@ -302,6 +362,13 @@ export default function AdminCreateMissionPage() {
 
     if (parsedRequirementsError) {
       setRequirementsError(parsedRequirementsError);
+      return;
+    }
+
+    const { parsedRequirements: parsedMaterielRequirements, error: parsedMaterielRequirementsError } = parseMissionMaterielRequirements(materielRequirements);
+
+    if (parsedMaterielRequirementsError) {
+      setMaterielRequirementsError(parsedMaterielRequirementsError);
       return;
     }
 
@@ -379,6 +446,26 @@ export default function AdminCreateMissionPage() {
       }
     }
 
+    if (parsedMaterielRequirements.length > 0 && createdMissions.length > 0) {
+      const materielRequirementRows = createdMissions.flatMap((mission) =>
+        parsedMaterielRequirements.map((requirement) => ({
+          mission_id: mission.id,
+          materiel_type_id: requirement.materiel_type_id,
+          quantity: requirement.quantity
+        }))
+      );
+
+      const { error: materielRequirementInsertError } = await supabase.from('mission_required_materiels').insert(materielRequirementRows);
+
+      if (materielRequirementInsertError) {
+        const missionIds = createdMissions.map((m) => m.id);
+        await supabase.from('missions').delete().in('id', missionIds);
+        setError(`Missions non enregistrées: impossible de créer le matériel requis (${materielRequirementInsertError.message}).`);
+        setSubmitting(false);
+        return;
+      }
+    }
+
     const count = createdMissions?.length ?? 0;
     const successMsg = count > 1
       ? `${count} missions créées avec succès. Redirection en cours...`
@@ -388,6 +475,7 @@ export default function AdminCreateMissionPage() {
     setForm(INITIAL_MISSION_FORM);
     setRecurrence(INITIAL_RECURRENCE_FORM);
     setRequirements([]);
+    setMaterielRequirements([]);
 
     const firstId = createdMissions?.[0]?.id;
     window.setTimeout(() => {
@@ -433,6 +521,10 @@ export default function AdminCreateMissionPage() {
         onRequirementsChange={setRequirements}
         requirementsError={requirementsError}
         availableSkills={skills.map((skill) => ({ id: skill.id, name: skill.name || 'Compétence sans nom', color: skill.color }))}
+        materielRequirements={materielRequirements}
+        onMaterielRequirementsChange={setMaterielRequirements}
+        materielRequirementsError={materielRequirementsError}
+        availableMateriels={materielTypes}
         locationSuggestions={locationSuggestions}
         recurrence={recurrence}
         onRecurrenceChange={setRecurrence}

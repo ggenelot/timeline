@@ -10,6 +10,7 @@ import {
 
 export type MissionTypeOption = { id: string; name: string };
 import { MissionRequirementsEditor } from '@/components/missions/mission-requirements-editor';
+import { MissionMaterielEditor } from '@/components/missions/mission-materiel-editor';
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly';
 
@@ -67,9 +68,20 @@ export type MissionRequirementFormState = {
   quantity: string;
 };
 
+export type MissionMaterielRequirementFormState = {
+  materiel_type_id: string;
+  quantity: string;
+};
+
 type SkillOption = {
   id: string;
   name: string;
+};
+
+export type MaterielTypeOption = {
+  id: string;
+  name: string;
+  color?: string | null;
 };
 
 type MissionFormProps = {
@@ -80,6 +92,10 @@ type MissionFormProps = {
   onRequirementsChange?: (nextValue: MissionRequirementFormState[]) => void;
   availableSkills?: SkillOption[];
   requirementsError?: string | null;
+  materielRequirements?: MissionMaterielRequirementFormState[];
+  onMaterielRequirementsChange?: (nextValue: MissionMaterielRequirementFormState[]) => void;
+  availableMateriels?: MaterielTypeOption[];
+  materielRequirementsError?: string | null;
   locationSuggestions?: string[];
   recurrence?: RecurrenceFormState;
   onRecurrenceChange?: (nextValue: RecurrenceFormState) => void;
@@ -109,6 +125,10 @@ export function MissionForm({
   onRequirementsChange,
   availableSkills = [],
   requirementsError,
+  materielRequirements = [],
+  onMaterielRequirementsChange,
+  availableMateriels = [],
+  materielRequirementsError,
   locationSuggestions = [],
   recurrence,
   onRecurrenceChange,
@@ -120,6 +140,7 @@ export function MissionForm({
   footerActions
 }: MissionFormProps) {
   const canManageRequirements = Boolean(onRequirementsChange);
+  const canManageMaterielRequirements = Boolean(onMaterielRequirementsChange);
 
   return (
     <form style={{ display: 'flex', flexDirection: 'column', gap: 18 }} onSubmit={onSubmit}>
@@ -267,6 +288,16 @@ export function MissionForm({
           onRequirementsChange={onRequirementsChange!}
           availableSkills={availableSkills}
           requirementsError={requirementsError}
+          submitting={submitting}
+        />
+      ) : null}
+
+      {canManageMaterielRequirements ? (
+        <MissionMaterielEditor
+          requirements={materielRequirements}
+          onRequirementsChange={onMaterielRequirementsChange!}
+          availableMateriels={availableMateriels}
+          requirementsError={materielRequirementsError}
           submitting={submitting}
         />
       ) : null}

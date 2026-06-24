@@ -26,6 +26,7 @@ import {
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { getCandidateActivity } from '@/lib/queries/activity';
 import { MissionActivityPanel } from '@/components/activity/MissionActivityPanel';
+import { MissionMaterielAssignments } from '@/components/missions/mission-materiel-assignments';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -1096,6 +1097,8 @@ export default function MissionDetailPage() {
           </div>
         ) : null}
       </article>
+
+      {canManageMission ? <MissionMaterielAssignments missionId={mission.id} /> : null}
 
       {canManageMission ? (
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
