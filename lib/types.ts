@@ -89,6 +89,7 @@ export type MaterielType = {
   display_order: number;
   created_at: string;
   category?: MaterielCategory | null;
+  containers?: string[];
 };
 
 export type MaterielTypeContent = {

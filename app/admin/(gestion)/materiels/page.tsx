@@ -1,11 +1,12 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
   closestCenter,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -33,7 +34,7 @@ function DragHandle({ attributes, listeners, style }: {
     <span
       {...attributes}
       {...listeners}
-      title="Glisser pour réordonner"
+      title="Glisser pour réordonner ou déplacer"
       style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
     >
       ⠿⠿
@@ -154,141 +155,87 @@ function AddItemForm({ token, excludeIds, onSubmit, onCancel }: {
   );
 }
 
-// ── Nœud de l'arbre (contenant ou item) ──────────────────────────────
+// ── Contexte partagé de l'arbre ───────────────────────────────────────
 
-type TreeNodeType = Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container'>;
+type TreeCtxValue = {
+  token: string;
+  expanded: Set<string>;
+  childrenByContainer: Record<string, MaterielTypeContent[]>;
+  loadingContainers: Set<string>;
+  toggleExpand: (containerId: string) => void;
+  addContainer: (containerId: string, name: string, code: string) => Promise<void>;
+  addItem: (containerId: string, itemId: string, quantity: number) => Promise<void>;
+  updateQuantity: (containerId: string, contentId: string, quantity: number) => Promise<void>;
+  unlink: (containerId: string, contentId: string) => Promise<void>;
+};
+
+const TreeCtx = createContext<TreeCtxValue | null>(null);
+
+function useTreeCtx(): TreeCtxValue {
+  const ctx = useContext(TreeCtx);
+  if (!ctx) throw new Error('TreeCtx manquant');
+  return ctx;
+}
+
+// ── Zone de dépôt (conteneur droppable pour une liste d'enfants) ─────
+
+function DropZone({ id, children, empty }: { id: string; children: React.ReactNode; empty?: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
+  return (
+    <div ref={setNodeRef} style={{
+      borderRadius: 10,
+      background: isOver ? '#eff6ff' : 'transparent',
+      outline: isOver ? '2px dashed #93c5fd' : 'none',
+      outlineOffset: 2,
+      minHeight: empty ? 40 : undefined,
+      transition: 'background .1s',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+// ── Nœud de l'arbre (contenant ou item) ──────────────────────────────
 
 type LinkMeta = {
   contentId: string;
   quantity: number;
-  onQuantityChange: (quantity: number) => void;
-  onUnlink: () => void;
+  parentContainerId: string;
 };
 
-function TreeNode({ node, token, depth, meta, onFullDelete, sortableId }: {
-  node: TreeNodeType;
-  token: string;
+function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
+  node: MaterielType;
   depth: number;
   meta?: LinkMeta;
   onFullDelete?: () => void;
   sortableId: string;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const [contents, setContents] = useState<MaterielTypeContent[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const ctx = useTreeCtx();
   const [addMode, setAddMode] = useState<'container' | 'item' | null>(null);
-
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortableId });
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
-  const fetchContents = useCallback(async () => {
-    setLoading(true);
-    const res = await fetch(`/api/admin/materiel-types/${node.id}/contents`, { headers: { Authorization: `Bearer ${token}` } });
-    if (res.ok) {
-      const json = (await res.json()) as { contents: MaterielTypeContent[] };
-      setContents(json.contents);
-    }
-    setLoading(false);
-  }, [node.id, token]);
-
-  function toggleExpand() {
-    if (!expanded && contents === null) void fetchContents();
-    setExpanded((v) => !v);
-  }
-
-  async function handleAddContainer(name: string, code: string) {
-    const createRes = await fetch('/api/admin/materiel-types', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, code, is_container: true }),
-    });
-    if (!createRes.ok) return;
-    const { type } = (await createRes.json()) as { type: MaterielType };
-    await fetch(`/api/admin/materiel-types/${node.id}/contents`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ child_type_id: type.id, quantity: 1 }),
-    });
-    setAddMode(null);
-    await fetchContents();
-  }
-
-  async function handleAddItem(itemId: string, quantity: number) {
-    await fetch(`/api/admin/materiel-types/${node.id}/contents`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ child_type_id: itemId, quantity }),
-    });
-    setAddMode(null);
-    await fetchContents();
-  }
-
-  async function handleUpdateQuantity(contentId: string, quantity: number) {
-    if (quantity < 1) return;
-    await fetch(`/api/admin/materiel-types/${node.id}/contents/${contentId}`, {
-      method: 'PATCH',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ quantity }),
-    });
-    await fetchContents();
-  }
-
-  async function handleUnlink(contentId: string) {
-    await fetch(`/api/admin/materiel-types/${node.id}/contents/${contentId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    await fetchContents();
-  }
-
-  async function handleChildDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!contents || !over || active.id === over.id) return;
-    const oldIndex = contents.findIndex((c) => c.id === active.id);
-    const newIndex = contents.findIndex((c) => c.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(contents, oldIndex, newIndex);
-    setContents(next);
-    await Promise.all(
-      next.map((c, i) => fetch(`/api/admin/materiel-types/${node.id}/contents/${c.id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position: i }),
-      }))
-    );
-  }
-
+  const isExpanded = ctx.expanded.has(node.id);
+  const isLoading = ctx.loadingContainers.has(node.id);
+  const contents = ctx.childrenByContainer[node.id];
   const existingChildIds = new Set((contents ?? []).map((c) => c.child_type_id));
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '1px solid #eef1f5', borderRadius: 12, padding: '10px 12px', background: '#fcfcfd' }}>
-        {meta ? <DragHandle attributes={attributes} listeners={listeners} /> : <span style={{ width: 13 }} />}
-        {node.is_container ? (
-          <button type="button" onClick={toggleExpand} aria-label={expanded ? 'Replier' : 'Déplier'}
-            style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#64748b', fontSize: 13, padding: '2px 4px', flexShrink: 0 }}>
-            {expanded ? '▾' : '▸'}
-          </button>
-        ) : (
-          <span style={{ width: 19, flexShrink: 0 }} />
-        )}
-        <span style={{
-          flexShrink: 0, fontSize: 10.5, fontWeight: 800, letterSpacing: '.03em', textTransform: 'uppercase', borderRadius: 99, padding: '2px 8px',
-          color: node.is_container ? '#7c3aed' : '#64748b',
-          background: node.is_container ? '#f5f3ff' : '#f1f5f9',
-          border: `1px solid ${node.is_container ? '#ddd6fe' : '#e2e8f0'}`,
-        }}>
-          {node.is_container ? 'Contenant' : 'Item'}
-        </span>
-        <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0f172a', cursor: node.is_container ? 'pointer' : 'default' }} onClick={node.is_container ? toggleExpand : undefined}>
+        <DragHandle attributes={attributes} listeners={listeners} />
+        <span
+          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0f172a', cursor: node.is_container ? 'pointer' : 'default' }}
+          onClick={node.is_container ? () => ctx.toggleExpand(node.id) : undefined}
+        >
           {node.name}
           {node.code ? <span style={{ marginLeft: 7, fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{node.code}</span> : null}
         </span>
         {meta ? (
           <>
-            <input type="number" min={1} value={meta.quantity} onChange={(e) => meta.onQuantityChange(Number(e.target.value) || 1)}
+            <input type="number" min={1} value={meta.quantity}
+              onChange={(e) => void ctx.updateQuantity(meta.parentContainerId, meta.contentId, Number(e.target.value) || 1)}
               style={{ ...inputStyle, width: 58, textAlign: 'center', flexShrink: 0 }} />
-            <button type="button" onClick={meta.onUnlink} aria-label="Retirer"
+            <button type="button" onClick={() => void ctx.unlink(meta.parentContainerId, meta.contentId)} aria-label="Retirer"
               style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
           </>
         ) : onFullDelete ? (
@@ -299,43 +246,45 @@ function TreeNode({ node, token, depth, meta, onFullDelete, sortableId }: {
         ) : null}
       </div>
 
-      {expanded && node.is_container ? (
+      {isExpanded && node.is_container ? (
         <div style={{ marginLeft: 30, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {loading ? (
+          {isLoading ? (
             <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Chargement…</div>
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleChildDragEnd}>
-              <SortableContext items={(contents ?? []).map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            <DropZone id={`zone:${node.id}`} empty={(contents ?? []).length === 0}>
+              <SortableContext items={(contents ?? []).map((c) => `node:${c.id}`)} strategy={verticalListSortingStrategy}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {(contents ?? []).length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Ce contenant est vide.</div>
+                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Ce contenant est vide. Glissez un élément ici, ou ajoutez-en un ci-dessous.</div>
                   ) : (contents ?? []).map((c) => (
                     c.child_type ? (
                       <TreeNode
                         key={c.id}
-                        sortableId={c.id}
-                        node={c.child_type}
-                        token={token}
+                        sortableId={`node:${c.id}`}
+                        node={c.child_type as MaterielType}
                         depth={depth + 1}
-                        meta={{
-                          contentId: c.id,
-                          quantity: c.quantity,
-                          onQuantityChange: (q) => void handleUpdateQuantity(c.id, q),
-                          onUnlink: () => void handleUnlink(c.id),
-                        }}
+                        meta={{ contentId: c.id, quantity: c.quantity, parentContainerId: node.id }}
                       />
                     ) : null
                   ))}
                 </div>
               </SortableContext>
-            </DndContext>
+            </DropZone>
           )}
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {addMode === 'container' ? (
-              <AddContainerForm onSubmit={handleAddContainer} onCancel={() => setAddMode(null)} />
+              <AddContainerForm
+                onSubmit={async (name, code) => { await ctx.addContainer(node.id, name, code); setAddMode(null); }}
+                onCancel={() => setAddMode(null)}
+              />
             ) : addMode === 'item' ? (
-              <AddItemForm token={token} excludeIds={existingChildIds} onSubmit={handleAddItem} onCancel={() => setAddMode(null)} />
+              <AddItemForm
+                token={ctx.token}
+                excludeIds={existingChildIds}
+                onSubmit={async (itemId, quantity) => { await ctx.addItem(node.id, itemId, quantity); setAddMode(null); }}
+                onCancel={() => setAddMode(null)}
+              />
             ) : (
               <div style={{ display: 'flex', gap: 8 }}>
                 <button type="button" onClick={() => setAddMode('container')}
@@ -355,11 +304,16 @@ function TreeNode({ node, token, depth, meta, onFullDelete, sortableId }: {
   );
 }
 
+// ── Page principale ───────────────────────────────────────────────────
+
 export default function AdminMaterielsPage() {
   const router = useRouter();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [roots, setRoots] = useState<MaterielType[]>([]);
+  const [childrenByContainer, setChildrenByContainer] = useState<Record<string, MaterielTypeContent[]>>({});
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [loadingContainers, setLoadingContainers] = useState<Set<string>>(new Set());
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [addingRoot, setAddingRoot] = useState(false);
@@ -372,6 +326,16 @@ export default function AdminMaterielsPage() {
       const json = (await res.json()) as { types: MaterielType[] };
       setRoots(json.types);
     }
+  }, []);
+
+  const loadContents = useCallback(async (containerId: string, tok: string) => {
+    setLoadingContainers((prev) => new Set(prev).add(containerId));
+    const res = await fetch(`/api/admin/materiel-types/${containerId}/contents`, { headers: { Authorization: `Bearer ${tok}` } });
+    if (res.ok) {
+      const json = (await res.json()) as { contents: MaterielTypeContent[] };
+      setChildrenByContainer((prev) => ({ ...prev, [containerId]: json.contents }));
+    }
+    setLoadingContainers((prev) => { const next = new Set(prev); next.delete(containerId); return next; });
   }, []);
 
   useEffect(() => {
@@ -401,6 +365,65 @@ export default function AdminMaterielsPage() {
     void init();
   }, [router, fetchRoots]);
 
+  function toggleExpand(containerId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(containerId)) {
+        next.delete(containerId);
+      } else {
+        next.add(containerId);
+        if (!childrenByContainer[containerId]) void loadContents(containerId, token);
+      }
+      return next;
+    });
+  }
+
+  async function addContainer(containerId: string, name: string, code: string) {
+    const createRes = await fetch('/api/admin/materiel-types', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, code, is_container: true }),
+    });
+    if (!createRes.ok) return;
+    const { type } = (await createRes.json()) as { type: MaterielType };
+    await fetch(`/api/admin/materiel-types/${containerId}/contents`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ child_type_id: type.id, quantity: 1 }),
+    });
+    await loadContents(containerId, token);
+  }
+
+  async function addItem(containerId: string, itemId: string, quantity: number) {
+    await fetch(`/api/admin/materiel-types/${containerId}/contents`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ child_type_id: itemId, quantity }),
+    });
+    await loadContents(containerId, token);
+  }
+
+  async function updateQuantity(containerId: string, contentId: string, quantity: number) {
+    if (quantity < 1) return;
+    setChildrenByContainer((prev) => ({
+      ...prev,
+      [containerId]: (prev[containerId] ?? []).map((c) => (c.id === contentId ? { ...c, quantity } : c)),
+    }));
+    await fetch(`/api/admin/materiel-types/${containerId}/contents/${contentId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity }),
+    });
+  }
+
+  async function unlink(containerId: string, contentId: string) {
+    setChildrenByContainer((prev) => ({ ...prev, [containerId]: (prev[containerId] ?? []).filter((c) => c.id !== contentId) }));
+    await fetch(`/api/admin/materiel-types/${containerId}/contents/${contentId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+  }
+
   async function handleAddRoot(name: string, code: string) {
     const res = await fetch('/api/admin/materiel-types', {
       method: 'POST',
@@ -428,14 +451,32 @@ export default function AdminMaterielsPage() {
     }
   }
 
-  async function handleRootDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIndex = roots.findIndex((r) => r.id === active.id);
-    const newIndex = roots.findIndex((r) => r.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const next = arrayMove(roots, oldIndex, newIndex);
-    setRoots(next);
+  // ── Localisation d'un id glissable dans l'arbre courant ──────────────
+
+  type Location = { zoneId: string; index: number };
+
+  function findLocation(id: string): Location | null {
+    if (id === 'zone:root') return { zoneId: 'root', index: roots.length };
+    if (id.startsWith('zone:')) {
+      const containerId = id.slice(5);
+      return { zoneId: containerId, index: (childrenByContainer[containerId] ?? []).length };
+    }
+    if (id.startsWith('root:')) {
+      const typeId = id.slice(5);
+      const idx = roots.findIndex((r) => r.id === typeId);
+      return idx >= 0 ? { zoneId: 'root', index: idx } : null;
+    }
+    if (id.startsWith('node:')) {
+      const contentId = id.slice(5);
+      for (const [containerId, list] of Object.entries(childrenByContainer)) {
+        const idx = list.findIndex((c) => c.id === contentId);
+        if (idx >= 0) return { zoneId: containerId, index: idx };
+      }
+    }
+    return null;
+  }
+
+  async function persistRootOrder(next: MaterielType[]) {
     await Promise.all(
       next.map((r, i) => fetch(`/api/admin/materiel-types/${r.id}`, {
         method: 'PATCH',
@@ -443,6 +484,111 @@ export default function AdminMaterielsPage() {
         body: JSON.stringify({ display_order: i }),
       }))
     );
+  }
+
+  async function persistContainerOrder(containerId: string, next: MaterielTypeContent[]) {
+    await Promise.all(
+      next.map((c, i) => fetch(`/api/admin/materiel-types/${containerId}/contents/${c.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: i }),
+      }))
+    );
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
+
+    const fromLoc = findLocation(activeId);
+    const toLoc = findLocation(overId);
+    if (!fromLoc || !toLoc) return;
+
+    let draggedType: MaterielType | undefined;
+    let draggedContentId: string | null = null;
+    let draggedQuantity = 1;
+
+    if (activeId.startsWith('root:')) {
+      draggedType = roots.find((r) => r.id === activeId.slice(5));
+    } else if (activeId.startsWith('node:')) {
+      const contentId = activeId.slice(5);
+      const list = childrenByContainer[fromLoc.zoneId] ?? [];
+      const entry = list.find((c) => c.id === contentId);
+      if (entry?.child_type) {
+        draggedType = entry.child_type as MaterielType;
+        draggedContentId = entry.id;
+        draggedQuantity = entry.quantity;
+      }
+    }
+    if (!draggedType) return;
+
+    // Un item (non-contenant) ne peut pas devenir un contenant racine.
+    if (toLoc.zoneId === 'root' && !draggedType.is_container) return;
+    // Un contenant ne peut pas se contenir lui-même.
+    if (toLoc.zoneId === draggedType.id) return;
+
+    if (fromLoc.zoneId === toLoc.zoneId) {
+      if (fromLoc.index === toLoc.index) return;
+      if (fromLoc.zoneId === 'root') {
+        const next = arrayMove(roots, fromLoc.index, toLoc.index);
+        setRoots(next);
+        await persistRootOrder(next);
+      } else {
+        const list = childrenByContainer[fromLoc.zoneId] ?? [];
+        const next = arrayMove(list, fromLoc.index, toLoc.index);
+        setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: next }));
+        await persistContainerOrder(fromLoc.zoneId, next);
+      }
+      return;
+    }
+
+    // Déplacement entre deux emplacements différents (racine <-> contenant, ou contenant <-> contenant).
+    if (fromLoc.zoneId === 'root') {
+      setRoots((prev) => prev.filter((r) => r.id !== draggedType!.id));
+    } else if (draggedContentId) {
+      setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: (prev[fromLoc.zoneId] ?? []).filter((c) => c.id !== draggedContentId) }));
+    }
+
+    if (toLoc.zoneId === 'root') {
+      if (draggedContentId) {
+        await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
+      const nextRoots = roots.filter((r) => r.id !== draggedType!.id);
+      nextRoots.splice(toLoc.index, 0, draggedType);
+      setRoots(nextRoots);
+      await persistRootOrder(nextRoots);
+      return;
+    }
+
+    if (draggedContentId) {
+      await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
+    const res = await fetch(`/api/admin/materiel-types/${toLoc.zoneId}/contents`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ child_type_id: draggedType.id, quantity: draggedQuantity }),
+    });
+    if (!res.ok) {
+      const json = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? "Ce déplacement n'est pas possible.");
+      if (fromLoc.zoneId === 'root') await fetchRoots(token); else await loadContents(fromLoc.zoneId, token);
+      await loadContents(toLoc.zoneId, token);
+      return;
+    }
+    const { content: newContent } = (await res.json()) as { content: MaterielTypeContent };
+    const destList = [...(childrenByContainer[toLoc.zoneId] ?? [])];
+    destList.splice(toLoc.index, 0, newContent);
+    setChildrenByContainer((prev) => ({ ...prev, [toLoc.zoneId]: destList }));
+    await persistContainerOrder(toLoc.zoneId, destList);
   }
 
   if (loading) {
@@ -461,6 +607,18 @@ export default function AdminMaterielsPage() {
     );
   }
 
+  const ctxValue: TreeCtxValue = {
+    token,
+    expanded,
+    childrenByContainer,
+    loadingContainers,
+    toggleExpand,
+    addContainer,
+    addItem,
+    updateQuantity,
+    unlink,
+  };
+
   return (
     <div style={{ paddingBottom: 80 }}>
       <div style={{ marginBottom: 18 }}>
@@ -469,7 +627,7 @@ export default function AdminMaterielsPage() {
         </h1>
         <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
           Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d&apos;autres contenants ou
-          des items de la bibliothèque, et glissez-déposez pour réordonner leur contenu.
+          des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants.
         </p>
       </div>
 
@@ -479,28 +637,33 @@ export default function AdminMaterielsPage() {
         </div>
       ) : null}
 
-      {roots.length === 0 ? (
-        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucun contenant pour l&apos;instant. Créez-en un ci-dessous.</p>
-        </div>
-      ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRootDragEnd}>
-          <SortableContext items={roots.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-              {roots.map((r) => (
-                <TreeNode
-                  key={r.id}
-                  sortableId={r.id}
-                  node={r}
-                  token={token}
-                  depth={0}
-                  onFullDelete={() => void handleDeleteRoot(r.id, r.name)}
-                />
-              ))}
-            </div>
-          </SortableContext>
+      <TreeCtx.Provider value={ctxValue}>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
+          {roots.length === 0 ? (
+            <DropZone id="zone:root" empty>
+              <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
+                <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucun contenant pour l&apos;instant. Créez-en un ci-dessous.</p>
+              </div>
+            </DropZone>
+          ) : (
+            <DropZone id="zone:root">
+              <SortableContext items={roots.map((r) => `root:${r.id}`)} strategy={verticalListSortingStrategy}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                  {roots.map((r) => (
+                    <TreeNode
+                      key={r.id}
+                      sortableId={`root:${r.id}`}
+                      node={r}
+                      depth={0}
+                      onFullDelete={() => void handleDeleteRoot(r.id, r.name)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DropZone>
+          )}
         </DndContext>
-      )}
+      </TreeCtx.Provider>
 
       {addingRoot ? (
         <AddContainerForm onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />

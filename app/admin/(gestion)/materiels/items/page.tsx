@@ -40,6 +40,8 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 }
 
 const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' };
+const thStyle: React.CSSProperties = { textAlign: 'left', padding: '9px 12px', fontSize: 11.5, fontWeight: 800, letterSpacing: '.02em', textTransform: 'uppercase', color: '#64748b' };
+const tdStyle: React.CSSProperties = { padding: '9px 12px', verticalAlign: 'top' };
 
 type ItemModalState = { id?: string; code: string; name: string; description: string };
 
@@ -188,26 +190,38 @@ export default function AdminMaterielItemsPage() {
           </p>
         </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
-          {filteredItems.map((item) => (
-            <div key={item.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 10, border: '1px solid #eef1f5', borderRadius: 12, padding: '11px 13px', background: '#fcfcfd' }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>
-                  {item.name}
-                  {item.code ? <span style={{ marginLeft: 8, fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{item.code}</span> : null}
-                </div>
-                {item.description ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{item.description}</div> : null}
-              </div>
-              <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <button type="button" onClick={() => setItemModal({ id: item.id, code: item.code ?? '', name: item.name, description: item.description ?? '' })}
-                  style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
-                  Modifier
-                </button>
-                <button type="button" onClick={() => void handleDeleteItem(item.id, item.name)} aria-label="Supprimer"
-                  style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
-              </span>
-            </div>
-          ))}
+        <div style={{ overflowX: 'auto', border: '1px solid #eef1f5', borderRadius: 12, marginBottom: 16 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: '#f8fafc' }}>
+                <th style={thStyle}>Code</th>
+                <th style={thStyle}>Nom</th>
+                <th style={thStyle}>Description</th>
+                <th style={thStyle}>Présent dans</th>
+                <th style={{ ...thStyle, width: 1 }} />
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.map((item) => (
+                <tr key={item.id} style={{ borderTop: '1px solid #eef1f5' }}>
+                  <td style={tdStyle}>{item.code ? <span style={{ fontWeight: 600, color: '#64748b' }}>{item.code}</span> : '—'}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700, color: '#0f172a', whiteSpace: 'nowrap' }}>{item.name}</td>
+                  <td style={{ ...tdStyle, color: '#64748b' }}>{item.description || '—'}</td>
+                  <td style={{ ...tdStyle, color: '#64748b' }}>{item.containers && item.containers.length > 0 ? item.containers.join(', ') : '—'}</td>
+                  <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                      <button type="button" onClick={() => setItemModal({ id: item.id, code: item.code ?? '', name: item.name, description: item.description ?? '' })}
+                        style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+                        Modifier
+                      </button>
+                      <button type="button" onClick={() => void handleDeleteItem(item.id, item.name)} aria-label="Supprimer"
+                        style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 

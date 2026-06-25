@@ -56,7 +56,24 @@ export async function GET(req: NextRequest) {
 
     const { data, error: dbError } = await query;
     if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
-    return NextResponse.json({ types: data });
+
+    const ids = (data ?? []).map((t) => t.id);
+    const containersByItem = new Map<string, string[]>();
+    if (ids.length > 0) {
+      const { data: edges } = await client!
+        .from('materiel_type_contents')
+        .select('child_type_id, parent_type:materiel_types!materiel_type_contents_parent_type_id_fkey(name)')
+        .in('child_type_id', ids);
+      for (const edge of edges ?? []) {
+        const parentType = Array.isArray(edge.parent_type) ? edge.parent_type[0] : edge.parent_type;
+        const list = containersByItem.get(edge.child_type_id) ?? [];
+        if (parentType?.name) list.push(parentType.name);
+        containersByItem.set(edge.child_type_id, list);
+      }
+    }
+
+    const types = (data ?? []).map((t) => ({ ...t, containers: containersByItem.get(t.id) ?? [] }));
+    return NextResponse.json({ types });
   }
 
   const { data, error: dbError } = await client!.from('materiel_types').select('*').order('display_order', { ascending: true });
