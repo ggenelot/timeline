@@ -120,6 +120,19 @@ export type MissionTypeRequiredMateriel = {
   materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
 };
 
+export type MissionMaterielCheck = {
+  id: string;
+  mission_required_materiel_id: string;
+  item_type_id: string;
+  expected_quantity: number;
+  is_present: boolean;
+  comment: string | null;
+  checked_by: string | null;
+  checked_at: string;
+  item_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  checked_by_profile?: Pick<Profile, 'id' | 'full_name'> | null;
+};
+
 export type HelpPage = {
   id: string;
   page_path: string;
