@@ -191,7 +191,7 @@ export default function AdminEditMissionPage() {
       }
 
       // Mission, skills, materiel types, location suggestions and the session are independent: fetch in parallel.
-      const [missionResult, sessionResult, skillResult, materielResult, locationsResult] = await Promise.all([
+      const [missionResult, sessionResult, skillResult, materielResult, materielContentsResult, locationsResult] = await Promise.all([
         supabase
           .from('missions')
           .select('id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity),mission_required_materiels(id,materiel_type_id,quantity)')
@@ -199,7 +199,8 @@ export default function AdminEditMissionPage() {
           .single<MissionEditPayload>(),
         supabase.auth.getSession(),
         supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
-        supabase.from('materiel_types').select('id,name,materiel_categories(color)').order('name', { ascending: true }),
+        supabase.from('materiel_types').select('id,name,materiel_categories(color)').eq('is_container', true).order('name', { ascending: true }),
+        supabase.from('materiel_type_contents').select('child_type_id'),
         supabase.from('missions').select('location').not('location', 'is', null),
       ]);
 
@@ -252,19 +253,25 @@ export default function AdminEditMissionPage() {
       );
 
       const { data: materielData, error: materielError } = materielResult;
+      const { data: materielContentsData, error: materielContentsError } = materielContentsResult;
 
-      if (materielError) {
-        setError(`Impossible de charger les types de matériel: ${materielError.message}`);
+      if (materielError || materielContentsError) {
+        setError(`Impossible de charger les types de matériel: ${materielError?.message ?? materielContentsError?.message}`);
         setLoading(false);
         return;
       }
 
+      // Seuls les contenants de plus haut niveau (jamais imbriqués dans un autre
+      // contenant) sont mobilisables sur une mission.
+      const nestedContainerIds = new Set((materielContentsData ?? []).map((row) => row.child_type_id));
       setMaterielTypes(
-        (materielData ?? []).map((m) => ({
-          id: m.id,
-          name: m.name,
-          color: (m.materiel_categories as { color?: string } | null)?.color ?? null
-        }))
+        (materielData ?? [])
+          .filter((m) => !nestedContainerIds.has(m.id))
+          .map((m) => ({
+            id: m.id,
+            name: m.name,
+            color: (m.materiel_categories as { color?: string } | null)?.color ?? null
+          }))
       );
 
       const { data: locationsData, error: locationsError } = locationsResult;
