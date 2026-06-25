@@ -27,6 +27,16 @@ Le Preview Deployment d'une PR partage la base staging avec toutes les autres PR
 4. **Vérifier sur l'environnement staging** une fois la PR mergée : la migration (s'il y en a une) est appliquée automatiquement, et le déploiement staging est mis à jour.
 5. **Promotion en production** : une fois que `staging` est jugé stable, ouvrir une PR `staging → main`. Cette PR est **toujours revue et mergée manuellement** par un humain, jamais auto-mergée. Une fois mergée, les migrations déjà validées sur staging sont rejouées automatiquement sur le projet Supabase production.
 
+## Branches d'intégration ad-hoc
+
+Pour une fonctionnalité qui s'étend sur plusieurs PR ou plusieurs sessions de travail, ouvrir une branche d'intégration dédiée depuis `staging` (ex. `suivi-competences`) plutôt que de viser `staging` à chaque sous-PR :
+
+- Toutes les sous-PR de la fonctionnalité ciblent cette branche d'intégration comme base, pas `staging` directement.
+- Une fois la fonctionnalité complète et validée, ouvrir une PR `<branche d'intégration> → staging`.
+- La promotion `staging → main` se fait ensuite normalement (revue humaine, jamais d'auto-merge).
+
+Voir `AGENTS.md` § 7 pour le détail. Cette convention s'applique aussi aux agents IA : si une fonctionnalité est déjà en cours sur une branche d'intégration ad-hoc, les PR suivantes doivent cibler cette branche, pas `main` ni `staging`.
+
 ## Règles
 
 - Ne jamais ouvrir de PR de feature directement vers `main`.
@@ -46,7 +56,11 @@ Voir `AGENTS.md` § 7 pour le détail des workflows CI/CD.
 
 ## Configuration GitHub à appliquer manuellement
 
-Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées. À configurer dans **Settings → Branches** :
+Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées.
+
+**Branche par défaut du repo** (**Settings → General → Default branch**) : mettre `staging`, pas `main`. C'est la branche que GitHub propose par défaut comme base de PR et comme point de départ pour une nouvelle branche — y compris pour les agents IA qui n'ont pas reçu d'instruction explicite. La garder sur `main` pousse les agents à créer leurs branches et PR depuis/vers `main` par défaut, ce qui contredit directement le reste de ce document.
+
+À configurer dans **Settings → Branches** :
 
 **Branche `main` :**
 - Require a pull request before merging — 1 approbation minimum.
@@ -60,3 +74,19 @@ Les workflows ne suffisent pas seuls à empêcher un contournement humain (force
 - Require status checks to pass before merging — mêmes checks que ci-dessus. C'est de la défense en profondeur : `auto-merge.yml` attend déjà lui-même la fin des checks (`gh pr checks --watch`), mais ce réglage empêche aussi qu'un merge manuel par un humain contourne la vérification.
 - Do not allow force pushes.
 - Pas de "require pull request review" : l'auto-merge des agents doit continuer à fonctionner sans approbation humaine.
+
+## Configuration du projet Supabase staging
+
+Le déploiement des migrations passe par les workflows GitHub Actions (`supabase-staging.yml` / `supabase-prod.yml`, voir `AGENTS.md` § 7), pas par l'intégration GitHub native de Supabase. Lors de la création du projet Supabase staging :
+
+1. Sur l'écran **GitHub Integration** du dashboard Supabase, désactiver le toggle **"Deploy to production"**. Le repo et le working directory peuvent rester liés (utile pour le lien visuel migrations ↔ commits), mais Supabase ne doit pas déployer lui-même — sinon double déploiement, avec ce projet staging pointant en plus sur la mauvaise branche (`main`).
+2. Récupérer la référence du projet : **Settings → General → Reference ID**.
+3. Récupérer/réinitialiser le mot de passe DB : **Settings → Database → Database password**.
+4. Ajouter dans **Settings → Secrets and variables → Actions** du repo :
+   - `STAGING_SUPABASE_PROJECT_ID` (reference ID de l'étape 2).
+   - `STAGING_SUPABASE_DB_PASSWORD` (mot de passe de l'étape 3).
+   - Vérifier que `SUPABASE_ACCESS_TOKEN` existe déjà (token de compte, partagé avec le projet production).
+5. Déclencher un premier déploiement manuel pour valider le lien et appliquer tout le schéma existant : `gh workflow run supabase-staging.yml --ref staging` (sans `--ref`, la commande dispatche le workflow tel qu'il existe sur la branche par défaut du dépôt — `main` — et non sur `staging`).
+6. Dans **Auth → URL Configuration** du projet staging, renseigner le Site URL et les Redirect URLs avec l'URL stable de la branche `staging` sur Vercel (et un wildcard pour les Preview Deployments par PR si besoin).
+7. Répliquer manuellement depuis le projet production ce qui n'est pas couvert par les migrations : providers Auth (ex. Slack SSO), buckets Storage, extensions activées hors migration.
+8. Dans Vercel, ajouter les variables d'environnement (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) pointant vers ce projet staging, scopées à l'environnement Preview — distinctes des variables Production.

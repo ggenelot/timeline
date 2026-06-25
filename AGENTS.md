@@ -210,6 +210,17 @@ Les branches agents (`claude/`, `codex/`) sont auto-mergées en squash sur **`st
 
 Ne **jamais** force-pusher sur `main` ni sur `staging`.
 
+### Branches d'intégration ad-hoc (fonctionnalités multi-PR)
+
+Quand une fonctionnalité demande plusieurs itérations ou plusieurs PR successives (ex. une série de changements liés sur une même feature, parfois étalés sur plusieurs sessions d'agent), créer une **branche d'intégration ad-hoc** dédiée plutôt que de cibler `staging` directement :
+
+1. Créer la branche d'intégration depuis `staging` : `git checkout -b suivi-competences origin/staging` puis `git push -u origin suivi-competences`. Le nom doit décrire la fonctionnalité, pas l'agent qui l'a créée.
+2. Toutes les PR de la fonctionnalité (y compris les branches `claude/`, `codex/`) ciblent cette branche d'intégration comme base — **pas** `staging`. L'auto-merge ne se déclenche que si la base est `staging`, donc ces PR sont mergées manuellement (ou par un agent) sur la branche d'intégration au fil de l'eau.
+3. Une fois la fonctionnalité jugée complète et testée sur cette branche, ouvrir une PR `<branche d'intégration> → staging`. Cette PR suit les règles normales (CI verte, etc.) et peut être auto-mergée comme une PR `claude/`/`codex/` classique si elle en a le préfixe.
+4. La promotion finale `staging → main` reste inchangée (revue humaine obligatoire, jamais d'auto-merge).
+
+Si un agent reprend une fonctionnalité déjà en cours sur une branche d'intégration ad-hoc existante, il doit retargeter ses PR vers cette branche plutôt que vers `main` ou `staging`.
+
 ### Avant chaque PR
 
 1. `npm run typecheck` — pas d'erreur TypeScript.

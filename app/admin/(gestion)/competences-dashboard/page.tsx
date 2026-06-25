@@ -51,12 +51,40 @@ type ApiStatus = {
 
 type CursusRef = { id: string; code: string; name: string };
 
+type ApiCursus = { id: string; code: string; name: string; category: string | null; level: number | null; skill_id: string | null };
+
+type ApiEnrolledCursus = { profile_id: string; cursus_id: string; completed_at: string | null };
+
+type ApiCompetenceEvent = {
+  id: string;
+  profile_id: string;
+  cursus_id: string;
+  volunteer_cursus_id: string;
+  competence_id: string;
+  competence_name: string;
+  phase_name: string | null;
+  doublure_id: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  event_lieu: string | null;
+  supervisor_name: string | null;
+  supervisor_antenne: string | null;
+  message: string | null;
+  supervisor_comment: string | null;
+  is_external: boolean;
+  is_pending: boolean;
+  validated_at: string;
+};
+
 type DashboardData = {
   categories: ApiCategory[];
   profiles: ApiProfile[];
   profileSkills: ApiProfileSkill[];
   cursusBySkill: Record<string, CursusRef>;
+  allCursus: ApiCursus[];
+  enrolledCursus: ApiEnrolledCursus[];
   statuses: ApiStatus[];
+  competenceEvents: ApiCompetenceEvent[];
 };
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
@@ -111,14 +139,31 @@ export default function CompetencesDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
 
   const [catId, setCatId] = useState<string | null>(null);
-  const [view, setView] = useState<'arbre' | 'tableau'>('arbre');
+  const [view, setView] = useState<'arbre' | 'tableau' | 'chronologie'>('arbre');
   const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
   const [query, setQuery] = useState('');
   const [expandedSkillIds, setExpandedSkillIds] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
 
+  // ── Chronologie des montées en compétence ────────────────────
+  const [chronoProfileId, setChronoProfileId] = useState<'all' | string>('all');
+  const [chronoCursusId, setChronoCursusId] = useState<'all' | string>('all');
+  const [chronoQuery, setChronoQuery] = useState('');
+  const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(new Set());
+
   // Statuts effectifs, clé `${profileId}|${skillId}` → statut brut.
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+
+  // ── Création d'un cahier de doublure depuis la flèche d'un badge ─────
+  const [createCursusTarget, setCreateCursusTarget] = useState<{
+    pid: string;
+    name: string;
+    cursus: CursusRef;
+    x: number;
+    y: number;
+  } | null>(null);
+  const [createCursusSubmitting, setCreateCursusSubmitting] = useState(false);
+  const [createCursusError, setCreateCursusError] = useState<string | null>(null);
 
   // ── Accès + chargement ──────────────────────────────────────
 
@@ -231,6 +276,15 @@ export default function CompetencesDashboardPage() {
     return m;
   }, [data]);
 
+  // Paires profil|cursus pour lesquelles un cahier de doublure (en cours ou
+  // terminé) existe déjà — sert à n'afficher la flèche vers le carnet que
+  // dans ce cas, et à filtrer les cursus proposables dans la modale d'inscription.
+  const enrolledCursusSet = useMemo(() => {
+    const m = new Set<string>();
+    for (const ec of data?.enrolledCursus ?? []) m.add(`${ec.profile_id}|${ec.cursus_id}`);
+    return m;
+  }, [data]);
+
   const q = query.trim().toLowerCase();
   const matchPerson = useCallback(
     (pid: string) => {
@@ -317,7 +371,8 @@ export default function CompetencesDashboardPage() {
         const holders = filtered.map(({ pid, status: st }) => {
           const p = profileById[pid];
           const ss = statusByKey[st];
-          const cursus = data.cursusBySkill[sk.id];
+          const cursusDef = data.cursusBySkill[sk.id];
+          const cursusEnrolled = cursusDef ? enrolledCursusSet.has(`${pid}|${cursusDef.id}`) : false;
           return {
             pid,
             name: p?.full_name ?? p?.email ?? '—',
@@ -328,7 +383,8 @@ export default function CompetencesDashboardPage() {
             avatarBg: ss?.soft ?? '#f1f5f9',
             avatarColor: ss?.text ?? '#64748b',
             text: ss?.text ?? '#64748b',
-            cursus,
+            cursus: cursusDef,
+            cursusEnrolled,
           };
         });
         const metaBits: string[] = [];
@@ -356,7 +412,7 @@ export default function CompetencesDashboardPage() {
         if (filtering) return sk.hasHolders;
         return true;
       });
-  }, [cat, data, eff, highestIdx, matchPerson, statusFilter, profileById, filtering, expandedSkillIds, statusByKey]);
+  }, [cat, data, eff, highestIdx, matchPerson, statusFilter, profileById, filtering, expandedSkillIds, statusByKey, enrolledCursusSet]);
 
   // ── Vue tableau ─────────────────────────────────────────────
 
@@ -381,6 +437,147 @@ export default function CompetencesDashboardPage() {
       }));
   }, [cat, data, matchPerson]);
 
+  // ── Chronologie des montées en compétence ────────────────────
+
+  const cursusById = useMemo(() => {
+    const m: Record<string, ApiCursus> = {};
+    for (const c of data?.allCursus ?? []) m[c.id] = c;
+    return m;
+  }, [data]);
+
+  // Couleur du badge de cursus = couleur de la catégorie de compétence portant
+  // le même nom que `cursus.category` (champ texte toujours renseigné — on
+  // évite de passer par `skill_id`, qui peut être nul pour certains cursus,
+  // par ex. CE n'a pour l'instant aucune compétence associée en base).
+  const cursusColorById = useMemo(() => {
+    const colorByCategoryName: Record<string, string> = {};
+    for (const c of data?.categories ?? []) colorByCategoryName[c.name] = c.color;
+    const m: Record<string, string> = {};
+    for (const c of data?.allCursus ?? []) {
+      m[c.id] = (c.category && colorByCategoryName[c.category]) || 'slate';
+    }
+    return m;
+  }, [data]);
+
+  const chronoQ = chronoQuery.trim().toLowerCase();
+  const chronoEvents = useMemo(() => {
+    if (!data) return [];
+    // Regroupe les validations par séance : un même cahier de doublure (ou,
+    // à défaut, le même nom+date d'événement déclaré sans doublure associée)
+    // peut valider plusieurs compétences d'un coup.
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        profileId: string;
+        cursusId: string;
+        doublureId: string | null;
+        eventName: string | null;
+        eventDate: string | null;
+        eventLieu: string | null;
+        supervisorName: string | null;
+        supervisorAntenne: string | null;
+        message: string | null;
+        supervisorComment: string | null;
+        isExternal: boolean;
+        isPending: boolean;
+        phaseName: string | null;
+        validatedAt: string;
+        competences: { id: string; name: string }[];
+      }
+    >();
+    for (const ev of data.competenceEvents) {
+      const groupKey = ev.doublure_id
+        ? `d:${ev.doublure_id}`
+        : `e:${ev.volunteer_cursus_id}:${ev.event_date ?? ''}:${ev.event_name ?? ''}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.competences.push({ id: ev.competence_id, name: ev.competence_name });
+        if (!existing.phaseName && ev.phase_name) existing.phaseName = ev.phase_name;
+        if (ev.validated_at > existing.validatedAt) existing.validatedAt = ev.validated_at;
+      } else {
+        groups.set(groupKey, {
+          key: groupKey,
+          profileId: ev.profile_id,
+          cursusId: ev.cursus_id,
+          doublureId: ev.doublure_id,
+          eventName: ev.event_name,
+          eventDate: ev.event_date,
+          eventLieu: ev.event_lieu,
+          supervisorName: ev.supervisor_name,
+          supervisorAntenne: ev.supervisor_antenne,
+          message: ev.message,
+          supervisorComment: ev.supervisor_comment,
+          isExternal: ev.is_external,
+          isPending: ev.is_pending,
+          phaseName: ev.phase_name,
+          validatedAt: ev.validated_at,
+          competences: [{ id: ev.competence_id, name: ev.competence_name }],
+        });
+      }
+    }
+
+    return Array.from(groups.values())
+      .filter((g) => chronoProfileId === 'all' || g.profileId === chronoProfileId)
+      .filter((g) => chronoCursusId === 'all' || g.cursusId === chronoCursusId)
+      .map((g) => {
+        const p = profileById[g.profileId];
+        const c = cursusById[g.cursusId];
+        return {
+          ...g,
+          profileName: p?.full_name ?? p?.email ?? '—',
+          profileInitials: initials(p?.full_name ?? p?.email ?? '?'),
+          cursusName: c?.name ?? '—',
+          cursusCode: c?.code ?? '—',
+        };
+      })
+      .filter((g) => {
+        if (!chronoQ) return true;
+        const haystack = [
+          g.profileName,
+          g.cursusName,
+          g.cursusCode,
+          g.eventName ?? '',
+          g.eventLieu ?? '',
+          ...g.competences.map((c) => c.name),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(chronoQ);
+      })
+      .sort((a, b) => (a.validatedAt < b.validatedAt ? 1 : -1));
+  }, [data, chronoProfileId, chronoCursusId, chronoQ, profileById, cursusById]);
+
+  // Regroupe les séances par jour calendaire pour un en-tête de date commun,
+  // à la manière des en-têtes de mois de la vue « Missions ».
+  const chronoDayGroups = useMemo(() => {
+    const groups: Array<{ key: string; label: string; events: typeof chronoEvents }> = [];
+    const indexByKey = new Map<string, number>();
+    for (const ev of chronoEvents) {
+      const refDate = ev.eventDate ?? ev.validatedAt;
+      const d = new Date(refDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      let index = indexByKey.get(key);
+      if (index === undefined) {
+        index = groups.length;
+        indexByKey.set(key, index);
+        const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        groups.push({ key, label: label.charAt(0).toUpperCase() + label.slice(1), events: [] });
+      }
+      groups[index].events.push(ev);
+    }
+    return groups;
+  }, [chronoEvents]);
+
+  function toggleEventExpanded(key: string) {
+    setExpandedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   // ── Éditeur popover ─────────────────────────────────────────
 
   function openEditor(
@@ -399,6 +596,44 @@ export default function CompetencesDashboardPage() {
       x: r.left + r.width / 2,
       y: r.bottom,
     });
+  }
+
+  // ── Création d'un cahier de doublure depuis la flèche d'un badge ─────
+
+  function openCreateCursus(e: React.MouseEvent<HTMLElement>, pid: string, name: string, cursus: CursusRef) {
+    const r = e.currentTarget.getBoundingClientRect();
+    setCreateCursusError(null);
+    setCreateCursusTarget({ pid, name, cursus, x: r.left + r.width / 2, y: r.bottom });
+  }
+
+  function closeCreateCursus() {
+    setCreateCursusTarget(null);
+    setCreateCursusError(null);
+  }
+
+  async function confirmCreateCursus() {
+    if (!createCursusTarget) return;
+    const { pid, cursus } = createCursusTarget;
+    setCreateCursusSubmitting(true);
+    setCreateCursusError(null);
+    try {
+      const res = await fetch('/api/admin/competences-dashboard', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'enroll', profile_id: pid, cursus_id: cursus.id }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? "Erreur lors de la création du cahier.");
+      }
+      setData((d) => (d ? { ...d, enrolledCursus: [...d.enrolledCursus, { profile_id: pid, cursus_id: cursus.id, completed_at: null }] } : d));
+      setCreateCursusTarget(null);
+      router.push(`/competences?profile=${encodeURIComponent(pid)}&cursus=${encodeURIComponent(cursus.id)}`);
+    } catch (e) {
+      setCreateCursusError((e as Error).message);
+    } finally {
+      setCreateCursusSubmitting(false);
+    }
   }
 
   // ── Rendu ───────────────────────────────────────────────────
@@ -605,7 +840,7 @@ export default function CompetencesDashboardPage() {
             padding: 3,
           }}
         >
-          {(['arbre', 'tableau'] as const).map((v) => {
+          {(['arbre', 'tableau', 'chronologie'] as const).map((v) => {
             const active = view === v;
             return (
               <button
@@ -624,30 +859,95 @@ export default function CompetencesDashboardPage() {
                   color: active ? '#fff' : '#64748b',
                 }}
               >
-                {v === 'arbre' ? 'Vue arbre' : 'Vue tableau'}
+                {v === 'arbre' ? 'Vue arbre' : v === 'tableau' ? 'Vue tableau' : 'Chronologie'}
               </button>
             );
           })}
         </div>
 
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un bénévole…"
-          style={{
-            flex: 1,
-            minWidth: 180,
-            maxWidth: 280,
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '9px 13px',
-            fontSize: 13.5,
-            color: '#0f172a',
-            outline: 'none',
-            background: '#fff',
-            fontFamily: 'inherit',
-          }}
-        />
+        {view !== 'chronologie' ? (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un bénévole…"
+            style={{
+              flex: 1,
+              minWidth: 180,
+              maxWidth: 280,
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: '9px 13px',
+              fontSize: 13.5,
+              color: '#0f172a',
+              outline: 'none',
+              background: '#fff',
+              fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <>
+            <select
+              value={chronoProfileId}
+              onChange={(e) => setChronoProfileId(e.target.value)}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="all">Tous les bénévoles</option>
+              {data.profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.full_name ?? p.email}
+                </option>
+              ))}
+            </select>
+            <select
+              value={chronoCursusId}
+              onChange={(e) => setChronoCursusId(e.target.value)}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="all">Tous les cursus</option>
+              {data.allCursus.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} · {c.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={chronoQuery}
+              onChange={(e) => setChronoQuery(e.target.value)}
+              placeholder="Rechercher (bénévole, compétence, lieu…)"
+              style={{
+                flex: 1,
+                minWidth: 200,
+                maxWidth: 320,
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* ARBRE */}
@@ -750,47 +1050,19 @@ export default function CompetencesDashboardPage() {
                         </div>
                       </>
                     );
-                    if (h.cursus) {
-                      return (
-                        <a
-                          key={h.pid}
-                          href={`/competences?profile=${encodeURIComponent(h.pid)}&cursus=${encodeURIComponent(
-                            h.cursus.id
-                          )}`}
-                          title={`Cahier de doublure de ${h.name} — ${h.cursus.name}`}
-                          style={{
-                            textDecoration: 'none',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            background: '#fff',
-                            border: `1.5px solid ${h.ring}`,
-                            borderRadius: 12,
-                            padding: '8px 10px 8px 9px',
-                          }}
-                        >
-                          {inner}
-                          <span
-                            style={{
-                              flex: 'none',
-                              width: 24,
-                              height: 24,
-                              borderRadius: '50%',
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                              fontSize: 13,
-                              fontWeight: 800,
-                              color: h.text,
-                              background: h.avatarBg,
-                            }}
-                          >
-                            ↗
-                          </span>
-                        </a>
-                      );
-                    }
+                    const arrowStyle: React.CSSProperties = {
+                      flex: 'none',
+                      width: 24,
+                      height: 24,
+                      borderRadius: '50%',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: 13,
+                      fontWeight: 800,
+                      color: h.text,
+                      background: h.avatarBg,
+                    };
                     return (
                       <div
                         key={h.pid}
@@ -801,10 +1073,30 @@ export default function CompetencesDashboardPage() {
                           background: '#fff',
                           border: `1.5px solid ${h.ring}`,
                           borderRadius: 12,
-                          padding: '8px 13px 8px 9px',
+                          padding: h.cursus ? '8px 10px 8px 9px' : '8px 13px 8px 9px',
                         }}
                       >
                         {inner}
+                        {h.cursus && h.cursusEnrolled ? (
+                          <a
+                            href={`/competences?profile=${encodeURIComponent(h.pid)}&cursus=${encodeURIComponent(
+                              h.cursus.id
+                            )}`}
+                            title={`Cahier de doublure de ${h.name} — ${h.cursus.name}`}
+                            style={{ ...arrowStyle, textDecoration: 'none', cursor: 'pointer' }}
+                          >
+                            ↗
+                          </a>
+                        ) : h.cursus ? (
+                          <button
+                            type="button"
+                            onClick={(e) => openCreateCursus(e, h.pid, h.name, h.cursus!)}
+                            title={`Créer un cahier de doublure pour ${h.name} — ${h.cursus.name}`}
+                            style={{ ...arrowStyle, border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}
+                          >
+                            ↗
+                          </button>
+                        ) : null}
                       </div>
                     );
                   })}
@@ -989,6 +1281,214 @@ export default function CompetencesDashboardPage() {
         </div>
       ) : null}
 
+      {/* CHRONOLOGIE */}
+      {view === 'chronologie' ? (
+        <div style={{ position: 'relative' }}>
+          {chronoDayGroups.length > 0 ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 23,
+                width: 2,
+                background: '#e3e7ee',
+                pointerEvents: 'none',
+              }}
+            />
+          ) : null}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {chronoDayGroups.length === 0 ? (
+            <div
+              style={{
+                background: '#fff',
+                border: '1px solid #e7e9ee',
+                borderRadius: 16,
+                padding: '24px 18px',
+                textAlign: 'center',
+                fontSize: 13.5,
+                color: '#94a3b8',
+              }}
+            >
+              Aucun événement de montée en compétence ne correspond à ces filtres.
+            </div>
+          ) : (
+            chronoDayGroups.map((day) => (
+              <div key={day.key} style={{ marginBottom: 14 }}>
+                <div
+                  style={{
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '.06em',
+                    textTransform: 'uppercase',
+                    color: '#94a3b8',
+                    padding: '4px 2px 8px 56px',
+                  }}
+                >
+                  {day.label}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {day.events.map((g) => {
+                    const expanded = expandedEventIds.has(g.key);
+                    const cp = palette(cursusColorById[g.cursusId] ?? 'slate');
+                    return (
+                      <div key={g.key} style={{ position: 'relative', paddingLeft: 56 }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 24,
+                          top: 28,
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          background: cp.accent,
+                          boxShadow: '0 0 0 4px #f8fafc',
+                        }}
+                      />
+                      <div
+                        style={{
+                          background: '#fff',
+                          border: '1px solid #e7e9ee',
+                          borderRadius: 14,
+                          boxShadow: '0 1px 3px rgba(15,23,42,.04)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div style={{ padding: '13px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <a
+                              href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
+                              title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
+                              style={{
+                                flex: 'none',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: cp.accent,
+                                background: cp.soft,
+                                border: `1px solid ${cp.softBorder}`,
+                                borderRadius: 8,
+                                padding: '5px 9px',
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {g.cursusCode}
+                            </a>
+                            <span style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#0f172a', textAlign: 'center' }}>
+                              {g.profileName}
+                            </span>
+                            <span
+                              style={{
+                                flex: 'none',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: '#fff',
+                                background: '#059669',
+                                borderRadius: 999,
+                                padding: '2px 9px',
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              +{g.competences.length}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => toggleEventExpanded(g.key)}
+                            aria-expanded={expanded}
+                            style={{
+                              display: 'block',
+                              width: '100%',
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              border: 'none',
+                              background: 'transparent',
+                              fontFamily: 'inherit',
+                              padding: 0,
+                              marginTop: 9,
+                            }}
+                          >
+                            <div style={{ marginTop: 0, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                              {g.phaseName ? (
+                                <span style={{ fontWeight: 700, color: '#475569' }}>{g.phaseName}</span>
+                              ) : null}
+                              {g.eventName || g.eventLieu ? (
+                                <span>
+                                  {g.eventName}
+                                  {g.eventName && g.eventLieu ? ' · ' : ''}
+                                  {g.eventLieu}
+                                </span>
+                              ) : null}
+                            </div>
+                            {g.supervisorName ? (
+                              <div style={{ marginTop: 3, fontSize: 12, color: '#475569' }}>
+                                Encadré par <strong>{g.supervisorName}</strong>
+                                {g.supervisorAntenne ? ` · ${g.supervisorAntenne}` : ''}
+                              </div>
+                            ) : null}
+                          </button>
+                        </div>
+                        {expanded ? (
+                          <div style={{ borderTop: '1px solid #f1f5f9', padding: '12px 16px 14px' }}>
+                            {g.supervisorComment ? (
+                              <div style={{ marginBottom: 8, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
+                                « {g.supervisorComment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                              </div>
+                            ) : null}
+                            {g.message ? (
+                              <div style={{ marginBottom: 8, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                                Note perso : {g.message}
+                              </div>
+                            ) : null}
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {g.competences.map((c) => (
+                                <div
+                                  key={c.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    borderLeft: '3px solid #d1fae5',
+                                    padding: '6px 10px',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      flexShrink: 0,
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: '50%',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: 10.5,
+                                      fontWeight: 800,
+                                      background: '#059669',
+                                      color: '#fff',
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ))
+          )}
+          </div>
+        </div>
+      ) : null}
+
       {/* status editor popover */}
       {editor ? (
         <>
@@ -1095,6 +1595,54 @@ export default function CompetencesDashboardPage() {
                 />
                 <span style={{ flex: 1 }}>Non acquise</span>
                 {editor.current === null ? <span style={{ color: '#059669', fontSize: 13 }}>✓</span> : null}
+              </button>
+            </div>
+          </div>
+        </>
+      ) : null}
+
+      {/* confirmation de création d'un cahier de doublure */}
+      {createCursusTarget ? (
+        <>
+          <div onClick={closeCreateCursus} style={{ position: 'fixed', inset: 0, zIndex: 100 }} />
+          <div
+            style={{
+              position: 'fixed',
+              left: Math.max(12, Math.min(createCursusTarget.x - 130, editorVw - 272)),
+              top: createCursusTarget.y + 8,
+              zIndex: 101,
+              width: 260,
+              background: '#fff',
+              border: '1px solid #e2e8f0',
+              borderRadius: 12,
+              boxShadow: '0 16px 40px rgba(15,23,42,.22)',
+              padding: 14,
+            }}
+          >
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Créer un cahier de doublure</div>
+            <div style={{ marginTop: 6, fontSize: 12.5, color: '#64748b' }}>
+              {createCursusTarget.name} → <strong>{createCursusTarget.cursus.name}</strong>
+            </div>
+            {createCursusError ? (
+              <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#dc2626' }}>
+                {createCursusError}
+              </div>
+            ) : null}
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                onClick={closeCreateCursus}
+                style={{ cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit' }}
+              >
+                Annuler
+              </button>
+              <button
+                type="button"
+                disabled={createCursusSubmitting}
+                onClick={confirmCreateCursus}
+                style={{ cursor: createCursusSubmitting ? 'not-allowed' : 'pointer', border: 'none', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: createCursusSubmitting ? 0.6 : 1 }}
+              >
+                Créer
               </button>
             </div>
           </div>
