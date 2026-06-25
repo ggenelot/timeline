@@ -27,6 +27,16 @@ Le Preview Deployment d'une PR partage la base staging avec toutes les autres PR
 4. **Vérifier sur l'environnement staging** une fois la PR mergée : la migration (s'il y en a une) est appliquée automatiquement, et le déploiement staging est mis à jour.
 5. **Promotion en production** : une fois que `staging` est jugé stable, ouvrir une PR `staging → main`. Cette PR est **toujours revue et mergée manuellement** par un humain, jamais auto-mergée. Une fois mergée, les migrations déjà validées sur staging sont rejouées automatiquement sur le projet Supabase production.
 
+## Branches d'intégration ad-hoc
+
+Pour une fonctionnalité qui s'étend sur plusieurs PR ou plusieurs sessions de travail, ouvrir une branche d'intégration dédiée depuis `staging` (ex. `suivi-competences`) plutôt que de viser `staging` à chaque sous-PR :
+
+- Toutes les sous-PR de la fonctionnalité ciblent cette branche d'intégration comme base, pas `staging` directement.
+- Une fois la fonctionnalité complète et validée, ouvrir une PR `<branche d'intégration> → staging`.
+- La promotion `staging → main` se fait ensuite normalement (revue humaine, jamais d'auto-merge).
+
+Voir `AGENTS.md` § 7 pour le détail. Cette convention s'applique aussi aux agents IA : si une fonctionnalité est déjà en cours sur une branche d'intégration ad-hoc, les PR suivantes doivent cibler cette branche, pas `main` ni `staging`.
+
 ## Règles
 
 - Ne jamais ouvrir de PR de feature directement vers `main`.
