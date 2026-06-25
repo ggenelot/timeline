@@ -445,16 +445,16 @@ export default function CompetencesDashboardPage() {
     return m;
   }, [data]);
 
-  // Couleur du badge de cursus = couleur de la catégorie de la compétence
-  // associée (même palette que partout ailleurs dans le tableau de bord).
+  // Couleur du badge de cursus = couleur de la catégorie de compétence portant
+  // le même nom que `cursus.category` (champ texte toujours renseigné — on
+  // évite de passer par `skill_id`, qui peut être nul pour certains cursus,
+  // par ex. CE n'a pour l'instant aucune compétence associée en base).
   const cursusColorById = useMemo(() => {
-    const colorBySkillId: Record<string, string> = {};
-    for (const c of data?.categories ?? []) {
-      for (const sk of c.skills) colorBySkillId[sk.id] = c.color;
-    }
+    const colorByCategoryName: Record<string, string> = {};
+    for (const c of data?.categories ?? []) colorByCategoryName[c.name] = c.color;
     const m: Record<string, string> = {};
     for (const c of data?.allCursus ?? []) {
-      m[c.id] = (c.skill_id && colorBySkillId[c.skill_id]) || 'slate';
+      m[c.id] = (c.category && colorByCategoryName[c.category]) || 'slate';
     }
     return m;
   }, [data]);
@@ -1363,7 +1363,7 @@ export default function CompetencesDashboardPage() {
                                 fontVariantNumeric: 'tabular-nums',
                               }}
                             >
-                              ✓ {g.competences.length}
+                              +{g.competences.length}
                             </span>
                           </div>
                           <button
