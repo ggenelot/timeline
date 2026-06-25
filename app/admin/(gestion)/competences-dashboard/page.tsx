@@ -51,11 +51,17 @@ type ApiStatus = {
 
 type CursusRef = { id: string; code: string; name: string };
 
+type ApiCursus = { id: string; code: string; name: string; category: string | null; level: number | null; skill_id: string | null };
+
+type ApiEnrolledCursus = { profile_id: string; cursus_id: string; completed_at: string | null };
+
 type DashboardData = {
   categories: ApiCategory[];
   profiles: ApiProfile[];
   profileSkills: ApiProfileSkill[];
   cursusBySkill: Record<string, CursusRef>;
+  allCursus: ApiCursus[];
+  enrolledCursus: ApiEnrolledCursus[];
   statuses: ApiStatus[];
 };
 
@@ -119,6 +125,13 @@ export default function CompetencesDashboardPage() {
 
   // Statuts effectifs, clé `${profileId}|${skillId}` → statut brut.
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
+
+  // ── Inscription à un cursus (ouverture d'un cahier de doublure) ──────
+  const [enrollOpen, setEnrollOpen] = useState(false);
+  const [enrollProfileQuery, setEnrollProfileQuery] = useState('');
+  const [enrollProfileId, setEnrollProfileId] = useState<string | null>(null);
+  const [enrollSubmitting, setEnrollSubmitting] = useState(false);
+  const [enrollError, setEnrollError] = useState<string | null>(null);
 
   // ── Accès + chargement ──────────────────────────────────────
 
@@ -231,6 +244,28 @@ export default function CompetencesDashboardPage() {
     return m;
   }, [data]);
 
+  // Paires profil|cursus pour lesquelles un cahier de doublure (en cours ou
+  // terminé) existe déjà — sert à n'afficher la flèche vers le carnet que
+  // dans ce cas, et à filtrer les cursus proposables dans la modale d'inscription.
+  const enrolledCursusSet = useMemo(() => {
+    const m = new Set<string>();
+    for (const ec of data?.enrolledCursus ?? []) m.add(`${ec.profile_id}|${ec.cursus_id}`);
+    return m;
+  }, [data]);
+
+  const enrollProfileResults = useMemo(() => {
+    const eq = enrollProfileQuery.trim().toLowerCase();
+    if (!eq) return [];
+    return (data?.profiles ?? [])
+      .filter((p) => (p.full_name ?? p.email).toLowerCase().includes(eq))
+      .slice(0, 8);
+  }, [data, enrollProfileQuery]);
+
+  const enrollCursusOptions = useMemo(() => {
+    if (!enrollProfileId) return [];
+    return (data?.allCursus ?? []).filter((c) => !enrolledCursusSet.has(`${enrollProfileId}|${c.id}`));
+  }, [data, enrollProfileId, enrolledCursusSet]);
+
   const q = query.trim().toLowerCase();
   const matchPerson = useCallback(
     (pid: string) => {
@@ -317,7 +352,8 @@ export default function CompetencesDashboardPage() {
         const holders = filtered.map(({ pid, status: st }) => {
           const p = profileById[pid];
           const ss = statusByKey[st];
-          const cursus = data.cursusBySkill[sk.id];
+          const cursusDef = data.cursusBySkill[sk.id];
+          const cursus = cursusDef && enrolledCursusSet.has(`${pid}|${cursusDef.id}`) ? cursusDef : undefined;
           return {
             pid,
             name: p?.full_name ?? p?.email ?? '—',
@@ -356,7 +392,7 @@ export default function CompetencesDashboardPage() {
         if (filtering) return sk.hasHolders;
         return true;
       });
-  }, [cat, data, eff, highestIdx, matchPerson, statusFilter, profileById, filtering, expandedSkillIds, statusByKey]);
+  }, [cat, data, eff, highestIdx, matchPerson, statusFilter, profileById, filtering, expandedSkillIds, statusByKey, enrolledCursusSet]);
 
   // ── Vue tableau ─────────────────────────────────────────────
 
@@ -401,6 +437,38 @@ export default function CompetencesDashboardPage() {
     });
   }
 
+  // ── Inscription à un cursus ──────────────────────────────────
+
+  function closeEnrollModal() {
+    setEnrollOpen(false);
+    setEnrollProfileQuery('');
+    setEnrollProfileId(null);
+    setEnrollError(null);
+  }
+
+  async function handleEnroll(cursusId: string) {
+    if (!enrollProfileId) return;
+    setEnrollSubmitting(true);
+    setEnrollError(null);
+    try {
+      const res = await fetch('/api/admin/competences-dashboard', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'enroll', profile_id: enrollProfileId, cursus_id: cursusId }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(json.error ?? "Erreur lors de l'inscription.");
+      }
+      setData((d) => (d ? { ...d, enrolledCursus: [...d.enrolledCursus, { profile_id: enrollProfileId, cursus_id: cursusId, completed_at: null }] } : d));
+      closeEnrollModal();
+    } catch (e) {
+      setEnrollError((e as Error).message);
+    } finally {
+      setEnrollSubmitting(false);
+    }
+  }
+
   // ── Rendu ───────────────────────────────────────────────────
 
   if (allowed === false) {
@@ -439,13 +507,33 @@ export default function CompetencesDashboardPage() {
       </div>
 
       {/* title */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Suivi des compétences
-        </h1>
-        <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
-          Qui détient quoi, par catégorie de compétence et par bénévole.
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', marginBottom: 20 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+            Suivi des compétences
+          </h1>
+          <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
+            Qui détient quoi, par catégorie de compétence et par bénévole.
+          </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setEnrollOpen(true)}
+          style={{
+            flex: 'none',
+            cursor: 'pointer',
+            border: 'none',
+            borderRadius: 10,
+            padding: '10px 18px',
+            fontSize: 13.5,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+            background: '#0f172a',
+            color: '#fff',
+          }}
+        >
+          + Inscrire à un cursus
+        </button>
       </div>
 
       {error ? (
@@ -1099,6 +1187,99 @@ export default function CompetencesDashboardPage() {
             </div>
           </div>
         </>
+      ) : null}
+
+      {/* enroll modal */}
+      {enrollOpen ? (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}
+          onClick={(e) => { if (e.target === e.currentTarget) closeEnrollModal(); }}
+        >
+          <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
+              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>Inscrire à un cursus</div>
+              <button type="button" onClick={closeEnrollModal} style={{ cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
+            </div>
+            <div style={{ padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {enrollError ? (
+                <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '8px 12px', fontSize: 12.5, color: '#dc2626' }}>
+                  {enrollError}
+                </div>
+              ) : null}
+
+              <div style={{ fontSize: 11.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                1 · Bénévole
+              </div>
+              {enrollProfileId ? (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 12px' }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
+                    {profileById[enrollProfileId]?.full_name ?? profileById[enrollProfileId]?.email}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setEnrollProfileId(null)}
+                    style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 12, fontWeight: 700 }}
+                  >
+                    Changer
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <input
+                    value={enrollProfileQuery}
+                    onChange={(e) => setEnrollProfileQuery(e.target.value)}
+                    placeholder="Rechercher un bénévole…"
+                    style={{ border: '1px solid #e2e8f0', borderRadius: 10, padding: '9px 13px', fontSize: 13.5, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
+                  />
+                  {enrollProfileResults.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {enrollProfileResults.map((p) => (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() => { setEnrollProfileId(p.id); setEnrollProfileQuery(''); }}
+                          style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 10, padding: '8px 12px', fontFamily: 'inherit' }}
+                        >
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{p.full_name ?? p.email}</div>
+                          {p.sector ? <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{p.sector}</div> : null}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </>
+              )}
+
+              {enrollProfileId ? (
+                <>
+                  <div style={{ marginTop: 6, fontSize: 11.5, fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '.06em' }}>
+                    2 · Cursus
+                  </div>
+                  {enrollCursusOptions.length === 0 ? (
+                    <p style={{ fontSize: 13, color: '#64748b' }}>Ce bénévole est déjà inscrit à tous les cursus disponibles.</p>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto' }}>
+                      {enrollCursusOptions.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          disabled={enrollSubmitting}
+                          onClick={() => handleEnroll(c.id)}
+                          style={{ cursor: enrollSubmitting ? 'not-allowed' : 'pointer', textAlign: 'left', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: '12px 14px', fontFamily: 'inherit', opacity: enrollSubmitting ? 0.6 : 1 }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 8px' }}>{c.code}</span>
+                            <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                          </div>
+                          {c.category ? <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8' }}>{c.category}{c.level ? ` · Niveau ${c.level}` : ''}</div> : null}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {/* legend */}
