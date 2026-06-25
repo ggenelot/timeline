@@ -109,6 +109,9 @@ export function SidebarMenu({
         <Link href="/competences" onClick={onClose} tabIndex={tab} className={linkClass}>
           Cursus
         </Link>
+        <Link href="/verification" onClick={onClose} tabIndex={tab} className={linkClass}>
+          Vérification
+        </Link>
         <Link href="/profile" onClick={onClose} tabIndex={tab} className={linkClass}>
           Profil
         </Link>

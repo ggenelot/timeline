@@ -120,6 +120,64 @@ export type MissionTypeRequiredMateriel = {
   materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
 };
 
+// ── Vérification assistée du matériel ──────────────────────────────────
+
+export type MissionMaterielVerificationStatus = 'not_started' | 'in_progress' | 'completed';
+export type MissionMaterielVerificationItemStatus = 'present' | 'missing';
+
+export type MissionMaterielVerification = {
+  id: string;
+  mission_id: string;
+  status: MissionMaterielVerificationStatus;
+  completed_by: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MissionMaterielVerificationItem = {
+  id: string;
+  mission_id: string;
+  mission_required_materiel_id: string;
+  occurrence_index: number;
+  child_type_id: string;
+  status: MissionMaterielVerificationItemStatus;
+  note: string | null;
+  checked_by: string;
+  checked_at: string;
+};
+
+// Un item à vérifier, aplati pour l'écran de pile de cartes : un exemplaire
+// de contenant (occurrence_index) requis sur la mission, et un des items
+// catalogue qu'il doit contenir.
+export type MissionVerificationCard = {
+  mission_required_materiel_id: string;
+  container_type_id: string;
+  container_name: string;
+  occurrence_index: number;
+  occurrence_count: number;
+  child_type_id: string;
+  child_name: string;
+  expected_quantity: number;
+  check: Pick<MissionMaterielVerificationItem, 'status' | 'note'> | null;
+};
+
+export type MissionVerificationDetail = {
+  mission_id: string;
+  verification: MissionMaterielVerification | null;
+  cards: MissionVerificationCard[];
+};
+
+export type MissionVerificationSummary = {
+  mission_id: string;
+  title: string;
+  starts_at: string;
+  location: string | null;
+  status: MissionMaterielVerificationStatus;
+  total_items: number;
+  checked_items: number;
+};
+
 export type HelpPage = {
   id: string;
   page_path: string;
