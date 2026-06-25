@@ -159,6 +159,7 @@ function AddItemForm({ token, excludeIds, onSubmit, onCancel }: {
 
 type TreeCtxValue = {
   token: string;
+  editMode: boolean;
   expanded: Set<string>;
   childrenByContainer: Record<string, MaterielTypeContent[]>;
   loadingContainers: Set<string>;
@@ -221,10 +222,29 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 9, border: '1px solid #eef1f5', borderRadius: 12, padding: '10px 12px', background: '#fcfcfd' }}>
-        <DragHandle attributes={attributes} listeners={listeners} />
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 9,
+        border: node.is_container ? '1px solid #eef1f5' : 'none',
+        borderBottom: node.is_container ? '1px solid #eef1f5' : '1px solid #f1f5f9',
+        borderRadius: node.is_container ? 12 : 0,
+        padding: node.is_container ? '10px 12px' : '7px 4px',
+        background: node.is_container ? '#fcfcfd' : 'transparent',
+      }}>
+        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} /> : null}
+        {meta && !ctx.editMode ? (
+          <span style={{ flexShrink: 0, minWidth: 22, fontSize: 12.5, fontWeight: 700, color: '#94a3b8' }}>{meta.quantity}x</span>
+        ) : null}
         <span
-          style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0f172a', cursor: node.is_container ? 'pointer' : 'default' }}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            fontSize: 14,
+            fontWeight: node.is_container ? 700 : 500,
+            color: node.is_container ? '#0f172a' : '#475569',
+            cursor: node.is_container ? 'pointer' : 'default',
+          }}
           onClick={node.is_container ? () => ctx.toggleExpand(node.id) : undefined}
         >
           {node.name}
@@ -232,13 +252,17 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
         </span>
         {meta ? (
           <>
-            <input type="number" min={1} value={meta.quantity}
-              onChange={(e) => void ctx.updateQuantity(meta.parentContainerId, meta.contentId, Number(e.target.value) || 1)}
-              style={{ ...inputStyle, width: 58, textAlign: 'center', flexShrink: 0 }} />
-            <button type="button" onClick={() => void ctx.unlink(meta.parentContainerId, meta.contentId)} aria-label="Retirer"
-              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+            {ctx.editMode ? (
+              <input type="number" min={1} value={meta.quantity}
+                onChange={(e) => void ctx.updateQuantity(meta.parentContainerId, meta.contentId, Number(e.target.value) || 1)}
+                style={{ ...inputStyle, width: 58, textAlign: 'center', flexShrink: 0 }} />
+            ) : null}
+            {ctx.editMode ? (
+              <button type="button" onClick={() => void ctx.unlink(meta.parentContainerId, meta.contentId)} aria-label="Retirer"
+                style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+            ) : null}
           </>
-        ) : onFullDelete ? (
+        ) : onFullDelete && ctx.editMode ? (
           <button type="button" onClick={onFullDelete}
             style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
             Supprimer
@@ -255,7 +279,9 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
               <SortableContext items={(contents ?? []).map((c) => `node:${c.id}`)} strategy={verticalListSortingStrategy}>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {(contents ?? []).length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Ce contenant est vide. Glissez un élément ici, ou ajoutez-en un ci-dessous.</div>
+                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>
+                      {ctx.editMode ? 'Ce contenant est vide. Glissez un élément ici, ou ajoutez-en un ci-dessous.' : 'Ce contenant est vide.'}
+                    </div>
                   ) : (contents ?? []).map((c) => (
                     c.child_type ? (
                       <TreeNode
@@ -272,32 +298,34 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
             </DropZone>
           )}
 
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {addMode === 'container' ? (
-              <AddContainerForm
-                onSubmit={async (name, code) => { await ctx.addContainer(node.id, name, code); setAddMode(null); }}
-                onCancel={() => setAddMode(null)}
-              />
-            ) : addMode === 'item' ? (
-              <AddItemForm
-                token={ctx.token}
-                excludeIds={existingChildIds}
-                onSubmit={async (itemId, quantity) => { await ctx.addItem(node.id, itemId, quantity); setAddMode(null); }}
-                onCancel={() => setAddMode(null)}
-              />
-            ) : (
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button type="button" onClick={() => setAddMode('container')}
-                  style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
-                  + Ajouter un contenant
-                </button>
-                <button type="button" onClick={() => setAddMode('item')}
-                  style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
-                  + Ajouter un item
-                </button>
-              </div>
-            )}
-          </div>
+          {ctx.editMode ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {addMode === 'container' ? (
+                <AddContainerForm
+                  onSubmit={async (name, code) => { await ctx.addContainer(node.id, name, code); setAddMode(null); }}
+                  onCancel={() => setAddMode(null)}
+                />
+              ) : addMode === 'item' ? (
+                <AddItemForm
+                  token={ctx.token}
+                  excludeIds={existingChildIds}
+                  onSubmit={async (itemId, quantity) => { await ctx.addItem(node.id, itemId, quantity); setAddMode(null); }}
+                  onCancel={() => setAddMode(null)}
+                />
+              ) : (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button type="button" onClick={() => setAddMode('container')}
+                    style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
+                    + Ajouter un contenant
+                  </button>
+                  <button type="button" onClick={() => setAddMode('item')}
+                    style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
+                    + Ajouter un item
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -317,6 +345,7 @@ export default function AdminMaterielsPage() {
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [addingRoot, setAddingRoot] = useState(false);
+  const [editMode, setEditMode] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -609,6 +638,7 @@ export default function AdminMaterielsPage() {
 
   const ctxValue: TreeCtxValue = {
     token,
+    editMode,
     expanded,
     childrenByContainer,
     loadingContainers,
@@ -621,14 +651,34 @@ export default function AdminMaterielsPage() {
 
   return (
     <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Matériel
-        </h1>
-        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d&apos;autres contenants ou
-          des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants.
-        </p>
+      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+        <div>
+          <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+            Matériel
+          </h1>
+          <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
+            Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d&apos;autres contenants ou
+            des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setEditMode((v) => !v)}
+          style={{
+            cursor: 'pointer',
+            flexShrink: 0,
+            border: editMode ? 'none' : '1px solid #cbd5e1',
+            background: editMode ? '#059669' : '#fff',
+            color: editMode ? '#fff' : '#334155',
+            borderRadius: 9,
+            padding: '10px 18px',
+            fontSize: 13.5,
+            fontWeight: 700,
+            fontFamily: 'inherit',
+          }}
+        >
+          {editMode ? 'Valider' : 'Modifier'}
+        </button>
       </div>
 
       {error ? (
@@ -665,14 +715,16 @@ export default function AdminMaterielsPage() {
         </DndContext>
       </TreeCtx.Provider>
 
-      {addingRoot ? (
-        <AddContainerForm onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
-      ) : (
-        <button type="button" onClick={() => setAddingRoot(true)}
-          style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
-          + Nouveau contenant
-        </button>
-      )}
+      {editMode ? (
+        addingRoot ? (
+          <AddContainerForm onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
+        ) : (
+          <button type="button" onClick={() => setAddingRoot(true)}
+            style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+            + Nouveau contenant
+          </button>
+        )
+      ) : null}
     </div>
   );
 }
