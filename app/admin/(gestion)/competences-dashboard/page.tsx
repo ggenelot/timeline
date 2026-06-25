@@ -1330,39 +1330,63 @@ export default function CompetencesDashboardPage() {
                           overflow: 'hidden',
                         }}
                       >
-                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 16px' }}>
+                        <div style={{ padding: '13px 16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                            <a
+                              href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
+                              title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
+                              style={{
+                                flex: 'none',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: cp.accent,
+                                background: cp.soft,
+                                border: `1px solid ${cp.softBorder}`,
+                                borderRadius: 8,
+                                padding: '5px 9px',
+                                textDecoration: 'none',
+                                cursor: 'pointer',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {g.cursusCode}
+                            </a>
+                            <span
+                              style={{
+                                flex: 'none',
+                                fontSize: 12,
+                                fontWeight: 800,
+                                color: '#fff',
+                                background: '#059669',
+                                borderRadius: 999,
+                                padding: '2px 9px',
+                                fontVariantNumeric: 'tabular-nums',
+                              }}
+                            >
+                              ✓ {g.competences.length}
+                            </span>
+                          </div>
                           <button
                             type="button"
                             onClick={() => toggleEventExpanded(g.key)}
                             aria-expanded={expanded}
                             style={{
-                              flex: 1,
-                              minWidth: 0,
+                              display: 'block',
+                              width: '100%',
                               textAlign: 'left',
                               cursor: 'pointer',
                               border: 'none',
                               background: 'transparent',
                               fontFamily: 'inherit',
                               padding: 0,
+                              marginTop: 9,
                             }}
                           >
                             <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                               <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{g.profileName}</span>
                               <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>· {mainCompetence.name}</span>
                               {extraCount > 0 ? (
-                                <span
-                                  style={{
-                                    fontSize: 12,
-                                    fontWeight: 800,
-                                    color: '#fff',
-                                    background: '#059669',
-                                    borderRadius: 999,
-                                    padding: '2px 9px',
-                                    fontVariantNumeric: 'tabular-nums',
-                                  }}
-                                >
-                                  +{extraCount}
-                                </span>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>et {extraCount} autre{extraCount > 1 ? 's' : ''}</span>
                               ) : null}
                             </div>
                             <div style={{ marginTop: 4, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
@@ -1381,28 +1405,19 @@ export default function CompetencesDashboardPage() {
                               </div>
                             ) : null}
                           </button>
-                          <a
-                            href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
-                            title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
-                            style={{
-                              flex: 'none',
-                              fontSize: 12,
-                              fontWeight: 800,
-                              color: cp.accent,
-                              background: cp.soft,
-                              border: `1px solid ${cp.softBorder}`,
-                              borderRadius: 8,
-                              padding: '5px 9px',
-                              textDecoration: 'none',
-                              cursor: 'pointer',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {g.cursusCode}
-                          </a>
                         </div>
                         {expanded ? (
                           <div style={{ borderTop: '1px solid #f1f5f9', padding: '12px 16px 14px' }}>
+                            {g.supervisorComment ? (
+                              <div style={{ marginBottom: 8, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
+                                « {g.supervisorComment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                              </div>
+                            ) : null}
+                            {g.message ? (
+                              <div style={{ marginBottom: 8, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                                Note perso : {g.message}
+                              </div>
+                            ) : null}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                               {g.competences.map((c) => (
                                 <div
@@ -1436,16 +1451,6 @@ export default function CompetencesDashboardPage() {
                                 </div>
                               ))}
                             </div>
-                            {g.supervisorComment ? (
-                              <div style={{ marginTop: 8, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
-                                « {g.supervisorComment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
-                              </div>
-                            ) : null}
-                            {g.message ? (
-                              <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
-                                Note perso : {g.message}
-                              </div>
-                            ) : null}
                           </div>
                         ) : null}
                       </div>
