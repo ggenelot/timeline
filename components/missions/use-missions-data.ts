@@ -123,12 +123,12 @@ export function useMissionsData() {
     if (rolesRes.ok) {
       const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
 
-      const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_create');
+      const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_create');
       const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
         ? allTypeIds
         : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
 
-      const canManageBehaviors = rolesJson.behaviors.filter((b) => b.behavior_type === 'can_manage');
+      const canManageBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
       const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
         ? allTypeIds
         : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));

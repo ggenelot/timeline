@@ -80,17 +80,50 @@ export function MissionManagementClient() {
     typeColorById,
     proposalStatsByMission,
     canManageMissionTypeIds,
-    missionCountsByStatus,
-    missionCountsByTypeId,
     error,
     loading,
     publishDraftMission
   } = useMissionsData();
 
+  const isAdmin = profile?.role === 'admin';
+
   const missionTypeIds = useMemo(() => missionTypes.map((t) => t.id), [missionTypes]);
   const selectedTypeId = useMemo(() => parseTypeFilter(searchParams.get('type'), missionTypeIds), [searchParams, missionTypeIds]);
   const selectedStatus = useMemo(() => parseStatusFilter(searchParams.get('status')), [searchParams]);
   const view = useMemo(() => parseView(searchParams.get('view')), [searchParams]);
+
+  // A responsable with can_manage limited to specific mission types must only see
+  // those missions/types/counts here, even though RLS lets them read every mission.
+  const manageableMissions = useMemo(
+    () => (isAdmin ? missions : missions.filter((mission) => canManageMissionTypeIds.includes(mission.mission_type_id))),
+    [isAdmin, missions, canManageMissionTypeIds]
+  );
+
+  const visibleMissionTypes = useMemo(
+    () => (isAdmin ? missionTypes : missionTypes.filter((type) => canManageMissionTypeIds.includes(type.id))),
+    [isAdmin, missionTypes, canManageMissionTypeIds]
+  );
+
+  const scopedMissionCountsByStatus = useMemo(
+    () =>
+      manageableMissions.reduce<Record<MissionStatus, number>>(
+        (counts, mission) => {
+          counts[mission.status] += 1;
+          return counts;
+        },
+        { draft: 0, proposed: 0, confirmed: 0, closed: 0, cancelled: 0 }
+      ),
+    [manageableMissions]
+  );
+
+  const scopedMissionCountsByTypeId = useMemo(
+    () =>
+      manageableMissions.reduce<Record<string, number>>((counts, mission) => {
+        counts[mission.mission_type_id] = (counts[mission.mission_type_id] ?? 0) + 1;
+        return counts;
+      }, {}),
+    [manageableMissions]
+  );
 
   function updateParams(next: { type?: 'all' | string; status?: 'all' | MissionStatus; view?: ManagementView }) {
     const params = new URLSearchParams(searchParams.toString());
@@ -113,7 +146,7 @@ export function MissionManagementClient() {
 
   const filteredMissions = useMemo(
     () =>
-      missions.filter((mission) => {
+      manageableMissions.filter((mission) => {
         const normalizedSearch = searchQuery.trim().toLocaleLowerCase('fr-FR');
 
         if (normalizedSearch.length > 0) {
@@ -130,7 +163,7 @@ export function MissionManagementClient() {
 
         return true;
       }),
-    [missions, searchQuery, selectedTypeId, selectedStatus]
+    [manageableMissions, searchQuery, selectedTypeId, selectedStatus]
   );
 
   if (!accessChecked || loading) {
@@ -153,18 +186,16 @@ export function MissionManagementClient() {
     );
   }
 
-  const isAdmin = profile.role === 'admin';
-
   const statusCards: Array<{ key: 'all' | MissionStatus; label: string; count: number; color: string }> = [
-    { key: 'all', label: 'Toutes', count: missions.length, color: '#0f172a' },
-    { key: 'draft', label: 'Brouillons', count: missionCountsByStatus.draft, color: '#b45309' },
-    { key: 'proposed', label: 'Proposées', count: missionCountsByStatus.proposed, color: '#2563eb' },
-    { key: 'confirmed', label: 'Confirmées', count: missionCountsByStatus.confirmed, color: '#059669' },
-    ...(missionCountsByStatus.closed > 0
-      ? [{ key: 'closed' as MissionStatus, label: 'Clôturées', count: missionCountsByStatus.closed, color: '#64748b' }]
+    { key: 'all', label: 'Toutes', count: manageableMissions.length, color: '#0f172a' },
+    { key: 'draft', label: 'Brouillons', count: scopedMissionCountsByStatus.draft, color: '#b45309' },
+    { key: 'proposed', label: 'Proposées', count: scopedMissionCountsByStatus.proposed, color: '#2563eb' },
+    { key: 'confirmed', label: 'Confirmées', count: scopedMissionCountsByStatus.confirmed, color: '#059669' },
+    ...(scopedMissionCountsByStatus.closed > 0
+      ? [{ key: 'closed' as MissionStatus, label: 'Clôturées', count: scopedMissionCountsByStatus.closed, color: '#64748b' }]
       : []),
-    ...(missionCountsByStatus.cancelled > 0
-      ? [{ key: 'cancelled' as MissionStatus, label: 'Annulées', count: missionCountsByStatus.cancelled, color: '#dc2626' }]
+    ...(scopedMissionCountsByStatus.cancelled > 0
+      ? [{ key: 'cancelled' as MissionStatus, label: 'Annulées', count: scopedMissionCountsByStatus.cancelled, color: '#dc2626' }]
       : [])
   ];
 
@@ -243,7 +274,7 @@ export function MissionManagementClient() {
           <span className="h-[7px] w-[7px] rounded-full bg-[#94a3b8]" />
           Tous les types
         </button>
-        {missionTypes.map((missionType) => {
+        {visibleMissionTypes.map((missionType) => {
           const active = selectedTypeId === missionType.id;
           return (
             <button
@@ -255,7 +286,7 @@ export function MissionManagementClient() {
               }`}
             >
               <span className="h-[7px] w-[7px] rounded-full" style={{ background: typeColorById.get(missionType.id) ?? '#64748b' }} />
-              {missionType.name} {missionCountsByTypeId[missionType.id] ?? 0}
+              {missionType.name} {scopedMissionCountsByTypeId[missionType.id] ?? 0}
             </button>
           );
         })}
