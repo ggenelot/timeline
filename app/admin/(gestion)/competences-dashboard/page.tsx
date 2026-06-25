@@ -62,10 +62,17 @@ type ApiCompetenceEvent = {
   volunteer_cursus_id: string;
   competence_id: string;
   competence_name: string;
+  phase_name: string | null;
   doublure_id: string | null;
   event_name: string | null;
   event_date: string | null;
   event_lieu: string | null;
+  supervisor_name: string | null;
+  supervisor_antenne: string | null;
+  message: string | null;
+  supervisor_comment: string | null;
+  is_external: boolean;
+  is_pending: boolean;
   validated_at: string;
 };
 
@@ -438,6 +445,20 @@ export default function CompetencesDashboardPage() {
     return m;
   }, [data]);
 
+  // Couleur du badge de cursus = couleur de la catégorie de la compétence
+  // associée (même palette que partout ailleurs dans le tableau de bord).
+  const cursusColorById = useMemo(() => {
+    const colorBySkillId: Record<string, string> = {};
+    for (const c of data?.categories ?? []) {
+      for (const sk of c.skills) colorBySkillId[sk.id] = c.color;
+    }
+    const m: Record<string, string> = {};
+    for (const c of data?.allCursus ?? []) {
+      m[c.id] = (c.skill_id && colorBySkillId[c.skill_id]) || 'slate';
+    }
+    return m;
+  }, [data]);
+
   const chronoQ = chronoQuery.trim().toLowerCase();
   const chronoEvents = useMemo(() => {
     if (!data) return [];
@@ -454,6 +475,13 @@ export default function CompetencesDashboardPage() {
         eventName: string | null;
         eventDate: string | null;
         eventLieu: string | null;
+        supervisorName: string | null;
+        supervisorAntenne: string | null;
+        message: string | null;
+        supervisorComment: string | null;
+        isExternal: boolean;
+        isPending: boolean;
+        phaseName: string | null;
         validatedAt: string;
         competences: { id: string; name: string }[];
       }
@@ -465,6 +493,7 @@ export default function CompetencesDashboardPage() {
       const existing = groups.get(groupKey);
       if (existing) {
         existing.competences.push({ id: ev.competence_id, name: ev.competence_name });
+        if (!existing.phaseName && ev.phase_name) existing.phaseName = ev.phase_name;
         if (ev.validated_at > existing.validatedAt) existing.validatedAt = ev.validated_at;
       } else {
         groups.set(groupKey, {
@@ -475,6 +504,13 @@ export default function CompetencesDashboardPage() {
           eventName: ev.event_name,
           eventDate: ev.event_date,
           eventLieu: ev.event_lieu,
+          supervisorName: ev.supervisor_name,
+          supervisorAntenne: ev.supervisor_antenne,
+          message: ev.message,
+          supervisorComment: ev.supervisor_comment,
+          isExternal: ev.is_external,
+          isPending: ev.is_pending,
+          phaseName: ev.phase_name,
           validatedAt: ev.validated_at,
           competences: [{ id: ev.competence_id, name: ev.competence_name }],
         });
@@ -511,6 +547,27 @@ export default function CompetencesDashboardPage() {
       })
       .sort((a, b) => (a.validatedAt < b.validatedAt ? 1 : -1));
   }, [data, chronoProfileId, chronoCursusId, chronoQ, profileById, cursusById]);
+
+  // Regroupe les séances par jour calendaire pour un en-tête de date commun,
+  // à la manière des en-têtes de mois de la vue « Missions ».
+  const chronoDayGroups = useMemo(() => {
+    const groups: Array<{ key: string; label: string; events: typeof chronoEvents }> = [];
+    const indexByKey = new Map<string, number>();
+    for (const ev of chronoEvents) {
+      const refDate = ev.eventDate ?? ev.validatedAt;
+      const d = new Date(refDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      let index = indexByKey.get(key);
+      if (index === undefined) {
+        index = groups.length;
+        indexByKey.set(key, index);
+        const label = d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        groups.push({ key, label: label.charAt(0).toUpperCase() + label.slice(1), events: [] });
+      }
+      groups[index].events.push(ev);
+    }
+    return groups;
+  }, [chronoEvents]);
 
   function toggleEventExpanded(key: string) {
     setExpandedEventIds((prev) => {
@@ -1226,8 +1283,8 @@ export default function CompetencesDashboardPage() {
 
       {/* CHRONOLOGIE */}
       {view === 'chronologie' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          {chronoEvents.length === 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {chronoDayGroups.length === 0 ? (
             <div
               style={{
                 background: '#fff',
@@ -1242,129 +1299,161 @@ export default function CompetencesDashboardPage() {
               Aucun événement de montée en compétence ne correspond à ces filtres.
             </div>
           ) : (
-            chronoEvents.map((g) => {
-              const expanded = expandedEventIds.has(g.key);
-              const dateLabel = g.eventDate
-                ? new Date(g.eventDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
-                : new Date(g.validatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-              const mainCompetence = g.competences[0];
-              const extraCount = g.competences.length - 1;
-              return (
+            chronoDayGroups.map((day) => (
+              <div key={day.key} style={{ marginBottom: 14 }}>
                 <div
-                  key={g.key}
                   style={{
-                    background: '#fff',
-                    border: '1px solid #e7e9ee',
-                    borderRadius: 14,
-                    boxShadow: '0 1px 3px rgba(15,23,42,.04)',
-                    overflow: 'hidden',
+                    fontSize: 12,
+                    fontWeight: 800,
+                    letterSpacing: '.06em',
+                    textTransform: 'uppercase',
+                    color: '#94a3b8',
+                    padding: '4px 2px 8px',
                   }}
                 >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px' }}>
-                    <span
-                      style={{
-                        flex: 'none',
-                        minWidth: 78,
-                        textAlign: 'center',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: '#64748b',
-                        background: '#f8fafc',
-                        border: '1px solid #eef1f5',
-                        borderRadius: 8,
-                        padding: '5px 8px',
-                      }}
-                    >
-                      {dateLabel}
-                    </span>
-                    <span
-                      style={{
-                        flex: 'none',
-                        width: 30,
-                        height: 30,
-                        borderRadius: '50%',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 11.5,
-                        fontWeight: 800,
-                        background: '#f1f5f9',
-                        color: '#64748b',
-                      }}
-                    >
-                      {g.profileInitials}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => toggleEventExpanded(g.key)}
-                      style={{
-                        flex: 1,
-                        minWidth: 0,
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        border: 'none',
-                        background: 'transparent',
-                        fontFamily: 'inherit',
-                        padding: 0,
-                      }}
-                    >
-                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
-                        {g.profileName}
-                        <span style={{ fontWeight: 600, color: '#94a3b8' }}> · {mainCompetence.name}</span>
-                        {extraCount > 0 ? (
-                          <span style={{ fontWeight: 700, color: '#0284c7' }}> +{extraCount}</span>
+                  {day.label}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {day.events.map((g) => {
+                    const expanded = expandedEventIds.has(g.key);
+                    const mainCompetence = g.competences[0];
+                    const extraCount = g.competences.length - 1;
+                    const cp = palette(cursusColorById[g.cursusId] ?? 'slate');
+                    return (
+                      <div
+                        key={g.key}
+                        style={{
+                          background: '#fff',
+                          border: '1px solid #e7e9ee',
+                          borderRadius: 14,
+                          boxShadow: '0 1px 3px rgba(15,23,42,.04)',
+                          overflow: 'hidden',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '13px 16px' }}>
+                          <button
+                            type="button"
+                            onClick={() => toggleEventExpanded(g.key)}
+                            aria-expanded={expanded}
+                            style={{
+                              flex: 1,
+                              minWidth: 0,
+                              textAlign: 'left',
+                              cursor: 'pointer',
+                              border: 'none',
+                              background: 'transparent',
+                              fontFamily: 'inherit',
+                              padding: 0,
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{g.profileName}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>· {mainCompetence.name}</span>
+                              {extraCount > 0 ? (
+                                <span
+                                  style={{
+                                    fontSize: 12,
+                                    fontWeight: 800,
+                                    color: '#fff',
+                                    background: '#059669',
+                                    borderRadius: 999,
+                                    padding: '2px 9px',
+                                    fontVariantNumeric: 'tabular-nums',
+                                  }}
+                                >
+                                  +{extraCount}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div style={{ marginTop: 4, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                              {g.phaseName ? (
+                                <span style={{ fontWeight: 700, color: '#475569' }}>{g.phaseName}</span>
+                              ) : null}
+                              <span>
+                                {g.eventName ?? 'Compétence déclarée'}
+                                {g.eventLieu ? ` · ${g.eventLieu}` : ''}
+                              </span>
+                            </div>
+                            {g.supervisorName ? (
+                              <div style={{ marginTop: 3, fontSize: 12, color: '#475569' }}>
+                                Encadré par <strong>{g.supervisorName}</strong>
+                                {g.supervisorAntenne ? ` · ${g.supervisorAntenne}` : ''}
+                              </div>
+                            ) : null}
+                          </button>
+                          <a
+                            href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
+                            title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
+                            style={{
+                              flex: 'none',
+                              fontSize: 12,
+                              fontWeight: 800,
+                              color: cp.accent,
+                              background: cp.soft,
+                              border: `1px solid ${cp.softBorder}`,
+                              borderRadius: 8,
+                              padding: '5px 9px',
+                              textDecoration: 'none',
+                              cursor: 'pointer',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {g.cursusCode}
+                          </a>
+                        </div>
+                        {expanded ? (
+                          <div style={{ borderTop: '1px solid #f1f5f9', padding: '12px 16px 14px' }}>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {g.competences.map((c) => (
+                                <div
+                                  key={c.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 10,
+                                    borderLeft: '3px solid #d1fae5',
+                                    padding: '6px 10px',
+                                  }}
+                                >
+                                  <span
+                                    style={{
+                                      flexShrink: 0,
+                                      width: 20,
+                                      height: 20,
+                                      borderRadius: '50%',
+                                      display: 'inline-flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'center',
+                                      fontSize: 10.5,
+                                      fontWeight: 800,
+                                      background: '#059669',
+                                      color: '#fff',
+                                    }}
+                                  >
+                                    ✓
+                                  </span>
+                                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                </div>
+                              ))}
+                            </div>
+                            {g.supervisorComment ? (
+                              <div style={{ marginTop: 8, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
+                                « {g.supervisorComment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                              </div>
+                            ) : null}
+                            {g.message ? (
+                              <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                                Note perso : {g.message}
+                              </div>
+                            ) : null}
+                          </div>
                         ) : null}
                       </div>
-                      <div style={{ marginTop: 2, fontSize: 12, color: '#94a3b8' }}>
-                        {g.cursusCode} · {g.cursusName}
-                        {g.eventLieu ? ` · ${g.eventLieu}` : ''}
-                      </div>
-                    </button>
-                    <a
-                      href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
-                      title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
-                      style={{
-                        flex: 'none',
-                        width: 28,
-                        height: 28,
-                        borderRadius: '50%',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 14,
-                        fontWeight: 800,
-                        color: '#0284c7',
-                        background: '#f0f9ff',
-                        textDecoration: 'none',
-                        cursor: 'pointer',
-                      }}
-                    >
-                      ↗
-                    </a>
-                  </div>
-                  {expanded ? (
-                    <div style={{ borderTop: '1px solid #f1f5f9', padding: '10px 16px 13px', display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                      {g.competences.map((c) => (
-                        <span
-                          key={c.id}
-                          style={{
-                            fontSize: 12,
-                            fontWeight: 700,
-                            color: '#059669',
-                            background: '#ecfdf5',
-                            border: '1px solid #a7f3d0',
-                            borderRadius: 8,
-                            padding: '4px 9px',
-                          }}
-                        >
-                          ✓ {c.name}
-                        </span>
-                      ))}
-                    </div>
-                  ) : null}
+                    );
+                  })}
                 </div>
-              );
-            })
+              </div>
+            ))
           )}
         </div>
       ) : null}

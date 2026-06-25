@@ -62,6 +62,8 @@ export async function GET(req: NextRequest) {
     statusesRes,
     volunteerCursusRes,
     competenceValidationsRes,
+    cursusPhasesRes,
+    doubluresRes,
   ] = await Promise.all([
     client!
       .from('skill_categories')
@@ -78,8 +80,12 @@ export async function GET(req: NextRequest) {
     client!.from('volunteer_cursus').select('id,profile_id,cursus_id,completed_at'),
     client!
       .from('competence_validations')
-      .select('id,volunteer_cursus_id,competence_id,doublure_id,event_name,event_date,event_lieu,validated_at,competence:cursus_competences(name)')
+      .select(
+        'id,volunteer_cursus_id,competence_id,doublure_id,event_name,event_date,event_lieu,supervisor_name,supervisor_antenne,validated_at,competence:cursus_competences(name,phase_id)'
+      )
       .order('validated_at', { ascending: false }),
+    client!.from('cursus_phases').select('id,cursus_id,label'),
+    client!.from('doublures').select('id,message,supervisor_comment,is_external,is_pending'),
   ]);
 
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
@@ -89,6 +95,8 @@ export async function GET(req: NextRequest) {
   if (statusesRes.error) return NextResponse.json({ error: statusesRes.error.message }, { status: 500 });
   if (volunteerCursusRes.error) return NextResponse.json({ error: volunteerCursusRes.error.message }, { status: 500 });
   if (competenceValidationsRes.error) return NextResponse.json({ error: competenceValidationsRes.error.message }, { status: 500 });
+  if (cursusPhasesRes.error) return NextResponse.json({ error: cursusPhasesRes.error.message }, { status: 500 });
+  if (doubluresRes.error) return NextResponse.json({ error: doubluresRes.error.message }, { status: 500 });
 
   // Map skill_id -> cursus (pour rendre les chips cliquables vers le carnet).
   const cursusBySkill: Record<string, { id: string; code: string; name: string }> = {};
@@ -103,21 +111,50 @@ export async function GET(req: NextRequest) {
     vcById[vc.id] = { profile_id: vc.profile_id, cursus_id: vc.cursus_id };
   }
 
+  const phaseLabelById: Record<string, string> = {};
+  for (const ph of cursusPhasesRes.data ?? []) {
+    phaseLabelById[ph.id] = ph.label;
+  }
+
+  // message / supervisor_comment ne sont portés que par `doublures`, pas par
+  // `competence_validations` : on les rattache via doublure_id quand présent.
+  const doublureById: Record<
+    string,
+    { message: string | null; supervisor_comment: string | null; is_external: boolean; is_pending: boolean }
+  > = {};
+  for (const d of doubluresRes.data ?? []) {
+    doublureById[d.id] = {
+      message: d.message,
+      supervisor_comment: d.supervisor_comment,
+      is_external: d.is_external,
+      is_pending: d.is_pending,
+    };
+  }
+
   const competenceEvents = (competenceValidationsRes.data ?? [])
     .map((cv) => {
       const vc = vcById[cv.volunteer_cursus_id];
       if (!vc) return null;
+      const competence = cv.competence as unknown as { name: string; phase_id: string | null } | null;
+      const doublure = cv.doublure_id ? doublureById[cv.doublure_id] : undefined;
       return {
         id: cv.id,
         profile_id: vc.profile_id,
         cursus_id: vc.cursus_id,
         volunteer_cursus_id: cv.volunteer_cursus_id,
         competence_id: cv.competence_id,
-        competence_name: (cv.competence as unknown as { name: string } | null)?.name ?? '—',
+        competence_name: competence?.name ?? '—',
+        phase_name: (competence?.phase_id && phaseLabelById[competence.phase_id]) || null,
         doublure_id: cv.doublure_id,
         event_name: cv.event_name,
         event_date: cv.event_date,
         event_lieu: cv.event_lieu,
+        supervisor_name: cv.supervisor_name,
+        supervisor_antenne: cv.supervisor_antenne,
+        message: doublure?.message ?? null,
+        supervisor_comment: doublure?.supervisor_comment ?? null,
+        is_external: doublure?.is_external ?? false,
+        is_pending: doublure?.is_pending ?? false,
         validated_at: cv.validated_at,
       };
     })
