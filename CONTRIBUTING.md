@@ -56,7 +56,11 @@ Voir `AGENTS.md` § 7 pour le détail des workflows CI/CD.
 
 ## Configuration GitHub à appliquer manuellement
 
-Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées. À configurer dans **Settings → Branches** :
+Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées.
+
+**Branche par défaut du repo** (**Settings → General → Default branch**) : mettre `staging`, pas `main`. C'est la branche que GitHub propose par défaut comme base de PR et comme point de départ pour une nouvelle branche — y compris pour les agents IA qui n'ont pas reçu d'instruction explicite. La garder sur `main` pousse les agents à créer leurs branches et PR depuis/vers `main` par défaut, ce qui contredit directement le reste de ce document.
+
+À configurer dans **Settings → Branches** :
 
 **Branche `main` :**
 - Require a pull request before merging — 1 approbation minimum.
