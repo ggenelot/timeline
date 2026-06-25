@@ -1,0 +1,120 @@
+import { MissionMaterielRequirementFormState, MaterielTypeOption } from '@/components/missions/mission-form';
+import { getSkillColorClass } from '@/components/skills/skill-badge';
+import { AdminSectionLabel } from '@/components/admin/ui';
+
+type MissionMaterielEditorProps = {
+  requirements: MissionMaterielRequirementFormState[];
+  onRequirementsChange: (nextValue: MissionMaterielRequirementFormState[]) => void;
+  availableMateriels: MaterielTypeOption[];
+  requirementsError?: string | null;
+  submitting: boolean;
+};
+
+export function MissionMaterielEditor({
+  requirements,
+  onRequirementsChange,
+  availableMateriels,
+  requirementsError,
+  submitting
+}: MissionMaterielEditorProps) {
+  const selectedMaterielTypeIds = requirements.map((requirement) => requirement.materiel_type_id);
+
+  function updateRequirement(index: number, patch: Partial<MissionMaterielRequirementFormState>) {
+    onRequirementsChange(requirements.map((requirement, currentIndex) => (currentIndex === index ? { ...requirement, ...patch } : requirement)));
+  }
+
+  function removeRequirement(index: number) {
+    onRequirementsChange(requirements.filter((_, currentIndex) => currentIndex !== index));
+  }
+
+  function addRequirement() {
+    onRequirementsChange([...requirements, { materiel_type_id: '', quantity: '1' }]);
+  }
+
+  function updateQuantity(index: number, nextQuantity: number) {
+    updateRequirement(index, { quantity: String(Math.max(1, nextQuantity)) });
+  }
+
+  const neutralBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-sm text-slate-700';
+  const stepBtn = { cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 32, fontSize: 16, fontWeight: 700, fontFamily: 'inherit' } as const;
+
+  return (
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #eef1f5', background: '#fcfcfd', borderRadius: 12, padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+        <div>
+          <AdminSectionLabel>Matériel requis</AdminSectionLabel>
+          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#94a3b8' }}>Optionnel. Définissez le matériel nécessaire pour cette mission.</p>
+        </div>
+        <button
+          type="button"
+          onClick={addRequirement}
+          disabled={submitting || availableMateriels.length === 0 || requirements.length >= availableMateriels.length}
+          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting || availableMateriels.length === 0 || requirements.length >= availableMateriels.length ? 0.5 : 1 }}
+        >
+          Ajouter du matériel
+        </button>
+      </div>
+
+      {requirements.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {requirements.map((requirement, index) => {
+            const usedTypeIdsByOtherRows = new Set(selectedMaterielTypeIds.filter((typeId, selectedIndex) => selectedIndex !== index));
+
+            return (
+              <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 11, border: '1px solid #eef1f5', background: '#fff', borderRadius: 11, padding: 13 }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+                  {availableMateriels.map((materiel) => {
+                    const isUsedInAnotherRow = usedTypeIdsByOtherRows.has(materiel.id);
+                    const isSelected = requirement.materiel_type_id === materiel.id;
+
+                    return (
+                      <button
+                        key={materiel.id}
+                        type="button"
+                        onClick={() => updateRequirement(index, { materiel_type_id: materiel.id })}
+                        disabled={submitting || isUsedInAnotherRow}
+                        className={`${isSelected ? getSkillColorClass(materiel.color ?? null) : neutralBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
+                      >
+                        {materiel.name}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden', borderRadius: 9, border: '1px solid #cbd5e1' }}>
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) - 1)} disabled={submitting} style={{ ...stepBtn, opacity: submitting ? 0.5 : 1 }}>−</button>
+                    <input
+                      type="number"
+                      min={1}
+                      step={1}
+                      value={requirement.quantity}
+                      onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
+                      style={{ width: 48, borderTop: 'none', borderBottom: 'none', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1', padding: '7px 4px', textAlign: 'center', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
+                      disabled={submitting}
+                      required
+                    />
+                    <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) + 1)} disabled={submitting} style={{ ...stepBtn, opacity: submitting ? 0.5 : 1 }}>+</button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => removeRequirement(index)}
+                    disabled={submitting}
+                    style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
+                  >
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12.5, color: '#94a3b8' }}>Aucun matériel requis défini.</p>
+      )}
+
+      {requirementsError ? <p style={{ margin: 0, fontSize: 12.5, color: '#dc2626' }}>{requirementsError}</p> : null}
+    </section>
+  );
+}
