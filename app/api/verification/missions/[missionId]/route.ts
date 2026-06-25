@@ -33,16 +33,12 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: requiredError.message }, { status: 400 });
   }
 
-  const containerTypeIds = (requiredMateriels ?? []).map((row) => row.materiel_type_id);
-
-  const { data: contents, error: contentsError } =
-    containerTypeIds.length > 0
-      ? await auth.client
-          .from('materiel_type_contents')
-          .select('parent_type_id,child_type_id,quantity,position,child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id,name)')
-          .in('parent_type_id', containerTypeIds)
-          .order('position', { ascending: true })
-      : { data: [], error: null };
+  // On charge tout l'arbre de composition (pas seulement les enfants directs des contenants
+  // requis) car un contenant requis peut lui-même contenir d'autres contenants imbriqués.
+  const { data: contents, error: contentsError } = await auth.client
+    .from('materiel_type_contents')
+    .select('parent_type_id,child_type_id,quantity,position,child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id,name,is_container)')
+    .order('position', { ascending: true });
 
   if (contentsError) {
     return NextResponse.json({ error: contentsError.message }, { status: 400 });
@@ -72,7 +68,7 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
     child_type_id: string;
     quantity: number;
     position: number;
-    child_type: { id: string; name: string } | { id: string; name: string }[] | null;
+    child_type: { id: string; name: string; is_container: boolean } | { id: string; name: string; is_container: boolean }[] | null;
   };
 
   const contentsByContainer = new Map<string, ContentRow[]>();
@@ -87,17 +83,42 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
     checksByKey.set(`${item.mission_required_materiel_id}:${item.occurrence_index}:${item.child_type_id}`, item);
   }
 
+  type LeafItem = { childTypeId: string; label: string; expectedQuantity: number };
+
+  // Descend récursivement la composition d'un contenant jusqu'aux items terminaux (non-contenants),
+  // en cumulant les quantités le long du chemin et en préfixant le nom par les contenants imbriqués traversés.
+  function collectLeafItems(containerTypeId: string, nestedPath: string[], multiplier: number, visited: Set<string>): LeafItem[] {
+    if (visited.has(containerTypeId)) return [];
+    const nextVisited = new Set(visited).add(containerTypeId);
+    const children = contentsByContainer.get(containerTypeId) ?? [];
+    const leaves: LeafItem[] = [];
+
+    for (const content of children) {
+      const childType = Array.isArray(content.child_type) ? content.child_type[0] : content.child_type;
+      const childName = childType?.name ?? 'Item';
+      const childQuantity = multiplier * content.quantity;
+
+      if (childType?.is_container) {
+        leaves.push(...collectLeafItems(content.child_type_id, [...nestedPath, childName], childQuantity, nextVisited));
+      } else {
+        const label = nestedPath.length > 0 ? `${nestedPath.join(' > ')} — ${childName}` : childName;
+        leaves.push({ childTypeId: content.child_type_id, label, expectedQuantity: childQuantity });
+      }
+    }
+
+    return leaves;
+  }
+
   const cards: MissionVerificationCard[] = [];
 
   for (const requirement of requiredMateriels ?? []) {
     const containerType = Array.isArray(requirement.materiel_type) ? requirement.materiel_type[0] : requirement.materiel_type;
     const containerName = containerType?.name ?? 'Contenant';
-    const children = contentsByContainer.get(requirement.materiel_type_id) ?? [];
+    const leafItems = collectLeafItems(requirement.materiel_type_id, [], 1, new Set());
 
     for (let occurrenceIndex = 0; occurrenceIndex < requirement.quantity; occurrenceIndex += 1) {
-      for (const content of children) {
-        const childType = Array.isArray(content.child_type) ? content.child_type[0] : content.child_type;
-        const check = checksByKey.get(`${requirement.id}:${occurrenceIndex}:${content.child_type_id}`) ?? null;
+      for (const leaf of leafItems) {
+        const check = checksByKey.get(`${requirement.id}:${occurrenceIndex}:${leaf.childTypeId}`) ?? null;
 
         cards.push({
           mission_required_materiel_id: requirement.id,
@@ -105,9 +126,9 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
           container_name: containerName,
           occurrence_index: occurrenceIndex,
           occurrence_count: requirement.quantity,
-          child_type_id: content.child_type_id,
-          child_name: childType?.name ?? 'Item',
-          expected_quantity: content.quantity,
+          child_type_id: leaf.childTypeId,
+          child_name: leaf.label,
+          expected_quantity: leaf.expectedQuantity,
           check: check ? { status: check.status, note: check.note } : null
         });
       }

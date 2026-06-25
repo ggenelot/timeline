@@ -575,32 +575,24 @@ export default function AdminMaterielsPage() {
     }
 
     // Déplacement entre deux emplacements différents (racine <-> contenant, ou contenant <-> contenant).
-    if (fromLoc.zoneId === 'root') {
-      setRoots((prev) => prev.filter((r) => r.id !== draggedType!.id));
-    } else if (draggedContentId) {
-      setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: (prev[fromLoc.zoneId] ?? []).filter((c) => c.id !== draggedContentId) }));
-    }
-
+    // On crée d'abord l'entrée à destination, et on ne retire l'ancienne qu'une fois ce déplacement confirmé,
+    // pour éviter de perdre l'item si la destination refuse l'insertion (doublon, cycle...).
     if (toLoc.zoneId === 'root') {
+      const nextRoots = roots.filter((r) => r.id !== draggedType!.id);
+      nextRoots.splice(toLoc.index, 0, draggedType);
+      setRoots(nextRoots);
+      await persistRootOrder(nextRoots);
+
       if (draggedContentId) {
         await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         });
+        await loadContents(fromLoc.zoneId, token);
       }
-      const nextRoots = roots.filter((r) => r.id !== draggedType!.id);
-      nextRoots.splice(toLoc.index, 0, draggedType);
-      setRoots(nextRoots);
-      await persistRootOrder(nextRoots);
       return;
     }
 
-    if (draggedContentId) {
-      await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
-        method: 'DELETE',
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    }
     const res = await fetch(`/api/admin/materiel-types/${toLoc.zoneId}/contents`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -609,8 +601,6 @@ export default function AdminMaterielsPage() {
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
       setError(json.error ?? "Ce déplacement n'est pas possible.");
-      if (fromLoc.zoneId === 'root') await fetchRoots(token); else await loadContents(fromLoc.zoneId, token);
-      await loadContents(toLoc.zoneId, token);
       return;
     }
     const { content: newContent } = (await res.json()) as { content: MaterielTypeContent };
@@ -618,6 +608,16 @@ export default function AdminMaterielsPage() {
     destList.splice(toLoc.index, 0, newContent);
     setChildrenByContainer((prev) => ({ ...prev, [toLoc.zoneId]: destList }));
     await persistContainerOrder(toLoc.zoneId, destList);
+
+    if (fromLoc.zoneId === 'root') {
+      setRoots((prev) => prev.filter((r) => r.id !== draggedType!.id));
+    } else if (draggedContentId) {
+      await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: (prev[fromLoc.zoneId] ?? []).filter((c) => c.id !== draggedContentId) }));
+    }
   }
 
   if (loading) {

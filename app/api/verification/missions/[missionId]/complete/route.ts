@@ -32,24 +32,41 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: requiredError.message }, { status: 400 });
   }
 
-  const containerTypeIds = (requiredMateriels ?? []).map((row) => row.materiel_type_id);
-
-  const { data: contents, error: contentsError } =
-    containerTypeIds.length > 0
-      ? await auth.client.from('materiel_type_contents').select('parent_type_id').in('parent_type_id', containerTypeIds)
-      : { data: [], error: null };
+  // On charge tout l'arbre de composition car un contenant requis peut contenir d'autres
+  // contenants imbriqués : seuls les items terminaux (non-contenants) comptent comme "à vérifier".
+  const { data: contents, error: contentsError } = await auth.client
+    .from('materiel_type_contents')
+    .select('parent_type_id,child_type_id,child_type:materiel_types!materiel_type_contents_child_type_id_fkey(is_container)');
 
   if (contentsError) {
     return NextResponse.json({ error: contentsError.message }, { status: 400 });
   }
 
-  const childCountByContainer = new Map<string, number>();
-  for (const row of contents ?? []) {
-    childCountByContainer.set(row.parent_type_id, (childCountByContainer.get(row.parent_type_id) ?? 0) + 1);
+  type ContentRow = { parent_type_id: string; child_type_id: string; child_type: { is_container: boolean } | { is_container: boolean }[] | null };
+
+  const childrenByContainer = new Map<string, ContentRow[]>();
+  for (const row of (contents ?? []) as ContentRow[]) {
+    const list = childrenByContainer.get(row.parent_type_id) ?? [];
+    list.push(row);
+    childrenByContainer.set(row.parent_type_id, list);
+  }
+
+  function countLeafItems(containerTypeId: string, visited: Set<string>): number {
+    if (visited.has(containerTypeId)) return 0;
+    const nextVisited = new Set(visited).add(containerTypeId);
+    const children = childrenByContainer.get(containerTypeId) ?? [];
+    let count = 0;
+
+    for (const content of children) {
+      const childType = Array.isArray(content.child_type) ? content.child_type[0] : content.child_type;
+      count += childType?.is_container ? countLeafItems(content.child_type_id, nextVisited) : 1;
+    }
+
+    return count;
   }
 
   const totalExpected = (requiredMateriels ?? []).reduce(
-    (sum, row) => sum + row.quantity * (childCountByContainer.get(row.materiel_type_id) ?? 0),
+    (sum, row) => sum + row.quantity * countLeafItems(row.materiel_type_id, new Set()),
     0
   );
 

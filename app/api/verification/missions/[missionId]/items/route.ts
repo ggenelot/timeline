@@ -40,6 +40,56 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: 'Statut de vérification invalide.' }, { status: 400 });
   }
 
+  const { data: requirement, error: requirementError } = await auth.client
+    .from('mission_required_materiels')
+    .select('id,materiel_type_id,quantity')
+    .eq('id', body.mission_required_materiel_id)
+    .eq('mission_id', missionId)
+    .maybeSingle<{ id: string; materiel_type_id: string; quantity: number }>();
+
+  if (requirementError) {
+    return NextResponse.json({ error: requirementError.message }, { status: 400 });
+  }
+  if (!requirement || body.occurrence_index < 0 || body.occurrence_index >= requirement.quantity) {
+    return NextResponse.json({ error: 'Matériel requis introuvable pour cette mission.' }, { status: 400 });
+  }
+
+  // Le contenant requis peut contenir d'autres contenants imbriqués : on vérifie que l'item visé
+  // est bien atteignable en descendant l'arbre de composition, pas seulement un enfant direct.
+  const { data: contents, error: contentsError } = await auth.client
+    .from('materiel_type_contents')
+    .select('parent_type_id,child_type_id');
+
+  if (contentsError) {
+    return NextResponse.json({ error: contentsError.message }, { status: 400 });
+  }
+
+  const childrenByContainer = new Map<string, string[]>();
+  for (const row of contents ?? []) {
+    const list = childrenByContainer.get(row.parent_type_id) ?? [];
+    list.push(row.child_type_id);
+    childrenByContainer.set(row.parent_type_id, list);
+  }
+
+  let reachable = false;
+  const queue = [requirement.materiel_type_id];
+  const visited = new Set<string>();
+  while (queue.length > 0 && !reachable) {
+    const current = queue.shift()!;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    const children = childrenByContainer.get(current) ?? [];
+    if (children.includes(body.child_type_id)) {
+      reachable = true;
+      break;
+    }
+    queue.push(...children);
+  }
+
+  if (!reachable) {
+    return NextResponse.json({ error: 'Cet item ne fait pas partie du contenant requis.' }, { status: 400 });
+  }
+
   const { data: verification, error: verificationFetchError } = await auth.client
     .from('mission_materiel_verifications')
     .select('id,status')

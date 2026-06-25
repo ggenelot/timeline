@@ -429,6 +429,14 @@ export default function AdminEditMissionPage() {
       }
     }
 
+    // Le matériel requis vient d'être recréé (nouveaux ids), ce qui supprime en cascade les
+    // pointages de vérification existants : la vérification doit donc repasser à refaire.
+    await supabase
+      .from('mission_materiel_verifications')
+      .update({ status: 'not_started', completed_by: null, completed_at: null, updated_at: new Date().toISOString() })
+      .eq('mission_id', mission.id)
+      .eq('status', 'completed');
+
     setMission((prev) =>
       prev
         ? {
