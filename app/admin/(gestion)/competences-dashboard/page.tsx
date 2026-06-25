@@ -1316,8 +1316,6 @@ export default function CompetencesDashboardPage() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {day.events.map((g) => {
                     const expanded = expandedEventIds.has(g.key);
-                    const mainCompetence = g.competences[0];
-                    const extraCount = g.competences.length - 1;
                     const cp = palette(cursusColorById[g.cursusId] ?? 'slate');
                     return (
                       <div
@@ -1351,6 +1349,9 @@ export default function CompetencesDashboardPage() {
                             >
                               {g.cursusCode}
                             </a>
+                            <span style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#0f172a', textAlign: 'center' }}>
+                              {g.profileName}
+                            </span>
                             <span
                               style={{
                                 flex: 'none',
@@ -1382,21 +1383,17 @@ export default function CompetencesDashboardPage() {
                               marginTop: 9,
                             }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                              <span style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{g.profileName}</span>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8' }}>· {mainCompetence.name}</span>
-                              {extraCount > 0 ? (
-                                <span style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>et {extraCount} autre{extraCount > 1 ? 's' : ''}</span>
-                              ) : null}
-                            </div>
-                            <div style={{ marginTop: 4, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                            <div style={{ marginTop: 0, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
                               {g.phaseName ? (
                                 <span style={{ fontWeight: 700, color: '#475569' }}>{g.phaseName}</span>
                               ) : null}
-                              <span>
-                                {g.eventName ?? 'Compétence déclarée'}
-                                {g.eventLieu ? ` · ${g.eventLieu}` : ''}
-                              </span>
+                              {g.eventName || g.eventLieu ? (
+                                <span>
+                                  {g.eventName}
+                                  {g.eventName && g.eventLieu ? ' · ' : ''}
+                                  {g.eventLieu}
+                                </span>
+                              ) : null}
                             </div>
                             {g.supervisorName ? (
                               <div style={{ marginTop: 3, fontSize: 12, color: '#475569' }}>
