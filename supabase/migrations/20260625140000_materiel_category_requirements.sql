@@ -201,6 +201,23 @@ create trigger mission_materiel_assignments_generate_checks
   for each row
   execute function generate_mission_materiel_checks();
 
+-- Repointage : l'historique se rattache désormais à l'affectation de
+-- contenant, plus à la déclaration du besoin abstrait.
+create or replace function public.record_mission_materiel_check_history()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if new.checked_by is not null then
+    insert into mission_materiel_check_history (mission_materiel_assignment_id, item_type_id, is_present, comment, checked_by, checked_at)
+    values (new.mission_materiel_assignment_id, new.item_type_id, new.is_present, new.comment, new.checked_by, new.checked_at);
+  end if;
+  return new;
+end;
+$$;
+
 drop policy if exists "mission_materiel_checks_select_strict" on mission_materiel_checks;
 create policy "mission_materiel_checks_select_strict"
   on mission_materiel_checks for select
