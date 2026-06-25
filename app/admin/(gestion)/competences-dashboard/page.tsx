@@ -55,6 +55,20 @@ type ApiCursus = { id: string; code: string; name: string; category: string | nu
 
 type ApiEnrolledCursus = { profile_id: string; cursus_id: string; completed_at: string | null };
 
+type ApiCompetenceEvent = {
+  id: string;
+  profile_id: string;
+  cursus_id: string;
+  volunteer_cursus_id: string;
+  competence_id: string;
+  competence_name: string;
+  doublure_id: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  event_lieu: string | null;
+  validated_at: string;
+};
+
 type DashboardData = {
   categories: ApiCategory[];
   profiles: ApiProfile[];
@@ -63,6 +77,7 @@ type DashboardData = {
   allCursus: ApiCursus[];
   enrolledCursus: ApiEnrolledCursus[];
   statuses: ApiStatus[];
+  competenceEvents: ApiCompetenceEvent[];
 };
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
@@ -117,11 +132,17 @@ export default function CompetencesDashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
 
   const [catId, setCatId] = useState<string | null>(null);
-  const [view, setView] = useState<'arbre' | 'tableau'>('arbre');
+  const [view, setView] = useState<'arbre' | 'tableau' | 'chronologie'>('arbre');
   const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
   const [query, setQuery] = useState('');
   const [expandedSkillIds, setExpandedSkillIds] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
+
+  // ── Chronologie des montées en compétence ────────────────────
+  const [chronoProfileId, setChronoProfileId] = useState<'all' | string>('all');
+  const [chronoCursusId, setChronoCursusId] = useState<'all' | string>('all');
+  const [chronoQuery, setChronoQuery] = useState('');
+  const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(new Set());
 
   // Statuts effectifs, clé `${profileId}|${skillId}` → statut brut.
   const [statusMap, setStatusMap] = useState<Record<string, string>>({});
@@ -409,6 +430,97 @@ export default function CompetencesDashboardPage() {
       }));
   }, [cat, data, matchPerson]);
 
+  // ── Chronologie des montées en compétence ────────────────────
+
+  const cursusById = useMemo(() => {
+    const m: Record<string, ApiCursus> = {};
+    for (const c of data?.allCursus ?? []) m[c.id] = c;
+    return m;
+  }, [data]);
+
+  const chronoQ = chronoQuery.trim().toLowerCase();
+  const chronoEvents = useMemo(() => {
+    if (!data) return [];
+    // Regroupe les validations par séance : un même cahier de doublure (ou,
+    // à défaut, le même nom+date d'événement déclaré sans doublure associée)
+    // peut valider plusieurs compétences d'un coup.
+    const groups = new Map<
+      string,
+      {
+        key: string;
+        profileId: string;
+        cursusId: string;
+        doublureId: string | null;
+        eventName: string | null;
+        eventDate: string | null;
+        eventLieu: string | null;
+        validatedAt: string;
+        competences: { id: string; name: string }[];
+      }
+    >();
+    for (const ev of data.competenceEvents) {
+      const groupKey = ev.doublure_id
+        ? `d:${ev.doublure_id}`
+        : `e:${ev.volunteer_cursus_id}:${ev.event_date ?? ''}:${ev.event_name ?? ''}`;
+      const existing = groups.get(groupKey);
+      if (existing) {
+        existing.competences.push({ id: ev.competence_id, name: ev.competence_name });
+        if (ev.validated_at > existing.validatedAt) existing.validatedAt = ev.validated_at;
+      } else {
+        groups.set(groupKey, {
+          key: groupKey,
+          profileId: ev.profile_id,
+          cursusId: ev.cursus_id,
+          doublureId: ev.doublure_id,
+          eventName: ev.event_name,
+          eventDate: ev.event_date,
+          eventLieu: ev.event_lieu,
+          validatedAt: ev.validated_at,
+          competences: [{ id: ev.competence_id, name: ev.competence_name }],
+        });
+      }
+    }
+
+    return Array.from(groups.values())
+      .filter((g) => chronoProfileId === 'all' || g.profileId === chronoProfileId)
+      .filter((g) => chronoCursusId === 'all' || g.cursusId === chronoCursusId)
+      .map((g) => {
+        const p = profileById[g.profileId];
+        const c = cursusById[g.cursusId];
+        return {
+          ...g,
+          profileName: p?.full_name ?? p?.email ?? '—',
+          profileInitials: initials(p?.full_name ?? p?.email ?? '?'),
+          cursusName: c?.name ?? '—',
+          cursusCode: c?.code ?? '—',
+        };
+      })
+      .filter((g) => {
+        if (!chronoQ) return true;
+        const haystack = [
+          g.profileName,
+          g.cursusName,
+          g.cursusCode,
+          g.eventName ?? '',
+          g.eventLieu ?? '',
+          ...g.competences.map((c) => c.name),
+        ]
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(chronoQ);
+      })
+      .sort((a, b) => (a.validatedAt < b.validatedAt ? 1 : -1));
+  }, [data, chronoProfileId, chronoCursusId, chronoQ, profileById, cursusById]);
+
+  function toggleEventExpanded(key: string) {
+    setExpandedEventIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
   // ── Éditeur popover ─────────────────────────────────────────
 
   function openEditor(
@@ -671,7 +783,7 @@ export default function CompetencesDashboardPage() {
             padding: 3,
           }}
         >
-          {(['arbre', 'tableau'] as const).map((v) => {
+          {(['arbre', 'tableau', 'chronologie'] as const).map((v) => {
             const active = view === v;
             return (
               <button
@@ -690,30 +802,95 @@ export default function CompetencesDashboardPage() {
                   color: active ? '#fff' : '#64748b',
                 }}
               >
-                {v === 'arbre' ? 'Vue arbre' : 'Vue tableau'}
+                {v === 'arbre' ? 'Vue arbre' : v === 'tableau' ? 'Vue tableau' : 'Chronologie'}
               </button>
             );
           })}
         </div>
 
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un bénévole…"
-          style={{
-            flex: 1,
-            minWidth: 180,
-            maxWidth: 280,
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: '9px 13px',
-            fontSize: 13.5,
-            color: '#0f172a',
-            outline: 'none',
-            background: '#fff',
-            fontFamily: 'inherit',
-          }}
-        />
+        {view !== 'chronologie' ? (
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Rechercher un bénévole…"
+            style={{
+              flex: 1,
+              minWidth: 180,
+              maxWidth: 280,
+              border: '1px solid #e2e8f0',
+              borderRadius: 10,
+              padding: '9px 13px',
+              fontSize: 13.5,
+              color: '#0f172a',
+              outline: 'none',
+              background: '#fff',
+              fontFamily: 'inherit',
+            }}
+          />
+        ) : (
+          <>
+            <select
+              value={chronoProfileId}
+              onChange={(e) => setChronoProfileId(e.target.value)}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="all">Tous les bénévoles</option>
+              {data.profiles.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.full_name ?? p.email}
+                </option>
+              ))}
+            </select>
+            <select
+              value={chronoCursusId}
+              onChange={(e) => setChronoCursusId(e.target.value)}
+              style={{
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            >
+              <option value="all">Tous les cursus</option>
+              {data.allCursus.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.code} · {c.name}
+                </option>
+              ))}
+            </select>
+            <input
+              value={chronoQuery}
+              onChange={(e) => setChronoQuery(e.target.value)}
+              placeholder="Rechercher (bénévole, compétence, lieu…)"
+              style={{
+                flex: 1,
+                minWidth: 200,
+                maxWidth: 320,
+                border: '1px solid #e2e8f0',
+                borderRadius: 10,
+                padding: '9px 13px',
+                fontSize: 13.5,
+                color: '#0f172a',
+                outline: 'none',
+                background: '#fff',
+                fontFamily: 'inherit',
+              }}
+            />
+          </>
+        )}
       </div>
 
       {/* ARBRE */}
@@ -1044,6 +1221,151 @@ export default function CompetencesDashboardPage() {
               ))}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {/* CHRONOLOGIE */}
+      {view === 'chronologie' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {chronoEvents.length === 0 ? (
+            <div
+              style={{
+                background: '#fff',
+                border: '1px solid #e7e9ee',
+                borderRadius: 16,
+                padding: '24px 18px',
+                textAlign: 'center',
+                fontSize: 13.5,
+                color: '#94a3b8',
+              }}
+            >
+              Aucun événement de montée en compétence ne correspond à ces filtres.
+            </div>
+          ) : (
+            chronoEvents.map((g) => {
+              const expanded = expandedEventIds.has(g.key);
+              const dateLabel = g.eventDate
+                ? new Date(g.eventDate).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' })
+                : new Date(g.validatedAt).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+              const mainCompetence = g.competences[0];
+              const extraCount = g.competences.length - 1;
+              return (
+                <div
+                  key={g.key}
+                  style={{
+                    background: '#fff',
+                    border: '1px solid #e7e9ee',
+                    borderRadius: 14,
+                    boxShadow: '0 1px 3px rgba(15,23,42,.04)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '13px 16px' }}>
+                    <span
+                      style={{
+                        flex: 'none',
+                        minWidth: 78,
+                        textAlign: 'center',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        color: '#64748b',
+                        background: '#f8fafc',
+                        border: '1px solid #eef1f5',
+                        borderRadius: 8,
+                        padding: '5px 8px',
+                      }}
+                    >
+                      {dateLabel}
+                    </span>
+                    <span
+                      style={{
+                        flex: 'none',
+                        width: 30,
+                        height: 30,
+                        borderRadius: '50%',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 11.5,
+                        fontWeight: 800,
+                        background: '#f1f5f9',
+                        color: '#64748b',
+                      }}
+                    >
+                      {g.profileInitials}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => toggleEventExpanded(g.key)}
+                      style={{
+                        flex: 1,
+                        minWidth: 0,
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        border: 'none',
+                        background: 'transparent',
+                        fontFamily: 'inherit',
+                        padding: 0,
+                      }}
+                    >
+                      <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>
+                        {g.profileName}
+                        <span style={{ fontWeight: 600, color: '#94a3b8' }}> · {mainCompetence.name}</span>
+                        {extraCount > 0 ? (
+                          <span style={{ fontWeight: 700, color: '#0284c7' }}> +{extraCount}</span>
+                        ) : null}
+                      </div>
+                      <div style={{ marginTop: 2, fontSize: 12, color: '#94a3b8' }}>
+                        {g.cursusCode} · {g.cursusName}
+                        {g.eventLieu ? ` · ${g.eventLieu}` : ''}
+                      </div>
+                    </button>
+                    <a
+                      href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
+                      title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
+                      style={{
+                        flex: 'none',
+                        width: 28,
+                        height: 28,
+                        borderRadius: '50%',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: 14,
+                        fontWeight: 800,
+                        color: '#0284c7',
+                        background: '#f0f9ff',
+                        textDecoration: 'none',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      ↗
+                    </a>
+                  </div>
+                  {expanded ? (
+                    <div style={{ borderTop: '1px solid #f1f5f9', padding: '10px 16px 13px', display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+                      {g.competences.map((c) => (
+                        <span
+                          key={c.id}
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 700,
+                            color: '#059669',
+                            background: '#ecfdf5',
+                            border: '1px solid #a7f3d0',
+                            borderRadius: 8,
+                            padding: '4px 9px',
+                          }}
+                        >
+                          ✓ {c.name}
+                        </span>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })
+          )}
         </div>
       ) : null}
 

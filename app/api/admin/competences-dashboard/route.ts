@@ -54,7 +54,15 @@ export async function GET(req: NextRequest) {
   const { client, error } = await authorize(req);
   if (error) return error;
 
-  const [categoriesRes, profilesRes, profileSkillsRes, cursusRes, statusesRes, volunteerCursusRes] = await Promise.all([
+  const [
+    categoriesRes,
+    profilesRes,
+    profileSkillsRes,
+    cursusRes,
+    statusesRes,
+    volunteerCursusRes,
+    competenceValidationsRes,
+  ] = await Promise.all([
     client!
       .from('skill_categories')
       .select('id,name,color,display_order,skills(id,name,code,level,category_id,display_order)')
@@ -67,7 +75,11 @@ export async function GET(req: NextRequest) {
     client!.from('profile_skills').select('profile_id,skill_id,status'),
     client!.from('cursus').select('id,code,name,category,level,skill_id').order('level', { ascending: true }),
     client!.from('skill_statuses').select('*').order('display_order', { ascending: true }),
-    client!.from('volunteer_cursus').select('profile_id,cursus_id,completed_at'),
+    client!.from('volunteer_cursus').select('id,profile_id,cursus_id,completed_at'),
+    client!
+      .from('competence_validations')
+      .select('id,volunteer_cursus_id,competence_id,doublure_id,event_name,event_date,event_lieu,validated_at,competence:cursus_competences(name)')
+      .order('validated_at', { ascending: false }),
   ]);
 
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
@@ -76,6 +88,7 @@ export async function GET(req: NextRequest) {
   if (cursusRes.error) return NextResponse.json({ error: cursusRes.error.message }, { status: 500 });
   if (statusesRes.error) return NextResponse.json({ error: statusesRes.error.message }, { status: 500 });
   if (volunteerCursusRes.error) return NextResponse.json({ error: volunteerCursusRes.error.message }, { status: 500 });
+  if (competenceValidationsRes.error) return NextResponse.json({ error: competenceValidationsRes.error.message }, { status: 500 });
 
   // Map skill_id -> cursus (pour rendre les chips cliquables vers le carnet).
   const cursusBySkill: Record<string, { id: string; code: string; name: string }> = {};
@@ -83,14 +96,46 @@ export async function GET(req: NextRequest) {
     if (c.skill_id) cursusBySkill[c.skill_id] = { id: c.id, code: c.code, name: c.name };
   }
 
+  // volunteer_cursus_id -> { profile_id, cursus_id } pour aplatir les
+  // validations sans avoir à imbriquer plusieurs niveaux de jointure.
+  const vcById: Record<string, { profile_id: string; cursus_id: string }> = {};
+  for (const vc of volunteerCursusRes.data ?? []) {
+    vcById[vc.id] = { profile_id: vc.profile_id, cursus_id: vc.cursus_id };
+  }
+
+  const competenceEvents = (competenceValidationsRes.data ?? [])
+    .map((cv) => {
+      const vc = vcById[cv.volunteer_cursus_id];
+      if (!vc) return null;
+      return {
+        id: cv.id,
+        profile_id: vc.profile_id,
+        cursus_id: vc.cursus_id,
+        volunteer_cursus_id: cv.volunteer_cursus_id,
+        competence_id: cv.competence_id,
+        competence_name: (cv.competence as unknown as { name: string }[] | null)?.[0]?.name ?? '—',
+        doublure_id: cv.doublure_id,
+        event_name: cv.event_name,
+        event_date: cv.event_date,
+        event_lieu: cv.event_lieu,
+        validated_at: cv.validated_at,
+      };
+    })
+    .filter((e): e is NonNullable<typeof e> => e !== null);
+
   return NextResponse.json({
     categories: categoriesRes.data ?? [],
     profiles: profilesRes.data ?? [],
     profileSkills: profileSkillsRes.data ?? [],
     cursusBySkill,
     allCursus: cursusRes.data ?? [],
-    enrolledCursus: volunteerCursusRes.data ?? [],
+    enrolledCursus: (volunteerCursusRes.data ?? []).map((vc) => ({
+      profile_id: vc.profile_id,
+      cursus_id: vc.cursus_id,
+      completed_at: vc.completed_at,
+    })),
     statuses: statusesRes.data ?? [],
+    competenceEvents,
   });
 }
 
