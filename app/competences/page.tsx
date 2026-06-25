@@ -18,7 +18,6 @@ import {
   getVolunteerCursus,
   getDoubluresForVolunteerCursus,
   getValidationsForVolunteerCursus,
-  enrollInCursus,
   declareDoublure,
   deleteDoublure,
   declareCompetenceValidation,
@@ -617,9 +616,6 @@ export default function CompetencesPage() {
   const [modal, setModal] = useState<ModalState | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // enroll modal
-  const [enrollModal, setEnrollModal] = useState(false);
-
   // ── Load ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -693,30 +689,15 @@ export default function CompetencesPage() {
     [cursusDetail]
   );
 
-  const enrolledCursusIds = useMemo(() => new Set(volunteerCursus.map((vc) => vc.cursus_id)), [volunteerCursus]);
-  const availableToEnroll = useMemo(() => allCursus.filter((c) => !enrolledCursusIds.has(c.id)), [allCursus, enrolledCursusIds]);
+  // Cursus en cours en premier (plein), cursus terminés ensuite (plus légers).
+  const inProgressCursus = useMemo(() => volunteerCursus.filter((vc) => !vc.completed_at), [volunteerCursus]);
+  const completedCursus = useMemo(() => volunteerCursus.filter((vc) => vc.completed_at), [volunteerCursus]);
 
   const currentVC = volunteerCursus.find((v) => v.id === selectedVCId);
   const currentCursusData = currentVC ? (allCursus.find((c) => c.id === currentVC.cursus_id) ?? null) : null;
 
   function scrollToPhase(phaseId: string) {
     document.getElementById(`phase-anchor-${phaseId}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-
-  // ── Enroll ────────────────────────────────────────────────
-
-  async function handleEnroll(cursusId: string) {
-    if (readOnly) return;
-    if (!profileId) return;
-    try {
-      const vc = await enrollInCursus(profileId, cursusId);
-      const cursus = allCursus.find((c) => c.id === cursusId);
-      setVolunteerCursus((prev) => [...prev, { ...vc, cursus }]);
-      setSelectedVCId(vc.id);
-      setEnrollModal(false);
-    } catch (e) {
-      setError((e as Error).message);
-    }
   }
 
   // ── Modal submit ───────────────────────────────────────────
@@ -896,9 +877,9 @@ export default function CompetencesPage() {
           </div>
         ) : null}
 
-        {/* Cursus tab selector + enroll */}
+        {/* Cursus tab selector : en cours en plein, terminés en plus léger */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
-          {volunteerCursus.map((vc) => {
+          {inProgressCursus.map((vc) => {
             const c = allCursus.find((x) => x.id === vc.cursus_id);
             return (
               <button
@@ -918,30 +899,39 @@ export default function CompetencesPage() {
                 }}
               >
                 {c?.code ?? vc.cursus_id}
-                {vc.completed_at ? ' ✓' : ''}
               </button>
             );
           })}
-          {!readOnly ? (
-            <button
-              type="button"
-              onClick={() => setEnrollModal(true)}
-              disabled={availableToEnroll.length === 0}
-              style={{
-                cursor: availableToEnroll.length === 0 ? 'not-allowed' : 'pointer',
-                border: '1px dashed #cbd5e1',
-                borderRadius: 99,
-                padding: '7px 16px',
-                fontSize: 13,
-                fontWeight: 700,
-                fontFamily: 'inherit',
-                background: 'transparent',
-                color: '#94a3b8',
-                opacity: availableToEnroll.length === 0 ? 0.5 : 1,
-              }}
-            >
-              + Rejoindre un cursus
-            </button>
+          {completedCursus.length > 0 ? (
+            <>
+              {inProgressCursus.length > 0 ? (
+                <span style={{ width: 1, height: 18, background: '#e2e8f0', margin: '0 2px' }} />
+              ) : null}
+              {completedCursus.map((vc) => {
+                const c = allCursus.find((x) => x.id === vc.cursus_id);
+                return (
+                  <button
+                    key={vc.id}
+                    type="button"
+                    onClick={() => setSelectedVCId(vc.id)}
+                    style={{
+                      cursor: 'pointer',
+                      border: selectedVCId === vc.id ? 'none' : '1px solid #eef1f5',
+                      borderRadius: 99,
+                      padding: '5px 13px',
+                      fontSize: 12,
+                      fontWeight: 600,
+                      fontFamily: 'inherit',
+                      background: selectedVCId === vc.id ? '#475569' : 'transparent',
+                      color: selectedVCId === vc.id ? '#fff' : '#94a3b8',
+                      opacity: selectedVCId === vc.id ? 1 : 0.75,
+                    }}
+                  >
+                    {c?.code ?? vc.cursus_id} ✓
+                  </button>
+                );
+              })}
+            </>
           ) : null}
         </div>
 
@@ -950,17 +940,8 @@ export default function CompetencesPage() {
             <p style={{ color: '#94a3b8', fontSize: 15 }}>
               {readOnly
                 ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
-                : "Vous n'êtes inscrit dans aucun cursus de doublure."}
+                : "Vous n'êtes inscrit dans aucun cursus de doublure. Un administrateur peut vous y inscrire."}
             </p>
-            {!readOnly ? (
-              <button
-                type="button"
-                onClick={() => setEnrollModal(true)}
-                style={{ marginTop: 16, cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#475569', borderRadius: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
-              >
-                Rejoindre un cursus
-              </button>
-            ) : null}
           </div>
         ) : cursusDetail ? (
           <>
@@ -1478,41 +1459,6 @@ export default function CompetencesPage() {
             ) : null}
           </>
         ) : null}
-
-      {/* ── Enroll modal ── */}
-      {enrollModal ? (
-        <div
-          style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 18 }}
-          onClick={(e) => { if (e.target === e.currentTarget) setEnrollModal(false); }}
-        >
-          <div style={{ width: '100%', maxWidth: 440, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
-              <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>Rejoindre un cursus</div>
-              <button type="button" onClick={() => setEnrollModal(false)} style={{ cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
-            </div>
-            <div style={{ padding: '14px 20px 20px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {availableToEnroll.length === 0 ? (
-                <p style={{ fontSize: 13, color: '#64748b' }}>Vous êtes déjà inscrit à tous les cursus disponibles.</p>
-              ) : availableToEnroll.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => handleEnroll(c.id)}
-                  style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #e2e8f0', background: '#fff', borderRadius: 12, padding: '12px 14px', fontFamily: 'inherit' }}
-                  onMouseEnter={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#a7f3d0'; (e.currentTarget as HTMLButtonElement).style.background = '#f6fdfa'; }}
-                  onMouseLeave={(e) => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#e2e8f0'; (e.currentTarget as HTMLButtonElement).style.background = '#fff'; }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 6, padding: '2px 8px' }}>{c.code}</span>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
-                  </div>
-                  {c.category ? <div style={{ marginTop: 4, fontSize: 12, color: '#94a3b8' }}>{c.category}{c.level ? ` · Niveau ${c.level}` : ''}</div> : null}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      ) : null}
 
       {/* ── Declare doublure wizard ── */}
       {modal ? (() => {
