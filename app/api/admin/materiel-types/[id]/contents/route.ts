@@ -38,9 +38,9 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const { data, error: dbError } = await client!
     .from('materiel_type_contents')
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code)')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container)')
     .eq('parent_type_id', params.id)
-    .order('created_at', { ascending: true });
+    .order('position', { ascending: true });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
   return NextResponse.json({ contents: data });
@@ -86,14 +86,25 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     queue.push(...(childrenByParent.get(current) ?? []));
   }
 
+  const { data: maxRow } = await client!
+    .from('materiel_type_contents')
+    .select('position')
+    .eq('parent_type_id', params.id)
+    .order('position', { ascending: false })
+    .limit(1)
+    .single();
+
+  const nextPosition = (maxRow?.position ?? -1) + 1;
+
   const { data, error: dbError } = await client!
     .from('materiel_type_contents')
     .insert({
       parent_type_id: params.id,
       child_type_id: body.child_type_id,
       quantity: body.quantity && body.quantity >= 1 ? body.quantity : 1,
+      position: nextPosition,
     })
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code)')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container)')
     .single();
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });

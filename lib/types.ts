@@ -82,7 +82,7 @@ export type MaterielCategory = {
 export type MaterielType = {
   id: string;
   name: string;
-  category_id: string;
+  category_id?: string | null;
   code?: string | null;
   description?: string | null;
   is_container: boolean;
@@ -96,6 +96,7 @@ export type MaterielTypeContent = {
   parent_type_id: string;
   child_type_id: string;
   quantity: number;
+  position: number;
   created_at: string;
   child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container'> | null;
 };

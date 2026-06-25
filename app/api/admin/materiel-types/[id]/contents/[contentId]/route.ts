@@ -20,17 +20,23 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const client = await getAdminClient(req);
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
-  const body = (await req.json()) as { quantity?: number };
-  if (body.quantity === undefined || body.quantity < 1) {
-    return NextResponse.json({ error: 'La quantité doit être un entier positif.' }, { status: 400 });
+  const body = (await req.json()) as { quantity?: number; position?: number };
+  const patch: Record<string, number> = {};
+  if (body.quantity !== undefined) {
+    if (body.quantity < 1) return NextResponse.json({ error: 'La quantité doit être un entier positif.' }, { status: 400 });
+    patch.quantity = body.quantity;
+  }
+  if (body.position !== undefined) patch.position = body.position;
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'Aucune modification.' }, { status: 400 });
   }
 
   const { data, error } = await client
     .from('materiel_type_contents')
-    .update({ quantity: body.quantity })
+    .update(patch)
     .eq('id', params.contentId)
     .eq('parent_type_id', params.id)
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code)')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container)')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
