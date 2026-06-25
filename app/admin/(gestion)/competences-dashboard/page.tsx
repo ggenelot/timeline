@@ -1283,7 +1283,21 @@ export default function CompetencesDashboardPage() {
 
       {/* CHRONOLOGIE */}
       {view === 'chronologie' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ position: 'relative' }}>
+          {chronoDayGroups.length > 0 ? (
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                left: 23,
+                width: 2,
+                background: '#e3e7ee',
+                pointerEvents: 'none',
+              }}
+            />
+          ) : null}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           {chronoDayGroups.length === 0 ? (
             <div
               style={{
@@ -1308,7 +1322,7 @@ export default function CompetencesDashboardPage() {
                     letterSpacing: '.06em',
                     textTransform: 'uppercase',
                     color: '#94a3b8',
-                    padding: '4px 2px 8px',
+                    padding: '4px 2px 8px 56px',
                   }}
                 >
                   {day.label}
@@ -1318,8 +1332,21 @@ export default function CompetencesDashboardPage() {
                     const expanded = expandedEventIds.has(g.key);
                     const cp = palette(cursusColorById[g.cursusId] ?? 'slate');
                     return (
+                      <div key={g.key} style={{ position: 'relative', paddingLeft: 56 }}>
+                      <span
+                        style={{
+                          position: 'absolute',
+                          left: 24,
+                          top: 28,
+                          width: 14,
+                          height: 14,
+                          borderRadius: '50%',
+                          transform: 'translate(-50%, -50%)',
+                          background: cp.accent,
+                          boxShadow: '0 0 0 4px #f8fafc',
+                        }}
+                      />
                       <div
-                        key={g.key}
                         style={{
                           background: '#fff',
                           border: '1px solid #e7e9ee',
@@ -1451,12 +1478,14 @@ export default function CompetencesDashboardPage() {
                           </div>
                         ) : null}
                       </div>
+                      </div>
                     );
                   })}
                 </div>
               </div>
             ))
           )}
+          </div>
         </div>
       ) : null}
 
