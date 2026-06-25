@@ -113,7 +113,7 @@ export async function GET(req: NextRequest) {
         cursus_id: vc.cursus_id,
         volunteer_cursus_id: cv.volunteer_cursus_id,
         competence_id: cv.competence_id,
-        competence_name: (cv.competence as unknown as { name: string }[] | null)?.[0]?.name ?? '—',
+        competence_name: (cv.competence as unknown as { name: string } | null)?.name ?? '—',
         doublure_id: cv.doublure_id,
         event_name: cv.event_name,
         event_date: cv.event_date,
