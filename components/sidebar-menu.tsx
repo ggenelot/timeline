@@ -19,6 +19,7 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/cursus', label: 'Cursus', domain: 'cursus' },
   { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', domain: 'cursus' },
   { href: '/admin/mission-types', label: 'Missions', domain: 'admin-only' },
+  { href: '/admin/missions', label: 'Gestion des missions', domain: 'mission' },
   { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', domain: 'mission' },
   { href: '/admin/stats', label: 'Statistiques', domain: 'mission' },
   { href: '/admin/slack', label: 'Slack', domain: 'admin-only' },
@@ -103,7 +104,7 @@ export function SidebarMenu({
       >
         <nav className="flex h-full w-64 flex-col gap-1 p-4 text-sm">
         <Link href="/missions" ref={firstLinkRef} onClick={onClose} tabIndex={tab} className={linkClass}>
-          Mission
+          Timeline
         </Link>
         <Link href="/competences" onClick={onClose} tabIndex={tab} className={linkClass}>
           Compétences
