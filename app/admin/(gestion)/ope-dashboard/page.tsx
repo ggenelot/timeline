@@ -4,14 +4,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import type { OpeDashboardData, OpeMission, RoleBehavior } from '@/lib/types';
-import { MISSION_STATUS_LABELS, getMissionStatusBadgeClass, formatMissionRequirementLabel } from '@/lib/missions';
-import {
-  buildDayAxis,
-  missionDayKey,
-  formatMissionDuration,
-  resolveMissionTypeColor,
-} from '@/lib/mission-timeline';
-import { SkillBadge } from '@/components/skills/skill-badge';
+import { buildDayAxis, missionDayKey } from '@/lib/mission-timeline';
+import { availableNotRetainedByDay, computeVolunteerConflicts } from '@/lib/ope-dashboard';
+import { DayColumn } from '@/components/ope/day-column';
+import { EventDetailModal } from '@/components/ope/event-detail-modal';
+import { TypeFilter, type OpeTypeOption } from '@/components/ope/type-filter';
+import { PersonSearch } from '@/components/ope/person-search';
+import { PersonActivityPanel } from '@/components/ope/person-activity-panel';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -21,96 +20,8 @@ function startOfToday(): Date {
   return d;
 }
 
-function capitalize(s: string): string {
-  return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
-}
+const TODAY_KEY = missionDayKey(new Date().toISOString());
 
-function formatTimeRange(startISO: string, endISO: string): string {
-  const opts: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit' };
-  const start = new Date(startISO).toLocaleTimeString('fr-FR', opts);
-  const end = new Date(endISO).toLocaleTimeString('fr-FR', opts);
-  return `${start} – ${end}`;
-}
-
-function statusBadgeLabel(status: OpeMission['status']): string {
-  return status === 'confirmed' ? 'Validé' : MISSION_STATUS_LABELS[status];
-}
-
-// ── Carte événement ───────────────────────────────────────────────
-function EventCard({ mission }: { mission: OpeMission }) {
-  const accent = resolveMissionTypeColor(mission.type.name, mission.type.color);
-  const isValidated = mission.status === 'confirmed';
-
-  return (
-    <article
-      className="rounded-lg border border-slate-200 bg-white p-3 shadow-sm"
-      style={{ borderLeft: `4px solid ${accent}` }}
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: accent }}>
-          {mission.type.name ?? 'Événement'}
-        </span>
-        <span
-          className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-medium ${getMissionStatusBadgeClass(
-            mission.status
-          )}`}
-        >
-          {statusBadgeLabel(mission.status)}
-        </span>
-      </div>
-
-      <h3 className="mt-1 text-sm font-semibold text-slate-900">{mission.title}</h3>
-
-      <dl className="mt-1.5 space-y-0.5 text-xs text-slate-600">
-        <div>
-          {formatTimeRange(mission.starts_at, mission.ends_at)}{' '}
-          <span className="text-slate-400">({formatMissionDuration(mission.starts_at, mission.ends_at)})</span>
-        </div>
-        {mission.location ? <div>📍 {mission.location}</div> : null}
-      </dl>
-
-      {/* Besoins */}
-      {mission.requiredSkills.length > 0 ? (
-        <div className="mt-2 flex flex-wrap gap-1">
-          {mission.requiredSkills.map((rs) => (
-            <span
-              key={rs.id}
-              className="inline-flex rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600"
-            >
-              {formatMissionRequirementLabel(rs.skill?.name, rs.quantity)}
-            </span>
-          ))}
-        </div>
-      ) : null}
-
-      {/* Équipe engagée (uniquement si validé) */}
-      {isValidated ? (
-        <div className="mt-2 border-t border-slate-100 pt-2">
-          {mission.team.length === 0 ? (
-            <p className="text-[11px] italic text-slate-400">Aucun secouriste engagé</p>
-          ) : (
-            <ul className="space-y-1.5">
-              {mission.team.map((member) => (
-                <li key={member.volunteer_id} className="text-xs">
-                  <div className="font-medium text-slate-800">{member.full_name ?? 'Bénévole'}</div>
-                  {member.validatedSkills.length > 0 ? (
-                    <div className="mt-0.5 flex flex-wrap gap-1">
-                      {member.validatedSkills.map((skill) => (
-                        <SkillBadge key={skill.id} name={skill.name} color={skill.color} />
-                      ))}
-                    </div>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      ) : null}
-    </article>
-  );
-}
-
-// ── Page ──────────────────────────────────────────────────────────
 export default function OpeDashboardPage() {
   const router = useRouter();
   const [allowed, setAllowed] = useState<boolean | null>(null);
@@ -121,6 +32,9 @@ export default function OpeDashboardPage() {
 
   const [days, setDays] = useState<7 | 14>(7);
   const [offsetDays, setOffsetDays] = useState(0);
+  const [disabledTypes, setDisabledTypes] = useState<Set<string>>(new Set());
+  const [selectedMission, setSelectedMission] = useState<OpeMission | null>(null);
+  const [person, setPerson] = useState<{ id: string; name: string } | null>(null);
 
   const fromISO = useMemo(() => {
     const d = startOfToday();
@@ -160,7 +74,7 @@ export default function OpeDashboardPage() {
     void init();
   }, [router]);
 
-  // Chargement des données (à chaque changement de fenêtre)
+  // Données (à chaque changement de fenêtre)
   useEffect(() => {
     if (!allowed || !token) return;
     let cancelled = false;
@@ -177,8 +91,7 @@ export default function OpeDashboardPage() {
         setLoading(false);
         return;
       }
-      const json = (await res.json()) as OpeDashboardData;
-      setData(json);
+      setData((await res.json()) as OpeDashboardData);
       setLoading(false);
     }
     void load();
@@ -187,19 +100,51 @@ export default function OpeDashboardPage() {
     };
   }, [allowed, token, fromISO, days]);
 
-  // Regroupement des missions par jour
+  const allMissions = useMemo(() => data?.missions ?? [], [data]);
+
+  // Types présents (pour le filtre)
+  const typeOptions = useMemo<OpeTypeOption[]>(() => {
+    const seen = new Map<string, OpeTypeOption>();
+    for (const m of allMissions) {
+      const name = m.type.name;
+      if (name && !seen.has(name)) seen.set(name, { name, color: m.type.color });
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [allMissions]);
+
+  const filteredMissions = useMemo(
+    () => allMissions.filter((m) => !(m.type.name && disabledTypes.has(m.type.name))),
+    [allMissions, disabledTypes]
+  );
+
   const missionsByDay = useMemo(() => {
     const map = new Map<string, OpeMission[]>();
-    for (const mission of data?.missions ?? []) {
-      const key = missionDayKey(mission.starts_at);
+    for (const m of filteredMissions) {
+      const key = missionDayKey(m.starts_at);
       const list = map.get(key) ?? [];
-      list.push(mission);
+      list.push(m);
       map.set(key, list);
     }
     return map;
-  }, [data]);
+  }, [filteredMissions]);
+
+  // Conflits & dispo calculés sur TOUTES les missions (le filtre n'est qu'une vue).
+  const conflicts = useMemo(() => computeVolunteerConflicts(allMissions), [allMissions]);
+  const availByDay = useMemo(
+    () => availableNotRetainedByDay(allMissions, data?.availability ?? []),
+    [allMissions, data]
+  );
 
   const dayAxis = useMemo(() => buildDayAxis(fromISO, days), [fromISO, days]);
+
+  function toggleType(name: string) {
+    setDisabledTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
 
   if (allowed === false) {
     return (
@@ -216,100 +161,102 @@ export default function OpeDashboardPage() {
     { day: 'numeric', month: 'short' }
   )}`;
 
-  return (
-    <div>
-      {/* breadcrumb */}
-      <div className="mb-3 text-xs font-semibold text-slate-400">
-        OPE <span className="text-slate-300">›</span>{' '}
-        <span className="text-slate-500">Tableau de bord</span>
-      </div>
+  const btn = 'rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50';
 
-      {/* titre */}
-      <div className="mb-5">
+  return (
+    // Full-bleed par marges (pas de transform, sinon il deviendrait le bloc conteneur
+    // des modales `fixed`) : on sort du gabarit max-w-4xl du shell pour prendre toute la largeur.
+    // `overflow-x-clip` neutralise le léger débordement dû à 100vw sans casser le sticky.
+    <div className="mx-[calc(50%_-_50vw)] w-screen overflow-x-clip px-3 sm:px-6 lg:px-10">
+      {/* breadcrumb + titre */}
+      <div className="mb-3 text-xs font-semibold text-slate-400">
+        OPE <span className="text-slate-300">›</span> <span className="text-slate-500">Tableau de bord</span>
+      </div>
+      <div className="mb-4">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Tableau de bord OPE</h1>
         <p className="mt-1 text-sm text-slate-500">
           Suivi de l&apos;engagement des moyens et des personnes sur les prochains jours.
         </p>
       </div>
 
-      {/* contrôles fenêtre */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          onClick={() => setOffsetDays((o) => o - days)}
-          className="rounded-md border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          ← Précédent
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffsetDays(0)}
-          className="rounded-md border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Aujourd&apos;hui
-        </button>
-        <button
-          type="button"
-          onClick={() => setOffsetDays((o) => o + days)}
-          className="rounded-md border border-slate-300 px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50"
-        >
-          Suivant →
-        </button>
-        <span className="ml-1 text-sm font-medium text-slate-600">{rangeLabel}</span>
+      {/* Toolbar sticky */}
+      <div className="sticky top-0 z-20 -mx-3 mb-4 border-b border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" onClick={() => setOffsetDays((o) => o - days)} className={btn}>
+            ← Précédent
+          </button>
+          <button type="button" onClick={() => setOffsetDays(0)} className={btn}>
+            Aujourd&apos;hui
+          </button>
+          <button type="button" onClick={() => setOffsetDays((o) => o + days)} className={btn}>
+            Suivant →
+          </button>
+          <span className="ml-1 text-sm font-medium text-slate-600">{rangeLabel}</span>
 
-        <div className="ml-auto inline-flex overflow-hidden rounded-md border border-slate-300">
-          {([7, 14] as const).map((d) => (
-            <button
-              key={d}
-              type="button"
-              onClick={() => setDays(d)}
-              className={`px-3 py-1 text-sm ${
-                days === d ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
-              }`}
-            >
-              {d} jours
-            </button>
-          ))}
+          <div className="ml-auto flex items-center gap-2">
+            <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+              {([7, 14] as const).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => setDays(d)}
+                  className={`px-3 py-1 text-sm ${
+                    days === d ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {d} j
+                </button>
+              ))}
+            </div>
+            <PersonSearch
+              volunteers={data?.volunteers ?? []}
+              value={person?.id ?? ''}
+              onSelect={(id) => {
+                const v = (data?.volunteers ?? []).find((x) => x.id === id);
+                if (v) setPerson({ id: v.id, name: v.full_name ?? 'Bénévole' });
+              }}
+            />
+          </div>
         </div>
+
+        {typeOptions.length > 0 ? (
+          <div className="mt-2">
+            <TypeFilter types={typeOptions} disabled={disabledTypes} onToggle={toggleType} />
+          </div>
+        ) : null}
       </div>
 
       {error ? (
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       ) : null}
 
-      {/* board */}
+      {/* Board */}
       {loading && !data ? (
-        <p className="text-sm text-slate-500">Chargement…</p>
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {Array.from({ length: days }).map((_, i) => (
+            <div key={i} className="h-64 w-72 shrink-0 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+          ))}
+        </div>
       ) : (
         <div className="overflow-x-auto pb-2">
           <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
-            {dayAxis.map((day) => {
-              const missions = missionsByDay.get(day.key) ?? [];
-              return (
-                <section key={day.key} className="flex w-60 shrink-0 flex-col rounded-lg bg-slate-50 p-2">
-                  <header className="mb-2 flex items-baseline justify-between px-1">
-                    <span className="text-sm font-semibold capitalize text-slate-700">{capitalize(day.label)}</span>
-                    {missions.length > 0 ? (
-                      <span className="text-xs text-slate-400">{missions.length}</span>
-                    ) : null}
-                  </header>
-                  <div className="flex flex-col gap-2">
-                    {missions.length === 0 ? (
-                      <p className="rounded-md border border-dashed border-slate-200 px-2 py-3 text-center text-xs text-slate-400">
-                        Aucun événement
-                      </p>
-                    ) : (
-                      missions.map((mission) => <EventCard key={mission.id} mission={mission} />)
-                    )}
-                  </div>
-                </section>
-              );
-            })}
+            {dayAxis.map((day) => (
+              <DayColumn
+                key={day.key}
+                label={day.label}
+                dateISO={day.dateISO}
+                missions={missionsByDay.get(day.key) ?? []}
+                conflicts={conflicts}
+                availableNotRetained={availByDay.get(day.key) ?? []}
+                isToday={day.key === TODAY_KEY}
+                onOpen={setSelectedMission}
+              />
+            ))}
           </div>
         </div>
       )}
 
-      {/* section matériel — phase 2 */}
+      {/* Matériel — phase 2 */}
       <section className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
         <h2 className="text-sm font-semibold text-slate-700">Matériel disponible et non engagé</h2>
         <p className="mt-1 text-xs text-slate-500">
@@ -317,6 +264,25 @@ export default function OpeDashboardPage() {
           période.
         </p>
       </section>
+
+      {/* Modale fiche poste */}
+      {selectedMission ? (
+        <EventDetailModal
+          mission={selectedMission}
+          availability={data?.availability ?? []}
+          onClose={() => setSelectedMission(null)}
+        />
+      ) : null}
+
+      {/* Panneau activités d'une personne */}
+      {person ? (
+        <PersonActivityPanel
+          volunteerId={person.id}
+          volunteerName={person.name}
+          token={token}
+          onClose={() => setPerson(null)}
+        />
+      ) : null}
     </div>
   );
 }
