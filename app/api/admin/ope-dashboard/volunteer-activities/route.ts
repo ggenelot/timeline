@@ -31,19 +31,30 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Paramètre `volunteer_id` requis.' }, { status: 400 });
   }
 
-  const [assignmentsRes, typesRes, categoriesRes] = await Promise.all([
+  const assignmentsQuery = (withSkillRef: boolean) =>
     client!
       .from('mission_assignments')
       .select(
-        'assignment_status,mission_required_skill_id,' +
+        `assignment_status,${withSkillRef ? 'mission_required_skill_id,' : ''}` +
           'mission:missions(id,title,starts_at,ends_at,status,mission_type_id,' +
           'mission_required_skills(id,skill:skills(id,name,category_id)))'
       )
       .eq('volunteer_id', volunteerId)
-      .in('assignment_status', ENGAGED_STATUSES),
+      .in('assignment_status', ENGAGED_STATUSES);
+
+  const [assignmentsInitial, typesRes, categoriesRes] = await Promise.all([
+    assignmentsQuery(true),
     client!.from('mission_types').select('id,name,color'),
     client!.from('skill_categories').select('id,color'),
   ]);
+
+  // Fallback : base sans la colonne mission_required_skill_id (migration 20260430201000).
+  let assignmentsRes = assignmentsInitial;
+  let supportsRequiredSkill = true;
+  if (assignmentsRes.error?.message.includes('mission_assignments.mission_required_skill_id')) {
+    supportsRequiredSkill = false;
+    assignmentsRes = await assignmentsQuery(false);
+  }
   if (assignmentsRes.error) return NextResponse.json({ error: assignmentsRes.error.message }, { status: 500 });
   if (typesRes.error) return NextResponse.json({ error: typesRes.error.message }, { status: 500 });
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
@@ -66,7 +77,7 @@ export async function GET(req: NextRequest) {
     if (!mission) continue;
 
     let assignedSkill: OpeSkill | null = null;
-    if (row.mission_required_skill_id) {
+    if (supportsRequiredSkill && row.mission_required_skill_id) {
       const rs = (mission.mission_required_skills ?? []).find((r) => r.id === row.mission_required_skill_id);
       assignedSkill = rs ? toOpeSkill(rs.skill) : null;
     }
