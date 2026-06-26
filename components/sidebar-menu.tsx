@@ -20,6 +20,7 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', domain: 'cursus' },
   { href: '/admin/mission-types', label: 'Missions', domain: 'admin-only' },
   { href: '/admin/missions', label: 'Gestion des missions', domain: 'mission' },
+  { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', domain: 'mission' },
   { href: '/admin/stats', label: 'Statistiques', domain: 'mission' },
   { href: '/admin/slack', label: 'Slack', domain: 'admin-only' },
   { href: '/admin/help', label: 'Aide', domain: 'admin-only' },
@@ -64,14 +65,17 @@ export function SidebarMenu({
   }, [open, profile]);
 
   const isAdmin = profile?.role === 'admin';
+  const isResponsable = profile?.role === 'responsable';
 
   const visibleGestionItems = useMemo(() => {
     return GESTION_ITEMS.filter((item) => {
       if (isAdmin) return true;
       if (item.domain === 'admin-only') return false;
+      // Les responsables ont accès au pilotage des missions (OPE, stats…).
+      if (isResponsable && item.domain === 'mission') return true;
       return behaviors.some((b) => b.resource_type === item.domain && b.behavior_type === 'can_manage');
     });
-  }, [isAdmin, behaviors]);
+  }, [isAdmin, isResponsable, behaviors]);
 
   async function handleSignOut() {
     await supabase.auth.signOut();

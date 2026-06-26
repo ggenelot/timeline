@@ -357,3 +357,73 @@ export type CompetenceValidation = {
   declared_by: string;
   validated_at: string;
 };
+
+// ── Tableau de bord OPE ───────────────────────────────────────────
+// Données dénormalisées renvoyées par /api/admin/ope-dashboard pour le
+// board de pilotage opérationnel (un événement = une mission).
+export type OpeSkill = {
+  id: string;
+  name: string;
+  color: string | null; // couleur nommée de la catégorie (cf. SkillBadge)
+};
+
+export type OpeTeamMember = {
+  volunteer_id: string;
+  full_name: string | null;
+  assignment_status: string;
+  // Rôle tenu sur ce dispositif (compétence du mission_required_skill affecté).
+  assignedSkill: OpeSkill | null;
+  validatedSkills: OpeSkill[];
+};
+
+export type OpeRequiredSkill = {
+  id: string;
+  quantity: number;
+  skill: OpeSkill | null;
+};
+
+export type OpeMissionType = { name: string | null; color: string | null };
+
+export type OpeMission = {
+  id: string;
+  title: string;
+  description: string | null;
+  location: string | null;
+  starts_at: string;
+  ends_at: string;
+  status: MissionStatus;
+  required_volunteers: number;
+  type: OpeMissionType;
+  requiredSkills: OpeRequiredSkill[];
+  team: OpeTeamMember[];
+};
+
+// Secouriste disponible (response='available') sur une mission de la fenêtre.
+export type OpeAvailabilityEntry = {
+  mission_id: string;
+  volunteer_id: string;
+  full_name: string | null;
+  validatedSkills: OpeSkill[];
+};
+
+export type OpeVolunteerRef = { id: string; full_name: string | null };
+
+export type OpeDashboardData = {
+  from: string;
+  days: number;
+  missions: OpeMission[];
+  availability: OpeAvailabilityEntry[];
+  volunteers: OpeVolunteerRef[];
+};
+
+// Activité (engagement) d'une personne, pour la recherche par secouriste.
+export type OpePersonActivity = {
+  mission_id: string;
+  title: string;
+  starts_at: string;
+  ends_at: string;
+  status: MissionStatus;
+  type: OpeMissionType;
+  assignment_status: string;
+  assignedSkill: OpeSkill | null;
+};

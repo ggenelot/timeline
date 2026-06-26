@@ -82,6 +82,33 @@ export function groupMissionsByMonth<T extends { starts_at: string }>(
   return groups;
 }
 
+// ── Regroupement par jour (board OPE) ─────────────────────────────
+// Clé locale "AAAA-MM-JJ" : on utilise les composantes locales pour que la
+// colonne corresponde au jour tel que vu par l'utilisateur (pas l'UTC).
+export function missionDayKey(iso: string): string {
+  const d = new Date(iso);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function missionDayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+
+// Axe des jours de la fenêtre [from, from+days[ — inclut les jours vides
+// (nécessaire pour afficher les colonnes sans événement du board).
+export function buildDayAxis(fromISO: string, days: number): Array<{ key: string; label: string; dateISO: string }> {
+  const start = new Date(fromISO);
+  start.setHours(0, 0, 0, 0);
+  const axis: Array<{ key: string; label: string; dateISO: string }> = [];
+  for (let i = 0; i < days; i += 1) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const iso = d.toISOString();
+    axis.push({ key: missionDayKey(iso), label: missionDayLabel(iso), dateISO: iso });
+  }
+  return axis;
+}
+
 export function relationForProposal(proposal: MissionProposal | undefined, isRetained: boolean): MissionRelation {
   if (isRetained) return 'retenu';
   if (!proposal) return 'pending';
