@@ -115,34 +115,48 @@ export async function GET(req: NextRequest) {
   const teamByMission = new Map<string, OpeTeamMember[]>();
   const availability: OpeAvailabilityEntry[] = [];
   if (missionIds.length > 0) {
-    const [assignmentsRes, proposalsRes] = await Promise.all([
+    // Embed volontaire (identique pour assignments & proposals).
+    const volunteerEmbed =
+      'volunteer:profiles!%FK%(id,full_name,profile_skills(status,skill:skills(id,name,category_id)))';
+    const assignmentEmbed = volunteerEmbed.replace('%FK%', 'mission_assignments_volunteer_id_fkey');
+
+    const assignmentsQuery = (withSkillRef: boolean) =>
       client!
         .from('mission_assignments')
         .select(
-          'mission_id,volunteer_id,assignment_status,mission_required_skill_id,' +
-            'volunteer:profiles!mission_assignments_volunteer_id_fkey(' +
-            'id,full_name,profile_skills(status,skill:skills(id,name,category_id)))'
+          `mission_id,volunteer_id,assignment_status,${withSkillRef ? 'mission_required_skill_id,' : ''}${assignmentEmbed}`
         )
         .in('mission_id', missionIds)
-        .in('assignment_status', ENGAGED_STATUSES),
+        .in('assignment_status', ENGAGED_STATUSES);
+
+    const [assignmentsInitial, proposalsRes] = await Promise.all([
+      assignmentsQuery(true),
       client!
         .from('mission_proposals')
         .select(
-          'mission_id,volunteer_id,' +
-            'volunteer:profiles!mission_proposals_volunteer_id_fkey(' +
-            'id,full_name,profile_skills(status,skill:skills(id,name,category_id)))'
+          `mission_id,volunteer_id,${volunteerEmbed.replace('%FK%', 'mission_proposals_volunteer_id_fkey')}`
         )
         .in('mission_id', missionIds)
         .eq('response', 'available'),
     ]);
+
+    // Fallback : certaines bases n'ont pas encore la colonne mission_required_skill_id
+    // (migration 20260430201000). On rejoue sans elle, comme la page détail mission.
+    let assignmentsRes = assignmentsInitial;
+    let supportsRequiredSkill = true;
+    if (assignmentsRes.error?.message.includes('mission_assignments.mission_required_skill_id')) {
+      supportsRequiredSkill = false;
+      assignmentsRes = await assignmentsQuery(false);
+    }
     if (assignmentsRes.error) return NextResponse.json({ error: assignmentsRes.error.message }, { status: 500 });
     if (proposalsRes.error) return NextResponse.json({ error: proposalsRes.error.message }, { status: 500 });
 
     for (const row of (assignmentsRes.data ?? []) as unknown as AssignmentRow[]) {
       const volunteer = Array.isArray(row.volunteer) ? row.volunteer[0] : row.volunteer ?? undefined;
-      const assignedSkill = row.mission_required_skill_id
-        ? toOpeSkill(skillByRequiredId.get(row.mission_required_skill_id) ?? null)
-        : null;
+      const assignedSkill =
+        supportsRequiredSkill && row.mission_required_skill_id
+          ? toOpeSkill(skillByRequiredId.get(row.mission_required_skill_id) ?? null)
+          : null;
 
       const member: OpeTeamMember = {
         volunteer_id: row.volunteer_id,
