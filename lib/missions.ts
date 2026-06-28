@@ -1,4 +1,4 @@
-import { MissionProposalResponse, MissionStatus } from '@/lib/types';
+import { MissionMaterielVerificationStatus, MissionProposalResponse, MissionStatus } from '@/lib/types';
 
 export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   draft: 'Brouillon',
@@ -7,6 +7,22 @@ export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   confirmed: 'Confirmé',
   cancelled: 'Annulé'
 };
+
+export const MISSION_VERIFICATION_STATUS_LABELS: Record<MissionMaterielVerificationStatus, string> = {
+  not_started: 'À vérifier',
+  in_progress: 'En cours',
+  completed: 'Vérifiée'
+};
+
+export function getMissionVerificationStatusBadgeClass(status: MissionMaterielVerificationStatus) {
+  const statusClassMap: Record<MissionMaterielVerificationStatus, string> = {
+    not_started: 'border-slate-300 bg-slate-100 text-slate-700',
+    in_progress: 'border-amber-200 bg-amber-50 text-amber-700',
+    completed: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  };
+
+  return statusClassMap[status];
+}
 
 export function getMissionStatusBadgeClass(status: MissionStatus) {
   const statusClassMap: Record<MissionStatus, string> = {
