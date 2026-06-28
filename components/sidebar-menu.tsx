@@ -16,6 +16,8 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/volunteers', label: 'Bénévoles', domain: 'admin-only' },
   { href: '/admin/roles', label: 'Rôles', domain: 'admin-only' },
   { href: '/admin/skills', label: 'Compétences', domain: 'admin-only' },
+  { href: '/admin/materiels', label: 'Matériel', domain: 'admin-only' },
+  { href: '/admin/materiels/items', label: 'Items', domain: 'admin-only' },
   { href: '/admin/cursus', label: 'Cursus', domain: 'cursus' },
   { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', domain: 'cursus' },
   { href: '/admin/mission-types', label: 'Missions', domain: 'admin-only' },
@@ -111,6 +113,9 @@ export function SidebarMenu({
         </Link>
         <Link href="/competences" onClick={onClose} tabIndex={tab} className={linkClass}>
           Cursus
+        </Link>
+        <Link href="/verification" onClick={onClose} tabIndex={tab} className={linkClass}>
+          Vérification
         </Link>
         <Link href="/profile" onClick={onClose} tabIndex={tab} className={linkClass}>
           Profil
