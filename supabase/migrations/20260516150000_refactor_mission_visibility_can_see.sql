@@ -106,7 +106,7 @@ AS $$
             FROM public.profile_roles pr
             JOIN public.role_behaviors rb ON rb.role_id = pr.role_id
             WHERE pr.profile_id = _user_id
-              AND rb.behavior_type = 'can_see'
+              AND rb.behavior_type::text = 'can_see'
               AND (rb.mission_type_ids = '{}' OR m.mission_type_id = ANY(rb.mission_type_ids))
               AND (rb.mission_statuses = '{}' OR m.status = ANY(rb.mission_statuses))
           )

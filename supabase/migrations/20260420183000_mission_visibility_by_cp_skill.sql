@@ -66,7 +66,7 @@ as $$
           and m.status <> 'draft'
           and (
             public.user_has_cp_skill(_user_id)
-            or m.category <> 'poste_de_secours'
+            or m.category::text <> 'poste_de_secours'
             or public.mission_has_cp_available_volunteer(m.id)
           )
         )
