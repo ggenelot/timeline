@@ -17,7 +17,7 @@ export function MissionMaterielEditor({
   requirementsError,
   submitting
 }: MissionMaterielEditorProps) {
-  const selectedMaterielTypeIds = requirements.map((requirement) => requirement.materiel_type_id);
+  const selectedCategoryIds = requirements.map((requirement) => requirement.category_id);
 
   function updateRequirement(index: number, patch: Partial<MissionMaterielRequirementFormState>) {
     onRequirementsChange(requirements.map((requirement, currentIndex) => (currentIndex === index ? { ...requirement, ...patch } : requirement)));
@@ -28,7 +28,7 @@ export function MissionMaterielEditor({
   }
 
   function addRequirement() {
-    onRequirementsChange([...requirements, { materiel_type_id: '', quantity: '1' }]);
+    onRequirementsChange([...requirements, { category_id: '', quantity: '1' }]);
   }
 
   function updateQuantity(index: number, nextQuantity: number) {
@@ -58,20 +58,20 @@ export function MissionMaterielEditor({
       {requirements.length > 0 ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {requirements.map((requirement, index) => {
-            const usedTypeIdsByOtherRows = new Set(selectedMaterielTypeIds.filter((typeId, selectedIndex) => selectedIndex !== index));
+            const usedCategoryIdsByOtherRows = new Set(selectedCategoryIds.filter((categoryId, selectedIndex) => selectedIndex !== index));
 
             return (
               <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 11, border: '1px solid #eef1f5', background: '#fff', borderRadius: 11, padding: 13 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                   {availableMateriels.map((materiel) => {
-                    const isUsedInAnotherRow = usedTypeIdsByOtherRows.has(materiel.id);
-                    const isSelected = requirement.materiel_type_id === materiel.id;
+                    const isUsedInAnotherRow = usedCategoryIdsByOtherRows.has(materiel.id);
+                    const isSelected = requirement.category_id === materiel.id;
 
                     return (
                       <button
                         key={materiel.id}
                         type="button"
-                        onClick={() => updateRequirement(index, { materiel_type_id: materiel.id })}
+                        onClick={() => updateRequirement(index, { category_id: materiel.id })}
                         disabled={submitting || isUsedInAnotherRow}
                         className={`${isSelected ? getSkillColorClass(materiel.color ?? null) : neutralBadgeClass} disabled:cursor-not-allowed disabled:opacity-50`}
                       >

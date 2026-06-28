@@ -69,7 +69,7 @@ export type MissionRequirementFormState = {
 };
 
 export type MissionMaterielRequirementFormState = {
-  materiel_type_id: string;
+  category_id: string;
   quantity: string;
 };
 

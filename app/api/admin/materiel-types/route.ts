@@ -42,7 +42,7 @@ export async function GET(req: NextRequest) {
     const { data: childIds } = await client!.from('materiel_type_contents').select('child_type_id');
     const excluded = Array.from(new Set((childIds ?? []).map((row) => row.child_type_id)));
 
-    let query = client!.from('materiel_types').select('*').eq('is_container', true).order('display_order', { ascending: true });
+    let query = client!.from('materiel_types').select('*, category:materiel_categories(id, name, color)').eq('is_container', true).order('display_order', { ascending: true });
     if (excluded.length > 0) query = query.not('id', 'in', `(${excluded.join(',')})`);
 
     const { data, error: dbError } = await query;

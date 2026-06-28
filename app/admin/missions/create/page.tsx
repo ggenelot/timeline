@@ -20,7 +20,7 @@ type ParsedRequirement = {
 };
 
 type ParsedMaterielRequirement = {
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
 };
 
@@ -116,16 +116,16 @@ function parseMissionRequirements(requirements: MissionRequirementFormState[]): 
 function parseMissionMaterielRequirements(requirements: MissionMaterielRequirementFormState[]): { parsedRequirements: ParsedMaterielRequirement[]; error: string | null } {
   const trimmedRequirements = requirements
     .map((requirement) => ({
-      materiel_type_id: requirement.materiel_type_id.trim(),
+      category_id: requirement.category_id.trim(),
       quantity: requirement.quantity.trim()
     }))
-    .filter((requirement) => requirement.materiel_type_id.length > 0 || requirement.quantity.length > 0);
+    .filter((requirement) => requirement.category_id.length > 0 || requirement.quantity.length > 0);
 
   const parsedRequirements: ParsedMaterielRequirement[] = [];
-  const selectedMaterielTypeIds = new Set<string>();
+  const selectedCategoryIds = new Set<string>();
 
   for (const requirement of trimmedRequirements) {
-    if (!requirement.materiel_type_id) {
+    if (!requirement.category_id) {
       return { parsedRequirements: [], error: 'Veuillez sélectionner un type de matériel pour chaque ligne.' };
     }
 
@@ -133,13 +133,13 @@ function parseMissionMaterielRequirements(requirements: MissionMaterielRequireme
       return { parsedRequirements: [], error: 'La quantité doit être un entier strictement positif.' };
     }
 
-    if (selectedMaterielTypeIds.has(requirement.materiel_type_id)) {
+    if (selectedCategoryIds.has(requirement.category_id)) {
       return { parsedRequirements: [], error: 'Un même type de matériel ne peut pas être ajouté en double.' };
     }
 
-    selectedMaterielTypeIds.add(requirement.materiel_type_id);
+    selectedCategoryIds.add(requirement.category_id);
     parsedRequirements.push({
-      materiel_type_id: requirement.materiel_type_id,
+      category_id: requirement.category_id,
       quantity: Number.parseInt(requirement.quantity, 10)
     });
   }
@@ -193,11 +193,10 @@ export default function AdminCreateMissionPage() {
       setProfile(profileData);
 
       // Independent reads run in parallel to avoid a request waterfall.
-      const [sessionResult, skillResult, materielResult, materielContentsResult, locationsResult] = await Promise.all([
+      const [sessionResult, skillResult, materielResult, locationsResult] = await Promise.all([
         supabase.auth.getSession(),
         supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
-        supabase.from('materiel_types').select('id,name,materiel_categories(color)').eq('is_container', true).order('name', { ascending: true }),
-        supabase.from('materiel_type_contents').select('child_type_id'),
+        supabase.from('materiel_categories').select('id,name,color').order('display_order', { ascending: true }),
         supabase.from('missions').select('location').not('location', 'is', null),
       ]);
 
@@ -228,25 +227,19 @@ export default function AdminCreateMissionPage() {
       );
 
       const { data: materielData, error: materielError } = materielResult;
-      const { data: materielContentsData, error: materielContentsError } = materielContentsResult;
 
-      if (materielError || materielContentsError) {
-        setError(`Impossible de charger les types de matériel: ${materielError?.message ?? materielContentsError?.message}`);
+      if (materielError) {
+        setError(`Impossible de charger les types de matériel: ${materielError.message}`);
         setLoading(false);
         return;
       }
 
-      // Seuls les contenants de plus haut niveau (jamais imbriqués dans un autre
-      // contenant) sont mobilisables sur une mission.
-      const nestedContainerIds = new Set((materielContentsData ?? []).map((row) => row.child_type_id));
       setMaterielTypes(
-        (materielData ?? [])
-          .filter((m) => !nestedContainerIds.has(m.id))
-          .map((m) => ({
-            id: m.id,
-            name: m.name,
-            color: (m.materiel_categories as { color?: string } | null)?.color ?? null
-          }))
+        (materielData ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color ?? null
+        }))
       );
 
       const { data: locationsData, error: locationsError } = locationsResult;
@@ -457,7 +450,7 @@ export default function AdminCreateMissionPage() {
       const materielRequirementRows = createdMissions.flatMap((mission) =>
         parsedMaterielRequirements.map((requirement) => ({
           mission_id: mission.id,
-          materiel_type_id: requirement.materiel_type_id,
+          category_id: requirement.category_id,
           quantity: requirement.quantity
         }))
       );

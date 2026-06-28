@@ -99,25 +99,48 @@ export type MaterielTypeContent = {
   quantity: number;
   position: number;
   created_at: string;
-  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container'> | null;
+  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container' | 'category_id' | 'category'> | null;
+};
+
+export type MissionMaterielAssignment = {
+  id: string;
+  mission_required_materiel_id: string;
+  materiel_type_id: string;
+  assigned_by: string | null;
+  created_at: string;
+  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
 };
 
 export type MissionRequiredMateriel = {
   id: string;
   mission_id: string;
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
   created_at: string;
-  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  category?: Pick<MaterielCategory, 'id' | 'name' | 'color'> | null;
+  assignments?: MissionMaterielAssignment[];
 };
 
 export type MissionTypeRequiredMateriel = {
   id: string;
   mission_type_id: string;
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
   created_at: string;
-  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  category?: Pick<MaterielCategory, 'id' | 'name' | 'color'> | null;
+};
+
+export type MissionMaterielCheck = {
+  id: string;
+  mission_materiel_assignment_id: string;
+  item_type_id: string;
+  expected_quantity: number;
+  is_present: boolean;
+  comment: string | null;
+  checked_by: string | null;
+  checked_at: string;
+  item_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  checked_by_profile?: Pick<Profile, 'id' | 'full_name'> | null;
 };
 
 export type HelpPage = {

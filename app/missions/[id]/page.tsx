@@ -16,8 +16,10 @@ import {
   Mission,
   MissionAssignment,
   MissionAssignmentStatus,
+  MissionMaterielCheck,
   MissionProposal,
   MissionProposalResponse,
+  MissionRequiredMateriel,
   MissionRequiredSkill,
   Profile,
   ProfileSkill,
@@ -26,6 +28,8 @@ import {
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { getCandidateActivity } from '@/lib/queries/activity';
 import { MissionActivityPanel } from '@/components/activity/MissionActivityPanel';
+import { MissionMaterielCheckList } from '@/components/missions/mission-materiel-check-list';
+import { MissionMaterielAssignmentPicker, CandidateContainer } from '@/components/missions/mission-materiel-assignment-picker';
 
 type ProposalWithVolunteer = MissionProposal & {
   volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
@@ -41,6 +45,7 @@ type AssignmentWithVolunteer = MissionAssignment & {
 
 type MissionWithSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
+  mission_required_materiels: MissionRequiredMateriel[] | null;
 };
 
 type ActivityLogWithActor = ActivityLog & {
@@ -133,6 +138,8 @@ export default function MissionDetailPage() {
   const [activityActs, setActivityActs] = useState<ActivityAct[]>([]);
   const [activityError, setActivityError] = useState<string | null>(null);
   const [isActivityExpanded, setIsActivityExpanded] = useState(false);
+  const [materielChecks, setMaterielChecks] = useState<MissionMaterielCheck[]>([]);
+  const [candidateContainers, setCandidateContainers] = useState<CandidateContainer[]>([]);
 
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
 
@@ -473,7 +480,7 @@ export default function MissionDetailPage() {
     const { data: missionData, error: missionError } = await supabase
       .from('missions')
       .select(
-        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
+        'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,slack_channel_id,slack_channel_name,slack_channel_created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order)),mission_required_materiels(id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color),assignments:mission_materiel_assignments(id,mission_required_materiel_id,materiel_type_id,assigned_by,created_at,materiel_type:materiel_types(id,name,code)))'
       )
       .eq('id', missionId)
       .single();
@@ -489,10 +496,50 @@ export default function MissionDetailPage() {
       mission_required_skills: (missionData.mission_required_skills ?? []).map((requiredSkill) => ({
         ...requiredSkill,
         skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
+      })),
+      mission_required_materiels: (missionData.mission_required_materiels ?? []).map((requiredMateriel) => ({
+        ...requiredMateriel,
+        category: Array.isArray(requiredMateriel.category) ? requiredMateriel.category[0] ?? null : requiredMateriel.category,
+        assignments: (requiredMateriel.assignments ?? []).map((assignment) => ({
+          ...assignment,
+          materiel_type: Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] ?? null : assignment.materiel_type
+        }))
       }))
     };
 
     setMission(mappedMission);
+
+    const assignmentIds = mappedMission.mission_required_materiels?.flatMap((requiredMateriel) => (requiredMateriel.assignments ?? []).map((a) => a.id)) ?? [];
+    if (assignmentIds.length > 0) {
+      const { data: checksData } = await supabase
+        .from('mission_materiel_checks')
+        .select(
+          'id,mission_materiel_assignment_id,item_type_id,expected_quantity,is_present,comment,checked_by,checked_at,item_type:materiel_types(id,name,code),checked_by_profile:profiles!mission_materiel_checks_checked_by_fkey(id,full_name)'
+        )
+        .in('mission_materiel_assignment_id', assignmentIds);
+
+      setMaterielChecks(
+        (checksData ?? []).map((check) => ({
+          ...check,
+          item_type: Array.isArray(check.item_type) ? check.item_type[0] ?? null : check.item_type,
+          checked_by_profile: Array.isArray(check.checked_by_profile) ? check.checked_by_profile[0] ?? null : check.checked_by_profile
+        }))
+      );
+    } else {
+      setMaterielChecks([]);
+    }
+
+    const categoryIds = Array.from(new Set((mappedMission.mission_required_materiels ?? []).map((requiredMateriel) => requiredMateriel.category_id)));
+    if (categoryIds.length > 0) {
+      const [containersResult, contentsResult] = await Promise.all([
+        supabase.from('materiel_types').select('id,name,code,category_id').eq('is_container', true).in('category_id', categoryIds),
+        supabase.from('materiel_type_contents').select('child_type_id')
+      ]);
+      const nestedContainerIds = new Set((contentsResult.data ?? []).map((row) => row.child_type_id));
+      setCandidateContainers((containersResult.data ?? []).filter((c) => !nestedContainerIds.has(c.id)));
+    } else {
+      setCandidateContainers([]);
+    }
 
     const { data: statusData } = await supabase
       .from('skill_statuses')
@@ -694,6 +741,10 @@ export default function MissionDetailPage() {
   }
 
   const canManageMission = profile?.role === 'admin' || (canManageByRole && mission.created_by === user?.id);
+  const isAssignedToMission = assignments.some(
+    (assignment) => assignment.volunteer_id === user?.id && (assignment.assignment_status === 'selected' || assignment.assignment_status === 'confirmed')
+  );
+  const canVerifyMateriel = mission.status === 'confirmed' && (isAssignedToMission || canManageMission);
   const missionBlocksSelection = mission.status === 'cancelled' || mission.status === 'confirmed';
   const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
 
@@ -1096,6 +1147,18 @@ export default function MissionDetailPage() {
           </div>
         ) : null}
       </article>
+
+      {canManageMission ? (
+        <MissionMaterielAssignmentPicker
+          requirements={mission.mission_required_materiels ?? []}
+          candidateContainers={candidateContainers}
+          onChange={() => void loadData()}
+        />
+      ) : null}
+
+      {canVerifyMateriel && user ? (
+        <MissionMaterielCheckList requirements={mission.mission_required_materiels ?? []} checks={materielChecks} currentUserId={user.id} />
+      ) : null}
 
       {canManageMission ? (
         <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
