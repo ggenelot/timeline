@@ -1,3 +1,10 @@
+-- Fresh-apply guard : la colonne skills.category n'est créée par AUCUNE migration
+-- (elle a été ajoutée manuellement sur la prod historique). On la crée si absente
+-- pour rendre la chaîne rejouable depuis zéro (bootstrap d'un projet Supabase vierge).
+-- No-op sur la prod où la colonne existe déjà ; elle est supprimée plus tard par
+-- 20260517100000_skill_categories_refactor.sql.
+alter table public.skills add column if not exists category text;
+
 -- Remove deprecated "autres" skill family and keep only 4 families.
 -- Also normalize legacy "technique" category to "conduite".
 
