@@ -114,18 +114,40 @@ Pour contribuer (branches, PR, environnements), voir [`CONTRIBUTING.md`](./CONTR
 
 ### Fonctionnalités disponibles
 
+**Missions & équipes**
+
 - Authentification et profils par rôle.
-- Consultation des missions avec filtres (catégorie, dates, compétences requises).
+- Consultation des missions (frise chronologique) avec filtres (catégorie, dates, compétences requises).
 - Réponses bénévoles : `disponible`, `indisponible`, `peut-être`.
 - Validation responsable/admin des propositions (`acceptée`, `refusée`).
 - Sélection et retrait de bénévoles pour l'équipe finale.
 - Vue bénévole des missions retenues (`/my-missions`).
 - Historique métier par mission (création, changement de statut, réponses, sélections/retraits d'équipe).
-- Système de compétences et de rôles avec règles de visibilité configurable.
 - Import de missions depuis Google Sheets.
-- Intégration Slack V1 (bot : création canal privé, invitations, messages DM).
+- Export calendrier iCal (ICS) pour les bénévoles (missions proposées / positionné / retenu).
+- Tableau de bord OPE : pilotage opérationnel des missions et des disponibilités.
+
+**Compétences & formation**
+
+- Référentiel de compétences (catégories, niveaux et statuts configurables) et compétences par bénévole.
+- Cursus de formation (CE, CP, CEPS…) : phases, règles de validation, doublures (tutorat), validations de compétences et suivi de progression.
+- Tableau de bord des compétences.
+
+**Matériel**
+
+- Catalogue de matériel : types, catégories, contenus de conteneurs et exemplaires (« items ») avec statuts.
+- Affectation de matériel aux missions et vérification assistée du matériel par mission.
+
+**Configuration & rôles**
+
+- Types de missions configurables (compétences et matériel requis par défaut).
+- Rôles fonctionnels dynamiques : comportements configurables par type de ressource (création, gestion, visibilité, Slack), distincts du rôle d'authentification.
+- Page d'aide configurable par l'administration.
+
+**Slack**
+
+- Intégration Slack V1 (bot : création canal privé, invitations, messages DM) avec templates de messages configurables.
 - Auth Slack V2 (OpenID Connect SSO + liaison de compte OAuth).
-- Types de missions configurables avec compétences requises par défaut.
 
 ---
 
@@ -461,24 +483,34 @@ npm run diagnose:slack-oauth    # Diagnostiquer la configuration OAuth Slack
 ```
 timeline/
 ├── app/                    # Pages et API routes (Next.js App Router)
-│   ├── admin/              # Pages d'administration
-│   ├── api/                # Endpoints API (auth, slack, missions…)
-│   ├── missions/           # Liste et détail des missions
+│   ├── admin/              # Back-office : volunteers, missions, mission-types,
+│   │                       #   skills, roles, materiels, cursus, ope-dashboard,
+│   │                       #   competences-dashboard, stats, slack, help
+│   ├── api/                # Endpoints API (auth, slack, missions, materiel,
+│   │                       #   verification, ope-dashboard, calendar…)
+│   ├── missions/           # Liste (frise) et détail des missions
 │   ├── my-missions/        # Missions retenues du bénévole connecté
+│   ├── competences/        # Compétences et cursus du bénévole
+│   ├── verification/       # Vérification du matériel par mission
 │   ├── profile/            # Profil utilisateur
 │   └── login/              # Page de connexion
 ├── components/             # Composants React réutilisables
 ├── lib/                    # Utilitaires et configuration
+│   ├── api/                # Helpers d'authentification API (auth, OPE)
+│   ├── queries/            # Requêtes métier (cursus, activité)
 │   ├── slack/              # Service Slack (auth, OAuth, templates, bot)
 │   ├── supabase/           # Clients Supabase (client-side + server-side)
+│   ├── missions.ts         # Logique missions
+│   ├── import-missions.ts  # Import Google Sheets
+│   ├── ope-dashboard.ts    # Agrégations du tableau de bord OPE
 │   └── types.ts            # Types TypeScript partagés
 ├── supabase/
-│   ├── migrations/         # Migrations SQL (61 fichiers, ordre chronologique)
-│   ├── functions/          # Edge Functions Deno (Slack)
-│   └── seeds/              # Données de test
+│   ├── migrations/         # Migrations SQL (94 fichiers, ordre chronologique)
+│   ├── functions/          # Edge Functions Deno (invitations & sync Slack)
+│   └── seeds/              # Données de test (compétences…)
 ├── tests/e2e/              # Tests Playwright
 ├── docs/                   # Documentation complémentaire
-└── scripts/                # Scripts utilitaires (diagnostic, sécurité)
+└── scripts/                # Scripts utilitaires (diagnostic, démo, sécurité)
 ```
 
 ### Modèle de données principal
@@ -489,11 +521,23 @@ timeline/
 | `missions` | Missions avec statut, type, dates, équipe |
 | `mission_proposals` | Réponses des bénévoles aux missions |
 | `mission_assignments` | Équipe finale sélectionnée par mission |
-| `mission_required_skills` | Compétences requises par mission |
+| `mission_required_skills` / `mission_required_levels` | Compétences et niveaux requis par mission |
+| `mission_types` | Types de missions configurables (compétences/matériel par défaut) |
 | `skills` / `profile_skills` | Référentiel compétences + compétences utilisateur |
-| `mission_types` | Types de missions configurables |
+| `skill_categories` / `skill_levels` / `skill_statuses` / `skill_domains` | Paramétrage du référentiel de compétences |
+| `aptitudes` / `profile_aptitudes` | Aptitudes transverses et leur attribution aux bénévoles |
+| `cursus` / `cursus_phases` / `cursus_rules` / `cursus_competences` | Définition des cursus de formation |
+| `volunteer_cursus` / `doublures` / `competence_validations` | Inscriptions aux cursus, doublures (tutorat) et validations |
+| `profile_domain_progress` | Progression des bénévoles par domaine |
+| `materiel_types` / `materiel_categories` / `materiel_type_contents` | Catalogue de matériel et contenus de conteneurs |
+| `materiel_instances` | Exemplaires de matériel avec statut et stockage |
+| `mission_materiel_assignments` / `mission_required_materiels` | Matériel affecté / requis par mission |
+| `mission_materiel_verifications` / `mission_materiel_verification_items` | Vérification du matériel par mission |
+| `mission_visibility_rules` | Règles de visibilité des missions par rôle/compétence |
 | `roles` / `profile_roles` | Rôles fonctionnels (distincts du rôle auth) |
 | `role_behaviors` | Règles de comportement par rôle (visibilité, création, Slack) |
+| `responsibilities` / `responsibility_holders` | Responsabilités fonctionnelles et leurs titulaires |
+| `help_pages` / `events` | Contenu des pages d'aide et événements d'agenda |
 | `activity_logs` | Historique métier immuable (écrit par triggers SQL) |
 | `slack_*` | Tables d'intégration Slack (identités, invitations, logs, templates) |
 
