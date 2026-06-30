@@ -131,12 +131,7 @@ export function EventDetailModal({
               </h3>
               <div className="flex flex-wrap gap-1.5">
                 {mission.materiel.map((item) => (
-                  <MaterielChip
-                    key={item.container_type_id}
-                    name={item.name}
-                    code={item.code}
-                    color={item.category?.color ?? null}
-                  />
+                  <MaterielChip key={item.container_type_id} name={item.name} code={item.code} tone="engaged" />
                 ))}
               </div>
             </section>
