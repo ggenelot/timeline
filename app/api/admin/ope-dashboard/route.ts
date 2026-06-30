@@ -1,6 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { authorizeOpe } from '@/lib/api/ope-auth';
-import type { MissionStatus, OpeAvailabilityEntry, OpeMission, OpeSkill, OpeTeamMember } from '@/lib/types';
+import type {
+  MissionStatus,
+  OpeAvailabilityEntry,
+  OpeContainer,
+  OpeEngagedMateriel,
+  OpeMission,
+  OpeSkill,
+  OpeTeamMember,
+} from '@/lib/types';
 
 // Les assignments retenus pour l'équipe « engagée ».
 const ENGAGED_STATUSES = ['selected', 'confirmed'];
@@ -37,6 +45,34 @@ type ProposalRow = {
   volunteer_id: string;
   volunteer: VolunteerRel;
 };
+
+// ── Matériel : formes brutes des embeds Supabase ──────────────────
+type MaterielCategoryEmbed = { id: string; name: string; color: string | null };
+type MaterielCategoryRel = MaterielCategoryEmbed | MaterielCategoryEmbed[] | null;
+type MaterielTypeEmbed = { id: string; name: string; code: string | null; category: MaterielCategoryRel };
+type MaterielTypeRel = MaterielTypeEmbed | MaterielTypeEmbed[] | null;
+type RequiredMaterielRow = {
+  mission_id: string;
+  assignments: Array<{ materiel_type: MaterielTypeRel }> | null;
+};
+type ContainerRow = {
+  id: string;
+  name: string;
+  code: string | null;
+  is_available: boolean;
+  unavailable_reason: string | null;
+  category: MaterielCategoryRel;
+};
+
+function firstOf<T>(rel: T | T[] | null | undefined): T | null {
+  if (Array.isArray(rel)) return rel[0] ?? null;
+  return rel ?? null;
+}
+
+function toCategoryRef(rel: MaterielCategoryRel): { id: string; name: string; color: string | null } | null {
+  const c = firstOf(rel);
+  return c ? { id: c.id, name: c.name, color: c.color } : null;
+}
 
 export async function GET(req: NextRequest) {
   const { client, error } = await authorizeOpe(req);
@@ -113,6 +149,7 @@ export async function GET(req: NextRequest) {
   // 2) Équipe engagée + 3) disponibilités, sur les missions de la fenêtre.
   const missionIds = missionRows.map((m) => m.id);
   const teamByMission = new Map<string, OpeTeamMember[]>();
+  const materielByMission = new Map<string, OpeEngagedMateriel[]>();
   const availability: OpeAvailabilityEntry[] = [];
   if (missionIds.length > 0) {
     // Embed volontaire (identique pour assignments & proposals).
@@ -129,7 +166,7 @@ export async function GET(req: NextRequest) {
         .in('mission_id', missionIds)
         .in('assignment_status', ENGAGED_STATUSES);
 
-    const [assignmentsInitial, proposalsRes] = await Promise.all([
+    const [assignmentsInitial, proposalsRes, requiredMaterielsRes] = await Promise.all([
       assignmentsQuery(true),
       client!
         .from('mission_proposals')
@@ -138,6 +175,14 @@ export async function GET(req: NextRequest) {
         )
         .in('mission_id', missionIds)
         .eq('response', 'available'),
+      // Matériel engagé : on passe par mission_required_materiels (qui porte
+      // mission_id) car mission_materiel_assignments ne référence que le besoin.
+      client!
+        .from('mission_required_materiels')
+        .select(
+          'mission_id,assignments:mission_materiel_assignments(materiel_type:materiel_types(id,name,code,category:materiel_categories(id,name,color)))'
+        )
+        .in('mission_id', missionIds),
     ]);
 
     // Fallback : certaines bases n'ont pas encore la colonne mission_required_skill_id
@@ -150,6 +195,7 @@ export async function GET(req: NextRequest) {
     }
     if (assignmentsRes.error) return NextResponse.json({ error: assignmentsRes.error.message }, { status: 500 });
     if (proposalsRes.error) return NextResponse.json({ error: proposalsRes.error.message }, { status: 500 });
+    if (requiredMaterielsRes.error) return NextResponse.json({ error: requiredMaterielsRes.error.message }, { status: 500 });
 
     for (const row of (assignmentsRes.data ?? []) as unknown as AssignmentRow[]) {
       const volunteer = Array.isArray(row.volunteer) ? row.volunteer[0] : row.volunteer ?? undefined;
@@ -179,7 +225,53 @@ export async function GET(req: NextRequest) {
         validatedSkills: validatedSkillsOf(volunteer),
       });
     }
+
+    // Matériel engagé par mission (dédupliqué par contenant : un même contenant
+    // ne peut servir qu'une catégorie, donc apparaît au plus une fois par mission).
+    for (const row of (requiredMaterielsRes.data ?? []) as unknown as RequiredMaterielRow[]) {
+      const list = materielByMission.get(row.mission_id) ?? [];
+      for (const assignment of row.assignments ?? []) {
+        const mt = firstOf(assignment.materiel_type);
+        if (!mt || list.some((x) => x.container_type_id === mt.id)) continue;
+        list.push({
+          container_type_id: mt.id,
+          name: mt.name,
+          code: mt.code ?? null,
+          category: toCategoryRef(mt.category),
+        });
+      }
+      if (list.length > 0) materielByMission.set(row.mission_id, list);
+    }
   }
+
+  // 4) Catalogue des contenants racines (unités engageables) + leur disponibilité.
+  // Mêmes critères que la route ?kind=roots : is_container=true et non imbriqué
+  // dans un autre contenant.
+  const { data: childIdRows, error: childIdsError } = await client!
+    .from('materiel_type_contents')
+    .select('child_type_id');
+  if (childIdsError) return NextResponse.json({ error: childIdsError.message }, { status: 500 });
+  const nestedContainerIds = Array.from(new Set((childIdRows ?? []).map((r) => r.child_type_id)));
+
+  let containersQuery = client!
+    .from('materiel_types')
+    .select('id,name,code,is_available,unavailable_reason,category:materiel_categories(id,name,color)')
+    .eq('is_container', true)
+    .order('display_order', { ascending: true });
+  if (nestedContainerIds.length > 0) {
+    containersQuery = containersQuery.not('id', 'in', `(${nestedContainerIds.join(',')})`);
+  }
+  const containersRes = await containersQuery;
+  if (containersRes.error) return NextResponse.json({ error: containersRes.error.message }, { status: 500 });
+
+  const containers: OpeContainer[] = ((containersRes.data ?? []) as unknown as ContainerRow[]).map((c) => ({
+    id: c.id,
+    name: c.name,
+    code: c.code ?? null,
+    is_available: c.is_available,
+    unavailable_reason: c.unavailable_reason ?? null,
+    category: toCategoryRef(c.category),
+  }));
 
   const missions: OpeMission[] = missionRows.map((m) => ({
     id: m.id,
@@ -197,9 +289,10 @@ export async function GET(req: NextRequest) {
       skill: toOpeSkill(rs.skill),
     })),
     team: teamByMission.get(m.id) ?? [],
+    materiel: materielByMission.get(m.id) ?? [],
   }));
 
   const volunteers = (volunteersRes.data ?? []).map((v) => ({ id: v.id, full_name: v.full_name }));
 
-  return NextResponse.json({ from: from.toISOString(), days, missions, availability, volunteers });
+  return NextResponse.json({ from: from.toISOString(), days, missions, availability, volunteers, containers });
 }

@@ -1,5 +1,6 @@
 import type { MissionStatus } from '@/lib/types';
 import { MISSION_STATUS_LABELS, getMissionStatusBadgeClass } from '@/lib/missions';
+import { getSkillColorClass } from '@/components/skills/skill-badge';
 
 export function capitalize(s: string): string {
   return s.length === 0 ? s : s[0].toUpperCase() + s.slice(1);
@@ -55,6 +56,33 @@ export function EffectifBadge({ engaged, required }: { engaged: number; required
       <span className={`text-[11px] font-semibold tabular-nums ${tone.text}`}>
         {engaged}/{required || '—'}
       </span>
+    </span>
+  );
+}
+
+// Puce d'un contenant matériel, colorée par sa catégorie (même palette que les
+// compétences). `muted` = grisé barré, pour le matériel indisponible.
+export function MaterielChip({
+  name,
+  code,
+  color,
+  muted,
+  title,
+}: {
+  name: string;
+  code: string | null;
+  color: string | null;
+  muted?: boolean;
+  title?: string;
+}) {
+  const colorClass = muted ? 'border-slate-200 bg-slate-50 text-slate-400' : getSkillColorClass(color);
+  return (
+    <span
+      className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${colorClass}`}
+      title={title ?? (code ? `${name} · ${code}` : name)}
+    >
+      <span className={`truncate ${muted ? 'line-through' : ''}`}>{name}</span>
+      {code ? <span className="shrink-0 opacity-60">· {code}</span> : null}
     </span>
   );
 }

@@ -1,4 +1,4 @@
-import type { OpeAvailabilityEntry, OpeMission } from '@/lib/types';
+import type { OpeAvailabilityEntry, OpeEngagedMateriel, OpeMission } from '@/lib/types';
 import { missionDayKey } from '@/lib/mission-timeline';
 
 // ── Détection des conflits d'engagement d'un secouriste ───────────
@@ -103,6 +103,37 @@ export function availableNotRetainedByDay(
     const list = result.get(day) ?? [];
     list.push(entry);
     result.set(day, list);
+  }
+  return result;
+}
+
+// ── Matériel engagé, par jour ─────────────────────────────────────
+// Pour chaque jour : les contenants affectés à au moins une activité de ce
+// jour, dédupliqués (un même contenant engagé sur deux activités le même jour
+// n'est listé qu'une fois). La page en déduit ensuite "dispo" et "indispo" à
+// partir du catalogue : indispo = contenant hors service non engagé ce jour,
+// dispo = contenant disponible non engagé ce jour (précédence engagé > indispo > dispo).
+export function engagedMaterielByDay(missions: OpeMission[]): Map<string, OpeEngagedMateriel[]> {
+  const result = new Map<string, OpeEngagedMateriel[]>();
+  const seenByDay = new Map<string, Set<string>>();
+  for (const mission of missions) {
+    if (mission.materiel.length === 0) continue;
+    const day = missionDayKey(mission.starts_at);
+    let list = result.get(day);
+    if (!list) {
+      list = [];
+      result.set(day, list);
+    }
+    let seen = seenByDay.get(day);
+    if (!seen) {
+      seen = new Set();
+      seenByDay.set(day, seen);
+    }
+    for (const m of mission.materiel) {
+      if (seen.has(m.container_type_id)) continue;
+      seen.add(m.container_type_id);
+      list.push(m);
+    }
   }
   return result;
 }

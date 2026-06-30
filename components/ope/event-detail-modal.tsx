@@ -6,7 +6,7 @@ import type { OpeAvailabilityEntry, OpeMission } from '@/lib/types';
 import { resolveMissionTypeColor, formatMissionDuration } from '@/lib/mission-timeline';
 import { formatMissionRequirementLabel } from '@/lib/missions';
 import { SkillBadge } from '@/components/skills/skill-badge';
-import { Avatar, StatusBadge, formatTimeRange } from '@/components/ope/atoms';
+import { Avatar, MaterielChip, StatusBadge, formatTimeRange } from '@/components/ope/atoms';
 
 export function EventDetailModal({
   mission,
@@ -122,6 +122,25 @@ export function EventDetailModal({
               </ul>
             )}
           </section>
+
+          {/* Matériel engagé */}
+          {mission.materiel.length > 0 ? (
+            <section>
+              <h3 className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                Matériel engagé ({mission.materiel.length})
+              </h3>
+              <div className="flex flex-wrap gap-1.5">
+                {mission.materiel.map((item) => (
+                  <MaterielChip
+                    key={item.container_type_id}
+                    name={item.name}
+                    code={item.code}
+                    color={item.category?.color ?? null}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
 
           {/* Dispo non retenus sur ce poste */}
           {notRetained.length > 0 ? (

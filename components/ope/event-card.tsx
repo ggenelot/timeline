@@ -5,7 +5,7 @@ import { resolveMissionTypeColor, formatMissionDuration } from '@/lib/mission-ti
 import { formatMissionRequirementLabel } from '@/lib/missions';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import type { ConflictInfo } from '@/lib/ope-dashboard';
-import { Avatar, ConflictMark, EffectifBadge, StatusBadge, formatTimeRange } from '@/components/ope/atoms';
+import { Avatar, ConflictMark, EffectifBadge, MaterielChip, StatusBadge, formatTimeRange } from '@/components/ope/atoms';
 
 export function EventCard({
   mission,
@@ -84,6 +84,25 @@ export function EventCard({
           </ul>
         )}
       </div>
+
+      {/* Matériel engagé (contenants affectés) */}
+      {mission.materiel.length > 0 ? (
+        <div className="mt-2 border-t border-slate-100 pt-2">
+          <div className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+            Matériel engagé
+          </div>
+          <div className="flex flex-wrap gap-1">
+            {mission.materiel.map((item) => (
+              <MaterielChip
+                key={item.container_type_id}
+                name={item.name}
+                code={item.code}
+                color={item.category?.color ?? null}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
     </button>
   );
 }
