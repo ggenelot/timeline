@@ -439,17 +439,46 @@ export default function AdminEditMissionPage() {
       }
     }
 
-    const { error: deleteMaterielRequirementsError } = await supabase.from('mission_required_materiels').delete().eq('mission_id', mission.id);
+    // Réconciliation plutôt que delete-all/insert-all : une catégorie déjà présente garde
+    // son id, donc ses affectations de contenant (mission_materiel_assignments) survivent
+    // à une modification de la mission qui ne touche pas le matériel requis.
+    const { data: existingMaterielRequirements, error: existingMaterielRequirementsError } = await supabase
+      .from('mission_required_materiels')
+      .select('id,category_id,quantity')
+      .eq('mission_id', mission.id);
 
-    if (deleteMaterielRequirementsError) {
-      setError(`Mission mise à jour partiellement: impossible de synchroniser le matériel requis (${deleteMaterielRequirementsError.message}).`);
+    if (existingMaterielRequirementsError) {
+      setError(`Mission mise à jour partiellement: impossible de synchroniser le matériel requis (${existingMaterielRequirementsError.message}).`);
       setSubmitting(false);
       return;
     }
 
-    if (parsedMaterielRequirements.length > 0) {
+    const existingByCategoryId = new Map((existingMaterielRequirements ?? []).map((requirement) => [requirement.category_id, requirement]));
+    const nextCategoryIds = new Set(parsedMaterielRequirements.map((requirement) => requirement.category_id));
+
+    const categoryIdsToRemove = (existingMaterielRequirements ?? [])
+      .filter((requirement) => !nextCategoryIds.has(requirement.category_id))
+      .map((requirement) => requirement.id);
+
+    if (categoryIdsToRemove.length > 0) {
+      const { error: deleteMaterielRequirementsError } = await supabase.from('mission_required_materiels').delete().in('id', categoryIdsToRemove);
+
+      if (deleteMaterielRequirementsError) {
+        setError(`Mission mise à jour partiellement: impossible de synchroniser le matériel requis (${deleteMaterielRequirementsError.message}).`);
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    const requirementsToInsert = parsedMaterielRequirements.filter((requirement) => !existingByCategoryId.has(requirement.category_id));
+    const requirementsToUpdate = parsedMaterielRequirements.filter((requirement) => {
+      const existing = existingByCategoryId.get(requirement.category_id);
+      return existing !== undefined && existing.quantity !== requirement.quantity;
+    });
+
+    if (requirementsToInsert.length > 0) {
       const { error: insertMaterielRequirementsError } = await supabase.from('mission_required_materiels').insert(
-        parsedMaterielRequirements.map((requirement) => ({
+        requirementsToInsert.map((requirement) => ({
           mission_id: mission.id,
           category_id: requirement.category_id,
           quantity: requirement.quantity
@@ -463,13 +492,30 @@ export default function AdminEditMissionPage() {
       }
     }
 
-    // Le matériel requis vient d'être recréé (nouveaux ids), ce qui supprime en cascade les
-    // pointages de vérification existants : la vérification doit donc repasser à refaire.
-    await supabase
-      .from('mission_materiel_verifications')
-      .update({ status: 'not_started', completed_by: null, completed_at: null, updated_at: new Date().toISOString() })
-      .eq('mission_id', mission.id)
-      .eq('status', 'completed');
+    for (const requirement of requirementsToUpdate) {
+      const existing = existingByCategoryId.get(requirement.category_id)!;
+      const { error: updateMaterielRequirementError } = await supabase
+        .from('mission_required_materiels')
+        .update({ quantity: requirement.quantity })
+        .eq('id', existing.id);
+
+      if (updateMaterielRequirementError) {
+        setError(`Mission mise à jour partiellement: impossible de synchroniser le matériel requis (${updateMaterielRequirementError.message}).`);
+        setSubmitting(false);
+        return;
+      }
+    }
+
+    // Seules les catégories retirées du besoin font perdre leurs pointages de vérification
+    // (cascade sur mission_required_materiels) : on ne réinitialise donc le statut "vérifiée"
+    // que si du matériel a réellement été retiré.
+    if (categoryIdsToRemove.length > 0) {
+      await supabase
+        .from('mission_materiel_verifications')
+        .update({ status: 'not_started', completed_by: null, completed_at: null, updated_at: new Date().toISOString() })
+        .eq('mission_id', mission.id)
+        .eq('status', 'completed');
+    }
 
     setMission((prev) =>
       prev

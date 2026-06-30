@@ -46,6 +46,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
   const { error } = await client.from('materiel_categories').delete().eq('id', params.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (error.code === '23503') {
+      return NextResponse.json({ error: 'Ce type de matériel est utilisé par du matériel requis sur au moins une mission ou un gabarit de mission. Retirez-le de ces besoins avant de le supprimer.' }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

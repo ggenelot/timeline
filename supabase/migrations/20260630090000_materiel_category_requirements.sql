@@ -10,13 +10,86 @@
 -- ── 1. Backfill : convertir chaque besoin existant en (catégorie + affectation) ──
 -- avant de modifier le schéma, le temps de lire encore materiel_type_id.
 
+-- original_requirement_id reste figé sur le besoin d'origine (avant fusion des
+-- doublons en 1bis) pour pouvoir encore retrouver, en 4, l'affectation exacte
+-- qu'un pointage de vérification existant doit désormais cibler ; requirement_id
+-- lui est mis à jour vers le besoin conservé et sert au backfill des affectations.
 create table _materiel_requirements_backfill as
-select id as requirement_id, materiel_type_id, quantity
+select id as requirement_id, id as original_requirement_id, materiel_type_id, quantity
 from mission_required_materiels;
 
 create table _materiel_type_requirements_backfill as
 select id as requirement_id, materiel_type_id, quantity
 from mission_type_required_materiels;
+
+-- ── 1bis. Fusion des besoins existants qui partageraient la future catégorie ──
+-- La nouvelle contrainte unique (mission_id, category_id) interdirait deux besoins
+-- d'une même mission pointant vers des contenants différents d'une même catégorie :
+-- on les fusionne en un seul besoin (quantité cumulée), en reportant dans le
+-- backfill l'affectation de chaque contenant fusionné sur le besoin conservé pour
+-- ne perdre aucun matériel déjà engagé. Même logique pour les gabarits de mission
+-- (mission_type_required_materiels), sans report d'affectation puisqu'ils n'en ont pas.
+
+with duplicate_groups as (
+  select
+    mrm.mission_id,
+    mt.category_id,
+    (array_agg(mrm.id order by mrm.created_at, mrm.id))[1] as keep_id,
+    sum(mrm.quantity) as total_quantity
+  from mission_required_materiels mrm
+  join materiel_types mt on mt.id = mrm.materiel_type_id
+  group by mrm.mission_id, mt.category_id
+  having count(*) > 1
+),
+merge_map as (
+  select mrm.id as drop_id, dg.keep_id, dg.total_quantity
+  from mission_required_materiels mrm
+  join materiel_types mt on mt.id = mrm.materiel_type_id
+  join duplicate_groups dg
+    on dg.mission_id = mrm.mission_id and dg.category_id = mt.category_id
+  where mrm.id <> dg.keep_id
+)
+update mission_required_materiels mrm
+set quantity = mm.total_quantity
+from merge_map mm
+where mrm.id = mm.keep_id;
+
+update _materiel_requirements_backfill b
+set requirement_id = mm.keep_id
+from merge_map mm
+where b.requirement_id = mm.drop_id;
+
+delete from mission_required_materiels mrm
+using merge_map mm
+where mrm.id = mm.drop_id;
+
+with duplicate_type_groups as (
+  select
+    mtrm.mission_type_id,
+    mt.category_id,
+    (array_agg(mtrm.id order by mtrm.created_at, mtrm.id))[1] as keep_id,
+    sum(mtrm.quantity) as total_quantity
+  from mission_type_required_materiels mtrm
+  join materiel_types mt on mt.id = mtrm.materiel_type_id
+  group by mtrm.mission_type_id, mt.category_id
+  having count(*) > 1
+),
+merge_type_map as (
+  select mtrm.id as drop_id, dg.keep_id, dg.total_quantity
+  from mission_type_required_materiels mtrm
+  join materiel_types mt on mt.id = mtrm.materiel_type_id
+  join duplicate_type_groups dg
+    on dg.mission_type_id = mtrm.mission_type_id and dg.category_id = mt.category_id
+  where mtrm.id <> dg.keep_id
+)
+update mission_type_required_materiels mtrm
+set quantity = mm.total_quantity
+from merge_type_map mm
+where mtrm.id = mm.keep_id;
+
+delete from mission_type_required_materiels mtrm
+using merge_type_map mm
+where mtrm.id = mm.drop_id;
 
 -- ── 2. mission_required_materiels / mission_type_required_materiels : repointage catégorie ──
 
@@ -35,9 +108,12 @@ from _materiel_requirements_backfill b
 join materiel_types mt on mt.id = b.materiel_type_id
 where b.requirement_id = mrm.id;
 
+-- "restrict" plutôt que "cascade" : supprimer une catégorie encore utilisée par
+-- un besoin de mission ne doit pas effacer silencieusement ce besoin (et, en
+-- cascade, ses affectations et pointages de vérification).
 alter table mission_required_materiels
   add constraint mission_required_materiels_category_id_fkey
-  foreign key (category_id) references materiel_categories(id) on delete cascade;
+  foreign key (category_id) references materiel_categories(id) on delete restrict;
 
 alter table mission_type_required_materiels drop constraint mission_type_required_materiels_materiel_type_id_fkey;
 alter table mission_type_required_materiels rename column materiel_type_id to category_id;
@@ -51,7 +127,7 @@ where b.requirement_id = mtrm.id;
 
 alter table mission_type_required_materiels
   add constraint mission_type_required_materiels_category_id_fkey
-  foreign key (category_id) references materiel_categories(id) on delete cascade;
+  foreign key (category_id) references materiel_categories(id) on delete restrict;
 
 -- ── 3. mission_materiel_assignments : affectation d'un contenant précis à un besoin ──
 
@@ -170,8 +246,10 @@ alter table mission_materiel_verification_items rename column mission_required_m
 update mission_materiel_verification_items vi
 set mission_materiel_assignment_id = mma.id
 from mission_materiel_assignments mma
-join _materiel_requirements_backfill b on b.requirement_id = mma.mission_required_materiel_id
-where b.requirement_id = vi.mission_materiel_assignment_id;
+join _materiel_requirements_backfill b
+  on b.requirement_id = mma.mission_required_materiel_id
+  and b.materiel_type_id = mma.materiel_type_id
+where b.original_requirement_id = vi.mission_materiel_assignment_id;
 
 alter table mission_materiel_verification_items
   add constraint mission_materiel_verification_items_assignment_id_fkey
