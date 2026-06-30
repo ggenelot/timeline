@@ -235,7 +235,8 @@ export default function OpeDashboardPage() {
         <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
       ) : null}
 
-      {/* Board */}
+      {/* Board unifié : activités + matériel dans un SEUL scroll horizontal,
+          pour que les jours restent alignés en colonnes entre les deux bandes. */}
       {loading && !data ? (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {Array.from({ length: days }).map((_, i) => (
@@ -244,56 +245,59 @@ export default function OpeDashboardPage() {
         </div>
       ) : (
         <div className="overflow-x-auto pb-2">
-          <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
-            {dayAxis.map((day) => (
-              <DayColumn
-                key={day.key}
-                label={day.label}
-                dateISO={day.dateISO}
-                missions={missionsByDay.get(day.key) ?? []}
-                conflicts={conflicts}
-                availableNotRetained={availByDay.get(day.key) ?? []}
-                isToday={day.key === TODAY_KEY}
-                onOpen={setSelectedMission}
-              />
-            ))}
+          <div style={{ minWidth: 'min-content' }}>
+            {/* Bande activités / secouristes */}
+            <div className="flex gap-3">
+              {dayAxis.map((day) => (
+                <DayColumn
+                  key={day.key}
+                  label={day.label}
+                  dateISO={day.dateISO}
+                  missions={missionsByDay.get(day.key) ?? []}
+                  conflicts={conflicts}
+                  availableNotRetained={availByDay.get(day.key) ?? []}
+                  isToday={day.key === TODAY_KEY}
+                  onOpen={setSelectedMission}
+                />
+              ))}
+            </div>
+
+            {/* Étiquette de section, épinglée à gauche pendant le scroll horizontal */}
+            <div className="sticky left-0 mb-2 mt-6 w-fit">
+              <h2 className="text-lg font-bold text-slate-900">Matériel par jour</h2>
+              <p className="mt-0.5 text-sm text-slate-500">
+                Contenants engagés sur les activités, disponibles, et indisponibles (hors service).
+              </p>
+            </div>
+
+            {/* Bande matériel — colonnes alignées avec les activités via le scroll commun */}
+            {containers.length === 0 ? (
+              <p className="sticky left-0 w-fit rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+                Aucun contenant dans le catalogue. Ajoutez des contenants dans « Matériel » pour suivre leur engagement.
+              </p>
+            ) : (
+              <div className="flex gap-3">
+                {dayAxis.map((day) => {
+                  const engaged = engagedMatByDay.get(day.key) ?? [];
+                  const engagedIds = new Set(engaged.map((m) => m.container_type_id));
+                  const unavailable = containers.filter((c) => !c.is_available && !engagedIds.has(c.id));
+                  const available = containers.filter((c) => c.is_available && !engagedIds.has(c.id));
+                  return (
+                    <MaterielDayColumn
+                      key={day.key}
+                      label={day.label}
+                      isToday={day.key === TODAY_KEY}
+                      engaged={engaged}
+                      available={available}
+                      unavailable={unavailable}
+                    />
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
-
-      {/* Matériel — engagé / disponible / indisponible par jour */}
-      <section className="mt-8">
-        <h2 className="text-lg font-bold text-slate-900">Matériel par jour</h2>
-        <p className="mb-3 mt-1 text-sm text-slate-500">
-          Contenants engagés sur les activités, disponibles, et indisponibles (hors service) sur la période.
-        </p>
-        {!loading && containers.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
-            Aucun contenant dans le catalogue. Ajoutez des contenants dans « Matériel » pour suivre leur engagement.
-          </p>
-        ) : (
-          <div className="overflow-x-auto pb-2">
-            <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
-              {dayAxis.map((day) => {
-                const engaged = engagedMatByDay.get(day.key) ?? [];
-                const engagedIds = new Set(engaged.map((m) => m.container_type_id));
-                const unavailable = containers.filter((c) => !c.is_available && !engagedIds.has(c.id));
-                const available = containers.filter((c) => c.is_available && !engagedIds.has(c.id));
-                return (
-                  <MaterielDayColumn
-                    key={day.key}
-                    label={day.label}
-                    isToday={day.key === TODAY_KEY}
-                    engaged={engaged}
-                    available={available}
-                    unavailable={unavailable}
-                  />
-                );
-              })}
-            </div>
-          </div>
-        )}
-      </section>
 
       {/* Modale fiche poste */}
       {selectedMission ? (
