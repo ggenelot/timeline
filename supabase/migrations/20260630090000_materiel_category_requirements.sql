@@ -61,6 +61,33 @@ set requirement_id = mm.keep_id
 from _merge_map mm
 where b.requirement_id = mm.drop_id;
 
+-- mission_materiel_verification_items référence mission_required_materiels en
+-- "on delete cascade" : sans repointage préalable, le delete ci-dessous
+-- effacerait silencieusement les pointages déjà saisis sur le besoin fusionné,
+-- avant même que la section 4 ne puisse les retrouver. On les repointe donc
+-- vers le besoin conservé, en gardant la trace du besoin d'origine dans
+-- _verification_premerge_backfill (nécessaire en section 4 pour distinguer,
+-- parmi les affectations désormais partagées par le besoin conservé, celle du
+-- contenant d'origine exact). Les rares pointages qui entreraient en conflit
+-- avec un pointage déjà existant sous le besoin conservé (même contenant
+-- d'item, même occurrence) ne sont pas repointés et suivent l'ancien
+-- comportement (perte, identique à avant ce correctif, cas marginal).
+create table _verification_premerge_backfill as
+select vi.id as verification_item_id, vi.mission_required_materiel_id as original_requirement_id
+from mission_materiel_verification_items vi
+join _merge_map mm on mm.drop_id = vi.mission_required_materiel_id;
+
+update mission_materiel_verification_items vi
+set mission_required_materiel_id = mm.keep_id
+from _merge_map mm
+where vi.mission_required_materiel_id = mm.drop_id
+  and not exists (
+    select 1 from mission_materiel_verification_items vi2
+    where vi2.mission_required_materiel_id = mm.keep_id
+      and vi2.occurrence_index = vi.occurrence_index
+      and vi2.child_type_id = vi.child_type_id
+  );
+
 delete from mission_required_materiels mrm
 using _merge_map mm
 where mrm.id = mm.drop_id;
@@ -247,13 +274,22 @@ alter table mission_materiel_verification_items rename column mission_required_m
 
 -- Reprend l'affectation backfillée à la place de l'ancien couple (besoin, occurrence_index).
 -- occurrence_index valait toujours 0 historiquement (quantité de 1 partout en donnée réelle).
+-- Pour un pointage repointé en 1bis (besoin fusionné), la colonne ne contient
+-- plus le besoin d'origine mais le besoin conservé : on retrouve le besoin
+-- d'origine via _verification_premerge_backfill pour cibler la bonne
+-- affectation parmi celles désormais partagées par le besoin conservé.
 update mission_materiel_verification_items vi
 set mission_materiel_assignment_id = mma.id
 from mission_materiel_assignments mma
 join _materiel_requirements_backfill b
   on b.requirement_id = mma.mission_required_materiel_id
   and b.materiel_type_id = mma.materiel_type_id
-where b.original_requirement_id = vi.mission_materiel_assignment_id;
+where b.original_requirement_id = coalesce(
+  (select vpb.original_requirement_id
+   from _verification_premerge_backfill vpb
+   where vpb.verification_item_id = vi.id),
+  vi.mission_materiel_assignment_id
+);
 
 alter table mission_materiel_verification_items
   add constraint mission_materiel_verification_items_assignment_id_fkey
@@ -269,3 +305,4 @@ alter index idx_mission_materiel_verification_items_required_materiel_id rename 
 
 drop table _materiel_requirements_backfill;
 drop table _materiel_type_requirements_backfill;
+drop table _verification_premerge_backfill;
