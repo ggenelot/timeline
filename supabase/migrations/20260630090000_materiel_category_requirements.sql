@@ -30,66 +30,97 @@ from mission_type_required_materiels;
 -- ne perdre aucun matériel déjà engagé. Même logique pour les gabarits de mission
 -- (mission_type_required_materiels), sans report d'affectation puisqu'ils n'en ont pas.
 
-with duplicate_groups as (
+-- Note : merge_map et merge_type_map sont des tables (et non des CTE) car elles
+-- doivent rester lisibles par plusieurs instructions successives ; une CTE est
+-- réévaluée à chaque requête et ne survit pas au-delà de l'instruction qui la déclare.
+
+create table _merge_map as
+select mrm.id as drop_id, dg.keep_id, dg.total_quantity
+from mission_required_materiels mrm
+join materiel_types mt on mt.id = mrm.materiel_type_id
+join (
   select
-    mrm.mission_id,
-    mt.category_id,
-    (array_agg(mrm.id order by mrm.created_at, mrm.id))[1] as keep_id,
-    sum(mrm.quantity) as total_quantity
-  from mission_required_materiels mrm
-  join materiel_types mt on mt.id = mrm.materiel_type_id
-  group by mrm.mission_id, mt.category_id
+    mrm2.mission_id,
+    mt2.category_id,
+    (array_agg(mrm2.id order by mrm2.created_at, mrm2.id))[1] as keep_id,
+    sum(mrm2.quantity) as total_quantity
+  from mission_required_materiels mrm2
+  join materiel_types mt2 on mt2.id = mrm2.materiel_type_id
+  group by mrm2.mission_id, mt2.category_id
   having count(*) > 1
-),
-merge_map as (
-  select mrm.id as drop_id, dg.keep_id, dg.total_quantity
-  from mission_required_materiels mrm
-  join materiel_types mt on mt.id = mrm.materiel_type_id
-  join duplicate_groups dg
-    on dg.mission_id = mrm.mission_id and dg.category_id = mt.category_id
-  where mrm.id <> dg.keep_id
-)
+) dg on dg.mission_id = mrm.mission_id and dg.category_id = mt.category_id
+where mrm.id <> dg.keep_id;
+
 update mission_required_materiels mrm
 set quantity = mm.total_quantity
-from merge_map mm
+from _merge_map mm
 where mrm.id = mm.keep_id;
 
 update _materiel_requirements_backfill b
 set requirement_id = mm.keep_id
-from merge_map mm
+from _merge_map mm
 where b.requirement_id = mm.drop_id;
 
+-- mission_materiel_verification_items référence mission_required_materiels en
+-- "on delete cascade" : sans repointage préalable, le delete ci-dessous
+-- effacerait silencieusement les pointages déjà saisis sur le besoin fusionné,
+-- avant même que la section 4 ne puisse les retrouver. On les repointe donc
+-- vers le besoin conservé, en gardant la trace du besoin d'origine dans
+-- _verification_premerge_backfill (nécessaire en section 4 pour distinguer,
+-- parmi les affectations désormais partagées par le besoin conservé, celle du
+-- contenant d'origine exact). Les rares pointages qui entreraient en conflit
+-- avec un pointage déjà existant sous le besoin conservé (même contenant
+-- d'item, même occurrence) ne sont pas repointés et suivent l'ancien
+-- comportement (perte, identique à avant ce correctif, cas marginal).
+create table _verification_premerge_backfill as
+select vi.id as verification_item_id, vi.mission_required_materiel_id as original_requirement_id
+from mission_materiel_verification_items vi
+join _merge_map mm on mm.drop_id = vi.mission_required_materiel_id;
+
+update mission_materiel_verification_items vi
+set mission_required_materiel_id = mm.keep_id
+from _merge_map mm
+where vi.mission_required_materiel_id = mm.drop_id
+  and not exists (
+    select 1 from mission_materiel_verification_items vi2
+    where vi2.mission_required_materiel_id = mm.keep_id
+      and vi2.occurrence_index = vi.occurrence_index
+      and vi2.child_type_id = vi.child_type_id
+  );
+
 delete from mission_required_materiels mrm
-using merge_map mm
+using _merge_map mm
 where mrm.id = mm.drop_id;
 
-with duplicate_type_groups as (
+drop table _merge_map;
+
+create table _merge_type_map as
+select mtrm.id as drop_id, dg.keep_id, dg.total_quantity
+from mission_type_required_materiels mtrm
+join materiel_types mt on mt.id = mtrm.materiel_type_id
+join (
   select
-    mtrm.mission_type_id,
-    mt.category_id,
-    (array_agg(mtrm.id order by mtrm.created_at, mtrm.id))[1] as keep_id,
-    sum(mtrm.quantity) as total_quantity
-  from mission_type_required_materiels mtrm
-  join materiel_types mt on mt.id = mtrm.materiel_type_id
-  group by mtrm.mission_type_id, mt.category_id
+    mtrm2.mission_type_id,
+    mt2.category_id,
+    (array_agg(mtrm2.id order by mtrm2.created_at, mtrm2.id))[1] as keep_id,
+    sum(mtrm2.quantity) as total_quantity
+  from mission_type_required_materiels mtrm2
+  join materiel_types mt2 on mt2.id = mtrm2.materiel_type_id
+  group by mtrm2.mission_type_id, mt2.category_id
   having count(*) > 1
-),
-merge_type_map as (
-  select mtrm.id as drop_id, dg.keep_id, dg.total_quantity
-  from mission_type_required_materiels mtrm
-  join materiel_types mt on mt.id = mtrm.materiel_type_id
-  join duplicate_type_groups dg
-    on dg.mission_type_id = mtrm.mission_type_id and dg.category_id = mt.category_id
-  where mtrm.id <> dg.keep_id
-)
+) dg on dg.mission_type_id = mtrm.mission_type_id and dg.category_id = mt.category_id
+where mtrm.id <> dg.keep_id;
+
 update mission_type_required_materiels mtrm
 set quantity = mm.total_quantity
-from merge_type_map mm
+from _merge_type_map mm
 where mtrm.id = mm.keep_id;
 
 delete from mission_type_required_materiels mtrm
-using merge_type_map mm
+using _merge_type_map mm
 where mtrm.id = mm.drop_id;
+
+drop table _merge_type_map;
 
 -- ── 2. mission_required_materiels / mission_type_required_materiels : repointage catégorie ──
 
@@ -243,13 +274,22 @@ alter table mission_materiel_verification_items rename column mission_required_m
 
 -- Reprend l'affectation backfillée à la place de l'ancien couple (besoin, occurrence_index).
 -- occurrence_index valait toujours 0 historiquement (quantité de 1 partout en donnée réelle).
+-- Pour un pointage repointé en 1bis (besoin fusionné), la colonne ne contient
+-- plus le besoin d'origine mais le besoin conservé : on retrouve le besoin
+-- d'origine via _verification_premerge_backfill pour cibler la bonne
+-- affectation parmi celles désormais partagées par le besoin conservé.
 update mission_materiel_verification_items vi
 set mission_materiel_assignment_id = mma.id
 from mission_materiel_assignments mma
 join _materiel_requirements_backfill b
   on b.requirement_id = mma.mission_required_materiel_id
   and b.materiel_type_id = mma.materiel_type_id
-where b.original_requirement_id = vi.mission_materiel_assignment_id;
+where b.original_requirement_id = coalesce(
+  (select vpb.original_requirement_id
+   from _verification_premerge_backfill vpb
+   where vpb.verification_item_id = vi.id),
+  vi.mission_materiel_assignment_id
+);
 
 alter table mission_materiel_verification_items
   add constraint mission_materiel_verification_items_assignment_id_fkey
@@ -265,3 +305,4 @@ alter index idx_mission_materiel_verification_items_required_materiel_id rename 
 
 drop table _materiel_requirements_backfill;
 drop table _materiel_type_requirements_backfill;
+drop table _verification_premerge_backfill;
