@@ -59,6 +59,40 @@ export function EffectifBadge({ engaged, required }: { engaged: number; required
   );
 }
 
+// Puce d'un contenant matériel, colorée par son STATUT opérationnel :
+//  - engaged     → orange (engagé sur une activité)
+//  - available   → vert (disponible)
+//  - unavailable → gris barré (hors service ; motif au survol)
+export type MaterielChipTone = 'engaged' | 'available' | 'unavailable';
+
+const MATERIEL_TONE_CLASS: Record<MaterielChipTone, string> = {
+  engaged: 'border-orange-300 bg-orange-50 text-orange-800',
+  available: 'border-emerald-300 bg-emerald-50 text-emerald-800',
+  unavailable: 'border-slate-300 bg-slate-100 text-slate-500',
+};
+
+export function MaterielChip({
+  name,
+  code,
+  tone,
+  title,
+}: {
+  name: string;
+  code: string | null;
+  tone: MaterielChipTone;
+  title?: string;
+}) {
+  return (
+    <span
+      className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${MATERIEL_TONE_CLASS[tone]}`}
+      title={title ?? (code ? `${name} · ${code}` : name)}
+    >
+      <span className={`truncate ${tone === 'unavailable' ? 'line-through' : ''}`}>{name}</span>
+      {code ? <span className="shrink-0 opacity-60">· {code}</span> : null}
+    </span>
+  );
+}
+
 // Marqueur de conflit d'engagement (⚠️) avec infobulle.
 export function ConflictMark({ label }: { label: string }) {
   return (

@@ -86,6 +86,10 @@ export type MaterielType = {
   code?: string | null;
   description?: string | null;
   is_container: boolean;
+  // Disponibilité globale du contenant (panne, maintenance…). N'a de sens que
+  // pour les contenants ; les items la portent aussi mais ne l'exposent pas.
+  is_available: boolean;
+  unavailable_reason?: string | null;
   display_order: number;
   created_at: string;
   category?: MaterielCategory | null;
@@ -505,6 +509,27 @@ export type OpeRequiredSkill = {
 
 export type OpeMissionType = { name: string | null; color: string | null };
 
+// ── Matériel sur le board OPE ──────────────────────────────────────
+export type OpeMaterielCategoryRef = { id: string; name: string; color: string | null };
+
+// Un contenant engagé (affecté) sur une mission de la fenêtre.
+export type OpeEngagedMateriel = {
+  container_type_id: string;
+  name: string;
+  code: string | null;
+  category: OpeMaterielCategoryRef | null;
+};
+
+// Un contenant racine du catalogue (unité engageable), avec sa disponibilité.
+export type OpeContainer = {
+  id: string;
+  name: string;
+  code: string | null;
+  is_available: boolean;
+  unavailable_reason: string | null;
+  category: OpeMaterielCategoryRef | null;
+};
+
 export type OpeMission = {
   id: string;
   title: string;
@@ -517,6 +542,7 @@ export type OpeMission = {
   type: OpeMissionType;
   requiredSkills: OpeRequiredSkill[];
   team: OpeTeamMember[];
+  materiel: OpeEngagedMateriel[];
 };
 
 // Secouriste disponible (response='available') sur une mission de la fenêtre.
@@ -535,6 +561,9 @@ export type OpeDashboardData = {
   missions: OpeMission[];
   availability: OpeAvailabilityEntry[];
   volunteers: OpeVolunteerRef[];
+  // Catalogue des contenants racines (unités engageables) + disponibilité,
+  // pour la section "matériel engagé / dispo / indispo par jour".
+  containers: OpeContainer[];
 };
 
 // Activité (engagement) d'une personne, pour la recherche par secouriste.

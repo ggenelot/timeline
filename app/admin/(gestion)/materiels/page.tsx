@@ -53,6 +53,22 @@ function DragHandle({ attributes, listeners, style }: {
 
 const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' };
 
+// ── Interrupteur disponible / indisponible ───────────────────────────
+
+function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={value}
+      onClick={() => onChange(!value)}
+      style={{ position: 'relative', flexShrink: 0, width: 40, height: 23, border: 'none', borderRadius: 99, cursor: 'pointer', background: value ? '#059669' : '#cbd5e1' }}
+    >
+      <span style={{ position: 'absolute', top: 2, left: value ? 19 : 2, width: 19, height: 19, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
+    </button>
+  );
+}
+
 // ── Formulaire « + Ajouter un contenant » ───────────────────────────
 
 function AddContainerForm({ categories, onSubmit, onCancel }: {
@@ -187,6 +203,7 @@ type TreeCtxValue = {
   addItem: (containerId: string, itemId: string, quantity: number) => Promise<void>;
   updateQuantity: (containerId: string, contentId: string, quantity: number) => Promise<void>;
   updateCategory: (typeId: string, containerId: string | null, categoryId: string) => Promise<void>;
+  setAvailability: (typeId: string, isAvailable: boolean, reason: string | null) => Promise<void>;
   unlink: (containerId: string, contentId: string) => Promise<void>;
 };
 
@@ -233,12 +250,16 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
 }) {
   const ctx = useTreeCtx();
   const [addMode, setAddMode] = useState<'container' | 'item' | null>(null);
+  const [reasonDraft, setReasonDraft] = useState(node.unavailable_reason ?? '');
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortableId });
 
   const isExpanded = ctx.expanded.has(node.id);
   const isLoading = ctx.loadingContainers.has(node.id);
   const contents = ctx.childrenByContainer[node.id];
   const existingChildIds = new Set((contents ?? []).map((c) => c.child_type_id));
+  // La disponibilité ne s'édite que sur les contenants racines (unités engageables) :
+  // ce sont eux qui portent is_available (chargés via ?kind=roots, donc `!meta`).
+  const isRootContainer = node.is_container && !meta;
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}>
@@ -276,6 +297,14 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
             {node.category.name}
           </span>
         ) : null}
+        {isRootContainer && !ctx.editMode && !node.is_available ? (
+          <span
+            title={node.unavailable_reason || 'Indisponible'}
+            style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 99, padding: '2px 9px' }}
+          >
+            Indisponible
+          </span>
+        ) : null}
         {node.is_container && ctx.editMode ? (
           <select
             value={node.category_id ?? ''}
@@ -305,6 +334,30 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
           </button>
         ) : null}
       </div>
+
+      {isRootContainer && ctx.editMode ? (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '8px 0 0', padding: '8px 12px', border: '1px dashed #e2e8f0', borderRadius: 10, background: '#fff' }}>
+          <Toggle
+            value={node.is_available}
+            onChange={(v) => {
+              if (v) setReasonDraft('');
+              void ctx.setAvailability(node.id, v, v ? null : reasonDraft || null);
+            }}
+          />
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: node.is_available ? '#059669' : '#dc2626' }}>
+            {node.is_available ? 'Disponible' : 'Indisponible'}
+          </span>
+          {!node.is_available ? (
+            <input
+              value={reasonDraft}
+              onChange={(e) => setReasonDraft(e.target.value)}
+              onBlur={() => void ctx.setAvailability(node.id, false, reasonDraft || null)}
+              placeholder="Motif (optionnel) : panne, maintenance…"
+              style={{ ...inputStyle, flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 12.5 }}
+            />
+          ) : null}
+        </div>
+      ) : null}
 
       {isExpanded && node.is_container ? (
         <div style={{ marginLeft: 30, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -515,6 +568,16 @@ export default function AdminMaterielsPage() {
     });
   }
 
+  async function setAvailability(typeId: string, isAvailable: boolean, reason: string | null) {
+    const nextReason = isAvailable ? null : reason;
+    setRoots((prev) => prev.map((r) => (r.id === typeId ? { ...r, is_available: isAvailable, unavailable_reason: nextReason } : r)));
+    await fetch(`/api/admin/materiel-types/${typeId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_available: isAvailable, unavailable_reason: nextReason }),
+    });
+  }
+
   async function handleAddRoot(name: string, code: string, categoryId: string) {
     const res = await fetch('/api/admin/materiel-types', {
       method: 'POST',
@@ -710,6 +773,7 @@ export default function AdminMaterielsPage() {
     addItem,
     updateQuantity,
     updateCategory,
+    setAvailability,
     unlink,
   };
 

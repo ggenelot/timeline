@@ -27,6 +27,8 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     display_order?: number;
     is_container?: boolean;
     category_id?: string | null;
+    is_available?: boolean;
+    unavailable_reason?: string | null;
   };
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) patch.name = body.name.trim();
@@ -35,6 +37,10 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.display_order !== undefined) patch.display_order = body.display_order;
   if (body.is_container !== undefined) patch.is_container = body.is_container;
   if (body.category_id !== undefined) patch.category_id = body.category_id || null;
+  if (body.is_available !== undefined) patch.is_available = body.is_available;
+  if (body.unavailable_reason !== undefined) {
+    patch.unavailable_reason = body.unavailable_reason?.trim() || null;
+  }
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Aucune modification.' }, { status: 400 });

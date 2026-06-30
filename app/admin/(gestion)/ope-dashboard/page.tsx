@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import type { OpeDashboardData, OpeMission, RoleBehavior } from '@/lib/types';
 import { buildDayAxis, missionDayKey } from '@/lib/mission-timeline';
-import { availableNotRetainedByDay, computeVolunteerConflicts } from '@/lib/ope-dashboard';
+import { availableNotRetainedByDay, computeVolunteerConflicts, engagedMaterielByDay } from '@/lib/ope-dashboard';
 import { DayColumn } from '@/components/ope/day-column';
+import { MaterielDayColumn } from '@/components/ope/materiel-day-column';
 import { EventDetailModal } from '@/components/ope/event-detail-modal';
 import { TypeFilter, type OpeTypeOption } from '@/components/ope/type-filter';
 import { PersonSearch } from '@/components/ope/person-search';
@@ -134,6 +135,10 @@ export default function OpeDashboardPage() {
     () => availableNotRetainedByDay(allMissions, data?.availability ?? []),
     [allMissions, data]
   );
+  // Matériel : engagé calculé sur TOUTES les missions (le filtre par type n'est qu'une vue),
+  // dispo/indispo dérivés du catalogue de contenants.
+  const engagedMatByDay = useMemo(() => engagedMaterielByDay(allMissions), [allMissions]);
+  const containers = useMemo(() => data?.containers ?? [], [data]);
 
   const dayAxis = useMemo(() => buildDayAxis(fromISO, days), [fromISO, days]);
 
@@ -256,13 +261,38 @@ export default function OpeDashboardPage() {
         </div>
       )}
 
-      {/* Matériel — phase 2 */}
-      <section className="mt-6 rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4">
-        <h2 className="text-sm font-semibold text-slate-700">Matériel disponible et non engagé</h2>
-        <p className="mt-1 text-xs text-slate-500">
-          À venir (phase 2) : suivi des moyens matériels (VPS, VTP…), engagés par événement et disponibles sur la
-          période.
+      {/* Matériel — engagé / disponible / indisponible par jour */}
+      <section className="mt-8">
+        <h2 className="text-lg font-bold text-slate-900">Matériel par jour</h2>
+        <p className="mb-3 mt-1 text-sm text-slate-500">
+          Contenants engagés sur les activités, disponibles, et indisponibles (hors service) sur la période.
         </p>
+        {!loading && containers.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+            Aucun contenant dans le catalogue. Ajoutez des contenants dans « Matériel » pour suivre leur engagement.
+          </p>
+        ) : (
+          <div className="overflow-x-auto pb-2">
+            <div className="flex gap-3" style={{ minWidth: 'min-content' }}>
+              {dayAxis.map((day) => {
+                const engaged = engagedMatByDay.get(day.key) ?? [];
+                const engagedIds = new Set(engaged.map((m) => m.container_type_id));
+                const unavailable = containers.filter((c) => !c.is_available && !engagedIds.has(c.id));
+                const available = containers.filter((c) => c.is_available && !engagedIds.has(c.id));
+                return (
+                  <MaterielDayColumn
+                    key={day.key}
+                    label={day.label}
+                    isToday={day.key === TODAY_KEY}
+                    engaged={engaged}
+                    available={available}
+                    unavailable={unavailable}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Modale fiche poste */}
