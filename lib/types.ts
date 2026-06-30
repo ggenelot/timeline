@@ -86,6 +86,10 @@ export type MaterielType = {
   code?: string | null;
   description?: string | null;
   is_container: boolean;
+  // Disponibilité globale du contenant (panne, maintenance…). N'a de sens que
+  // pour les contenants ; les items la portent aussi mais ne l'exposent pas.
+  is_available: boolean;
+  unavailable_reason?: string | null;
   display_order: number;
   created_at: string;
   category?: MaterielCategory | null;
