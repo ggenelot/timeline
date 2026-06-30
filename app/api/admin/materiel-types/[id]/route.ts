@@ -26,6 +26,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     description?: string;
     display_order?: number;
     is_container?: boolean;
+    category_id?: string | null;
   };
   const patch: Record<string, unknown> = {};
   if (body.name !== undefined) patch.name = body.name.trim();
@@ -33,6 +34,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (body.description !== undefined) patch.description = body.description.trim() || null;
   if (body.display_order !== undefined) patch.display_order = body.display_order;
   if (body.is_container !== undefined) patch.is_container = body.is_container;
+  if (body.category_id !== undefined) patch.category_id = body.category_id || null;
 
   if (Object.keys(patch).length === 0) {
     return NextResponse.json({ error: 'Aucune modification.' }, { status: 400 });
@@ -54,6 +56,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
 
   const { error } = await client.from('materiel_types').delete().eq('id', params.id);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) {
+    if (error.code === '23503') {
+      return NextResponse.json({ error: 'Impossible de supprimer ce contenant : il est affecté à une mission. Retirez-le de la mission avant de le supprimer.' }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
   return NextResponse.json({ success: true });
 }

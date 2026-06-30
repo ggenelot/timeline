@@ -3,8 +3,7 @@ import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { MissionMaterielVerificationItemStatus } from '@/lib/types';
 
 type ItemCheckBody = {
-  mission_required_materiel_id?: string;
-  occurrence_index?: number;
+  mission_materiel_assignment_id?: string;
   child_type_id?: string;
   status?: MissionMaterielVerificationItemStatus;
   note?: string | null;
@@ -33,28 +32,28 @@ export async function POST(request: NextRequest, { params }: { params: { mission
   }
 
   const body = (await request.json()) as ItemCheckBody;
-  if (!body.mission_required_materiel_id || body.occurrence_index === undefined || !body.child_type_id || !body.status) {
+  if (!body.mission_materiel_assignment_id || !body.child_type_id || !body.status) {
     return NextResponse.json({ error: 'Champs manquants pour enregistrer la vérification.' }, { status: 400 });
   }
   if (body.status !== 'present' && body.status !== 'missing') {
     return NextResponse.json({ error: 'Statut de vérification invalide.' }, { status: 400 });
   }
 
-  const { data: requirement, error: requirementError } = await auth.client
-    .from('mission_required_materiels')
-    .select('id,materiel_type_id,quantity')
-    .eq('id', body.mission_required_materiel_id)
-    .eq('mission_id', missionId)
-    .maybeSingle<{ id: string; materiel_type_id: string; quantity: number }>();
+  const { data: assignment, error: assignmentError } = await auth.client
+    .from('mission_materiel_assignments')
+    .select('id,materiel_type_id,mission_required_materiel_id,mission_required_materiel:mission_required_materiels!inner(mission_id)')
+    .eq('id', body.mission_materiel_assignment_id)
+    .eq('mission_required_materiel.mission_id', missionId)
+    .maybeSingle<{ id: string; materiel_type_id: string; mission_required_materiel_id: string }>();
 
-  if (requirementError) {
-    return NextResponse.json({ error: requirementError.message }, { status: 400 });
+  if (assignmentError) {
+    return NextResponse.json({ error: assignmentError.message }, { status: 400 });
   }
-  if (!requirement || body.occurrence_index < 0 || body.occurrence_index >= requirement.quantity) {
-    return NextResponse.json({ error: 'Matériel requis introuvable pour cette mission.' }, { status: 400 });
+  if (!assignment) {
+    return NextResponse.json({ error: 'Matériel affecté introuvable pour cette mission.' }, { status: 400 });
   }
 
-  // Le contenant requis peut contenir d'autres contenants imbriqués : on vérifie que l'item visé
+  // Le contenant affecté peut contenir d'autres contenants imbriqués : on vérifie que l'item visé
   // est bien atteignable en descendant l'arbre de composition, pas seulement un enfant direct.
   const { data: contents, error: contentsError } = await auth.client
     .from('materiel_type_contents')
@@ -72,7 +71,7 @@ export async function POST(request: NextRequest, { params }: { params: { mission
   }
 
   let reachable = false;
-  const queue = [requirement.materiel_type_id];
+  const queue = [assignment.materiel_type_id];
   const visited = new Set<string>();
   while (queue.length > 0 && !reachable) {
     const current = queue.shift()!;
@@ -87,7 +86,7 @@ export async function POST(request: NextRequest, { params }: { params: { mission
   }
 
   if (!reachable) {
-    return NextResponse.json({ error: 'Cet item ne fait pas partie du contenant requis.' }, { status: 400 });
+    return NextResponse.json({ error: 'Cet item ne fait pas partie du contenant affecté.' }, { status: 400 });
   }
 
   const { data: verification, error: verificationFetchError } = await auth.client
@@ -131,15 +130,14 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     .upsert(
       {
         mission_id: missionId,
-        mission_required_materiel_id: body.mission_required_materiel_id,
-        occurrence_index: body.occurrence_index,
+        mission_materiel_assignment_id: body.mission_materiel_assignment_id,
         child_type_id: body.child_type_id,
         status: body.status,
         note: body.note?.trim() || null,
         checked_by: auth.user.id,
         checked_at: new Date().toISOString()
       },
-      { onConflict: 'mission_required_materiel_id,occurrence_index,child_type_id' }
+      { onConflict: 'mission_materiel_assignment_id,child_type_id' }
     )
     .select()
     .single();

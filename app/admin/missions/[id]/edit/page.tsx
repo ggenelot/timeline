@@ -6,8 +6,9 @@ import { useParams, useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionTypeOption, MissionRequirementFormState, MissionMaterielRequirementFormState, MaterielTypeOption } from '@/components/missions/mission-form';
 import { AdminBanner, AdminCard, AdminPageHeader, ghostButtonStyle, dangerButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, Profile } from '@/lib/types';
+import { Mission, Profile, MissionRequiredMateriel } from '@/lib/types';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
+import { MissionMaterielAssignmentPicker, CandidateContainer } from '@/components/missions/mission-materiel-assignment-picker';
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -25,7 +26,7 @@ type ParsedRequirement = {
 };
 
 type ParsedMaterielRequirement = {
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
 };
 
@@ -40,7 +41,7 @@ type MissionEditPayload = Mission & {
   mission_required_materiels:
     | Array<{
         id: string;
-        materiel_type_id: string;
+        category_id: string;
         quantity: number;
       }>
     | null;
@@ -82,16 +83,16 @@ function parseMissionRequirements(requirements: MissionRequirementFormState[]): 
 function parseMissionMaterielRequirements(requirements: MissionMaterielRequirementFormState[]): { parsedRequirements: ParsedMaterielRequirement[]; error: string | null } {
   const trimmedRequirements = requirements
     .map((requirement) => ({
-      materiel_type_id: requirement.materiel_type_id.trim(),
+      category_id: requirement.category_id.trim(),
       quantity: requirement.quantity.trim()
     }))
-    .filter((requirement) => requirement.materiel_type_id.length > 0 || requirement.quantity.length > 0);
+    .filter((requirement) => requirement.category_id.length > 0 || requirement.quantity.length > 0);
 
   const parsedRequirements: ParsedMaterielRequirement[] = [];
-  const selectedMaterielTypeIds = new Set<string>();
+  const selectedCategoryIds = new Set<string>();
 
   for (const requirement of trimmedRequirements) {
-    if (!requirement.materiel_type_id) {
+    if (!requirement.category_id) {
       return { parsedRequirements: [], error: 'Veuillez sélectionner un type de matériel pour chaque ligne.' };
     }
 
@@ -99,13 +100,13 @@ function parseMissionMaterielRequirements(requirements: MissionMaterielRequireme
       return { parsedRequirements: [], error: 'La quantité doit être un entier strictement positif.' };
     }
 
-    if (selectedMaterielTypeIds.has(requirement.materiel_type_id)) {
+    if (selectedCategoryIds.has(requirement.category_id)) {
       return { parsedRequirements: [], error: 'Un même type de matériel ne peut pas être ajouté en double.' };
     }
 
-    selectedMaterielTypeIds.add(requirement.materiel_type_id);
+    selectedCategoryIds.add(requirement.category_id);
     parsedRequirements.push({
-      materiel_type_id: requirement.materiel_type_id,
+      category_id: requirement.category_id,
       quantity: Number.parseInt(requirement.quantity, 10)
     });
   }
@@ -152,6 +153,8 @@ export default function AdminEditMissionPage() {
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
   const [materielRequirements, setMaterielRequirements] = useState<MissionMaterielRequirementFormState[]>([]);
   const [materielTypes, setMaterielTypes] = useState<MaterielTypeOption[]>([]);
+  const [requiredMateriels, setRequiredMateriels] = useState<MissionRequiredMateriel[]>([]);
+  const [candidateContainers, setCandidateContainers] = useState<CandidateContainer[]>([]);
   const [missionTypes, setMissionTypes] = useState<MissionTypeOption[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
@@ -160,6 +163,41 @@ export default function AdminEditMissionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  async function loadMaterielAssignments() {
+    const { data: requirementsData, error: requirementsErr } = await supabase
+      .from('mission_required_materiels')
+      .select('id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color),assignments:mission_materiel_assignments(id,mission_required_materiel_id,materiel_type_id,assigned_by,created_at,materiel_type:materiel_types(id,name,code))')
+      .eq('mission_id', missionId);
+
+    if (requirementsErr || !requirementsData) {
+      setRequiredMateriels([]);
+      setCandidateContainers([]);
+      return;
+    }
+
+    const mappedRequirements = requirementsData.map((requirement) => ({
+      ...requirement,
+      category: Array.isArray(requirement.category) ? requirement.category[0] ?? null : requirement.category,
+      assignments: (requirement.assignments ?? []).map((assignment) => ({
+        ...assignment,
+        materiel_type: Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] ?? null : assignment.materiel_type
+      }))
+    }));
+    setRequiredMateriels(mappedRequirements);
+
+    const categoryIds = Array.from(new Set(mappedRequirements.map((requirement) => requirement.category_id)));
+    if (categoryIds.length > 0) {
+      const [containersResult, contentsResult] = await Promise.all([
+        supabase.from('materiel_types').select('id,name,code,category_id').eq('is_container', true).in('category_id', categoryIds),
+        supabase.from('materiel_type_contents').select('child_type_id')
+      ]);
+      const nestedContainerIds = new Set((contentsResult.data ?? []).map((row) => row.child_type_id));
+      setCandidateContainers((containersResult.data ?? []).filter((c) => !nestedContainerIds.has(c.id)));
+    } else {
+      setCandidateContainers([]);
+    }
+  }
 
   useEffect(() => {
     async function loadData() {
@@ -190,17 +228,16 @@ export default function AdminEditMissionPage() {
         return;
       }
 
-      // Mission, skills, materiel types, location suggestions and the session are independent: fetch in parallel.
-      const [missionResult, sessionResult, skillResult, materielResult, materielContentsResult, locationsResult] = await Promise.all([
+      // Mission, skills, materiel categories, location suggestions and the session are independent: fetch in parallel.
+      const [missionResult, sessionResult, skillResult, materielResult, locationsResult] = await Promise.all([
         supabase
           .from('missions')
-          .select('id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity),mission_required_materiels(id,materiel_type_id,quantity)')
+          .select('id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,skill_id,quantity),mission_required_materiels(id,category_id,quantity)')
           .eq('id', missionId)
           .single<MissionEditPayload>(),
         supabase.auth.getSession(),
         supabase.from('skills').select('id,name,skill_categories(color)').order('name', { ascending: true }),
-        supabase.from('materiel_types').select('id,name,materiel_categories(color)').eq('is_container', true).order('name', { ascending: true }),
-        supabase.from('materiel_type_contents').select('child_type_id'),
+        supabase.from('materiel_categories').select('id,name,color').order('display_order', { ascending: true }),
         supabase.from('missions').select('location').not('location', 'is', null),
       ]);
 
@@ -224,7 +261,7 @@ export default function AdminEditMissionPage() {
       );
       setMaterielRequirements(
         (missionData.mission_required_materiels ?? []).map((requirement) => ({
-          materiel_type_id: requirement.materiel_type_id,
+          category_id: requirement.category_id,
           quantity: String(requirement.quantity ?? 1)
         }))
       );
@@ -253,25 +290,19 @@ export default function AdminEditMissionPage() {
       );
 
       const { data: materielData, error: materielError } = materielResult;
-      const { data: materielContentsData, error: materielContentsError } = materielContentsResult;
 
-      if (materielError || materielContentsError) {
-        setError(`Impossible de charger les types de matériel: ${materielError?.message ?? materielContentsError?.message}`);
+      if (materielError) {
+        setError(`Impossible de charger les types de matériel: ${materielError.message}`);
         setLoading(false);
         return;
       }
 
-      // Seuls les contenants de plus haut niveau (jamais imbriqués dans un autre
-      // contenant) sont mobilisables sur une mission.
-      const nestedContainerIds = new Set((materielContentsData ?? []).map((row) => row.child_type_id));
       setMaterielTypes(
-        (materielData ?? [])
-          .filter((m) => !nestedContainerIds.has(m.id))
-          .map((m) => ({
-            id: m.id,
-            name: m.name,
-            color: (m.materiel_categories as { color?: string } | null)?.color ?? null
-          }))
+        (materielData ?? []).map((c) => ({
+          id: c.id,
+          name: c.name,
+          color: c.color ?? null
+        }))
       );
 
       const { data: locationsData, error: locationsError } = locationsResult;
@@ -292,9 +323,12 @@ export default function AdminEditMissionPage() {
 
       setLocationSuggestions(suggestions);
       setLoading(false);
+
+      void loadMaterielAssignments();
     }
 
     void loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [missionId, router]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -417,7 +451,7 @@ export default function AdminEditMissionPage() {
       const { error: insertMaterielRequirementsError } = await supabase.from('mission_required_materiels').insert(
         parsedMaterielRequirements.map((requirement) => ({
           mission_id: mission.id,
-          materiel_type_id: requirement.materiel_type_id,
+          category_id: requirement.category_id,
           quantity: requirement.quantity
         }))
       );
@@ -526,6 +560,12 @@ export default function AdminEditMissionPage() {
           }
           />
         </AdminCard>
+
+        <MissionMaterielAssignmentPicker
+          requirements={requiredMateriels}
+          candidateContainers={candidateContainers}
+          onChange={() => void loadMaterielAssignments()}
+        />
       </div>
     </div>
   );

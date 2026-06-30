@@ -57,8 +57,7 @@ export default function VerificationMissionPage() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        mission_required_materiel_id: card.mission_required_materiel_id,
-        occurrence_index: card.occurrence_index,
+        mission_materiel_assignment_id: card.mission_materiel_assignment_id,
         child_type_id: card.child_type_id,
         status,
         note
@@ -78,9 +77,7 @@ export default function VerificationMissionPage() {
         ...current,
         verification: current.verification ?? { id: '', mission_id: missionId, status: 'in_progress', completed_by: null, completed_at: null, created_at: '', updated_at: '' },
         cards: current.cards.map((c) =>
-          c.mission_required_materiel_id === card.mission_required_materiel_id &&
-          c.occurrence_index === card.occurrence_index &&
-          c.child_type_id === card.child_type_id
+          c.mission_materiel_assignment_id === card.mission_materiel_assignment_id && c.child_type_id === card.child_type_id
             ? { ...c, check: { status, note } }
             : c
         )
@@ -171,9 +168,8 @@ export default function VerificationMissionPage() {
             {missingCards.length > 0 ? (
               <ul className="mt-2 list-inside list-disc text-sm text-emerald-800">
                 {missingCards.map((card) => (
-                  <li key={`${card.mission_required_materiel_id}:${card.occurrence_index}:${card.child_type_id}`}>
-                    {card.container_name}
-                    {card.occurrence_count > 1 ? ` #${card.occurrence_index + 1}` : ''} — {card.child_name}
+                  <li key={`${card.mission_materiel_assignment_id}:${card.child_type_id}`}>
+                    {card.category_name} — {card.container_name} — {card.child_name}
                     {card.check?.note ? ` (${card.check.note})` : ''}
                   </li>
                 ))}
@@ -198,9 +194,8 @@ export default function VerificationMissionPage() {
             {missingCards.length > 0 ? (
               <ul className="mt-2 list-inside list-disc text-sm text-rose-700">
                 {missingCards.map((card) => (
-                  <li key={`${card.mission_required_materiel_id}:${card.occurrence_index}:${card.child_type_id}`}>
-                    {card.container_name}
-                    {card.occurrence_count > 1 ? ` #${card.occurrence_index + 1}` : ''} — {card.child_name}
+                  <li key={`${card.mission_materiel_assignment_id}:${card.child_type_id}`}>
+                    {card.category_name} — {card.container_name} — {card.child_name}
                   </li>
                 ))}
               </ul>

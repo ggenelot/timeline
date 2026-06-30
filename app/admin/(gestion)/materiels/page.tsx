@@ -21,7 +21,16 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, MaterielType, MaterielTypeContent } from '@/lib/types';
+import { Profile, MaterielType, MaterielTypeContent, MaterielCategory } from '@/lib/types';
+
+const CATEGORY_PALETTE: Record<string, string> = {
+  slate: '#475569', amber: '#d97706', sky: '#0284c7', violet: '#7c3aed', emerald: '#059669',
+  pink: '#db2777', rose: '#e11d48', orange: '#ea580c', cyan: '#0891b2', indigo: '#4f46e5',
+};
+
+function categoryDot(color: string) {
+  return CATEGORY_PALETTE[color] ?? CATEGORY_PALETTE.slate;
+}
 
 // ── Poignée de glisser-déposer ───────────────────────────────────
 
@@ -46,28 +55,37 @@ const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd
 
 // ── Formulaire « + Ajouter un contenant » ───────────────────────────
 
-function AddContainerForm({ onSubmit, onCancel }: { onSubmit: (name: string, code: string) => Promise<void>; onCancel: () => void }) {
+function AddContainerForm({ categories, onSubmit, onCancel }: {
+  categories: MaterielCategory[];
+  onSubmit: (name: string, code: string, categoryId: string) => Promise<void>;
+  onCancel: () => void;
+}) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [categoryId, setCategoryId] = useState('');
   const [saving, setSaving] = useState(false);
 
   async function submit() {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await onSubmit(name.trim(), code.trim());
+      await onSubmit(name.trim(), code.trim(), categoryId);
     } finally {
       setSaving(false);
     }
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 10, padding: '9px 11px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 10, padding: '9px 11px', flexWrap: 'wrap' }}>
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du contenant" autoFocus
         onKeyDown={(e) => { if (e.key === 'Enter') void submit(); if (e.key === 'Escape') onCancel(); }}
-        style={{ ...inputStyle, flex: 1 }} />
+        style={{ ...inputStyle, flex: 1, minWidth: 120 }} />
       <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code (optionnel)" maxLength={24}
         style={{ ...inputStyle, width: 140, textTransform: 'uppercase' }} />
+      <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={{ ...inputStyle, width: 160 }}>
+        <option value="">Type…</option>
+        {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
       <button type="button" onClick={submit} disabled={saving || !name.trim()}
         style={{ cursor: saving || !name.trim() ? 'not-allowed' : 'pointer', border: 'none', background: saving || !name.trim() ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 8, padding: '9px 14px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
         Ajouter
@@ -163,10 +181,12 @@ type TreeCtxValue = {
   expanded: Set<string>;
   childrenByContainer: Record<string, MaterielTypeContent[]>;
   loadingContainers: Set<string>;
+  categories: MaterielCategory[];
   toggleExpand: (containerId: string) => void;
-  addContainer: (containerId: string, name: string, code: string) => Promise<void>;
+  addContainer: (containerId: string, name: string, code: string, categoryId: string) => Promise<void>;
   addItem: (containerId: string, itemId: string, quantity: number) => Promise<void>;
   updateQuantity: (containerId: string, contentId: string, quantity: number) => Promise<void>;
+  updateCategory: (typeId: string, containerId: string | null, categoryId: string) => Promise<void>;
   unlink: (containerId: string, contentId: string) => Promise<void>;
 };
 
@@ -250,6 +270,22 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
           {node.name}
           {node.code ? <span style={{ marginLeft: 7, fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{node.code}</span> : null}
         </span>
+        {node.is_container && !ctx.editMode && node.category ? (
+          <span title={node.category.name} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>
+            <span style={{ width: 8, height: 8, borderRadius: '50%', background: categoryDot(node.category.color) }} />
+            {node.category.name}
+          </span>
+        ) : null}
+        {node.is_container && ctx.editMode ? (
+          <select
+            value={node.category_id ?? ''}
+            onChange={(e) => void ctx.updateCategory(node.id, meta?.parentContainerId ?? null, e.target.value)}
+            style={{ ...inputStyle, width: 140, flexShrink: 0 }}
+          >
+            <option value="">Type…</option>
+            {ctx.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+        ) : null}
         {meta ? (
           <>
             {ctx.editMode ? (
@@ -302,7 +338,8 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {addMode === 'container' ? (
                 <AddContainerForm
-                  onSubmit={async (name, code) => { await ctx.addContainer(node.id, name, code); setAddMode(null); }}
+                  categories={ctx.categories}
+                  onSubmit={async (name, code, categoryId) => { await ctx.addContainer(node.id, name, code, categoryId); setAddMode(null); }}
                   onCancel={() => setAddMode(null)}
                 />
               ) : addMode === 'item' ? (
@@ -346,6 +383,7 @@ export default function AdminMaterielsPage() {
   const [error, setError] = useState<string | null>(null);
   const [addingRoot, setAddingRoot] = useState(false);
   const [editMode, setEditMode] = useState(false);
+  const [categories, setCategories] = useState<MaterielCategory[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -389,6 +427,11 @@ export default function AdminMaterielsPage() {
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
       await fetchRoots(tok);
+      const { data: categoryData } = await supabase
+        .from('materiel_categories')
+        .select('id,name,color,display_order,created_at')
+        .order('display_order', { ascending: true });
+      setCategories(categoryData ?? []);
       setLoading(false);
     }
     void init();
@@ -407,11 +450,11 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function addContainer(containerId: string, name: string, code: string) {
+  async function addContainer(containerId: string, name: string, code: string, categoryId: string) {
     const createRes = await fetch('/api/admin/materiel-types', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, code, is_container: true }),
+      body: JSON.stringify({ name, code, is_container: true, category_id: categoryId || null }),
     });
     if (!createRes.ok) return;
     const { type } = (await createRes.json()) as { type: MaterielType };
@@ -445,6 +488,25 @@ export default function AdminMaterielsPage() {
     });
   }
 
+  async function updateCategory(typeId: string, containerId: string | null, categoryId: string) {
+    const category = categories.find((c) => c.id === categoryId) ?? null;
+    if (containerId === null) {
+      setRoots((prev) => prev.map((r) => (r.id === typeId ? { ...r, category_id: categoryId || null, category } : r)));
+    } else {
+      setChildrenByContainer((prev) => ({
+        ...prev,
+        [containerId]: (prev[containerId] ?? []).map((c) =>
+          c.child_type?.id === typeId ? { ...c, child_type: { ...c.child_type, category_id: categoryId || null, category } } : c
+        ),
+      }));
+    }
+    await fetch(`/api/admin/materiel-types/${typeId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ category_id: categoryId || null }),
+    });
+  }
+
   async function unlink(containerId: string, contentId: string) {
     setChildrenByContainer((prev) => ({ ...prev, [containerId]: (prev[containerId] ?? []).filter((c) => c.id !== contentId) }));
     await fetch(`/api/admin/materiel-types/${containerId}/contents/${contentId}`, {
@@ -453,11 +515,11 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function handleAddRoot(name: string, code: string) {
+  async function handleAddRoot(name: string, code: string, categoryId: string) {
     const res = await fetch('/api/admin/materiel-types', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, code, is_container: true }),
+      body: JSON.stringify({ name, code, is_container: true, category_id: categoryId || null }),
     });
     if (res.ok) {
       setAddingRoot(false);
@@ -642,10 +704,12 @@ export default function AdminMaterielsPage() {
     expanded,
     childrenByContainer,
     loadingContainers,
+    categories,
     toggleExpand,
     addContainer,
     addItem,
     updateQuantity,
+    updateCategory,
     unlink,
   };
 
@@ -717,7 +781,7 @@ export default function AdminMaterielsPage() {
 
       {editMode ? (
         addingRoot ? (
-          <AddContainerForm onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
+          <AddContainerForm categories={categories} onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
         ) : (
           <button type="button" onClick={() => setAddingRoot(true)}
             style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
