@@ -30,66 +30,70 @@ from mission_type_required_materiels;
 -- ne perdre aucun matériel déjà engagé. Même logique pour les gabarits de mission
 -- (mission_type_required_materiels), sans report d'affectation puisqu'ils n'en ont pas.
 
-with duplicate_groups as (
+-- Note : merge_map et merge_type_map sont des tables (et non des CTE) car elles
+-- doivent rester lisibles par plusieurs instructions successives ; une CTE est
+-- réévaluée à chaque requête et ne survit pas au-delà de l'instruction qui la déclare.
+
+create table _merge_map as
+select mrm.id as drop_id, dg.keep_id, dg.total_quantity
+from mission_required_materiels mrm
+join materiel_types mt on mt.id = mrm.materiel_type_id
+join (
   select
-    mrm.mission_id,
-    mt.category_id,
-    (array_agg(mrm.id order by mrm.created_at, mrm.id))[1] as keep_id,
-    sum(mrm.quantity) as total_quantity
-  from mission_required_materiels mrm
-  join materiel_types mt on mt.id = mrm.materiel_type_id
-  group by mrm.mission_id, mt.category_id
+    mrm2.mission_id,
+    mt2.category_id,
+    (array_agg(mrm2.id order by mrm2.created_at, mrm2.id))[1] as keep_id,
+    sum(mrm2.quantity) as total_quantity
+  from mission_required_materiels mrm2
+  join materiel_types mt2 on mt2.id = mrm2.materiel_type_id
+  group by mrm2.mission_id, mt2.category_id
   having count(*) > 1
-),
-merge_map as (
-  select mrm.id as drop_id, dg.keep_id, dg.total_quantity
-  from mission_required_materiels mrm
-  join materiel_types mt on mt.id = mrm.materiel_type_id
-  join duplicate_groups dg
-    on dg.mission_id = mrm.mission_id and dg.category_id = mt.category_id
-  where mrm.id <> dg.keep_id
-)
+) dg on dg.mission_id = mrm.mission_id and dg.category_id = mt.category_id
+where mrm.id <> dg.keep_id;
+
 update mission_required_materiels mrm
 set quantity = mm.total_quantity
-from merge_map mm
+from _merge_map mm
 where mrm.id = mm.keep_id;
 
 update _materiel_requirements_backfill b
 set requirement_id = mm.keep_id
-from merge_map mm
+from _merge_map mm
 where b.requirement_id = mm.drop_id;
 
 delete from mission_required_materiels mrm
-using merge_map mm
+using _merge_map mm
 where mrm.id = mm.drop_id;
 
-with duplicate_type_groups as (
+drop table _merge_map;
+
+create table _merge_type_map as
+select mtrm.id as drop_id, dg.keep_id, dg.total_quantity
+from mission_type_required_materiels mtrm
+join materiel_types mt on mt.id = mtrm.materiel_type_id
+join (
   select
-    mtrm.mission_type_id,
-    mt.category_id,
-    (array_agg(mtrm.id order by mtrm.created_at, mtrm.id))[1] as keep_id,
-    sum(mtrm.quantity) as total_quantity
-  from mission_type_required_materiels mtrm
-  join materiel_types mt on mt.id = mtrm.materiel_type_id
-  group by mtrm.mission_type_id, mt.category_id
+    mtrm2.mission_type_id,
+    mt2.category_id,
+    (array_agg(mtrm2.id order by mtrm2.created_at, mtrm2.id))[1] as keep_id,
+    sum(mtrm2.quantity) as total_quantity
+  from mission_type_required_materiels mtrm2
+  join materiel_types mt2 on mt2.id = mtrm2.materiel_type_id
+  group by mtrm2.mission_type_id, mt2.category_id
   having count(*) > 1
-),
-merge_type_map as (
-  select mtrm.id as drop_id, dg.keep_id, dg.total_quantity
-  from mission_type_required_materiels mtrm
-  join materiel_types mt on mt.id = mtrm.materiel_type_id
-  join duplicate_type_groups dg
-    on dg.mission_type_id = mtrm.mission_type_id and dg.category_id = mt.category_id
-  where mtrm.id <> dg.keep_id
-)
+) dg on dg.mission_type_id = mtrm.mission_type_id and dg.category_id = mt.category_id
+where mtrm.id <> dg.keep_id;
+
 update mission_type_required_materiels mtrm
 set quantity = mm.total_quantity
-from merge_type_map mm
+from _merge_type_map mm
 where mtrm.id = mm.keep_id;
 
 delete from mission_type_required_materiels mtrm
-using merge_type_map mm
+using _merge_type_map mm
 where mtrm.id = mm.drop_id;
+
+drop table _merge_type_map;
 
 -- ── 2. mission_required_materiels / mission_type_required_materiels : repointage catégorie ──
 
