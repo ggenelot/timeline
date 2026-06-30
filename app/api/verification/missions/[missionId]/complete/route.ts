@@ -25,14 +25,44 @@ export async function POST(request: NextRequest, { params }: { params: { mission
 
   const { data: requiredMateriels, error: requiredError } = await auth.client
     .from('mission_required_materiels')
-    .select('id,materiel_type_id,quantity')
+    .select('id,quantity,category:materiel_categories(name)')
     .eq('mission_id', missionId);
 
   if (requiredError) {
     return NextResponse.json({ error: requiredError.message }, { status: 400 });
   }
 
-  // On charge tout l'arbre de composition car un contenant requis peut contenir d'autres
+  const requirementIds = (requiredMateriels ?? []).map((row) => row.id);
+
+  const { data: materielAssignments, error: materielAssignmentsError } =
+    requirementIds.length > 0
+      ? await auth.client
+          .from('mission_materiel_assignments')
+          .select('id,mission_required_materiel_id,materiel_type_id')
+          .in('mission_required_materiel_id', requirementIds)
+      : { data: [], error: null };
+
+  if (materielAssignmentsError) {
+    return NextResponse.json({ error: materielAssignmentsError.message }, { status: 400 });
+  }
+
+  const assignedCountByRequirement = new Map<string, number>();
+  for (const row of materielAssignments ?? []) {
+    assignedCountByRequirement.set(row.mission_required_materiel_id, (assignedCountByRequirement.get(row.mission_required_materiel_id) ?? 0) + 1);
+  }
+
+  const underAssigned = (requiredMateriels ?? []).filter((row) => (assignedCountByRequirement.get(row.id) ?? 0) < row.quantity);
+  if (underAssigned.length > 0) {
+    const names = underAssigned
+      .map((row) => (Array.isArray(row.category) ? row.category[0] : row.category)?.name ?? 'Matériel')
+      .join(', ');
+    return NextResponse.json(
+      { error: `Du matériel reste à affecter avant de terminer la vérification : ${names}.` },
+      { status: 400 }
+    );
+  }
+
+  // On charge tout l'arbre de composition car un contenant affecté peut contenir d'autres
   // contenants imbriqués : seuls les items terminaux (non-contenants) comptent comme "à vérifier".
   const { data: contents, error: contentsError } = await auth.client
     .from('materiel_type_contents')
@@ -65,19 +95,16 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return count;
   }
 
-  const totalExpected = (requiredMateriels ?? []).reduce(
-    (sum, row) => sum + row.quantity * countLeafItems(row.materiel_type_id, new Set()),
-    0
-  );
+  const totalExpected = (materielAssignments ?? []).reduce((sum, row) => sum + countLeafItems(row.materiel_type_id, new Set()), 0);
 
-  const requiredMaterielIds = (requiredMateriels ?? []).map((row) => row.id);
+  const assignmentIds = (materielAssignments ?? []).map((row) => row.id);
 
   const { count: checkedCount, error: checkedError } =
-    requiredMaterielIds.length > 0
+    assignmentIds.length > 0
       ? await auth.client
           .from('mission_materiel_verification_items')
           .select('id', { count: 'exact', head: true })
-          .in('mission_required_materiel_id', requiredMaterielIds)
+          .in('mission_materiel_assignment_id', assignmentIds)
       : { count: 0, error: null };
 
   if (checkedError) {

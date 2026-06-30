@@ -12,7 +12,7 @@ type VerificationCardStackProps = {
 };
 
 function cardKey(card: MissionVerificationCard) {
-  return `${card.mission_required_materiel_id}:${card.occurrence_index}:${card.child_type_id}`;
+  return `${card.mission_materiel_assignment_id}:${card.child_type_id}`;
 }
 
 export function VerificationCardStack({ cards, onDecide, saving }: VerificationCardStackProps) {
@@ -99,8 +99,7 @@ export function VerificationCardStack({ cards, onDecide, saving }: VerificationC
         >
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-              {current.container_name}
-              {current.occurrence_count > 1 ? ` #${current.occurrence_index + 1}/${current.occurrence_count}` : ''}
+              {current.category_name} — {current.container_name}
             </span>
             <span className="text-xl font-semibold text-slate-900">{current.child_name}</span>
             {current.expected_quantity > 1 ? (

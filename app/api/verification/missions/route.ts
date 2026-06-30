@@ -36,37 +36,84 @@ export async function GET(request: NextRequest) {
 
   const { data: requiredMateriels, error: requiredError } = await auth.client
     .from('mission_required_materiels')
-    .select('id,mission_id,materiel_type_id,quantity')
+    .select('id,mission_id')
     .in('mission_id', missionIds);
 
   if (requiredError) {
     return NextResponse.json({ error: requiredError.message }, { status: 400 });
   }
 
-  const containerTypeIds = [...new Set((requiredMateriels ?? []).map((row) => row.materiel_type_id))];
+  const missionByRequirement = new Map<string, string>();
+  for (const row of requiredMateriels ?? []) {
+    missionByRequirement.set(row.id, row.mission_id);
+  }
+
+  const requiredMaterielIds = (requiredMateriels ?? []).map((row) => row.id);
+
+  const { data: materielAssignments, error: materielAssignmentsError } =
+    requiredMaterielIds.length > 0
+      ? await auth.client
+          .from('mission_materiel_assignments')
+          .select('id,mission_required_materiel_id,materiel_type_id')
+          .in('mission_required_materiel_id', requiredMaterielIds)
+      : { data: [], error: null };
+
+  if (materielAssignmentsError) {
+    return NextResponse.json({ error: materielAssignmentsError.message }, { status: 400 });
+  }
+
+  const containerTypeIds = [...new Set((materielAssignments ?? []).map((row) => row.materiel_type_id))];
 
   const { data: contents, error: contentsError } =
     containerTypeIds.length > 0
-      ? await auth.client.from('materiel_type_contents').select('parent_type_id,child_type_id').in('parent_type_id', containerTypeIds)
+      ? await auth.client
+          .from('materiel_type_contents')
+          .select('parent_type_id,child_type_id,child_type:materiel_types!materiel_type_contents_child_type_id_fkey(is_container)')
       : { data: [], error: null };
 
   if (contentsError) {
     return NextResponse.json({ error: contentsError.message }, { status: 400 });
   }
 
-  const childCountByContainer = new Map<string, number>();
-  for (const row of contents ?? []) {
-    childCountByContainer.set(row.parent_type_id, (childCountByContainer.get(row.parent_type_id) ?? 0) + 1);
+  type ContentRow = { parent_type_id: string; child_type_id: string; child_type: { is_container: boolean } | { is_container: boolean }[] | null };
+
+  const childrenByContainer = new Map<string, ContentRow[]>();
+  for (const row of (contents ?? []) as ContentRow[]) {
+    const list = childrenByContainer.get(row.parent_type_id) ?? [];
+    list.push(row);
+    childrenByContainer.set(row.parent_type_id, list);
   }
 
-  const requiredMaterielIds = (requiredMateriels ?? []).map((row) => row.id);
+  function countLeafItems(containerTypeId: string, visited: Set<string>): number {
+    if (visited.has(containerTypeId)) return 0;
+    const nextVisited = new Set(visited).add(containerTypeId);
+    const children = childrenByContainer.get(containerTypeId) ?? [];
+    let count = 0;
+
+    for (const content of children) {
+      const childType = Array.isArray(content.child_type) ? content.child_type[0] : content.child_type;
+      count += childType?.is_container ? countLeafItems(content.child_type_id, nextVisited) : 1;
+    }
+
+    return count;
+  }
+
+  const totalItemsByMission = new Map<string, number>();
+  for (const row of materielAssignments ?? []) {
+    const missionId = missionByRequirement.get(row.mission_required_materiel_id);
+    if (!missionId) continue;
+    const current = totalItemsByMission.get(missionId) ?? 0;
+    totalItemsByMission.set(missionId, current + countLeafItems(row.materiel_type_id, new Set()));
+  }
+
+  const assignmentIds = (materielAssignments ?? []).map((row) => row.id);
 
   const { data: checkedItems, error: checkedError } =
-    requiredMaterielIds.length > 0
+    assignmentIds.length > 0
       ? await auth.client
           .from('mission_materiel_verification_items')
-          .select('mission_id,mission_required_materiel_id')
-          .in('mission_required_materiel_id', requiredMaterielIds)
+          .select('mission_id,mission_materiel_assignment_id')
+          .in('mission_materiel_assignment_id', assignmentIds)
       : { data: [], error: null };
 
   if (checkedError) {
@@ -76,13 +123,6 @@ export async function GET(request: NextRequest) {
   const checkedCountByMission = new Map<string, number>();
   for (const row of checkedItems ?? []) {
     checkedCountByMission.set(row.mission_id, (checkedCountByMission.get(row.mission_id) ?? 0) + 1);
-  }
-
-  const totalItemsByMission = new Map<string, number>();
-  for (const row of requiredMateriels ?? []) {
-    const childCount = childCountByContainer.get(row.materiel_type_id) ?? 0;
-    const current = totalItemsByMission.get(row.mission_id) ?? 0;
-    totalItemsByMission.set(row.mission_id, current + row.quantity * childCount);
   }
 
   const { data: verifications, error: verificationsError } = await auth.client

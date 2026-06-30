@@ -99,25 +99,37 @@ export type MaterielTypeContent = {
   quantity: number;
   position: number;
   created_at: string;
-  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container'> | null;
+  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container' | 'category_id' | 'category'> | null;
+};
+
+// Affecte un contenant précis du catalogue à un besoin de mission exprimé en
+// catégorie (ex. "2x VPS" → assigner "VPS La Boétie" puis "VPS Étoile").
+export type MissionMaterielAssignment = {
+  id: string;
+  mission_required_materiel_id: string;
+  materiel_type_id: string;
+  assigned_by: string | null;
+  created_at: string;
+  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
 };
 
 export type MissionRequiredMateriel = {
   id: string;
   mission_id: string;
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
   created_at: string;
-  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  category?: Pick<MaterielCategory, 'id' | 'name' | 'color'> | null;
+  assignments?: MissionMaterielAssignment[];
 };
 
 export type MissionTypeRequiredMateriel = {
   id: string;
   mission_type_id: string;
-  materiel_type_id: string;
+  category_id: string;
   quantity: number;
   created_at: string;
-  materiel_type?: Pick<MaterielType, 'id' | 'name' | 'code'> | null;
+  category?: Pick<MaterielCategory, 'id' | 'name' | 'color'> | null;
 };
 
 // ── Vérification assistée du matériel ──────────────────────────────────
@@ -138,8 +150,7 @@ export type MissionMaterielVerification = {
 export type MissionMaterielVerificationItem = {
   id: string;
   mission_id: string;
-  mission_required_materiel_id: string;
-  occurrence_index: number;
+  mission_materiel_assignment_id: string;
   child_type_id: string;
   status: MissionMaterielVerificationItemStatus;
   note: string | null;
@@ -147,15 +158,15 @@ export type MissionMaterielVerificationItem = {
   checked_at: string;
 };
 
-// Un item à vérifier, aplati pour l'écran de pile de cartes : un exemplaire
-// de contenant (occurrence_index) requis sur la mission, et un des items
-// catalogue qu'il doit contenir.
+// Un item à vérifier, aplati pour l'écran de pile de cartes : un contenant
+// précis affecté à un besoin de mission, et un des items catalogue qu'il
+// doit contenir.
 export type MissionVerificationCard = {
+  mission_materiel_assignment_id: string;
   mission_required_materiel_id: string;
+  category_name: string;
   container_type_id: string;
   container_name: string;
-  occurrence_index: number;
-  occurrence_count: number;
   child_type_id: string;
   child_name: string;
   expected_quantity: number;
