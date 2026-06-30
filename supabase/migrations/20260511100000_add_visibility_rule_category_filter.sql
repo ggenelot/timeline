@@ -49,7 +49,16 @@ AS $$
                 -- Filtre statut : la règle s'applique si pas de filtre ou si le statut correspond
                 AND (r.required_status IS NULL OR m.status::text = r.required_status)
                 -- Filtre catégorie : la règle s'applique si pas de filtre ou si la catégorie correspond
-                AND (r.required_category IS NULL OR m.category::text = r.required_category)
+                -- (missions.category a déjà été remplacée par mission_type_id par
+                -- 20260511090000_unify_mission_types_as_categories.sql, qui s'applique avant
+                -- cette migration ; on retrouve donc la catégorie via ce mapping figé.)
+                AND (r.required_category IS NULL OR m.mission_type_id = CASE r.required_category
+                      WHEN 'maraude'          THEN 'aaaaaaaa-0000-0000-0000-000000000001'::uuid
+                      WHEN 'garde'            THEN 'aaaaaaaa-0000-0000-0000-000000000002'::uuid
+                      WHEN 'formation'        THEN 'aaaaaaaa-0000-0000-0000-000000000003'::uuid
+                      WHEN 'vie_antenne'      THEN 'aaaaaaaa-0000-0000-0000-000000000004'::uuid
+                      WHEN 'poste_de_secours' THEN 'aaaaaaaa-0000-0000-0000-000000000005'::uuid
+                    END)
                 AND (
                   -- L'utilisateur est dans le groupe privilégié de cette règle
                   (
