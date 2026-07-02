@@ -1,9 +1,11 @@
 'use client';
 
 import Link from 'next/link';
+import Image from 'next/image';
 import { useMemo } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Profile } from '@/lib/types';
+import { Icon } from '@/components/ui/icon';
 
 export function Header({
   session,
@@ -26,33 +28,30 @@ export function Header({
   }, [profile?.full_name, session?.user.email]);
 
   return (
-    <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80">
-      <div className="mx-auto flex w-full max-w-4xl items-center gap-4 overflow-x-auto px-4 py-3">
+    <header className="sticky top-0 z-30 border-b border-line bg-[rgba(255,255,255,.92)] backdrop-blur lg:hidden">
+      <div className="flex items-center gap-3 px-4 py-2.5">
         {session ? (
           <button
             type="button"
             onClick={onToggleMenu}
             aria-label="Ouvrir le menu"
             aria-expanded={menuOpen}
-            className="flex flex-col gap-1 rounded-md p-2 hover:bg-slate-50"
+            className="-ml-1 rounded-lg p-1.5 text-ink-2 transition-colors hover:bg-[#F4F6FB]"
           >
-            <span className="block h-0.5 w-5 bg-slate-700" />
-            <span className="block h-0.5 w-5 bg-slate-700" />
-            <span className="block h-0.5 w-5 bg-slate-700" />
+            <Icon name="menu" size={26} />
           </button>
         ) : null}
-        <Link href="/missions" className="font-semibold text-slate-800 hover:text-slate-900">
-          Timeline
+        <Link href="/missions" className="flex items-center gap-2">
+          <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 object-contain" priority />
+          <span className="text-[17px] font-extrabold text-ink">Timeline</span>
         </Link>
-        <nav className="flex min-w-max flex-1 items-center gap-4 text-sm">
-          {session ? (
-            <span className="ml-auto whitespace-nowrap text-slate-600">Bonjour, {greetingName}</span>
-          ) : (
-            <Link href="/login" className="ml-auto text-slate-700 hover:text-slate-900">
-              Connexion
-            </Link>
-          )}
-        </nav>
+        {session ? (
+          <span className="ml-auto truncate text-sm text-ink-2">Bonjour, {greetingName}</span>
+        ) : (
+          <Link href="/login" className="ml-auto text-sm font-semibold text-brand hover:underline">
+            Connexion
+          </Link>
+        )}
       </div>
     </header>
   );

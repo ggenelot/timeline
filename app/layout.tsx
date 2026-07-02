@@ -36,6 +36,15 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       lang="fr"
       className={`${sourceSans.variable} ${anton.variable} ${bethEllen.variable}`}
     >
+      <head>
+        {/* Material Symbols Rounded — police d'icônes (non dispo via next/font pour cette version). */}
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,0,0&display=block"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <AuthGuard>
           <AppShell>{children}</AppShell>
