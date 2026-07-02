@@ -23,7 +23,6 @@ export default function MissionsPage() {
     typeColorById,
     relationByMission,
     proposalStatsByMission,
-    canCreateMissionTypeIds,
     error,
     loading,
     reload
@@ -60,14 +59,12 @@ export default function MissionsPage() {
   return (
     <VolunteerTimelineView
       error={error}
-      profile={profile}
       missions={missions}
       missionTypes={missionTypes}
       missionTypeById={missionTypeById}
       typeColorById={typeColorById}
       relationByMission={relationByMission}
       proposalStatsByMission={proposalStatsByMission}
-      canCreateMissionTypeIds={canCreateMissionTypeIds}
       selectedTypeId={selectedTypeId}
       onChangeTypeFilter={handleChangeTypeFilter}
       onReload={reload}

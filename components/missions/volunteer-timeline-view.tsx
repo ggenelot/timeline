@@ -1,13 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { MissionCard } from '@/components/missions/mission-card';
 import { MissionTimelineCard } from '@/components/missions/mission-timeline-card';
-import { Profile } from '@/lib/types';
 import { groupMissionsByMonth, MissionRelation } from '@/lib/mission-timeline';
 import { MissionType, MissionWithRequiredSkills, ProposalStats } from '@/components/missions/use-missions-data';
-import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 
 type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
@@ -60,42 +56,32 @@ function TimelineNode({ relation, typeColor }: { relation: MissionRelation; type
 
 export function VolunteerTimelineView({
   error,
-  profile,
   missions,
   missionTypes,
   missionTypeById,
   typeColorById,
   relationByMission,
   proposalStatsByMission,
-  canCreateMissionTypeIds,
   selectedTypeId,
   onChangeTypeFilter,
   onReload
 }: {
   error?: string | null;
-  profile: Profile;
   missions: MissionWithRequiredSkills[];
   missionTypes: MissionType[];
   missionTypeById: Map<string, MissionType>;
   typeColorById: Map<string, string>;
   relationByMission: Map<string, MissionRelation>;
   proposalStatsByMission: Map<string, ProposalStats>;
-  canCreateMissionTypeIds: string[];
   selectedTypeId: 'all' | string;
   onChangeTypeFilter: (nextTypeId: 'all' | string) => void;
   onReload: () => void;
 }) {
-  const router = useRouter();
   const [benevoleStatusFilter, setBenevoleStatusFilter] = useState<BenevoleStatusFilter>('all');
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
   const today = new Date();
   const todayLabel = today.toLocaleDateString('fr-FR', { weekday: 'short', day: 'numeric', month: 'long' });
-
-  const draftProposals = useMemo(
-    () => missions.filter((mission) => mission.status === 'draft' && mission.created_by === profile.id),
-    [missions, profile.id]
-  );
 
   const proposedMissions = useMemo(() => missions.filter((mission) => mission.status === 'proposed'), [missions]);
 
@@ -135,28 +121,21 @@ export function VolunteerTimelineView({
 
   const filterCards: Array<{ key: BenevoleStatusFilter; label: string; count: number; color: string }> = [
     { key: 'all', label: 'Toutes', count: benevoleCounts.total, color: '#16203A' },
-    { key: 'pending', label: 'Réponses en attente', count: benevoleCounts.pending, color: '#B45309' },
-    { key: 'engaged', label: 'Mes engagements', count: benevoleCounts.engaged, color: '#12805A' },
-    { key: 'retenu', label: 'Mes missions', count: benevoleCounts.retenu, color: '#059669' }
+    { key: 'pending', label: 'Je me positionne', count: benevoleCounts.pending, color: '#B45309' },
+    { key: 'engaged', label: 'Je suis engagé.e', count: benevoleCounts.engaged, color: '#12805A' },
+    { key: 'retenu', label: 'Je suis retenu.e', count: benevoleCounts.retenu, color: '#059669' }
   ];
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
       {error ? <div className="mb-4 rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-[26px] font-bold tracking-[-0.02em] text-ink">Missions</h1>
-          <p className="mt-1 text-sm text-ink-2">
-            {subtitleStats.total} mission{subtitleStats.total > 1 ? 's' : ''} proposée{subtitleStats.total > 1 ? 's' : ''} ·{' '}
-            {subtitleStats.pending} en attente de votre réponse
-          </p>
-        </div>
-        {canCreateMissionTypeIds.length > 0 ? (
-          <Button variant="primary" icon="add" onClick={() => router.push('/missions/create')}>
-            Proposer une mission
-          </Button>
-        ) : null}
+      <div>
+        <h1 className="text-[26px] font-bold tracking-[-0.02em] text-ink">Missions</h1>
+        <p className="mt-1 text-sm text-ink-2">
+          {subtitleStats.total} mission{subtitleStats.total > 1 ? 's' : ''} proposée{subtitleStats.total > 1 ? 's' : ''} ·{' '}
+          {subtitleStats.pending} en attente de votre réponse
+        </p>
       </div>
 
       {/* Cartes-filtres */}
@@ -217,28 +196,6 @@ export function VolunteerTimelineView({
           );
         })}
       </div>
-
-      {/* Brouillons proposés par le bénévole (en attente de validation) */}
-      {draftProposals.length > 0 ? (
-        <section className="mt-5 space-y-2 rounded-2xl border border-warn-line bg-warn-soft p-3">
-          <h2 className="text-sm font-bold text-warn-text">Mes propositions en attente de validation ({draftProposals.length})</h2>
-          {draftProposals.map((mission) => (
-            <MissionCard
-              key={mission.id}
-              mission={mission}
-              missionTypeName={missionTypeById.get(mission.mission_type_id)?.name}
-              requiredSkills={mission.mission_required_skills ?? []}
-              currentUserId={profile.id}
-              canPropose={false}
-              proposalResponse={null}
-              canEdit={false}
-              availableVolunteersCount={0}
-              unavailableVolunteersCount={0}
-              availableVolunteers={[]}
-            />
-          ))}
-        </section>
-      ) : null}
 
       {/* Frise */}
       <div className="relative mt-6">
