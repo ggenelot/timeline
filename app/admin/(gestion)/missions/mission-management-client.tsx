@@ -86,7 +86,9 @@ export function MissionManagementClient() {
     canManageMissionTypeIds,
     error,
     loading,
-    publishDraftMission
+    publishDraftMission,
+    bulkUpdateMissionStatus,
+    bulkDeleteMissions
   } = useMissionsData();
 
   const isAdmin = profile?.role === 'admin';
@@ -333,6 +335,8 @@ export function MissionManagementClient() {
           isAdmin={isAdmin}
           canManageMissionTypeIds={canManageMissionTypeIds}
           onPublishDraft={publishDraftMission}
+          onBulkStatusChange={bulkUpdateMissionStatus}
+          onBulkDelete={bulkDeleteMissions}
         />
       )}
     </div>

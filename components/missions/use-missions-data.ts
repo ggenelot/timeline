@@ -207,6 +207,82 @@ export function useMissionsData() {
     [loadData]
   );
 
+  // Bascule en masse le statut de plusieurs missions. Les transitions vers
+  // "confirmed"/"cancelled" passent par les routes admin dédiées (elles
+  // portent les notifications Slack et les garde-fous métier : seule une
+  // mission "proposed" peut être confirmée, une mission "confirmed" ne peut
+  // pas être annulée) ; les autres transitions n'ont pas d'effet de bord et
+  // passent par une simple mise à jour groupée.
+  const bulkUpdateMissionStatus = useCallback(
+    async (missionIds: string[], targetStatus: MissionStatus): Promise<{ updatedCount: number; failedCount: number }> => {
+      if (missionIds.length === 0) return { updatedCount: 0, failedCount: 0 };
+
+      setError(null);
+
+      const missionById = new Map(missions.map((mission) => [mission.id, mission]));
+      let updatedCount = 0;
+      const rawUpdateIds: string[] = [];
+
+      if (targetStatus === 'confirmed' || targetStatus === 'cancelled') {
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token ?? '';
+        const endpoint = targetStatus === 'confirmed' ? 'confirm' : 'cancel';
+
+        await Promise.all(
+          missionIds.map(async (missionId) => {
+            const currentStatus = missionById.get(missionId)?.status;
+            const eligible =
+              targetStatus === 'confirmed' ? currentStatus === 'proposed' : currentStatus !== 'confirmed' && currentStatus !== 'cancelled';
+            if (!eligible) return;
+
+            const response = await fetch(`/api/admin/missions/${missionId}/${endpoint}`, {
+              method: 'POST',
+              headers: { Authorization: `Bearer ${token}` }
+            });
+            if (response.ok) updatedCount += 1;
+          })
+        );
+      } else {
+        rawUpdateIds.push(...missionIds.filter((missionId) => missionById.get(missionId)?.status !== targetStatus));
+        updatedCount += missionIds.length - rawUpdateIds.length;
+      }
+
+      if (rawUpdateIds.length > 0) {
+        const { data, error: updateError } = await supabase.from('missions').update({ status: targetStatus }).in('id', rawUpdateIds).select('id');
+
+        if (updateError) {
+          setError(`Impossible de changer le statut de certaines missions : ${updateError.message}`);
+        } else {
+          updatedCount += data?.length ?? 0;
+        }
+      }
+
+      await loadData();
+      return { updatedCount, failedCount: missionIds.length - updatedCount };
+    },
+    [missions, loadData]
+  );
+
+  const bulkDeleteMissions = useCallback(
+    async (missionIds: string[]): Promise<{ deletedCount: number }> => {
+      if (missionIds.length === 0) return { deletedCount: 0 };
+
+      setError(null);
+
+      const { data, error: deleteError } = await supabase.from('missions').delete().in('id', missionIds).select('id');
+
+      if (deleteError) {
+        setError(`Impossible de supprimer les missions sélectionnées : ${deleteError.message}`);
+        await loadData();
+        return { deletedCount: 0 };
+      }
+
+      await loadData();
+      return { deletedCount: data?.length ?? 0 };
+    },
+    [loadData]
+  );
+
   const proposalByMission = useMemo(() => new Map(proposals.map((proposal) => [proposal.mission_id, proposal])), [proposals]);
 
   const relationByMission = useMemo(() => {
@@ -262,6 +338,8 @@ export function useMissionsData() {
     loading,
     error,
     reload: loadData,
-    publishDraftMission
+    publishDraftMission,
+    bulkUpdateMissionStatus,
+    bulkDeleteMissions
   };
 }
