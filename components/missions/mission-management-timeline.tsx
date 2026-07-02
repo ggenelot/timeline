@@ -21,9 +21,9 @@ function AdminTimelineNode({ status }: { status: MissionStatus }) {
         top: 28,
         width: 14,
         height: 14,
-        background: hollow ? '#f1f5f9' : color,
+        background: hollow ? '#F2F5FA' : color,
         border: hollow ? `2px solid ${color}` : undefined,
-        boxShadow: '0 0 0 4px #f1f5f9'
+        boxShadow: '0 0 0 4px #F2F5FA'
       }}
     />
   );
@@ -51,21 +51,21 @@ export function MissionManagementTimeline({
 
   return (
     <div className="relative mt-6">
-      <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-[#e3e7ee]" />
+      <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-line" />
 
       {missions.length === 0 ? (
-        <div className="ml-14 rounded-[14px] border border-dashed border-[#cbd5e1] bg-white p-7 text-center text-sm text-[#94a3b8]">
+        <div className="ml-14 rounded-2xl border border-dashed border-line-field bg-surface-card p-7 text-center text-sm text-ink-3">
           Aucun résultat avec les filtres sélectionnés.
         </div>
       ) : (
         monthGroups.map((group) => (
           <div key={group.key}>
-            <div className="relative py-2 pl-14 text-[12px] font-bold uppercase tracking-[0.14em] text-[#94a3b8]">
+            <div className="relative py-2 pl-14 text-[12px] font-bold uppercase tracking-[0.14em] text-ink-3">
               {capitalize(group.label)}
             </div>
             <div className="space-y-4">
               {group.missions.map((mission) => {
-                const typeColor = typeColorById.get(mission.mission_type_id) ?? '#64748b';
+                const typeColor = typeColorById.get(mission.mission_type_id) ?? '#5B6478';
                 return (
                   <div key={mission.id} className="relative pl-14">
                     <AdminTimelineNode status={mission.status} />

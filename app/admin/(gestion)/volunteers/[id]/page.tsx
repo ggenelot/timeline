@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Skill, SkillCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, getMissionCategory, MissionStatus } from '@/lib/types';
 import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
+import { Button } from '@/components/ui/button';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
@@ -267,8 +268,8 @@ export default function VolunteerProfilePage() {
     });
   }, [availableMissions, selectedTypeId, searchQuery]);
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
-  if (error) return <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
+  if (error) return <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div>;
   if (!volunteer) return null;
 
   const currentSkills: Array<Skill & { category?: CategoryWithSkills }> = [];
@@ -281,21 +282,21 @@ export default function VolunteerProfilePage() {
 
   return (
     <div className="space-y-5">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <Link href="/admin/volunteers" className="mb-1 inline-flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700">
+            <Link href="/admin/volunteers" className="mb-1 inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink-2">
               ← Bénévoles
             </Link>
-            <h1 className="text-xl font-semibold text-slate-900">{volunteer.full_name ?? '—'}</h1>
+            <h1 className="text-xl font-semibold text-ink">{volunteer.full_name ?? '—'}</h1>
             {volunteer.identifier && (
-              <p className="mt-0.5 text-sm text-slate-500">{volunteer.identifier}</p>
+              <p className="mt-0.5 text-sm text-ink-3">{volunteer.identifier}</p>
             )}
           </div>
           {isAdmin && (
             <Link
               href={`/admin/volunteers/${volunteerId}/edit`}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+              className="inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]"
             >
               Modifier le compte
             </Link>
@@ -304,45 +305,45 @@ export default function VolunteerProfilePage() {
       </div>
 
       {saved && (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <div className="rounded-md border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">
           Compétences mises à jour.
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
-          <h2 className="mb-3 text-sm font-semibold text-slate-800">Informations</h2>
+        <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+          <h2 className="mb-3 text-sm font-semibold text-ink">Informations</h2>
           <dl className="space-y-2 text-sm">
             <div className="flex gap-2">
-              <dt className="w-28 shrink-0 text-slate-500">Identifiant</dt>
-              <dd className="text-slate-800">{volunteer.identifier ?? '—'}</dd>
+              <dt className="w-28 shrink-0 text-ink-3">Identifiant</dt>
+              <dd className="text-ink">{volunteer.identifier ?? '—'}</dd>
             </div>
             <div className="flex gap-2">
-              <dt className="w-28 shrink-0 text-slate-500">Compte Slack</dt>
+              <dt className="w-28 shrink-0 text-ink-3">Compte Slack</dt>
               <dd>
                 {volunteer.slack_user_id && volunteer.slack_team_id ? (
-                  <span className="text-emerald-700">
+                  <span className="text-ok-text">
                     Connecté{volunteer.slack_username ? ` (@${volunteer.slack_username})` : ''}
                   </span>
                 ) : (
-                  <span className="text-slate-400">Non connecté</span>
+                  <span className="text-ink-3">Non connecté</span>
                 )}
               </dd>
             </div>
           </dl>
         </div>
 
-        <div className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
           <div className="mb-3 flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-slate-800">Statistiques</h2>
-            <div className="flex gap-0.5 rounded border border-slate-200 p-0.5">
+            <h2 className="text-sm font-semibold text-ink">Statistiques</h2>
+            <div className="flex gap-0.5 rounded border border-line p-0.5">
               {([7, 30, 90] as StatPeriod[]).map((p) => (
                 <button
                   key={p}
                   type="button"
                   onClick={() => setStatPeriod(p)}
                   className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-                    statPeriod === p ? 'bg-slate-900 text-white' : 'text-slate-600 hover:bg-slate-100'
+                    statPeriod === p ? 'bg-brand text-white' : 'text-ink-2 hover:bg-surface-sub'
                   }`}
                 >
                   {p}j
@@ -357,19 +358,19 @@ export default function VolunteerProfilePage() {
               { label: 'Confirmés (tout)', value: confirmedAssignments.length },
               { label: `Confirmés (${statPeriod}j)`, value: confirmedInPeriod },
             ].map(({ label, value }) => (
-              <div key={label} className="rounded-md bg-slate-50 p-2">
-                <p className="text-xs text-slate-500">{label}</p>
-                <p className="mt-0.5 text-lg font-semibold text-slate-900">{value}</p>
+              <div key={label} className="rounded-xl bg-surface-sub p-2">
+                <p className="text-xs text-ink-3">{label}</p>
+                <p className="mt-0.5 font-display text-2xl leading-none text-ink">{value}</p>
               </div>
             ))}
           </div>
           {total > 0 && (
             <div className="mt-3 flex flex-wrap gap-3 text-xs">
               {[
-                { label: 'Dispo', count: proposals.filter((p) => p.response === 'available').length, color: 'text-emerald-700' },
-                { label: 'Peut-être', count: proposals.filter((p) => p.response === 'maybe').length, color: 'text-amber-700' },
-                { label: 'Indispo', count: proposals.filter((p) => p.response === 'unavailable').length, color: 'text-red-700' },
-                { label: 'Sans réponse', count: proposals.filter((p) => p.response === 'no_response').length, color: 'text-slate-400' },
+                { label: 'Dispo', count: proposals.filter((p) => p.response === 'available').length, color: 'text-ok-text' },
+                { label: 'Peut-être', count: proposals.filter((p) => p.response === 'maybe').length, color: 'text-warn-text' },
+                { label: 'Indispo', count: proposals.filter((p) => p.response === 'unavailable').length, color: 'text-bad' },
+                { label: 'Sans réponse', count: proposals.filter((p) => p.response === 'no_response').length, color: 'text-ink-3' },
               ].map(({ label, count, color }) => (
                 <span key={label} className={`font-medium ${color}`}>{count} {label}</span>
               ))}
@@ -378,47 +379,44 @@ export default function VolunteerProfilePage() {
         </div>
       </div>
 
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
+      <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-800">Compétences</h2>
+          <h2 className="text-sm font-semibold text-ink">Compétences</h2>
           {isAdmin && !editingSkills && (
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => setEditingSkills(true)}
-              className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
             >
               Modifier
-            </button>
+            </Button>
           )}
           {isAdmin && editingSkills && (
             <div className="flex gap-2">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => { setEditingSkills(false); setSaveError(null); }}
-                className="rounded-md border border-slate-300 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
                 disabled={saving}
               >
                 Annuler
-              </button>
-              <button
-                type="button"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={saveSkills}
                 disabled={saving}
-                className="rounded-md bg-slate-900 px-3 py-1 text-xs font-medium text-white hover:bg-slate-800 disabled:opacity-60"
               >
                 {saving ? 'Enregistrement...' : 'Enregistrer'}
-              </button>
+              </Button>
             </div>
           )}
         </div>
 
         {saveError && (
-          <div className="mb-3 rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">{saveError}</div>
+          <div className="mb-3 rounded-md border border-bad/30 bg-bad-soft p-2 text-xs text-bad">{saveError}</div>
         )}
 
         {!editingSkills ? (
           currentSkills.length === 0 ? (
-            <p className="text-sm text-slate-400">Aucune compétence.</p>
+            <p className="text-sm text-ink-3">Aucune compétence.</p>
           ) : (
             <div className="flex flex-wrap gap-1.5">
               {currentSkills.map((s) => (
@@ -429,7 +427,7 @@ export default function VolunteerProfilePage() {
         ) : (
           <div className="space-y-3">
             {categories.length === 0 ? (
-              <p className="text-xs text-slate-400">Aucune catégorie de compétences définie.</p>
+              <p className="text-xs text-ink-3">Aucune catégorie de compétences définie.</p>
             ) : (
               categories.map((category) => {
                 if (category.skills.length === 0) return null;
@@ -437,13 +435,13 @@ export default function VolunteerProfilePage() {
                 const selectedSkill = category.skills.find((s) => s.id === selectedSkillId);
                 return (
                   <div key={category.id} className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category.name}</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">{category.name}</p>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => setSelectedSkillByCategory((prev) => ({ ...prev, [category.id]: null }))}
                         className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-                          !selectedSkillId ? getSkillColorClass(category.color) : 'border-slate-300 bg-slate-100 text-slate-600'
+                          !selectedSkillId ? getSkillColorClass(category.color) : 'border-line-field bg-surface-sub text-ink-2'
                         }`}
                       >
                         Aucune
@@ -460,7 +458,7 @@ export default function VolunteerProfilePage() {
                             className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
                               isHighlighted
                                 ? getSkillColorClass(category.color)
-                                : 'border-slate-300 bg-slate-100 text-slate-600'
+                                : 'border-line-field bg-surface-sub text-ink-2'
                             }`}
                           >
                             {skill.name}
@@ -477,13 +475,13 @@ export default function VolunteerProfilePage() {
       </div>
 
       <div className="space-y-3">
-        <h2 className="text-base font-semibold text-slate-900">
+        <h2 className="text-base font-semibold text-ink">
           Missions (disponible)
-          <span className="ml-2 text-sm font-normal text-slate-500">{availableMissions.length}</span>
+          <span className="ml-2 text-sm font-normal text-ink-3">{availableMissions.length}</span>
         </h2>
 
         {availableMissions.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-line-field bg-surface-card p-6 text-sm text-ink-3">
             Aucune mission où ce bénévole s&apos;est rendu disponible.
           </div>
         ) : (
@@ -494,7 +492,7 @@ export default function VolunteerProfilePage() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Rechercher une mission..."
-                className="w-56 rounded-full border border-slate-200 bg-slate-100 px-3 py-1.5 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                className="w-56 rounded-full border border-line-field bg-surface-sub px-3 py-1.5 text-sm text-ink-2 placeholder:text-ink-3 focus:border-accent focus:bg-surface-card focus:outline-none"
               />
               <div className="flex flex-wrap gap-1">
                 <button
@@ -502,8 +500,8 @@ export default function VolunteerProfilePage() {
                   onClick={() => setSelectedTypeId(null)}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
                     selectedTypeId === null
-                      ? 'border-slate-700 bg-slate-900 text-white'
-                      : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-line-field bg-surface-sub text-ink-2 hover:bg-line'
                   }`}
                 >
                   Toutes
@@ -515,8 +513,8 @@ export default function VolunteerProfilePage() {
                     onClick={() => setSelectedTypeId(opt.value)}
                     className={`rounded-full border px-2.5 py-1 text-xs font-medium ${
                       selectedTypeId === opt.value
-                        ? 'border-slate-700 bg-slate-900 text-white'
-                        : 'border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200'
+                        ? 'border-brand bg-brand text-white'
+                        : 'border-line-field bg-surface-sub text-ink-2 hover:bg-line'
                     }`}
                   >
                     {opt.label}
@@ -526,37 +524,37 @@ export default function VolunteerProfilePage() {
             </div>
 
             {filteredMissions.length === 0 ? (
-              <p className="text-sm text-slate-500">Aucun résultat pour ces filtres.</p>
+              <p className="text-sm text-ink-3">Aucun résultat pour ces filtres.</p>
             ) : (
               <div className="space-y-2">
                 {filteredMissions.map((mission) => {
                   const retained = confirmedMissionIds.has(mission.id);
                   const category = getMissionCategory(mission.mission_type_id);
                   return (
-                    <div key={mission.id} className="rounded-lg border border-slate-200 bg-white p-3">
+                    <div key={mission.id} className="rounded-2xl border border-line bg-surface-card p-3 shadow-card">
                       <div className="flex flex-wrap items-start justify-between gap-2">
                         <Link
                           href={`/missions/${mission.id}`}
-                          className="font-medium text-slate-900 hover:underline"
+                          className="font-medium text-ink hover:underline"
                         >
                           {mission.title}
                         </Link>
                         <div className="flex shrink-0 flex-wrap gap-1.5">
-                          <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+                          <span className="inline-flex rounded-full border border-line bg-surface-sub px-2 py-0.5 text-xs font-medium text-ink-2">
                             {MISSION_CATEGORY_LABELS[category]}
                           </span>
                           {retained ? (
-                            <span className="inline-flex rounded-full border border-emerald-300 bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">
+                            <span className="inline-flex rounded-full border border-ok-line bg-ok-soft px-2 py-0.5 text-xs font-medium text-ok-text">
                               Retenu
                             </span>
                           ) : (
-                            <span className="inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500">
+                            <span className="inline-flex rounded-full border border-line bg-surface-sub px-2 py-0.5 text-xs font-medium text-ink-3">
                               Non retenu
                             </span>
                           )}
                         </div>
                       </div>
-                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-slate-500">
+                      <div className="mt-1 flex flex-wrap gap-3 text-xs text-ink-3">
                         <span>{formatDate(mission.starts_at)}</span>
                         {mission.location ? <span>{mission.location}</span> : null}
                         <span>{MISSION_STATUS_LABELS[mission.status]}</span>

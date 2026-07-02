@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
 
 type Row = { slack_user_id:string; slack_email:string|null; slack_name:string|null; timeline_status:string; matched_profile_id:string|null; status:string };
 type TimelineAccount = { id:string; full_name:string|null; email:string|null; slack_user_id:string|null; slack_team_id:string|null };
@@ -44,5 +46,48 @@ export function SlackAdminClient(){
       setSending(false);
     }
   };
-  return <div className='space-y-4 p-6'><div className='flex items-center justify-between'><h1 className='text-2xl font-semibold'>Admin Slack</h1><a href='/admin/slack/messages' className='rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50'>Gérer les messages par défaut →</a></div><div className='flex gap-2'><button onClick={scan} disabled={loading} className='rounded bg-slate-900 px-3 py-2 text-white'>Scanner les membres Slack</button><button onClick={inviteAll} disabled={sending} className='rounded bg-blue-600 px-3 py-2 text-white'>Inviter tous les membres éligibles</button></div>{error?<p className='text-red-600'>{error}</p>:null}<p>Total Slack: {rows.length} · Liés: {rows.filter(r=>r.timeline_status==='linked').length} · Non liés: {rows.filter(r=>r.timeline_status==='timeline_account_unlinked').length} · Sans compte: {rows.filter(r=>r.timeline_status==='missing_timeline_account').length}</p><p>Comptes Timeline récupérés: {timelineAccounts.length}</p><table className='w-full text-sm'><thead><tr><th>Nom</th><th>Email</th><th>Statut Timeline</th><th>Invitation</th></tr></thead><tbody>{rows.map((r)=><tr key={r.slack_user_id}><td>{r.slack_name}</td><td>{r.slack_email}</td><td>{r.timeline_status}</td><td>{r.status}</td></tr>)}</tbody></table></div>
+  return (
+    <div className='space-y-4 p-6'>
+      <PageHeader
+        title='Admin Slack'
+        actions={
+          <a
+            href='/admin/slack/messages'
+            className='inline-flex items-center rounded-[11px] border border-line-field bg-surface-card px-3 py-1.5 text-sm font-bold text-ink-2 hover:bg-surface-sub'
+          >
+            Gérer les messages par défaut →
+          </a>
+        }
+      />
+      <div className='flex gap-2'>
+        <Button onClick={scan} disabled={loading}>Scanner les membres Slack</Button>
+        <Button variant='engage' onClick={inviteAll} disabled={sending}>Inviter tous les membres éligibles</Button>
+      </div>
+      {error ? <p className='text-bad'>{error}</p> : null}
+      <p className='text-sm text-ink-2'>Total Slack: {rows.length} · Liés: {rows.filter(r=>r.timeline_status==='linked').length} · Non liés: {rows.filter(r=>r.timeline_status==='timeline_account_unlinked').length} · Sans compte: {rows.filter(r=>r.timeline_status==='missing_timeline_account').length}</p>
+      <p className='text-sm text-ink-2'>Comptes Timeline récupérés: {timelineAccounts.length}</p>
+      <div className='overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card'>
+        <table className='w-full text-sm'>
+          <thead className='bg-surface-sub text-left text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-2'>
+            <tr>
+              <th className='px-4 py-3'>Nom</th>
+              <th className='px-4 py-3'>Email</th>
+              <th className='px-4 py-3'>Statut Timeline</th>
+              <th className='px-4 py-3'>Invitation</th>
+            </tr>
+          </thead>
+          <tbody className='divide-y divide-line-row'>
+            {rows.map((r)=>(
+              <tr key={r.slack_user_id}>
+                <td className='px-4 py-2 text-ink'>{r.slack_name}</td>
+                <td className='px-4 py-2 text-ink-2'>{r.slack_email}</td>
+                <td className='px-4 py-2 text-ink-2'>{r.timeline_status}</td>
+                <td className='px-4 py-2 text-ink-2'>{r.status}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
 }

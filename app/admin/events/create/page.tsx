@@ -4,6 +4,8 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
+import { Card, PageHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 
 type EventFormState = {
   title: string;
@@ -105,76 +107,76 @@ export default function AdminCreateEventPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
+    return <p className="text-sm text-ink-2">Chargement...</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+    return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
   }
 
   if (profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : cette page est réservée aux administrateurs.
       </div>
     );
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <div>
-        <h1 className="text-xl font-semibold text-slate-900">Créer un événement</h1>
-        <p className="mt-1 text-sm text-slate-600">Ajoutez un nouvel événement visible par les utilisateurs connectés.</p>
+    <div className="pb-10">
+      <PageHeader
+        title="Créer un événement"
+        subtitle="Ajoutez un nouvel événement visible par les utilisateurs connectés."
+      />
+
+      <div className="flex flex-col gap-4">
+        {error ? <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
+        {success ? <div className="rounded-[10px] border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{success}</div> : null}
+
+        <Card className="p-5">
+          <form className="space-y-4" onSubmit={handleSubmit}>
+            <label className="block text-sm font-semibold text-ink-2">
+              Titre
+              <input
+                type="text"
+                value={form.title}
+                onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
+                className="mt-1.5 w-full rounded-[10px] border border-line-field bg-surface-card px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring"
+                placeholder="Ex: Formation premiers secours"
+                disabled={submitting}
+                required
+              />
+            </label>
+
+            <label className="block text-sm font-semibold text-ink-2">
+              Description
+              <textarea
+                value={form.description}
+                onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+                className="mt-1.5 min-h-28 w-full rounded-[10px] border border-line-field bg-surface-card px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring"
+                placeholder="Détails de l'événement"
+                disabled={submitting}
+              />
+            </label>
+
+            <label className="block text-sm font-semibold text-ink-2">
+              Date
+              <input
+                type="datetime-local"
+                value={form.date}
+                onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
+                className="mt-1.5 w-full rounded-[10px] border border-line-field bg-surface-card px-3 py-2 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring"
+                disabled={submitting}
+                required
+              />
+            </label>
+
+            <Button type="submit" disabled={submitting}>
+              {submitting ? "Création..." : "Créer l'événement"}
+            </Button>
+          </form>
+        </Card>
       </div>
-
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {success ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</div> : null}
-
-      <form className="space-y-4" onSubmit={handleSubmit}>
-        <label className="block text-sm text-slate-700">
-          Titre
-          <input
-            type="text"
-            value={form.title}
-            onChange={(event) => setForm((prev) => ({ ...prev, title: event.target.value }))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Ex: Formation premiers secours"
-            disabled={submitting}
-            required
-          />
-        </label>
-
-        <label className="block text-sm text-slate-700">
-          Description
-          <textarea
-            value={form.description}
-            onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
-            className="mt-1 min-h-28 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            placeholder="Détails de l'événement"
-            disabled={submitting}
-          />
-        </label>
-
-        <label className="block text-sm text-slate-700">
-          Date
-          <input
-            type="datetime-local"
-            value={form.date}
-            onChange={(event) => setForm((prev) => ({ ...prev, date: event.target.value }))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
-            disabled={submitting}
-            required
-          />
-        </label>
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {submitting ? "Création..." : "Créer l'événement"}
-        </button>
-      </form>
-    </section>
+    </div>
   );
 }

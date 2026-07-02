@@ -46,13 +46,13 @@ export default function MissionsPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des missions...</p>;
+    return <p className="text-sm text-ink-2">Chargement des missions...</p>;
   }
 
   if (!profile) {
     return (
       <div className="mx-auto w-full max-w-[880px]">
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error ?? 'Profil introuvable.'}</div>
+        <div className="rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error ?? 'Profil introuvable.'}</div>
       </div>
     );
   }

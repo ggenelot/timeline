@@ -4,7 +4,12 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Role, RoleBehavior, Skill, SkillCategory } from '@/lib/types';
-import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
+import { SkillBadge } from '@/components/skills/skill-badge';
+import { Card, PageHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
 
 export function ProfilePageClient() {
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -243,70 +248,84 @@ export function ProfilePageClient() {
     : [];
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement...</p>;
+    return <p className="text-sm text-ink-2">Chargement...</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Profil introuvable.'}</p>;
+    return <p className="text-sm text-bad">{error ?? 'Profil introuvable.'}</p>;
   }
 
   const isSlackConnected = Boolean(profile.slack_user_id && profile.slack_team_id);
   const isVolunteer = profile.role === 'benevole';
-  const neutralBadgeClass = 'inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-500';
+  const overlineClass = 'text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3';
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <h1 className="text-xl font-semibold text-slate-900">Mon profil</h1>
+    <section className="space-y-4">
+      <PageHeader title="Mon profil" />
 
-      {error ? <p className="rounded border border-red-200 bg-red-50 p-2 text-sm text-red-700">{error}</p> : null}
-      {success ? <p className="rounded border border-emerald-200 bg-emerald-50 p-2 text-sm text-emerald-700">{success}</p> : null}
+      {error ? (
+        <p className="rounded-[10px] border border-bad/30 bg-bad-soft px-3 py-2 text-sm text-bad">{error}</p>
+      ) : null}
+      {success ? (
+        <p className="rounded-[10px] border border-ok-line bg-ok-soft px-3 py-2 text-sm text-ok-text">{success}</p>
+      ) : null}
 
-      <div className="space-y-1 text-sm text-slate-700">
-        <p><span className="font-medium">Nom:</span> {profile.full_name ?? 'Non renseigné'}</p>
-        <p><span className="font-medium">Email:</span> {profile.email}</p>
-        <p><span className="font-medium">Rôle:</span> {profile.role}</p>
-      </div>
+      <Card className="p-4">
+        <p className={overlineClass}>Mon compte</p>
+        <div className="mt-3 space-y-1.5 text-sm text-ink-2">
+          <p><span className="font-semibold text-ink">Nom :</span> {profile.full_name ?? 'Non renseigné'}</p>
+          <p><span className="font-semibold text-ink">Email :</span> {profile.email}</p>
+          <p><span className="font-semibold text-ink">Rôle :</span> {profile.role}</p>
+        </div>
+      </Card>
 
       {roles.length > 0 ? (
-        <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-          <p className="font-medium text-slate-900">Mes rôles</p>
-          <div className="mt-2 space-y-2">
+        <Card className="p-4">
+          <p className={overlineClass}>Mes rôles</p>
+          <div className="mt-3 space-y-2 text-sm">
             {roles.map((role) => (
               <div key={role.id}>
-                <p className="font-medium text-slate-800">{role.name}</p>
-                {role.description ? <p className="text-xs text-slate-500">{role.description}</p> : null}
+                <p className="font-semibold text-ink">{role.name}</p>
+                {role.description ? <p className="text-xs text-ink-3">{role.description}</p> : null}
               </div>
             ))}
           </div>
-        </div>
+        </Card>
       ) : null}
 
       {isVolunteer ? (
         <div className="space-y-4 text-sm">
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-          <p className="font-medium text-slate-900">Calendriers personnalisés</p>
-          <p className="mt-1 text-slate-700">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
+          <Card className="p-4">
+          <p className={overlineClass}>Calendriers personnalisés</p>
+          <p className="mt-2 text-ink-2">Abonnez-vous à ces flux pour afficher automatiquement vos missions dans votre calendrier.</p>
           {volunteerCalendarLinks.length > 0 ? (
             <div className="mt-3 space-y-3">
               {volunteerCalendarLinks.map((link) => (
                 <div key={link.href} className="space-y-1">
-                  <p className="text-xs text-slate-600">{link.label}</p>
+                  <p className="text-xs text-ink-2">{link.label}</p>
                   <button
                     type="button"
                     onClick={() => void handleCopyCalendarUrl(link.href)}
-                    className="w-full overflow-hidden text-ellipsis whitespace-nowrap rounded-md border border-slate-300 bg-white px-3 py-2 text-left font-mono text-xs text-slate-700 transition hover:bg-slate-100"
+                    className="flex w-full items-center gap-2 overflow-hidden rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-left transition hover:bg-surface"
                     title="Cliquer pour copier le lien"
                   >
-                    {link.href}
+                    <Icon
+                      name={copiedCalendarUrl === link.href ? 'check' : 'content_copy'}
+                      size={16}
+                      className={cn('shrink-0', copiedCalendarUrl === link.href ? 'text-ok-text' : 'text-ink-3')}
+                    />
+                    <span className="min-w-0 flex-1 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-xs text-ink-2">
+                      {link.href}
+                    </span>
                   </button>
-                  {copiedCalendarUrl === link.href ? <p className="text-xs text-emerald-700">Lien copié.</p> : null}
+                  {copiedCalendarUrl === link.href ? <p className="text-xs text-ok-text">Lien copié.</p> : null}
                 </div>
               ))}
             </div>
           ) : (
-            <p className="mt-2 text-xs text-slate-500">Session invalide : impossible de générer les URL de calendrier.</p>
+            <p className="mt-2 text-xs text-ink-3">Session invalide : impossible de générer les URL de calendrier.</p>
           )}
-          </div>
+          </Card>
 
           <ProfileStats
             proposals={proposals}
@@ -315,22 +334,26 @@ export function ProfilePageClient() {
             onPeriodChange={setStatPeriod}
           />
 
-          <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-          <div>
-            <p className="font-medium text-slate-900">Mes compétences</p>
+          <Card className="p-4">
+            <p className={overlineClass}>Mes compétences</p>
             <div className="mt-3 space-y-3">
               {categoriesWithSkills.map((cat) => {
                 if (cat.skills.length === 0) return null;
                 return (
-                  <div key={cat.id} className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">{cat.name}</p>
+                  <div key={cat.id} className="space-y-1.5">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">{cat.name}</p>
                     <div className="flex flex-wrap gap-2">
                       {cat.skills.map((skill) => {
                         const isAcquired = acquiredSkillIds.has(skill.id);
                         return isAcquired ? (
                           <SkillBadge key={skill.id} name={skill.name} color={cat.color} />
                         ) : (
-                          <span key={skill.id} className={neutralBadgeClass}>{skill.name}</span>
+                          <span
+                            key={skill.id}
+                            className="inline-flex rounded-[7px] border border-line bg-surface-sub px-2 py-0.5 text-xs font-medium text-ink-3"
+                          >
+                            {skill.name}
+                          </span>
                         );
                       })}
                     </div>
@@ -338,76 +361,64 @@ export function ProfilePageClient() {
                 );
               })}
             </div>
-          </div>
-          </div>
+          </Card>
 
-          <form onSubmit={handleChangePassword} className="rounded-md border border-slate-200 bg-slate-50 p-3">
-            <p className="font-medium text-slate-900">Sécurité</p>
-            <p className="mt-1 text-slate-700">Changer mon mot de passe</p>
+          <Card as="form" onSubmit={handleChangePassword} className="p-4">
+            <p className={overlineClass}>Sécurité</p>
+            <p className="mt-2 font-semibold text-ink">Changer mon mot de passe</p>
             <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs text-slate-700">
+              <label className="text-xs font-medium text-ink-2">
                 Nouveau mot de passe
                 <input
                   type="password"
                   value={newPassword}
                   onChange={(event) => setNewPassword(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
                   autoComplete="new-password"
                   required
                 />
               </label>
-              <label className="text-xs text-slate-700">
+              <label className="text-xs font-medium text-ink-2">
                 Confirmer le mot de passe
                 <input
                   type="password"
                   value={confirmPassword}
                   onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+                  className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
                   autoComplete="new-password"
                   required
                 />
               </label>
             </div>
-            <button
-              type="submit"
-              disabled={working}
-              className="mt-3 rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
+            <Button type="submit" variant="primary" disabled={working} className="mt-4">
               Mettre à jour le mot de passe
-            </button>
-          </form>
+            </Button>
+          </Card>
         </div>
       ) : null}
 
-      <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-        <p className="font-medium text-slate-900">Intégration Slack <span className="ml-1 rounded bg-amber-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-amber-800">Expérimental</span></p>
-        <p className="mt-1 text-slate-700">
-          État: {isSlackConnected ? `Connecté (${profile.slack_username ? `@${profile.slack_username}` : `${profile.slack_team_id} / ${profile.slack_user_id}`})` : 'Non connecté'}
+      <Card className="p-4 text-sm">
+        <div className="flex items-center gap-2">
+          <p className={overlineClass}>Intégration Slack</p>
+          <Badge tone="warn">Expérimental</Badge>
+        </div>
+        <p className="mt-2 text-ink-2">
+          État : {isSlackConnected ? `Connecté (${profile.slack_username ? `@${profile.slack_username}` : `${profile.slack_team_id} / ${profile.slack_user_id}`})` : 'Non connecté'}
         </p>
-        {profile.slack_connected_at ? <p className="mt-1 text-xs text-slate-500">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
+        {profile.slack_connected_at ? <p className="mt-1 text-xs text-ink-3">Connecté le {new Date(profile.slack_connected_at).toLocaleString('fr-FR')}</p> : null}
         <div className="mt-3 flex gap-2">
           {!isSlackConnected ? (
-            <button
-              type="button"
-              onClick={handleConnectSlack}
-              disabled={working}
-              className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
+            <Button type="button" variant="primary" onClick={handleConnectSlack} disabled={working} icon="forum">
               Connecter Slack
-            </button>
+            </Button>
           ) : (
-            <button
-              type="button"
-              onClick={handleDisconnectSlack}
-              disabled={working}
-              className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-            >
+            <Button type="button" variant="ghost" onClick={handleDisconnectSlack} disabled={working} icon="logout">
               Déconnecter Slack
-            </button>
+            </Button>
           )}
         </div>
-        {slackConnectError ? <p className="mt-2 text-xs text-red-600">{slackConnectError}</p> : null}
-      </div>
+        {slackConnectError ? <p className="mt-2 text-xs text-bad">{slackConnectError}</p> : null}
+      </Card>
     </section>
   );
 }
@@ -440,8 +451,8 @@ function ProfileStats({ proposals, confirmedAssignments, period, onPeriodChange 
   }).length;
 
   return (
-    <div className="rounded-md border border-slate-200 bg-slate-50 p-3 text-sm">
-      <p className="font-medium text-slate-900">Mes statistiques</p>
+    <Card className="p-4 text-sm">
+      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">Mes statistiques</p>
 
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
@@ -450,48 +461,43 @@ function ProfileStats({ proposals, confirmedAssignments, period, onPeriodChange 
           { label: 'Missions confirmées', value: confirmedAllTime },
           { label: `Confirmées (${period} j)`, value: confirmedInPeriod },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-md border border-slate-200 bg-white p-3">
-            <p className="text-xs text-slate-500">{label}</p>
-            <p className="mt-0.5 text-xl font-semibold text-slate-900">{value}</p>
+          <div key={label} className="rounded-[12px] border border-line bg-surface-sub p-3">
+            <p className="text-xs text-ink-3">{label}</p>
+            <p className="mt-1 font-display text-[26px] leading-none text-ink">{value}</p>
           </div>
         ))}
       </div>
 
       {total > 0 ? (
-        <div className="mt-3 space-y-1">
-          <p className="text-xs font-medium text-slate-700">Répartition de mes réponses</p>
+        <div className="mt-4 space-y-1.5">
+          <p className="text-xs font-semibold text-ink-2">Répartition de mes réponses</p>
           <div className="flex flex-wrap gap-2">
-            <span className="inline-flex rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs text-emerald-800">
-              Disponible : {available}
-            </span>
-            <span className="inline-flex rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs text-amber-800">
-              Peut-être : {maybe}
-            </span>
-            <span className="inline-flex rounded-full border border-red-200 bg-red-50 px-2 py-0.5 text-xs text-red-800">
-              Indisponible : {unavailable}
-            </span>
-            <span className="inline-flex rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-xs text-slate-600">
-              Sans réponse : {noResponse}
-            </span>
+            <Badge tone="ok">Disponible : {available}</Badge>
+            <Badge tone="warn">Peut-être : {maybe}</Badge>
+            <Badge tone="bad">Indisponible : {unavailable}</Badge>
+            <Badge tone="neutral">Sans réponse : {noResponse}</Badge>
           </div>
         </div>
       ) : null}
 
-      <div className="mt-3 flex items-center gap-1">
-        <p className="text-xs text-slate-500">Période :</p>
-        {([7, 30, 90] as const).map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => onPeriodChange(p)}
-            className={`rounded px-2 py-0.5 text-xs font-medium transition-colors ${
-              period === p ? 'bg-slate-800 text-white' : 'text-slate-600 hover:bg-slate-200'
-            }`}
-          >
-            {p} j
-          </button>
-        ))}
+      <div className="mt-4 flex items-center gap-2">
+        <p className="text-xs text-ink-3">Période :</p>
+        <div className="inline-flex gap-1 rounded-[10px] bg-[#E4E9F2] p-1">
+          {([7, 30, 90] as const).map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => onPeriodChange(p)}
+              className={cn(
+                'rounded-[7px] px-2.5 py-1 text-xs font-semibold transition-colors',
+                period === p ? 'bg-brand text-white shadow-sm' : 'text-ink-2 hover:text-ink'
+              )}
+            >
+              {p} j
+            </button>
+          ))}
+        </div>
       </div>
-    </div>
+    </Card>
   );
 }

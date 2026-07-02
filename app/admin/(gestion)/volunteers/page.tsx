@@ -15,7 +15,7 @@ export default function AdminVolunteersPage({ searchParams }: AdminVolunteersPag
   const edited = searchParams?.edited === '1';
 
   return (
-    <Suspense fallback={<p className="text-sm text-slate-600">Chargement des bénévoles...</p>}>
+    <Suspense fallback={<p className="text-sm text-ink-2">Chargement des bénévoles...</p>}>
       <VolunteersPageClient created={created} edited={edited} />
     </Suspense>
   );

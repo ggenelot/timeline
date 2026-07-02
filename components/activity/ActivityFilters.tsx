@@ -27,7 +27,7 @@ export function ActivityFilters({
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-4">
         {/* Vue switch */}
-        <div className="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5 text-sm">
+        <div className="inline-flex rounded-lg border border-line bg-surface-sub p-0.5 text-sm">
           {(['graphe', 'calendrier'] as const).map((v) => (
             <button
               key={v}
@@ -36,8 +36,8 @@ export function ActivityFilters({
               onClick={() => onViewChange(v)}
               className={`rounded-md px-3 py-1 font-medium transition ${
                 view === v
-                  ? 'bg-white text-slate-900 shadow-sm'
-                  : 'text-slate-500 hover:text-slate-900'
+                  ? 'bg-surface-card text-ink shadow-sm'
+                  : 'text-ink-3 hover:text-ink'
               }`}
             >
               {v === 'graphe' ? 'Graphe' : 'Calendrier'}
@@ -55,8 +55,8 @@ export function ActivityFilters({
               onClick={() => onPeriodChange(opt.value)}
               className={`rounded-full border px-3 py-1 text-xs font-medium transition ${
                 period === opt.value
-                  ? 'border-emerald-300 bg-emerald-100 text-emerald-800'
-                  : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+                  ? 'border-ok-line bg-ok-soft text-ok-text'
+                  : 'border-line bg-surface-card text-ink-2 hover:bg-surface-sub'
               }`}
             >
               {opt.label}
@@ -79,14 +79,14 @@ export function ActivityFilters({
                 onClick={() => onToggleVol(pid)}
                 className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
                   hidden
-                    ? 'border-slate-200 bg-white text-slate-400 line-through'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'border-line bg-surface-card text-ink-3 line-through'
+                    : 'border-line-field bg-surface-card text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 <span
                   aria-hidden="true"
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: hidden ? '#cbd5e1' : getVolunteerColor(pid) }}
+                  style={{ background: hidden ? '#A6AEBE' : getVolunteerColor(pid) }}
                 />
                 {name}
               </button>
@@ -108,14 +108,14 @@ export function ActivityFilters({
                 onClick={() => onToggleType(typeName)}
                 className={`flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition ${
                   hidden
-                    ? 'border-slate-200 bg-white text-slate-400 line-through'
-                    : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                    ? 'border-line bg-surface-card text-ink-3 line-through'
+                    : 'border-line-field bg-surface-card text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 <span
                   aria-hidden="true"
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ background: hidden ? '#cbd5e1' : getTypeColor(typeName) }}
+                  style={{ background: hidden ? '#A6AEBE' : getTypeColor(typeName) }}
                 />
                 {typeName}
               </button>

@@ -22,10 +22,16 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, MaterielType, MaterielTypeContent, MaterielCategory } from '@/lib/types';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/cn';
 
 const CATEGORY_PALETTE: Record<string, string> = {
-  slate: '#475569', amber: '#d97706', sky: '#0284c7', violet: '#7c3aed', emerald: '#059669',
-  pink: '#db2777', rose: '#e11d48', orange: '#ea580c', cyan: '#0891b2', indigo: '#4f46e5',
+  slate: '#5B6478', amber: '#B4590F', sky: '#1E3C87', violet: '#7A2E86', emerald: '#0B6E63',
+  pink: '#8E1279', rose: '#D14343', orange: '#B4590F', cyan: '#0B6E63', indigo: '#1E3C87',
 };
 
 function categoryDot(color: string) {
@@ -44,30 +50,15 @@ function DragHandle({ attributes, listeners, style }: {
       {...attributes}
       {...listeners}
       title="Glisser pour réordonner ou déplacer"
-      style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
+      className="shrink-0 cursor-grab touch-none"
+      style={style}
     >
-      ⠿⠿
+      <Icon name="drag_indicator" className="text-ink-3" />
     </span>
   );
 }
 
-const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' };
-
-// ── Interrupteur disponible / indisponible ───────────────────────────
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={value}
-      onClick={() => onChange(!value)}
-      style={{ position: 'relative', flexShrink: 0, width: 40, height: 23, border: 'none', borderRadius: 99, cursor: 'pointer', background: value ? '#059669' : '#cbd5e1' }}
-    >
-      <span style={{ position: 'absolute', top: 2, left: value ? 19 : 2, width: 19, height: 19, borderRadius: '50%', background: '#fff', transition: 'left .15s' }} />
-    </button>
-  );
-}
+const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
 
 // ── Formulaire « + Ajouter un contenant » ───────────────────────────
 
@@ -92,22 +83,22 @@ function AddContainerForm({ categories, onSubmit, onCancel }: {
   }
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 10, padding: '9px 11px', flexWrap: 'wrap' }}>
+    <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-line-field px-[11px] py-[9px]">
       <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du contenant" autoFocus
         onKeyDown={(e) => { if (e.key === 'Enter') void submit(); if (e.key === 'Escape') onCancel(); }}
-        style={{ ...inputStyle, flex: 1, minWidth: 120 }} />
+        className={cn(inputClass, 'min-w-[120px] flex-1')} />
       <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code (optionnel)" maxLength={24}
-        style={{ ...inputStyle, width: 140, textTransform: 'uppercase' }} />
-      <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} style={{ ...inputStyle, width: 160 }}>
+        className={cn(inputClass, 'w-[140px] uppercase')} />
+      <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cn(inputClass, 'w-[160px]')}>
         <option value="">Type…</option>
         {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
       </select>
-      <button type="button" onClick={submit} disabled={saving || !name.trim()}
-        style={{ cursor: saving || !name.trim() ? 'not-allowed' : 'pointer', border: 'none', background: saving || !name.trim() ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 8, padding: '9px 14px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
+      <Button variant="engage" onClick={submit} disabled={saving || !name.trim()}
+        className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px]">
         Ajouter
-      </button>
+      </Button>
       <button type="button" onClick={onCancel} aria-label="Annuler"
-        style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+        className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
     </div>
   );
 }
@@ -150,38 +141,38 @@ function AddItemForm({ token, excludeIds, onSubmit, onCancel }: {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, border: '1px dashed #cbd5e1', borderRadius: 10, padding: '10px 11px' }}>
+    <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-line-field px-[11px] py-2.5">
       {selected ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 700, color: '#0f172a' }}>{selected.name}</span>
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 text-[13.5px] font-bold text-ink">{selected.name}</span>
           <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 1)}
-            style={{ ...inputStyle, width: 64, textAlign: 'center' }} />
-          <button type="button" onClick={submit} disabled={saving}
-            style={{ cursor: saving ? 'not-allowed' : 'pointer', border: 'none', background: saving ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 8, padding: '9px 14px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
+            className={cn(inputClass, 'w-16 text-center')} />
+          <Button variant="engage" onClick={submit} disabled={saving}
+            className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px]">
             Ajouter
-          </button>
+          </Button>
           <button type="button" onClick={() => setSelected(null)} aria-label="Changer"
-            style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+            className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
         </div>
       ) : (
         <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="flex items-center gap-2">
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un item de la bibliothèque…" autoFocus
-              style={{ ...inputStyle, flex: 1 }} />
+              className={cn(inputClass, 'flex-1')} />
             <button type="button" onClick={onCancel} aria-label="Annuler"
-              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+              className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
           </div>
           {results.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 180, overflowY: 'auto' }}>
+            <div className="flex max-h-[180px] flex-col gap-1 overflow-y-auto">
               {results.map((t) => (
                 <button key={t.id} type="button" onClick={() => setSelected(t)}
-                  style={{ cursor: 'pointer', textAlign: 'left', border: '1px solid #eef1f5', background: '#fff', borderRadius: 8, padding: '7px 10px', fontSize: 13, fontFamily: 'inherit', color: '#0f172a' }}>
-                  {t.name}{t.code ? <span style={{ color: '#94a3b8' }}> · {t.code}</span> : null}
+                  className="rounded-lg border border-line-row bg-surface-card px-2.5 py-[7px] text-left text-[13px] text-ink">
+                  {t.name}{t.code ? <span className="text-ink-3"> · {t.code}</span> : null}
                 </button>
               ))}
             </div>
           ) : query.trim() ? (
-            <div style={{ fontSize: 12, color: '#94a3b8' }}>Aucun item trouvé.</div>
+            <div className="text-xs text-ink-3">Aucun item trouvé.</div>
           ) : null}
         </>
       )}
@@ -220,14 +211,14 @@ function useTreeCtx(): TreeCtxValue {
 function DropZone({ id, children, empty }: { id: string; children: React.ReactNode; empty?: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} style={{
-      borderRadius: 10,
-      background: isOver ? '#eff6ff' : 'transparent',
-      outline: isOver ? '2px dashed #93c5fd' : 'none',
-      outlineOffset: 2,
-      minHeight: empty ? 40 : undefined,
-      transition: 'background .1s',
-    }}>
+    <div
+      ref={setNodeRef}
+      className={cn(
+        'rounded-[10px] transition-colors',
+        isOver && 'bg-accent-soft outline outline-2 outline-offset-2 outline-dashed outline-accent-ring'
+      )}
+      style={{ minHeight: empty ? 40 : undefined }}
+    >
       {children}
     </div>
   );
@@ -263,53 +254,42 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
 
   return (
     <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 9,
-        border: node.is_container ? '1px solid #eef1f5' : 'none',
-        borderBottom: node.is_container ? '1px solid #eef1f5' : '1px solid #f1f5f9',
-        borderRadius: node.is_container ? 12 : 0,
-        padding: node.is_container ? '10px 12px' : '7px 4px',
-        background: node.is_container ? '#fcfcfd' : 'transparent',
-      }}>
+      <div className={cn(
+        'flex items-center gap-[9px]',
+        node.is_container
+          ? 'rounded-xl border border-line-row bg-surface-sub px-3 py-2.5'
+          : 'border-b border-line-row px-1 py-[7px]'
+      )}>
         {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} /> : null}
         {meta && !ctx.editMode ? (
-          <span style={{ flexShrink: 0, minWidth: 22, fontSize: 12.5, fontWeight: 700, color: '#94a3b8' }}>{meta.quantity}x</span>
+          <span className="min-w-[22px] shrink-0 text-[12.5px] font-bold text-ink-3">{meta.quantity}x</span>
         ) : null}
         <span
-          style={{
-            flex: 1,
-            minWidth: 0,
-            fontSize: 14,
-            fontWeight: node.is_container ? 700 : 500,
-            color: node.is_container ? '#0f172a' : '#475569',
-            cursor: node.is_container ? 'pointer' : 'default',
-          }}
+          className={cn(
+            'min-w-0 flex-1 text-sm',
+            node.is_container ? 'cursor-pointer font-bold text-ink' : 'font-medium text-ink-2'
+          )}
           onClick={node.is_container ? () => ctx.toggleExpand(node.id) : undefined}
         >
           {node.name}
-          {node.code ? <span style={{ marginLeft: 7, fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{node.code}</span> : null}
+          {node.code ? <span className="ml-[7px] text-xs font-semibold text-ink-3">{node.code}</span> : null}
         </span>
         {node.is_container && !ctx.editMode && node.category ? (
-          <span title={node.category.name} style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5, fontWeight: 700, color: '#64748b' }}>
-            <span style={{ width: 8, height: 8, borderRadius: '50%', background: categoryDot(node.category.color) }} />
+          <span title={node.category.name} className="inline-flex shrink-0 items-center gap-[5px] text-[11.5px] font-bold text-ink-2">
+            <span className="h-2 w-2 rounded-full" style={{ background: categoryDot(node.category.color) }} />
             {node.category.name}
           </span>
         ) : null}
         {isRootContainer && !ctx.editMode && !node.is_available ? (
-          <span
-            title={node.unavailable_reason || 'Indisponible'}
-            style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, fontWeight: 700, color: '#b91c1c', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 99, padding: '2px 9px' }}
-          >
-            Indisponible
+          <span title={node.unavailable_reason || 'Indisponible'} className="inline-flex shrink-0">
+            <Badge tone="bad">Indisponible</Badge>
           </span>
         ) : null}
         {node.is_container && ctx.editMode ? (
           <select
             value={node.category_id ?? ''}
             onChange={(e) => void ctx.updateCategory(node.id, meta?.parentContainerId ?? null, e.target.value)}
-            style={{ ...inputStyle, width: 140, flexShrink: 0 }}
+            className={cn(inputClass, 'w-[140px] shrink-0')}
           >
             <option value="">Type…</option>
             {ctx.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -320,23 +300,23 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
             {ctx.editMode ? (
               <input type="number" min={1} value={meta.quantity}
                 onChange={(e) => void ctx.updateQuantity(meta.parentContainerId, meta.contentId, Number(e.target.value) || 1)}
-                style={{ ...inputStyle, width: 58, textAlign: 'center', flexShrink: 0 }} />
+                className={cn(inputClass, 'w-[58px] shrink-0 text-center')} />
             ) : null}
             {ctx.editMode ? (
               <button type="button" onClick={() => void ctx.unlink(meta.parentContainerId, meta.contentId)} aria-label="Retirer"
-                style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px', flexShrink: 0 }}>✕</button>
+                className="shrink-0 p-1 text-bad"><Icon name="close" size={18} /></button>
             ) : null}
           </>
         ) : onFullDelete && ctx.editMode ? (
-          <button type="button" onClick={onFullDelete}
-            style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', flexShrink: 0 }}>
+          <Button variant="ghost" onClick={onFullDelete}
+            className="shrink-0 rounded-[7px] border-bad/30 px-2.5 py-[5px] text-xs text-bad">
             Supprimer
-          </button>
+          </Button>
         ) : null}
       </div>
 
       {isRootContainer && ctx.editMode ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', margin: '8px 0 0', padding: '8px 12px', border: '1px dashed #e2e8f0', borderRadius: 10, background: '#fff' }}>
+        <div className="mt-2 flex flex-wrap items-center gap-2.5 rounded-[10px] border border-dashed border-line bg-surface-card px-3 py-2">
           <Toggle
             value={node.is_available}
             onChange={(v) => {
@@ -344,7 +324,7 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
               void ctx.setAvailability(node.id, v, v ? null : reasonDraft || null);
             }}
           />
-          <span style={{ fontSize: 12.5, fontWeight: 700, color: node.is_available ? '#059669' : '#dc2626' }}>
+          <span className={cn('text-[12.5px] font-bold', node.is_available ? 'text-engage' : 'text-bad')}>
             {node.is_available ? 'Disponible' : 'Indisponible'}
           </span>
           {!node.is_available ? (
@@ -353,22 +333,22 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
               onChange={(e) => setReasonDraft(e.target.value)}
               onBlur={() => void ctx.setAvailability(node.id, false, reasonDraft || null)}
               placeholder="Motif (optionnel) : panne, maintenance…"
-              style={{ ...inputStyle, flex: 1, minWidth: 160, padding: '7px 10px', fontSize: 12.5 }}
+              className={cn(inputClass, 'min-w-[160px] flex-1 px-2.5 py-[7px] text-[12.5px]')}
             />
           ) : null}
         </div>
       ) : null}
 
       {isExpanded && node.is_container ? (
-        <div style={{ marginLeft: 30, marginTop: 8, display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="ml-[30px] mt-2 flex flex-col gap-2">
           {isLoading ? (
-            <div style={{ fontSize: 12.5, color: '#94a3b8' }}>Chargement…</div>
+            <div className="text-[12.5px] text-ink-3">Chargement…</div>
           ) : (
             <DropZone id={`zone:${node.id}`} empty={(contents ?? []).length === 0}>
               <SortableContext items={(contents ?? []).map((c) => `node:${c.id}`)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div className="flex flex-col gap-2">
                   {(contents ?? []).length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>
+                    <div className="p-0.5 text-[12.5px] text-ink-3">
                       {ctx.editMode ? 'Ce contenant est vide. Glissez un élément ici, ou ajoutez-en un ci-dessous.' : 'Ce contenant est vide.'}
                     </div>
                   ) : (contents ?? []).map((c) => (
@@ -388,7 +368,7 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
           )}
 
           {ctx.editMode ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {addMode === 'container' ? (
                 <AddContainerForm
                   categories={ctx.categories}
@@ -403,13 +383,13 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
                   onCancel={() => setAddMode(null)}
                 />
               ) : (
-                <div style={{ display: 'flex', gap: 8 }}>
+                <div className="flex gap-2">
                   <button type="button" onClick={() => setAddMode('container')}
-                    style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
+                    className="flex-1 rounded-[9px] border border-dashed border-line-field bg-surface-card px-3 py-2 text-[12.5px] font-bold text-brand">
                     + Ajouter un contenant
                   </button>
                   <button type="button" onClick={() => setAddMode('item')}
-                    style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 9, padding: '8px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', flex: 1 }}>
+                    className="flex-1 rounded-[9px] border border-dashed border-line-field bg-surface-card px-3 py-2 text-[12.5px] font-bold text-brand">
                     + Ajouter un item
                   </button>
                 </div>
@@ -747,15 +727,15 @@ export default function AdminMaterielsPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-ink-3">Chargement…</p>
       </div>
     );
   }
 
   if (!profile || profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs.
       </div>
     );
@@ -778,39 +758,22 @@ export default function AdminMaterielsPage() {
   };
 
   return (
-    <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18, display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
-        <div>
-          <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-            Matériel
-          </h1>
-          <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-            Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d&apos;autres contenants ou
-            des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => setEditMode((v) => !v)}
-          style={{
-            cursor: 'pointer',
-            flexShrink: 0,
-            border: editMode ? 'none' : '1px solid #cbd5e1',
-            background: editMode ? '#059669' : '#fff',
-            color: editMode ? '#fff' : '#334155',
-            borderRadius: 9,
-            padding: '10px 18px',
-            fontSize: 13.5,
-            fontWeight: 700,
-            fontFamily: 'inherit',
-          }}
-        >
-          {editMode ? 'Valider' : 'Modifier'}
-        </button>
-      </div>
+    <div className="pb-20">
+      <PageHeader
+        title="Matériel"
+        subtitle="Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d'autres contenants ou des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants."
+        actions={
+          <Button
+            variant={editMode ? 'engage' : 'ghost'}
+            onClick={() => setEditMode((v) => !v)}
+          >
+            {editMode ? 'Valider' : 'Modifier'}
+          </Button>
+        }
+      />
 
       {error ? (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-4 py-3 text-[13px] text-bad">
           {error}
         </div>
       ) : null}
@@ -819,14 +782,14 @@ export default function AdminMaterielsPage() {
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
           {roots.length === 0 ? (
             <DropZone id="zone:root" empty>
-              <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
-                <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucun contenant pour l&apos;instant. Créez-en un ci-dessous.</p>
+              <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
+                <p className="text-[13.5px] text-ink-3">Aucun contenant pour l&apos;instant. Créez-en un ci-dessous.</p>
               </div>
             </DropZone>
           ) : (
             <DropZone id="zone:root">
               <SortableContext items={roots.map((r) => `root:${r.id}`)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 16 }}>
+                <div className="mb-4 flex flex-col gap-2">
                   {roots.map((r) => (
                     <TreeNode
                       key={r.id}
@@ -848,7 +811,7 @@ export default function AdminMaterielsPage() {
           <AddContainerForm categories={categories} onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
         ) : (
           <button type="button" onClick={() => setAddingRoot(true)}
-            style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+            className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
             + Nouveau contenant
           </button>
         )

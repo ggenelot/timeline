@@ -6,6 +6,10 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill, SkillCategory } from '@/lib/types';
 import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
+import { Button } from '@/components/ui/button';
+import { Card, PageHeader } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
@@ -31,7 +35,7 @@ type VolunteersPageClientProps = {
 };
 
 export function VolunteersPageClient({ created, edited }: VolunteersPageClientProps) {
-  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600';
+  const neutralSkillBadgeClass = 'inline-flex rounded-full border border-line bg-surface-sub px-2 py-0.5 text-xs font-medium text-ink-2';
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
@@ -149,54 +153,56 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
     return `${count} bénévole${count !== 1 ? 's' : ''}`;
   }, [filteredVolunteers.length]);
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement des bénévoles...</p>;
-  if (!profile) return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement des bénévoles...</p>;
+  if (!profile) return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Gestion des bénévoles</h1>
-            <p className="mt-1 text-sm text-slate-600">{volunteerCountLabel} affiché(s).</p>
-          </div>
-          <Link
-            href="/admin/volunteers/create"
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
-          >
-            Ajouter un bénévole
+      <PageHeader
+        title="Bénévoles"
+        subtitle={`${volunteerCountLabel} affiché(s).`}
+        actions={
+          <Link href="/admin/volunteers/create">
+            <Button variant="primary" icon="add" className="h-10">
+              Ajouter un bénévole
+            </Button>
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {created ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <div className="rounded-[11px] border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">
           Le bénévole a été ajouté avec succès.
         </div>
       ) : null}
       {edited ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <div className="rounded-[11px] border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">
           Le bénévole a été modifié avec succès.
         </div>
       ) : null}
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-[11px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
       {volunteers.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+        <Card className="border-dashed p-6 text-sm text-ink-2">
           Aucun bénévole enregistré pour le moment.
-        </div>
+        </Card>
       ) : (
         <>
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <Card className="p-4">
             <div className="space-y-4">
-              <label className="block" htmlFor="volunteer-search">
+              <label className="relative block" htmlFor="volunteer-search">
+                <Icon
+                  name="search"
+                  size={19}
+                  className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-ink-3"
+                />
                 <input
                   id="volunteer-search"
                   type="search"
                   value={searchQuery}
                   onChange={(event) => setSearchQuery(event.target.value)}
                   placeholder="Nom, identifiant ou compétence"
-                  className="w-full rounded-full border border-slate-200 bg-slate-100 px-4 py-2 text-sm text-slate-700 placeholder:text-slate-500 focus:border-emerald-500 focus:bg-white focus:outline-none"
+                  className="w-full rounded-full border border-line-field bg-surface-sub py-2 pl-11 pr-4 text-sm text-ink placeholder:text-ink-3 focus:border-accent-ring focus:bg-surface-card focus:outline-none"
                 />
               </label>
 
@@ -209,16 +215,15 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
 
                     return (
                       <div key={category.id} className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category.name}</p>
+                        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">{category.name}</p>
                         <div className="flex flex-wrap gap-2">
                           <button
                             type="button"
                             onClick={() => toggleSkillFilter(category.id, null)}
-                            className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-                              !selectedSkillId
-                                ? getSkillColorClass(category.color)
-                                : 'border-slate-300 bg-slate-100 text-slate-600'
-                            }`}
+                            className={cn(
+                              'inline-flex rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80',
+                              !selectedSkillId ? getSkillColorClass(category.color) : neutralSkillBadgeClass
+                            )}
                           >
                             Toutes
                           </button>
@@ -234,11 +239,10 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                                 key={skill.id}
                                 type="button"
                                 onClick={() => toggleSkillFilter(category.id, skill.id)}
-                                className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
-                                  isSelected || isHighlighted
-                                    ? getSkillColorClass(category.color)
-                                    : neutralSkillBadgeClass
-                                }`}
+                                className={cn(
+                                  'inline-flex rounded-full border px-2 py-0.5 text-xs font-medium transition hover:opacity-80',
+                                  isSelected || isHighlighted ? getSkillColorClass(category.color) : neutralSkillBadgeClass
+                                )}
                               >
                                 {skill.name} {count}
                               </button>
@@ -251,33 +255,33 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
-          <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-            <table className="min-w-full divide-y divide-slate-200 text-sm">
-              <thead className="bg-slate-50 text-left text-slate-700">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Nom</th>
-                  <th className="px-4 py-2 font-medium">Identifiant</th>
-                  <th className="px-4 py-2 font-medium">Slack</th>
-                  <th className="px-4 py-2 font-medium">Compétences</th>
+          <Card className="overflow-hidden p-0">
+            <table className="min-w-full text-sm">
+              <thead className="bg-surface-sub text-left">
+                <tr className="border-b border-line-row">
+                  <th className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">Nom</th>
+                  <th className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">Identifiant</th>
+                  <th className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">Slack</th>
+                  <th className="px-4 py-2 text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">Compétences</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100">
+              <tbody className="divide-y divide-line-row">
                 {filteredVolunteers.map(({ volunteer, skills }) => (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 font-medium">
-                      <Link href={`/admin/volunteers/${volunteer.id}`} className="text-slate-900 hover:underline">
+                      <Link href={`/admin/volunteers/${volunteer.id}`} className="font-semibold text-ink hover:underline">
                         {volunteer.full_name ?? '—'}
                       </Link>
                     </td>
-                    <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
+                    <td className="px-4 py-2 text-ink-2">{volunteer.identifier ?? '—'}</td>
                     <td className="px-4 py-2">
-                      <span className={`inline-block h-3 w-3 rounded-full ${volunteer.slack_user_id && volunteer.slack_team_id ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+                      <span className={cn('inline-block h-3 w-3 rounded-full', volunteer.slack_user_id && volunteer.slack_team_id ? 'bg-ok-bar' : 'bg-line-field')} />
                     </td>
-                    <td className="px-4 py-2 text-slate-700">
+                    <td className="px-4 py-2 text-ink-2">
                       {skills.length === 0 ? (
-                        <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Aucune</span>
+                        <span className="inline-flex rounded-full border border-line bg-surface-sub px-2 py-0.5 text-xs font-medium text-ink-2">Aucune</span>
                       ) : (
                         <div className="flex flex-wrap gap-1.5">
                           {skills.map((skill) => {
@@ -293,7 +297,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 ))}
               </tbody>
             </table>
-          </div>
+          </Card>
         </>
       )}
     </div>

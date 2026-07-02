@@ -35,21 +35,21 @@ export function MissionMaterielEditor({
     updateRequirement(index, { quantity: String(Math.max(1, nextQuantity)) });
   }
 
-  const neutralBadgeClass = 'inline-flex rounded-full border border-slate-300 bg-slate-100 px-2.5 py-1 text-sm text-slate-700';
-  const stepBtn = { cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 32, fontSize: 16, fontWeight: 700, fontFamily: 'inherit' } as const;
+  const neutralBadgeClass = 'inline-flex rounded-full border border-line-field bg-surface-sub px-2.5 py-1 text-sm text-ink-2';
+  const stepBtn = { cursor: 'pointer', border: 'none', background: '#F7F9FC', color: '#5B6478', width: 32, height: 32, fontSize: 16, fontWeight: 700, fontFamily: 'inherit' } as const;
 
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #eef1f5', background: '#fcfcfd', borderRadius: 12, padding: 14 }}>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #EEF1F6', background: '#F7F9FC', borderRadius: 12, padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
           <AdminSectionLabel>Matériel requis</AdminSectionLabel>
-          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#94a3b8' }}>Optionnel. Définissez le matériel nécessaire pour cette mission.</p>
+          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#8A93A6' }}>Optionnel. Définissez le matériel nécessaire pour cette mission.</p>
         </div>
         <button
           type="button"
           onClick={addRequirement}
           disabled={submitting || availableMateriels.length === 0 || requirements.length >= availableMateriels.length}
-          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting || availableMateriels.length === 0 || requirements.length >= availableMateriels.length ? 0.5 : 1 }}
+          style={{ cursor: 'pointer', border: '1px solid #DCE2EC', background: '#fff', color: '#5B6478', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting || availableMateriels.length === 0 || requirements.length >= availableMateriels.length ? 0.5 : 1 }}
         >
           Ajouter du matériel
         </button>
@@ -61,7 +61,7 @@ export function MissionMaterielEditor({
             const usedCategoryIdsByOtherRows = new Set(selectedCategoryIds.filter((categoryId, selectedIndex) => selectedIndex !== index));
 
             return (
-              <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 11, border: '1px solid #eef1f5', background: '#fff', borderRadius: 11, padding: 13 }}>
+              <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 11, border: '1px solid #EEF1F6', background: '#fff', borderRadius: 11, padding: 13 }}>
                 <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
                   {availableMateriels.map((materiel) => {
                     const isUsedInAnotherRow = usedCategoryIdsByOtherRows.has(materiel.id);
@@ -82,7 +82,7 @@ export function MissionMaterielEditor({
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                  <div style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden', borderRadius: 9, border: '1px solid #cbd5e1' }}>
+                  <div style={{ display: 'inline-flex', alignItems: 'center', overflow: 'hidden', borderRadius: 9, border: '1px solid #DCE2EC' }}>
                     <button type="button" onClick={() => updateQuantity(index, Number.parseInt(requirement.quantity || '1', 10) - 1)} disabled={submitting} style={{ ...stepBtn, opacity: submitting ? 0.5 : 1 }}>−</button>
                     <input
                       type="number"
@@ -90,7 +90,7 @@ export function MissionMaterielEditor({
                       step={1}
                       value={requirement.quantity}
                       onChange={(event) => updateRequirement(index, { quantity: event.target.value })}
-                      style={{ width: 48, borderTop: 'none', borderBottom: 'none', borderLeft: '1px solid #cbd5e1', borderRight: '1px solid #cbd5e1', padding: '7px 4px', textAlign: 'center', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
+                      style={{ width: 48, borderTop: 'none', borderBottom: 'none', borderLeft: '1px solid #DCE2EC', borderRight: '1px solid #DCE2EC', padding: '7px 4px', textAlign: 'center', fontSize: 14, color: '#16203A', outline: 'none', fontFamily: 'inherit' }}
                       disabled={submitting}
                       required
                     />
@@ -101,7 +101,7 @@ export function MissionMaterielEditor({
                     type="button"
                     onClick={() => removeRequirement(index)}
                     disabled={submitting}
-                    style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
+                    style={{ cursor: 'pointer', border: '1px solid #F1C7C7', background: '#fff', color: '#D14343', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
                   >
                     Supprimer
                   </button>
@@ -111,10 +111,10 @@ export function MissionMaterielEditor({
           })}
         </div>
       ) : (
-        <p style={{ margin: 0, fontSize: 12.5, color: '#94a3b8' }}>Aucun matériel requis défini.</p>
+        <p style={{ margin: 0, fontSize: 12.5, color: '#8A93A6' }}>Aucun matériel requis défini.</p>
       )}
 
-      {requirementsError ? <p style={{ margin: 0, fontSize: 12.5, color: '#dc2626' }}>{requirementsError}</p> : null}
+      {requirementsError ? <p style={{ margin: 0, fontSize: 12.5, color: '#D14343' }}>{requirementsError}</p> : null}
     </section>
   );
 }

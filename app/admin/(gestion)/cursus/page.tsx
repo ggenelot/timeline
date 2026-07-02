@@ -20,6 +20,12 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/cn';
 import type {
   Cursus,
   CursusRule,
@@ -72,43 +78,6 @@ type PhaseModal = {
   minExterne: number;
 };
 
-// ── Toggle switch ─────────────────────────────────────────────
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      style={{
-        position: 'relative',
-        flexShrink: 0,
-        width: 40,
-        height: 23,
-        border: 'none',
-        borderRadius: 99,
-        cursor: 'pointer',
-        background: value ? '#059669' : '#cbd5e1',
-      }}
-      aria-checked={value}
-      role="switch"
-    >
-      <span
-        style={{
-          position: 'absolute',
-          top: 2,
-          left: value ? 19 : 2,
-          width: 19,
-          height: 19,
-          borderRadius: '50%',
-          background: '#fff',
-          boxShadow: '0 1px 2px rgba(0,0,0,.25)',
-          transition: 'left 0.15s',
-        }}
-      />
-    </button>
-  );
-}
-
 // ── Drag handle ───────────────────────────────────────────────
 
 function DragHandle({
@@ -125,9 +94,10 @@ function DragHandle({
       {...attributes}
       {...listeners}
       title="Glisser pour réordonner"
-      style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
+      className="shrink-0 cursor-grab touch-none leading-none"
+      style={style}
     >
-      ⠿⠿
+      <Icon name="drag_indicator" className="text-ink-3" />
     </span>
   );
 }
@@ -137,22 +107,22 @@ function DragHandle({
 function Stepper({ value, onChange, max }: { value: number; onChange: (v: number) => void; max?: number }) {
   const atMax = max !== undefined && value >= max;
   return (
-    <div style={{ display: 'inline-flex', alignItems: 'center', border: '1px solid #cbd5e1', borderRadius: 9, overflow: 'hidden' }}>
+    <div className="inline-flex items-center overflow-hidden rounded-[9px] border border-line-field">
       <button
         type="button"
         onClick={() => onChange(Math.max(0, value - 1))}
-        style={{ cursor: 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700 }}
+        className="h-[34px] w-8 cursor-pointer bg-surface-sub text-[17px] font-bold text-ink-2"
       >
         −
       </button>
-      <span style={{ minWidth: 38, textAlign: 'center', fontSize: 15, fontWeight: 800, color: '#0f172a' }}>
+      <span className="min-w-[38px] text-center text-[15px] font-extrabold text-ink">
         {value}
       </span>
       <button
         type="button"
         onClick={() => { if (!atMax) onChange(value + 1); }}
         disabled={atMax}
-        style={{ cursor: atMax ? 'not-allowed' : 'pointer', border: 'none', background: '#f8fafc', color: '#475569', width: 32, height: 34, fontSize: 17, fontWeight: 700, opacity: atMax ? 0.4 : 1 }}
+        className="h-[34px] w-8 cursor-pointer bg-surface-sub text-[17px] font-bold text-ink-2 disabled:cursor-not-allowed disabled:opacity-40"
       >
         +
       </button>
@@ -181,21 +151,23 @@ function Modal({
 }) {
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '56px 18px', overflowY: 'auto' }}
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[rgba(12,19,38,.55)] px-[18px] py-14"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
+      <div className="w-full max-w-[520px] overflow-hidden rounded-[18px] bg-surface-card shadow-lift">
+        <div className="flex items-start justify-between gap-3 border-b border-line-row px-5 pb-[14px] pt-[18px]">
           <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
-            {subtitle ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>{subtitle}</div> : null}
+            <div className="text-[17px] font-extrabold text-ink">{title}</div>
+            {subtitle ? <div className="mt-[3px] text-[12.5px] text-ink-2">{subtitle}</div> : null}
           </div>
-          <button type="button" onClick={onClose} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
+          <button type="button" onClick={onClose} className="flex h-[30px] w-[30px] shrink-0 cursor-pointer items-center justify-center rounded-lg bg-surface-sub text-ink-2">
+            <Icon name="close" size={18} />
+          </button>
         </div>
-        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #eef1f5', background: '#fafbfc' }}>
-          <button type="button" onClick={onClose} style={{ cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>Annuler</button>
-          <button type="button" onClick={onSubmit} disabled={submitDisabled} style={{ cursor: submitDisabled ? 'not-allowed' : 'pointer', border: 'none', background: submitDisabled ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitDisabled ? 0.6 : 1 }}>{submitLabel}</button>
+        <div className="flex flex-col gap-4 px-5 py-[18px]">{children}</div>
+        <div className="flex items-center justify-end gap-2.5 border-t border-line-row bg-surface-sub px-5 py-[14px]">
+          <Button variant="ghost" onClick={onClose}>Annuler</Button>
+          <Button variant="engage" onClick={onSubmit} disabled={submitDisabled}>{submitLabel}</Button>
         </div>
       </div>
     </div>
@@ -203,7 +175,7 @@ function Modal({
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>{children}</div>;
+  return <div className="mb-[7px] text-[12.5px] font-bold text-ink-2">{children}</div>;
 }
 
 // ── Skill picker ───────────────────────────────────────────────
@@ -239,7 +211,7 @@ function SkillPicker({
           name: r.name,
           level: r.level,
           catLabel: cat?.name ?? 'Général',
-          dot: cat?.color ?? '#64748b',
+          dot: cat?.color ?? '#5B6478',
         };
       })
     );
@@ -247,17 +219,17 @@ function SkillPicker({
 
   if (chosenSkillId && chosenSkill && !open) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 13, flexWrap: 'wrap', border: '1.5px solid #bfdbfe', background: '#f6f9ff', borderRadius: 13, padding: '13px 15px' }}>
-        <span style={{ flexShrink: 0, width: 38, height: 38, borderRadius: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12.5, fontWeight: 800, color: '#fff', background: chosenSkill.dot }}>
+      <div className="flex flex-wrap items-center gap-[13px] rounded-[13px] border-[1.5px] border-[#CFDDF6] bg-[#EEF4FE] px-[15px] py-[13px]">
+        <span className="inline-flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] text-[12.5px] font-extrabold text-white" style={{ background: chosenSkill.dot }}>
           {chosenSkill.code ?? '?'}
         </span>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>{chosenSkill.name}</div>
-          <div style={{ marginTop: 2, fontSize: 12.5, color: '#64748b' }}>
+        <div className="min-w-0">
+          <div className="text-base font-extrabold tracking-[-0.01em] text-ink">{chosenSkill.name}</div>
+          <div className="mt-0.5 text-[12.5px] text-ink-2">
             {chosenSkill.code} · {chosenSkill.catLabel}{chosenSkill.level ? ` · Niveau ${chosenSkill.level}` : ''}
           </div>
         </div>
-        <button type="button" onClick={() => { setOpen(true); setQuery(''); }} style={{ marginLeft: 'auto', cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 8, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit' }}>Changer</button>
+        <Button variant="ghost" onClick={() => { setOpen(true); setQuery(''); }} className="ml-auto px-[13px] py-[7px] text-[12.5px]">Changer</Button>
       </div>
     );
   }
@@ -268,16 +240,16 @@ function SkillPicker({
         value={query}
         onChange={(e) => search(e.target.value)}
         placeholder="Rechercher : code ou nom (ex : CE, Chef d'Équipe)…"
-        style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }}
+        className="w-full rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none"
       />
       {results.length > 0 ? (
-        <div style={{ marginTop: 7, display: 'flex', flexDirection: 'column', gap: 5, maxHeight: 248, overflowY: 'auto' }}>
+        <div className="mt-[7px] flex max-h-[248px] flex-col gap-[5px] overflow-y-auto">
           {results.map((o) => (
-            <button key={o.id} type="button" onClick={() => { onPick(o); setOpen(false); setQuery(''); }} style={{ cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 11, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '8px 11px', fontFamily: 'inherit' }}>
-              <span style={{ flexShrink: 0, width: 32, height: 32, borderRadius: 8, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800, color: '#fff', background: o.dot }}>{o.code ?? '?'}</span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 13.5, color: '#475569' }}><span style={{ fontWeight: 700, color: '#0f172a' }}>{o.code ?? o.name}</span>{o.code ? ` — ${o.name}` : ''}</div>
-                <div style={{ fontSize: 11.5, color: '#94a3b8' }}>{o.catLabel}{o.level ? ` · Niveau ${o.level}` : ''}</div>
+            <button key={o.id} type="button" onClick={() => { onPick(o); setOpen(false); setQuery(''); }} className="flex cursor-pointer items-center gap-[11px] rounded-[9px] border border-line bg-surface-card px-[11px] py-2 text-left">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[11px] font-extrabold text-white" style={{ background: o.dot }}>{o.code ?? '?'}</span>
+              <div className="min-w-0">
+                <div className="text-[13.5px] text-ink-2"><span className="font-bold text-ink">{o.code ?? o.name}</span>{o.code ? ` — ${o.name}` : ''}</div>
+                <div className="text-[11.5px] text-ink-3">{o.catLabel}{o.level ? ` · Niveau ${o.level}` : ''}</div>
               </div>
             </button>
           ))}
@@ -302,28 +274,29 @@ function SortableRuleRow({
   return (
     <div
       ref={setNodeRef}
+      className={cn(
+        'flex items-center gap-[11px] rounded-[11px] border border-line-row bg-surface-sub px-[13px] py-2.5',
+        isDragging ? 'opacity-60 shadow-lift' : ''
+      )}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 11,
-        border: '1px solid #eef1f5',
-        borderRadius: 11,
-        padding: '10px 13px',
-        background: '#fcfcfd',
-        opacity: isDragging ? 0.6 : 1,
-        boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none',
         zIndex: isDragging ? 1 : 'auto',
       }}
     >
       <DragHandle attributes={attributes} listeners={listeners} />
-      <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800, background: rule.auto ? '#4338ca' : '#e2e8f0', color: rule.auto ? '#fff' : '#94a3b8' }}>
+      <span className={cn(
+        'inline-flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold',
+        rule.auto ? 'bg-[#1E3C87] text-white' : 'bg-line text-ink-3'
+      )}>
         {rule.auto ? '⚡' : '·'}
       </span>
-      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#334155', lineHeight: 1.45 }}>{rule.text}</span>
-      <button type="button" onClick={onToggleAuto} style={{ flexShrink: 0, cursor: 'pointer', border: `1px solid ${rule.auto ? '#6d28d9' : '#e2e8f0'}`, background: rule.auto ? '#f5f3ff' : '#fff', color: rule.auto ? '#6d28d9' : '#94a3b8', borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 800, fontFamily: 'inherit' }}>Auto</button>
-      <button type="button" onClick={onRemove} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '3px 6px' }} aria-label="Supprimer">✕</button>
+      <span className="min-w-0 flex-1 text-[13px] leading-snug text-ink-2">{rule.text}</span>
+      <button type="button" onClick={onToggleAuto} className={cn(
+        'shrink-0 cursor-pointer rounded-md border px-[9px] py-[3px] text-[11px] font-extrabold',
+        rule.auto ? 'border-[#CFDDF6] bg-[#EEF4FE] text-[#1E3C87]' : 'border-line bg-surface-card text-ink-3'
+      )}>Auto</button>
+      <button type="button" onClick={onRemove} className="shrink-0 cursor-pointer bg-transparent px-1.5 py-[3px] text-[15px] text-bad" aria-label="Supprimer">✕</button>
     </div>
   );
 }
@@ -343,38 +316,33 @@ function SortableCompetenceRow({
   return (
     <div
       ref={setNodeRef}
+      className={cn(
+        'flex items-start gap-2.5 rounded-xl border border-line-row bg-surface-sub px-[13px] py-[11px]',
+        isDragging ? 'opacity-60 shadow-lift' : ''
+      )}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        display: 'flex',
-        alignItems: 'flex-start',
-        gap: 10,
-        border: '1px solid #eef1f5',
-        borderRadius: 12,
-        padding: '11px 13px',
-        background: '#fcfcfd',
-        opacity: isDragging ? 0.6 : 1,
-        boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none',
         zIndex: isDragging ? 1 : 'auto',
       }}
     >
       <DragHandle attributes={attributes} listeners={listeners} style={{ marginTop: 3 }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{comp.name}</span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-bold text-ink">{comp.name}</span>
           {comp.garde_only ? (
-            <span style={{ fontSize: 10.5, fontWeight: 700, color: '#6d28d9', background: '#f5f3ff', border: '1px solid #ddd6fe', borderRadius: 5, padding: '1px 7px' }}>Garde uniquement</span>
+            <span className="rounded-[5px] border border-[#E3D6EF] bg-[#F5EDFA] px-[7px] py-px text-[10.5px] font-bold text-[#7A2E86]">Garde uniquement</span>
           ) : null}
         </div>
-        {comp.description ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{comp.description}</div> : null}
+        {comp.description ? <div className="mt-[3px] text-[12.5px] leading-snug text-ink-2">{comp.description}</div> : null}
       </div>
-      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span className="inline-flex shrink-0 items-center gap-1">
         <button type="button" onClick={onEdit}
-          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+          className="cursor-pointer rounded-[7px] border border-line-field bg-surface-card px-2.5 py-[5px] text-xs font-bold text-ink-2">
           Modifier
         </button>
         <button type="button" onClick={onRemove} aria-label="Supprimer"
-          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+          className="cursor-pointer bg-transparent px-1.5 py-1 text-[15px] text-bad">✕</button>
       </span>
     </div>
   );
@@ -409,50 +377,46 @@ function SortablePhaseCard({
   return (
     <div
       ref={setNodeRef}
+      className={cn(
+        'relative mb-4 overflow-hidden rounded-2xl border border-line bg-surface-card',
+        isDragging ? 'opacity-85 shadow-lift' : 'shadow-card'
+      )}
       style={{
         transform: CSS.Transform.toString(transform),
         transition,
-        background: '#fff',
-        border: '1px solid #e7e9ee',
-        borderRadius: 16,
-        boxShadow: isDragging ? '0 12px 30px rgba(15,23,42,.16)' : '0 2px 10px rgba(15,23,42,.05)',
-        marginBottom: 16,
-        overflow: 'hidden',
-        opacity: isDragging ? 0.85 : 1,
         zIndex: isDragging ? 5 : 'auto',
-        position: 'relative',
       }}
     >
       {/* Phase header */}
-      <div style={{ padding: '16px 22px 15px', borderBottom: '1px solid #eef1f5' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}>
+      <div className="border-b border-line-row px-[22px] pb-[15px] pt-4">
+        <div className="flex flex-wrap items-center gap-[11px]">
           <DragHandle attributes={attributes} listeners={listeners} />
-          <span style={{ flexShrink: 0, width: 24, height: 24, borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 800, background: '#0f172a', color: '#fff' }}>
+          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-brand text-xs font-extrabold text-white">
             {index + 1}
           </span>
-          <span style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{phase.label}</span>
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#64748b', marginRight: 4 }}>
+          <span className="text-base font-extrabold text-ink">{phase.label}</span>
+          <span className="ml-auto inline-flex items-center gap-1.5">
+            <span className="mr-1 text-xs font-bold text-ink-2">
               {comps.length} compétence{comps.length !== 1 ? 's' : ''}
             </span>
             <button type="button" onClick={onEditPhase}
-              style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+              className="cursor-pointer rounded-[7px] border border-line-field bg-surface-card px-2.5 py-[5px] text-xs font-bold text-ink-2">
               Modifier
             </button>
             <button type="button" onClick={onDeletePhase} aria-label="Supprimer la phase"
-              style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+              className="cursor-pointer bg-transparent px-1.5 py-1 text-[15px] text-bad">✕</button>
           </span>
         </div>
         {phase.sub ? (
-          <div style={{ marginTop: 9, fontSize: 12.5, color: '#64748b', lineHeight: 1.5 }}>{phase.sub}</div>
+          <div className="mt-[9px] text-[12.5px] leading-relaxed text-ink-2">{phase.sub}</div>
         ) : null}
         {/* Doublure requirements summary */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
-          <span style={{ fontSize: 12, fontWeight: 700, color: '#334155', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 7, padding: '4px 10px' }}>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="rounded-[7px] border border-line bg-surface-sub px-2.5 py-1 text-xs font-bold text-ink-2">
             {phase.min_doublures} doublure{phase.min_doublures !== 1 ? 's' : ''} min.
           </span>
           {phase.min_externe > 0 ? (
-            <span style={{ fontSize: 12, fontWeight: 700, color: '#b45309', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 7, padding: '4px 10px' }}>
+            <span className="rounded-[7px] border border-warn-line bg-warn-soft px-2.5 py-1 text-xs font-bold text-warn-text">
               dont {phase.min_externe} extérieure{phase.min_externe !== 1 ? 's' : ''}
             </span>
           ) : null}
@@ -460,15 +424,15 @@ function SortablePhaseCard({
       </div>
 
       {/* Competences */}
-      <div style={{ padding: '14px 22px 18px' }}>
-        <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 11 }}>
+      <div className="px-[22px] pb-[18px] pt-[14px]">
+        <div className="mb-[11px] text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">
           Compétences à valider
         </div>
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onCompDragEnd}>
           <SortableContext items={comps.map((c) => c.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {comps.length === 0 ? (
-                <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette phase.</div>
+                <div className="p-0.5 text-[12.5px] text-ink-3">Aucune compétence dans cette phase.</div>
               ) : comps.map((c) => (
                 <SortableCompetenceRow key={c.id} comp={c} onEdit={() => onEditComp(c)} onRemove={() => onRemoveComp(c.id)} />
               ))}
@@ -476,7 +440,7 @@ function SortablePhaseCard({
           </SortableContext>
         </DndContext>
         <button type="button" onClick={onAddComp}
-          style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+          className="mt-[11px] w-full cursor-pointer rounded-[10px] border border-dashed border-line-field bg-surface-card px-[14px] py-2.5 text-left text-[13px] font-bold text-brand">
           + Ajouter une compétence
         </button>
       </div>
@@ -578,7 +542,7 @@ export default function AdminCursusPage() {
                 name: data.name,
                 level: data.level,
                 catLabel: cat?.name ?? 'Général',
-                dot: cat?.color ?? '#64748b',
+                dot: cat?.color ?? '#5B6478',
               });
             }
           } else {
@@ -817,15 +781,15 @@ export default function AdminCursusPage() {
 
   if (allowed === null) {
     return (
-      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-ink-3">Chargement…</p>
       </div>
     );
   }
 
   if (!allowed) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé.
       </div>
     );
@@ -833,8 +797,8 @@ export default function AdminCursusPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-ink-3">Chargement…</p>
       </div>
     );
   }
@@ -842,75 +806,74 @@ export default function AdminCursusPage() {
   const orderedPhases = [...(detail?.phases ?? [])].sort((a, b) => a.order_idx - b.order_idx);
 
   return (
-    <div style={{ paddingBottom: 80 }}>
+    <div className="pb-20">
 
       {/* Page heading */}
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Cursus de doublure
-        </h1>
-        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Définissez les cursus, leurs règles, puis composez librement leurs phases : nom, description, doublures requises et compétences à valider. L&apos;ordre des phases et des compétences détermine leur progression dans la fiche.
-        </p>
-      </div>
+      <PageHeader
+        title="Cursus de doublure"
+        subtitle="Définissez les cursus, leurs règles, puis composez librement leurs phases : nom, description, doublures requises et compétences à valider. L'ordre des phases et des compétences détermine leur progression dans la fiche."
+      />
 
       {error ? (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-4 py-3 text-[13px] text-bad">
           {error}
         </div>
       ) : null}
 
       {/* Cursus tabs */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', marginBottom: 18 }}>
+      <div className="mb-[18px] flex flex-wrap items-center gap-2">
         {allCursus.map((c) => {
           const isActive = selectedId === c.id;
           return (
             <button key={c.id} type="button" onClick={() => setSelectedId(c.id)}
-              style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8, border: `1px solid ${isActive ? '#0f172a' : '#e2e8f0'}`, background: isActive ? '#0f172a' : '#fff', color: isActive ? '#fff' : '#334155', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+              className={cn(
+                'inline-flex cursor-pointer items-center gap-2 rounded-full border px-[15px] py-2 text-[13px] font-bold',
+                isActive ? 'border-brand bg-brand text-white' : 'border-line bg-surface-card text-ink-2'
+              )}
             >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: isActive ? '#fff' : '#059669', flexShrink: 0 }} />
+              <span className={cn('h-2 w-2 shrink-0 rounded-full', isActive ? 'bg-white' : 'bg-engage')} />
               <span>{c.code}</span>
-              <span style={{ fontWeight: 600, color: isActive ? 'rgba(255,255,255,.7)' : '#94a3b8' }}>{c.name}</span>
+              <span className={cn('font-semibold', isActive ? 'text-white/70' : 'text-ink-3')}>{c.name}</span>
             </button>
           );
         })}
         <button type="button" onClick={() => { setShowNewModal(true); setNewSkill(null); }}
-          style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#475569', borderRadius: 99, padding: '8px 15px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+          className="cursor-pointer rounded-full border border-dashed border-line-field bg-surface-card px-[15px] py-2 text-[13px] font-bold text-ink-2">
           + Nouveau cursus
         </button>
       </div>
 
       {!detail ? (
-        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 18, padding: '60px 24px' }}>
-          <p style={{ color: '#94a3b8', fontSize: 15 }}>Sélectionnez un cursus ou créez-en un.</p>
+        <div className="rounded-[18px] border-[1.5px] border-dashed border-line bg-surface-card px-6 py-[60px] text-center">
+          <p className="text-[15px] text-ink-3">Sélectionnez un cursus ou créez-en un.</p>
         </div>
       ) : (
         <>
           {/* ── Identity card ── */}
-          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '20px 22px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 18, flexWrap: 'wrap' }}>
-              <div style={{ flex: 1, minWidth: 300 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8', marginBottom: 9 }}>
+          <div className="mb-4 rounded-2xl border border-line bg-surface-card px-[22px] py-5 shadow-card">
+            <div className="flex flex-wrap items-start justify-between gap-[18px]">
+              <div className="min-w-[300px] flex-1">
+                <div className="mb-[9px] text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">
                   Compétence du cursus
                 </div>
                 <SkillPicker chosenSkillId={detail.skill_id} chosenSkill={linkedSkill} onPick={handleLinkSkill} />
-                {savingSkill ? <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Enregistrement…</p> : null}
-                {!detail.skill_id ? <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Associez une compétence du référentiel pour lier ce cursus aux profils bénévoles.</p> : null}
+                {savingSkill ? <p className="mt-2 text-xs text-ink-3">Enregistrement…</p> : null}
+                {!detail.skill_id ? <p className="mt-2 text-xs text-ink-3">Associez une compétence du référentiel pour lier ce cursus aux profils bénévoles.</p> : null}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12 }}>
-                <div style={{ display: 'flex', gap: 18, textAlign: 'right' }}>
+              <div className="flex flex-col items-end gap-3">
+                <div className="flex gap-[18px] text-right">
                   <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{totalComps}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>compétences</div>
+                    <div className="text-2xl font-extrabold leading-none text-ink">{totalComps}</div>
+                    <div className="mt-[3px] text-[11px] font-semibold text-ink-3">compétences</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 24, fontWeight: 800, color: '#0f172a', lineHeight: 1 }}>{totalMinDoublures}</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginTop: 3 }}>doublures min.</div>
+                    <div className="text-2xl font-extrabold leading-none text-ink">{totalMinDoublures}</div>
+                    <div className="mt-[3px] text-[11px] font-semibold text-ink-3">doublures min.</div>
                   </div>
                 </div>
                 <button type="button" onClick={handleDeleteCursus} disabled={deletingCursus || allCursus.length <= 1}
                   title={allCursus.length <= 1 ? 'Impossible de supprimer le dernier cursus' : undefined}
-                  style={{ cursor: allCursus.length <= 1 || deletingCursus ? 'not-allowed' : 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 9, padding: '7px 13px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: allCursus.length <= 1 ? 0.5 : 1 }}>
+                  className="cursor-pointer rounded-[9px] border border-bad/30 bg-surface-card px-[13px] py-[7px] text-[12.5px] font-bold text-bad disabled:cursor-not-allowed disabled:opacity-50">
                   {deletingCursus ? 'Suppression…' : 'Supprimer le cursus'}
                 </button>
               </div>
@@ -918,43 +881,42 @@ export default function AdminCursusPage() {
           </div>
 
           {/* ── Rules ── */}
-          <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '18px 22px', marginBottom: 16 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 }}>
-              <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>Règles du cursus</span>
-              <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Le badge <strong style={{ color: '#4338ca' }}>Auto</strong> = vérifiée automatiquement par l&apos;app</span>
+          <div className="mb-4 rounded-2xl border border-line bg-surface-card px-[22px] py-[18px] shadow-card">
+            <div className="mb-[13px] flex items-center justify-between gap-3">
+              <span className="text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">Règles du cursus</span>
+              <span className="text-[11.5px] text-ink-3">Le badge <strong className="text-[#1E3C87]">Auto</strong> = vérifiée automatiquement par l&apos;app</span>
             </div>
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleRuleDragEnd}>
               <SortableContext items={rules.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 12 }}>
+                <div className="mb-3 flex flex-col gap-2">
                   {rules.length === 0 ? (
-                    <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune règle pour l&apos;instant.</div>
+                    <div className="p-0.5 text-[12.5px] text-ink-3">Aucune règle pour l&apos;instant.</div>
                   ) : rules.map((r) => (
                     <SortableRuleRow key={r.id} rule={r} onToggleAuto={() => toggleRuleAuto(r)} onRemove={() => removeRule(r.id)} />
                   ))}
                 </div>
               </SortableContext>
             </DndContext>
-            <div style={{ display: 'flex', gap: 9 }}>
+            <div className="flex gap-[9px]">
               <input value={ruleDraft} onChange={(e) => setRuleDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addRule(); } }} placeholder="Ajouter une règle…"
-                style={{ flex: 1, border: '1px solid #cbd5e1', borderRadius: 9, padding: '9px 12px', fontSize: 13.5, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
-              <button type="button" onClick={addRule} disabled={addingRule || !ruleDraft.trim()}
-                style={{ cursor: addingRule || !ruleDraft.trim() ? 'not-allowed' : 'pointer', border: 'none', background: addingRule || !ruleDraft.trim() ? '#cbd5e1' : '#0f172a', color: '#fff', borderRadius: 9, padding: '9px 17px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>
+                className="flex-1 rounded-[9px] border border-line-field px-3 py-[9px] text-[13.5px] text-ink outline-none" />
+              <Button variant="primary" onClick={addRule} disabled={addingRule || !ruleDraft.trim()}>
                 Ajouter
-              </button>
+              </Button>
             </div>
           </div>
 
           {/* ── Phases ── */}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13 }}>
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+          <div className="mb-[13px] flex items-center justify-between gap-3">
+            <span className="text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">
               Phases du cursus
             </span>
-            <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Glissez les phases <strong>⠿⠿</strong> pour changer leur ordre</span>
+            <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-3">Glissez les phases <Icon name="drag_indicator" size={16} className="text-ink-3" /> pour changer leur ordre</span>
           </div>
 
           {orderedPhases.length === 0 ? (
-            <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
-              <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucune phase pour l&apos;instant. Ajoutez-en une pour commencer.</p>
+            <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
+              <p className="text-[13.5px] text-ink-3">Aucune phase pour l&apos;instant. Ajoutez-en une pour commencer.</p>
             </div>
           ) : (
             <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handlePhaseDragEnd}>
@@ -978,9 +940,9 @@ export default function AdminCursusPage() {
           )}
 
           {/* Add phase */}
-          <div style={{ marginBottom: 16 }}>
+          <div className="mb-4">
             <button type="button" onClick={openAddPhase}
-              style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+              className="w-full cursor-pointer rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
               + Nouvelle phase
             </button>
           </div>
@@ -1000,7 +962,7 @@ export default function AdminCursusPage() {
           <div>
             <FieldLabel>Compétence du référentiel</FieldLabel>
             <SkillPicker chosenSkillId={newSkill?.id ?? null} chosenSkill={newSkill} onPick={setNewSkill} />
-            <p style={{ marginTop: 8, fontSize: 12, color: '#94a3b8' }}>Le code, le nom et la catégorie du cursus sont repris de la compétence choisie.</p>
+            <p className="mt-2 text-xs text-ink-3">Le code, le nom et la catégorie du cursus sont repris de la compétence choisie.</p>
           </div>
         </Modal>
       ) : null}
@@ -1018,18 +980,18 @@ export default function AdminCursusPage() {
           <div>
             <FieldLabel>Intitulé de la compétence</FieldLabel>
             <input value={compModal.name} onChange={(e) => setCompModal((m) => m ? { ...m, name: e.target.value } : m)} placeholder="Ex : Transmission du bilan à l'IOA"
-              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+              className="w-full rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none" />
           </div>
           <div>
-            <FieldLabel>Description <span style={{ color: '#94a3b8', fontWeight: 600 }}>(critères d&apos;évaluation)</span></FieldLabel>
+            <FieldLabel>Description <span className="font-semibold text-ink-3">(critères d&apos;évaluation)</span></FieldLabel>
             <textarea value={compModal.description} onChange={(e) => setCompModal((m) => m ? { ...m, description: e.target.value } : m)} placeholder="Ex : maîtrise de la transmission du bilan à l'Infirmier Organisateur de l'Accueil." rows={3}
-              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+              className="w-full resize-y rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid #eef1f5', borderRadius: 11, background: '#fcfcfd' }}>
+          <div className="flex items-center gap-[11px] rounded-[11px] border border-line-row bg-surface-sub px-[13px] py-[11px]">
             <Toggle value={compModal.gardeOnly} onChange={(v) => setCompModal((m) => m ? { ...m, gardeOnly: v } : m)} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Validable en garde uniquement</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>Ne peut être validée que sur un événement de type Garde.</div>
+              <div className="text-[13px] font-bold text-ink-2">Validable en garde uniquement</div>
+              <div className="text-xs text-ink-3">Ne peut être validée que sur un événement de type Garde.</div>
             </div>
           </div>
         </Modal>
@@ -1048,19 +1010,19 @@ export default function AdminCursusPage() {
           <div>
             <FieldLabel>Nom de la phase</FieldLabel>
             <input value={phaseModal.label} onChange={(e) => setPhaseModal((m) => m ? { ...m, label: e.target.value } : m)} placeholder="Ex : Pré-doublure, Doublures opérationnelles…"
-              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' }} />
+              className="w-full rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none" />
           </div>
           <div>
-            <FieldLabel>Description <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnelle)</span></FieldLabel>
+            <FieldLabel>Description <span className="font-semibold text-ink-3">(optionnelle)</span></FieldLabel>
             <textarea value={phaseModal.sub} onChange={(e) => setPhaseModal((m) => m ? { ...m, sub: e.target.value } : m)} placeholder="Ex : Doublures d'observation avant la formation." rows={2}
-              style={{ width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }} />
+              className="w-full resize-y rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none" />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Nombre minimum de doublures</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[13px] font-bold text-ink-2">Nombre minimum de doublures</span>
             <Stepper value={phaseModal.minDoublures} onChange={(v) => setPhaseModal((m) => m ? { ...m, minDoublures: v, minExterne: Math.min(m.minExterne, v) } : m)} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>dont à l&apos;extérieur</span>
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <span className="text-[13px] font-bold text-ink-2">dont à l&apos;extérieur</span>
             <Stepper value={phaseModal.minExterne} onChange={(v) => setPhaseModal((m) => m ? { ...m, minExterne: v } : m)} max={phaseModal.minDoublures} />
           </div>
         </Modal>

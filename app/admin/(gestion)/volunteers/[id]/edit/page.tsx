@@ -6,6 +6,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { AppRole, Profile, Skill, SkillCategory } from '@/lib/types';
 import { getSkillColorClass } from '@/components/skills/skill-badge';
+import { Button } from '@/components/ui/button';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
@@ -182,86 +183,86 @@ export default function EditVolunteerPage() {
     router.push('/admin/volunteers?edited=1');
   }
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
-  if (!profile) return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
+  if (!profile) return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
   if (profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : cette page est réservée aux administrateurs.
       </div>
     );
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+    <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">Modifier un bénévole</h1>
-          <p className="mt-1 text-sm text-slate-600">Mettez à jour un compte bénévole avec le même formulaire que la création.</p>
+          <h1 className="text-[26px] font-black leading-tight tracking-[-0.02em] text-ink">Modifier un bénévole</h1>
+          <p className="mt-1 text-sm text-ink-2">Mettez à jour un compte bénévole avec le même formulaire que la création.</p>
         </div>
-        <Link href="/admin/volunteers" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50">
+        <Link href="/admin/volunteers" className="inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]">
           Retour à la liste
         </Link>
       </div>
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
       <form className="space-y-4" onSubmit={handleSubmit}>
         <div className="grid gap-4 md:grid-cols-2">
-          <label className="block text-sm text-slate-700">
+          <label className="block text-sm text-ink-2">
             Prénom
             <input
               type="text"
               value={form.firstName}
               onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
               disabled={submitting}
               required
             />
           </label>
-          <label className="block text-sm text-slate-700">
+          <label className="block text-sm text-ink-2">
             Nom
             <input
               type="text"
               value={form.lastName}
               onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
-              className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+              className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
               disabled={submitting}
               required
             />
           </label>
         </div>
 
-        <label className="block text-sm text-slate-700">
+        <label className="block text-sm text-ink-2">
           Identifiant
           <input
             type="text"
             value={form.identifier}
             onChange={(e) => setForm((prev) => ({ ...prev, identifier: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
             placeholder="prenom.nom"
             disabled={submitting}
             required
           />
         </label>
 
-        <label className="block text-sm text-slate-700">
+        <label className="block text-sm text-ink-2">
           Mot de passe
           <input
             type="password"
             value={form.password}
             onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-            className="mt-1 w-full rounded-md border border-slate-300 px-3 py-2 text-sm"
+            className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
             disabled={submitting}
             minLength={10}
             autoComplete="new-password"
           />
         </label>
 
-        <div className="space-y-3 rounded-md border border-slate-200 p-3">
-          <p className="text-sm font-medium text-slate-900">Compétences</p>
+        <div className="space-y-3 rounded-md border border-line p-3">
+          <p className="text-sm font-medium text-ink">Compétences</p>
           {categories.length === 0 ? (
-            <p className="text-xs text-slate-400">Aucune catégorie de compétences définie.</p>
+            <p className="text-xs text-ink-3">Aucune catégorie de compétences définie.</p>
           ) : (
             categories.map((category) => {
               if (category.skills.length === 0) return null;
@@ -270,7 +271,7 @@ export default function EditVolunteerPage() {
 
               return (
                 <div key={category.id} className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{category.name}</p>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-3">{category.name}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
@@ -279,7 +280,7 @@ export default function EditVolunteerPage() {
                         selectedSkillByCategory: { ...prev.selectedSkillByCategory, [category.id]: null },
                       }))}
                       className={`inline-flex rounded-full border px-2.5 py-1 text-xs font-medium ${
-                        !selectedSkillId ? getSkillColorClass(category.color) : 'border-slate-300 bg-slate-100 text-slate-600'
+                        !selectedSkillId ? getSkillColorClass(category.color) : 'border-line-field bg-surface-sub text-ink-2'
                       }`}
                       disabled={submitting}
                     >
@@ -300,7 +301,7 @@ export default function EditVolunteerPage() {
                           className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium hover:opacity-80 ${
                             isHighlighted
                               ? getSkillColorClass(category.color)
-                              : 'border-slate-300 bg-slate-100 text-slate-600'
+                              : 'border-line-field bg-surface-sub text-ink-2'
                           }`}
                           disabled={submitting}
                         >
@@ -315,13 +316,9 @@ export default function EditVolunteerPage() {
           )}
         </div>
 
-        <button
-          type="submit"
-          disabled={submitting}
-          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-        >
+        <Button type="submit" variant="primary" disabled={submitting}>
           {submitting ? 'Mise à jour en cours...' : 'Mettre à jour le bénévole'}
-        </button>
+        </Button>
       </form>
     </section>
   );

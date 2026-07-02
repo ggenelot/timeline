@@ -540,11 +540,11 @@ export default function AdminEditMissionPage() {
   }
 
   if (loading) {
-    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
+    return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement…</p>;
   }
 
   if (!profile) {
-    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Accès refusé.'}</p>;
+    return <p style={{ fontSize: 14, color: '#D14343' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
   if (profile.role !== 'admin') {
@@ -554,7 +554,7 @@ export default function AdminEditMissionPage() {
   }
 
   if (!mission || !form) {
-    return <p style={{ fontSize: 14, color: '#dc2626' }}>{error ?? 'Mission introuvable.'}</p>;
+    return <p style={{ fontSize: 14, color: '#D14343' }}>{error ?? 'Mission introuvable.'}</p>;
   }
 
   return (

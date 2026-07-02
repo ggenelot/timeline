@@ -46,7 +46,7 @@ export function MissionActivityPanel({ acts, error = null }: Props) {
 
   if (error) {
     return (
-      <div className="rounded-md border border-red-200 bg-red-50 px-3 py-2.5 text-sm text-red-700">
+      <div className="rounded-md border border-bad/30 bg-bad-soft px-3 py-2.5 text-sm text-bad">
         Impossible de charger l&apos;activité des bénévoles : {error}
       </div>
     );
@@ -54,7 +54,7 @@ export function MissionActivityPanel({ acts, error = null }: Props) {
 
   if (acts.length === 0) {
     return (
-      <p className="py-4 text-sm text-slate-500">
+      <p className="py-4 text-sm text-ink-3">
         Aucun bénévole disponible avec une activité sur l&apos;année roulante.
       </p>
     );

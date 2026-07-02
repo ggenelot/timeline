@@ -7,7 +7,30 @@ const config: Config = {
     './lib/**/*.{js,ts,jsx,tsx,mdx}'
   ],
   theme: {
-    extend: {}
+    extend: {
+      colors: {
+        brand: { DEFAULT: '#002D74', for: '#00378F' },
+        accent: { DEFAULT: '#FF7F30', text: '#B4590F', soft: '#FFF1E7', ring: '#FBDCC4' },
+        acsso: { DEFAULT: '#AB0093', text: '#8E1279', soft: '#F8E6F4' },
+        ink: { DEFAULT: '#16203A', 2: '#5B6478', 3: '#8A93A6', 4: '#A6AEBE' },
+        surface: { DEFAULT: '#F2F5FA', card: '#FFFFFF', sub: '#F7F9FC' },
+        line: { DEFAULT: '#E6EAF2', field: '#DCE2EC', row: '#EEF1F6' },
+        ok: { bar: '#22B26B', text: '#12805A', soft: '#E9F7EF', line: '#BDE7CE' },
+        warn: { bar: '#F59E0B', text: '#B45309', soft: '#FEF3E2', line: '#F6DFB0' },
+        bad: { DEFAULT: '#D14343', soft: '#FDEAEA' },
+        // Boutons d'engagement (README §Boutons, valeurs de la maquette)
+        engage: { DEFAULT: '#059669', dark: '#15935D', hover: '#047857' }
+      },
+      fontFamily: {
+        sans: ['var(--font-source-sans)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-anton)', 'sans-serif'],
+        hand: ['var(--font-beth-ellen)', 'cursive']
+      },
+      boxShadow: {
+        card: '0 6px 18px -12px rgba(20,32,58,.2)',
+        lift: '0 8px 22px -12px rgba(20,32,58,.3)'
+      }
+    }
   },
   plugins: []
 };

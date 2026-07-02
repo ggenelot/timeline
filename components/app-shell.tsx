@@ -5,7 +5,8 @@ import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 import { Header } from '@/components/header';
-import { SidebarMenu } from '@/components/sidebar-menu';
+import { SidebarMenu, DesktopSidebar, BottomTabs, useVisibleGestionItems } from '@/components/sidebar-menu';
+import { cn } from '@/lib/cn';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -45,11 +46,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
+  const gestionItems = useVisibleGestionItems(profile);
+
   return (
-    <div className="flex min-h-screen flex-col">
-      <Header session={session} profile={profile} menuOpen={menuOpen} onToggleMenu={() => setMenuOpen((o) => !o)} />
-      <main className="mx-auto w-full max-w-4xl px-4 py-8">{children}</main>
-      <SidebarMenu open={menuOpen} onClose={() => setMenuOpen(false)} profile={profile} session={session} />
+    <div className="min-h-screen">
+      <DesktopSidebar profile={profile} session={session} gestionItems={gestionItems} />
+      <Header
+        session={session}
+        profile={profile}
+        menuOpen={menuOpen}
+        onToggleMenu={() => setMenuOpen((o) => !o)}
+      />
+      <div className={cn('flex min-h-screen flex-col', session && 'lg:pl-[250px]')}>
+        <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-24 lg:pb-8">{children}</main>
+      </div>
+      <BottomTabs session={session} />
+      <SidebarMenu
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        profile={profile}
+        session={session}
+        gestionItems={gestionItems}
+      />
     </div>
   );
 }

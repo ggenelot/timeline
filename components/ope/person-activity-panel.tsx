@@ -16,19 +16,19 @@ function ActivityRow({ activity }: { activity: OpePersonActivity }) {
     year: 'numeric',
   });
   return (
-    <li className="rounded-lg border border-slate-200 bg-white p-3" style={{ borderLeft: `3px solid ${accent}` }}>
+    <li className="rounded-[10px] border border-line bg-surface-card p-3" style={{ borderLeft: `3px solid ${accent}` }}>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: accent }}>
+        <span className="text-[11px] font-bold uppercase tracking-[0.04em]" style={{ color: accent }}>
           {activity.type.name ?? 'Événement'}
         </span>
         <StatusBadge status={activity.status} />
       </div>
-      <Link href={`/missions/${activity.mission_id}`} className="mt-0.5 block text-sm font-semibold text-slate-900 hover:underline">
+      <Link href={`/missions/${activity.mission_id}`} className="mt-0.5 block text-sm font-bold text-ink hover:underline">
         {activity.title}
       </Link>
-      <div className="mt-0.5 text-xs capitalize text-slate-500">
+      <div className="mt-0.5 text-xs capitalize text-ink-3">
         {date}{' '}
-        <span className="text-slate-400">({formatMissionDuration(activity.starts_at, activity.ends_at)})</span>
+        <span className="text-ink-4">({formatMissionDuration(activity.starts_at, activity.ends_at)})</span>
       </div>
       {activity.assignedSkill ? (
         <div className="mt-1.5">
@@ -93,23 +93,23 @@ export function PersonActivityPanel({
   const past = activities.filter((a) => a.starts_at < now); // déjà desc
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end bg-black/40" onClick={onClose} role="presentation">
+    <div className="fixed inset-0 z-50 flex justify-end bg-[rgba(12,19,38,.55)]" onClick={onClose} role="presentation">
       <aside
-        className="flex h-full w-full max-w-md flex-col bg-white shadow-2xl"
+        className="flex h-full w-full max-w-md flex-col bg-surface-card shadow-lift"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label={`Activités de ${volunteerName}`}
       >
-        <header className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+        <header className="flex items-center justify-between border-b border-line px-5 py-4">
           <div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-slate-400">Activités de</div>
-            <h2 className="text-lg font-bold text-slate-900">{volunteerName}</h2>
+            <div className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">Activités de</div>
+            <h2 className="text-lg font-bold text-ink">{volunteerName}</h2>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="rounded-[11px] border-[1.5px] border-line-field px-3 py-1.5 text-sm font-semibold text-ink-2 transition hover:bg-[#F4F6FB]"
           >
             Fermer
           </button>
@@ -117,19 +117,19 @@ export function PersonActivityPanel({
 
         <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
           {loading ? (
-            <p className="text-sm text-slate-500">Chargement…</p>
+            <p className="text-sm text-ink-3">Chargement…</p>
           ) : error ? (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+            <div className="rounded-[10px] border border-bad/30 bg-bad-soft px-3 py-2 text-sm text-bad">{error}</div>
           ) : activities.length === 0 ? (
-            <p className="text-sm text-slate-500">Aucune activité enregistrée pour cette personne.</p>
+            <p className="text-sm text-ink-3">Aucune activité enregistrée pour cette personne.</p>
           ) : (
             <>
               <section>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">
                   À venir ({upcoming.length})
                 </h3>
                 {upcoming.length === 0 ? (
-                  <p className="text-sm italic text-slate-400">Rien de prévu.</p>
+                  <p className="text-sm italic text-ink-3">Rien de prévu.</p>
                 ) : (
                   <ul className="space-y-2">
                     {upcoming.map((a) => (
@@ -139,11 +139,11 @@ export function PersonActivityPanel({
                 )}
               </section>
               <section>
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">
+                <h3 className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.08em] text-ink-3">
                   Passées ({past.length})
                 </h3>
                 {past.length === 0 ? (
-                  <p className="text-sm italic text-slate-400">Aucune activité passée.</p>
+                  <p className="text-sm italic text-ink-3">Aucune activité passée.</p>
                 ) : (
                   <ul className="space-y-2">
                     {past.map((a) => (

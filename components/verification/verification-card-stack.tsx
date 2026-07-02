@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import { MissionVerificationCard, MissionMaterielVerificationItemStatus } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 
 type PendingDecision = { status: MissionMaterielVerificationItemStatus; note: string };
 
@@ -80,7 +82,7 @@ export function VerificationCardStack({ cards, onDecide, saving }: VerificationC
         {pending.slice(1, 3).reverse().map((card, idx) => (
           <div
             key={cardKey(card)}
-            className="absolute inset-0 rounded-2xl border border-slate-200 bg-white shadow-sm"
+            className="absolute inset-0 rounded-2xl border border-line bg-surface-card shadow-card"
             style={{ transform: `scale(${0.95 + idx * 0.025}) translateY(${(2 - idx) * 6}px)`, zIndex: idx }}
           />
         ))}
@@ -91,29 +93,29 @@ export function VerificationCardStack({ cards, onDecide, saving }: VerificationC
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={resetDrag}
-          className="absolute inset-0 z-10 flex cursor-grab flex-col justify-between rounded-2xl border border-slate-300 bg-white p-5 shadow-md select-none touch-none"
+          className="absolute inset-0 z-10 flex cursor-grab flex-col justify-between rounded-2xl border border-line-field bg-surface-card p-5 shadow-lift select-none touch-none"
           style={{
             transform: `translateX(${dragX}px) rotate(${rotation}deg)`,
             transition: dragging ? 'none' : 'transform 200ms ease'
           }}
         >
           <div className="flex flex-col gap-1">
-            <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
+            <span className="text-xs font-semibold uppercase tracking-[0.04em] text-ink-3">
               {current.category_name} — {current.container_name}
             </span>
-            <span className="text-xl font-semibold text-slate-900">{current.child_name}</span>
+            <span className="text-xl font-bold text-ink">{current.child_name}</span>
             {current.expected_quantity > 1 ? (
-              <span className="text-sm text-slate-500">Quantité attendue : {current.expected_quantity}</span>
+              <span className="text-sm text-ink-2">Quantité attendue : {current.expected_quantity}</span>
             ) : null}
           </div>
 
           {dragX > 30 ? (
-            <span className="self-end rounded-full border-2 border-emerald-500 px-3 py-1 text-sm font-bold text-emerald-600">
+            <span className="self-end rounded-full border-2 border-ok-bar px-3 py-1 text-sm font-bold text-ok-text">
               PRÉSENT
             </span>
           ) : null}
           {dragX < -30 ? (
-            <span className="self-start rounded-full border-2 border-rose-500 px-3 py-1 text-sm font-bold text-rose-600">
+            <span className="self-start rounded-full border-2 border-bad px-3 py-1 text-sm font-bold text-bad">
               MANQUANT
             </span>
           ) : null}
@@ -121,32 +123,30 @@ export function VerificationCardStack({ cards, onDecide, saving }: VerificationC
       </div>
 
       {missingDraft ? (
-        <div className="w-full rounded-lg border border-rose-200 bg-rose-50 p-3">
-          <label className="mb-1 block text-xs font-medium text-rose-700">Note (optionnelle)</label>
+        <div className="w-full rounded-2xl border border-bad/30 bg-bad-soft p-3">
+          <label className="mb-1 block text-xs font-semibold text-bad">Note (optionnelle)</label>
           <textarea
             value={missingDraft.note}
             onChange={(event) => setMissingDraft({ ...missingDraft, note: event.target.value })}
             placeholder="Pourquoi est-il manquant ?"
-            className="mb-2 w-full rounded border border-rose-300 bg-white p-2 text-sm text-slate-800"
+            className="mb-2 w-full rounded-[11px] border border-line-field bg-surface-card p-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none"
             rows={2}
           />
           <div className="flex justify-end gap-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
               onClick={() => setMissingDraft(null)}
               disabled={saving}
-              className="rounded border border-slate-300 bg-white px-3 py-1.5 text-sm text-slate-700"
             >
               Annuler
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="danger"
               onClick={() => void commitMissing()}
               disabled={saving}
-              className="rounded border border-rose-400 bg-rose-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-50"
             >
               Confirmer manquant
-            </button>
+            </Button>
           </div>
         </div>
       ) : (
@@ -156,23 +156,23 @@ export function VerificationCardStack({ cards, onDecide, saving }: VerificationC
             aria-label="Manquant"
             onClick={openMissingDraft}
             disabled={saving}
-            className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-rose-500 text-2xl font-bold text-rose-600 disabled:opacity-50"
+            className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-bad text-bad transition disabled:opacity-50"
           >
-            ✕
+            <Icon name="close" size={26} />
           </button>
           <button
             type="button"
             aria-label="Présent"
             onClick={() => void commitPresent()}
             disabled={saving}
-            className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-emerald-500 text-2xl font-bold text-emerald-600 disabled:opacity-50"
+            className="flex h-14 w-14 items-center justify-center rounded-full border-2 border-ok-bar text-ok-text transition disabled:opacity-50"
           >
-            ✓
+            <Icon name="check" size={26} />
           </button>
         </div>
       )}
 
-      <span className="text-xs text-slate-400">{pending.length} item(s) restant(s)</span>
+      <span className="text-xs text-ink-3">{pending.length} item(s) restant(s)</span>
     </div>
   );
 }

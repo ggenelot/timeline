@@ -7,6 +7,8 @@ import { MissionTimelineCard } from '@/components/missions/mission-timeline-card
 import { Profile } from '@/lib/types';
 import { groupMissionsByMonth, MissionRelation } from '@/lib/mission-timeline';
 import { MissionType, MissionWithRequiredSkills, ProposalStats } from '@/components/missions/use-missions-data';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 
 type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
 
@@ -15,7 +17,7 @@ function capitalize(value: string): string {
 }
 
 function TimelineNode({ relation, typeColor }: { relation: MissionRelation; typeColor: string }) {
-  const shadow = '0 0 0 4px #f1f5f9';
+  const shadow = '0 0 0 4px #F2F5FA';
   const base = 'absolute -translate-x-1/2 -translate-y-1/2';
   const position = { left: 24, top: 28 } as const;
 
@@ -33,7 +35,7 @@ function TimelineNode({ relation, typeColor }: { relation: MissionRelation; type
   if (relation === 'engaged') {
     return (
       <span
-        className={`${base} rounded-full bg-white`}
+        className={`${base} rounded-full bg-surface-card`}
         style={{ ...position, width: 16, height: 16, border: '3px solid #059669', boxShadow: shadow }}
       />
     );
@@ -43,7 +45,7 @@ function TimelineNode({ relation, typeColor }: { relation: MissionRelation; type
     return (
       <span
         className={`${base} rounded-full`}
-        style={{ ...position, width: 14, height: 14, background: '#f1f5f9', border: '2px solid #cbd5e1', boxShadow: shadow }}
+        style={{ ...position, width: 14, height: 14, background: '#F2F5FA', border: '2px solid #A6AEBE', boxShadow: shadow }}
       />
     );
   }
@@ -132,32 +134,28 @@ export function VolunteerTimelineView({
   const monthGroups = useMemo(() => groupMissionsByMonth(benevoleVisibleMissions), [benevoleVisibleMissions]);
 
   const filterCards: Array<{ key: BenevoleStatusFilter; label: string; count: number; color: string }> = [
-    { key: 'all', label: 'Toutes', count: benevoleCounts.total, color: '#0f172a' },
-    { key: 'pending', label: 'Réponses en attente', count: benevoleCounts.pending, color: '#b45309' },
-    { key: 'engaged', label: 'Mes engagements', count: benevoleCounts.engaged, color: '#047857' },
+    { key: 'all', label: 'Toutes', count: benevoleCounts.total, color: '#16203A' },
+    { key: 'pending', label: 'Réponses en attente', count: benevoleCounts.pending, color: '#B45309' },
+    { key: 'engaged', label: 'Mes engagements', count: benevoleCounts.engaged, color: '#12805A' },
     { key: 'retenu', label: 'Mes missions', count: benevoleCounts.retenu, color: '#059669' }
   ];
 
   return (
     <div className="mx-auto w-full max-w-[880px]">
-      {error ? <div className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="mb-4 rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#0f172a]">Missions</h1>
-          <p className="mt-1 text-sm text-[#64748b]">
+          <h1 className="text-[26px] font-bold tracking-[-0.02em] text-ink">Missions</h1>
+          <p className="mt-1 text-sm text-ink-2">
             {subtitleStats.total} mission{subtitleStats.total > 1 ? 's' : ''} proposée{subtitleStats.total > 1 ? 's' : ''} ·{' '}
             {subtitleStats.pending} en attente de votre réponse
           </p>
         </div>
         {canCreateMissionTypeIds.length > 0 ? (
-          <button
-            type="button"
-            onClick={() => router.push('/missions/create')}
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
-          >
+          <Button variant="primary" icon="add" onClick={() => router.push('/missions/create')}>
             Proposer une mission
-          </button>
+          </Button>
         ) : null}
       </div>
 
@@ -170,16 +168,15 @@ export function VolunteerTimelineView({
               key={card.key}
               type="button"
               onClick={() => setBenevoleStatusFilter(card.key)}
-              className={`flex-1 basis-[160px] rounded-[14px] bg-white px-4 py-[14px] text-left transition ${
-                active
-                  ? 'border-[1.5px] border-[#0f172a] shadow-[0_2px_8px_rgba(15,23,42,0.06)]'
-                  : 'border border-[#e7e9ee]'
-              }`}
+              className={cn(
+                'flex-1 basis-[160px] rounded-2xl bg-surface-card px-4 py-[14px] text-left transition hover:-translate-y-px hover:shadow-lift',
+                active ? 'border-[1.5px] border-brand shadow-card' : 'border border-line'
+              )}
             >
-              <div className="text-[26px] font-bold leading-none" style={{ color: card.color }}>
+              <div className="font-display text-[30px] leading-none" style={{ color: card.color }}>
                 {card.count}
               </div>
-              <div className={`mt-1.5 text-[12.5px] font-semibold ${active ? 'text-[#0f172a]' : 'text-[#64748b]'}`}>{card.label}</div>
+              <div className={cn('mt-1.5 text-[12.5px] font-semibold', active ? 'text-ink' : 'text-ink-2')}>{card.label}</div>
             </button>
           );
         })}
@@ -190,11 +187,14 @@ export function VolunteerTimelineView({
         <button
           type="button"
           onClick={() => onChangeTypeFilter('all')}
-          className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
-            selectedTypeId === 'all' ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
-          }`}
+          className={cn(
+            'inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition',
+            selectedTypeId === 'all'
+              ? 'border border-brand bg-brand font-semibold text-white'
+              : 'border border-line bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
+          )}
         >
-          <span className="h-[7px] w-[7px] rounded-full bg-[#94a3b8]" />
+          <span className="h-[7px] w-[7px] rounded-full bg-ink-3" />
           Tous les types
         </button>
         {missionTypes.map((missionType) => {
@@ -204,11 +204,14 @@ export function VolunteerTimelineView({
               key={missionType.id}
               type="button"
               onClick={() => onChangeTypeFilter(missionType.id)}
-              className={`inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition ${
-                active ? 'border border-[#0f172a] bg-[#0f172a] font-semibold text-white' : 'border border-[#e2e8f0] bg-white font-medium text-[#475569]'
-              }`}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full px-[13px] py-1.5 text-[13px] transition',
+                active
+                  ? 'border border-brand bg-brand font-semibold text-white'
+                  : 'border border-line bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
+              )}
             >
-              <span className="h-[7px] w-[7px] rounded-full" style={{ background: typeColorById.get(missionType.id) ?? '#64748b' }} />
+              <span className="h-[7px] w-[7px] rounded-full" style={{ background: typeColorById.get(missionType.id) ?? '#5B6478' }} />
               {missionType.name}
             </button>
           );
@@ -217,8 +220,8 @@ export function VolunteerTimelineView({
 
       {/* Brouillons proposés par le bénévole (en attente de validation) */}
       {draftProposals.length > 0 ? (
-        <section className="mt-5 space-y-2 rounded-lg border border-amber-200 bg-amber-50/40 p-3">
-          <h2 className="text-sm font-semibold text-amber-900">Mes propositions en attente de validation ({draftProposals.length})</h2>
+        <section className="mt-5 space-y-2 rounded-2xl border border-warn-line bg-warn-soft p-3">
+          <h2 className="text-sm font-bold text-warn-text">Mes propositions en attente de validation ({draftProposals.length})</h2>
           {draftProposals.map((mission) => (
             <MissionCard
               key={mission.id}
@@ -239,34 +242,34 @@ export function VolunteerTimelineView({
 
       {/* Frise */}
       <div className="relative mt-6">
-        <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-[#e3e7ee]" />
+        <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-line" />
 
         {/* Repère Aujourd'hui */}
         <div className="relative pb-6 pl-14">
           <span
-            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-[#f1f5f9]"
-            style={{ left: 24, top: 11, width: 12, height: 12, border: '2px solid #94a3b8' }}
+            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface"
+            style={{ left: 24, top: 11, width: 12, height: 12, border: '2px solid #8A93A6' }}
           />
           <div className="flex flex-wrap items-baseline gap-2">
-            <span className="text-[12px] font-bold uppercase tracking-[0.12em] text-[#94a3b8]">Aujourd&apos;hui</span>
-            <span className="text-[13px] text-[#94a3b8]">{todayLabel}</span>
+            <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-3">Aujourd&apos;hui</span>
+            <span className="text-[13px] text-ink-3">{todayLabel}</span>
           </div>
         </div>
 
         {monthGroups.length === 0 ? (
-          <div className="ml-14 rounded-[14px] border border-dashed border-[#cbd5e1] bg-white p-7 text-center text-sm text-[#94a3b8]">
+          <div className="ml-14 rounded-2xl border border-dashed border-line-field bg-surface-card p-7 text-center text-sm text-ink-3">
             Aucune mission dans cette catégorie.
           </div>
         ) : (
           monthGroups.map((group) => (
             <div key={group.key}>
-              <div className="relative py-2 pl-14 text-[12px] font-bold uppercase tracking-[0.14em] text-[#94a3b8]">
+              <div className="relative py-2 pl-14 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-3">
                 {capitalize(group.label)}
               </div>
               <div className="space-y-4">
                 {group.missions.map((mission) => {
                   const relation = relationByMission.get(mission.id) ?? 'pending';
-                  const typeColor = typeColorById.get(mission.mission_type_id) ?? '#64748b';
+                  const typeColor = typeColorById.get(mission.mission_type_id) ?? '#5B6478';
                   return (
                     <div key={mission.id} className="relative pl-14">
                       <TimelineNode relation={relation} typeColor={typeColor} />

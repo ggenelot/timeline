@@ -5,6 +5,9 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { MissionStatus, MissionType, Profile, RoleBehaviorResourceType, RoleBehaviorType } from '@/lib/types';
 import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 
 type Role = {
   id: string;
@@ -335,11 +338,11 @@ export default function AdminRolesPage() {
 
   // ---- Render ----
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
 
   if (!profile || profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-xl border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs.
       </div>
     );
@@ -366,52 +369,49 @@ export default function AdminRolesPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Rôles</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Définissez les rôles qui structurent les droits et comportements des bénévoles. Les rôles sont cumulables.
-        </p>
-      </header>
+      <PageHeader
+        title="Rôles"
+        subtitle="Définissez les rôles qui structurent les droits et comportements des bénévoles. Les rôles sont cumulables."
+      />
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {successMsg ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{successMsg}</div> : null}
+      {error ? <div className="rounded-xl border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
+      {successMsg ? <div className="rounded-xl border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{successMsg}</div> : null}
 
       {/* Create role form */}
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">Créer un rôle</h2>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+      <section className="rounded-2xl border border-line bg-surface-card p-5 shadow-card md:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Créer un rôle</h2>
+        <div className="rounded-xl border border-line bg-surface-card p-4 shadow-card">
           <div className="flex flex-col gap-3 sm:flex-row">
             <input
               type="text"
               placeholder="Nom du rôle (ex : Chef de poste)"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
             <input
               type="text"
               placeholder="Description (optionnel)"
               value={newDescription}
               onChange={(e) => setNewDescription(e.target.value)}
-              className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
             />
           </div>
           <div className="mt-3 flex justify-end">
-            <button
+            <Button
               type="button"
               onClick={handleCreate}
               disabled={!newName.trim() || creating}
-              className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {creating ? 'Création...' : 'Créer'}
-            </button>
+            </Button>
           </div>
         </div>
       </section>
 
       {/* Roles list */}
       {data.roles.length === 0 ? (
-        <p className="text-sm text-slate-400">Aucun rôle défini.</p>
+        <p className="text-sm text-ink-3">Aucun rôle défini.</p>
       ) : (
         <div className="space-y-6">
           {data.roles.map((role) => {
@@ -424,7 +424,7 @@ export default function AdminRolesPage() {
             const behaviorForm = getBehaviorForm(role.id);
 
             return (
-              <div key={role.id} className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
+              <div key={role.id} className="rounded-2xl border border-line bg-surface-card p-5 shadow-card md:p-6">
                 {/* Role header */}
                 {isEditing ? (
                   <div className="mb-4 space-y-3">
@@ -433,46 +433,47 @@ export default function AdminRolesPage() {
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       />
                       <input
                         type="text"
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         placeholder="Description (optionnel)"
-                        className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
                       />
                     </div>
                     <div className="flex gap-2">
-                      <button
+                      <Button
                         type="button"
                         onClick={() => handleSaveEdit(role.id)}
                         disabled={!editName.trim() || saving}
-                        className="rounded-lg bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800 disabled:opacity-60"
+                        className="px-3 py-1.5"
                       >
                         {saving ? 'Enregistrement...' : 'Enregistrer'}
-                      </button>
-                      <button
+                      </Button>
+                      <Button
                         type="button"
+                        variant="ghost"
                         onClick={() => setEditingId(null)}
-                        className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+                        className="px-3 py-1.5"
                       >
                         Annuler
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className="font-semibold text-slate-800">{role.name}</p>
+                        <p className="font-semibold text-ink">{role.name}</p>
                         {role.is_default && (
-                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                          <span className="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn-text">
                             Rôle par défaut
                           </span>
                         )}
                       </div>
-                      {role.description ? <p className="text-sm text-slate-500">{role.description}</p> : null}
+                      {role.description ? <p className="text-sm text-ink-2">{role.description}</p> : null}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
                       <button
@@ -481,8 +482,8 @@ export default function AdminRolesPage() {
                         disabled={settingDefault[role.id]}
                         className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
                           role.is_default
-                            ? 'border-amber-200 text-amber-700 hover:bg-amber-50'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
+                            ? 'border-warn-line text-warn-text hover:bg-warn-soft'
+                            : 'border-line text-ink-2 hover:bg-surface-sub'
                         }`}
                       >
                         {settingDefault[role.id]
@@ -498,7 +499,7 @@ export default function AdminRolesPage() {
                           setEditName(role.name);
                           setEditDescription(role.description ?? '');
                         }}
-                        className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                        className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 hover:bg-surface-sub"
                       >
                         Modifier
                       </button>
@@ -506,7 +507,7 @@ export default function AdminRolesPage() {
                         <button
                           type="button"
                           onClick={() => handleDelete(role.id, role.name)}
-                          className="rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                          className="rounded-md border border-bad/30 px-2.5 py-1 text-xs text-bad hover:bg-bad-soft"
                         >
                           Supprimer
                         </button>
@@ -517,28 +518,28 @@ export default function AdminRolesPage() {
 
                 {/* Volunteers section */}
                 <div className="mb-5">
-                  <p className="mb-2 text-sm font-medium text-slate-700">Bénévoles</p>
+                  <p className="mb-2 text-sm font-medium text-ink-2">Bénévoles</p>
                   {holders.length > 0 ? (
                     <div className="mb-3 flex flex-wrap gap-1.5">
                       {holders.map((h) => (
                         <span
                           key={h.id}
-                          className="inline-flex items-center gap-1 rounded-full bg-emerald-100 py-0.5 pl-2.5 pr-1 text-xs font-medium text-emerald-800"
+                          className="inline-flex items-center gap-1 rounded-full border border-ok-line bg-ok-soft py-0.5 pl-2.5 pr-1 text-xs font-medium text-ok-text"
                         >
                           {h.full_name ?? h.email}
                           <button
                             type="button"
                             onClick={() => handleRemoveVolunteer(role.id, h.id)}
-                            className="ml-0.5 flex items-center rounded-full p-0.5 hover:bg-emerald-200"
+                            className="ml-0.5 flex items-center rounded-full p-0.5 hover:bg-ok-line"
                             aria-label={`Retirer ${h.full_name ?? h.email}`}
                           >
-                            ✕
+                            <Icon name="close" size={13} />
                           </button>
                         </span>
                       ))}
                     </div>
                   ) : (
-                    <p className="mb-3 text-xs text-slate-400">Aucun bénévole dans ce rôle.</p>
+                    <p className="mb-3 text-xs text-ink-3">Aucun bénévole dans ce rôle.</p>
                   )}
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <SearchableSelect
@@ -550,51 +551,50 @@ export default function AdminRolesPage() {
                       emptyLabel="— Ajouter un bénévole —"
                       className="flex-1"
                     />
-                    <button
+                    <Button
                       type="button"
                       onClick={() => handleAssignVolunteer(role.id)}
                       disabled={!assignProfileIds[role.id] || assigning[role.id]}
-                      className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       {assigning[role.id] ? 'Ajout...' : 'Ajouter'}
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
                 {/* Behaviors section */}
                 <div>
-                  <p className="mb-2 text-sm font-medium text-slate-700">Comportements</p>
+                  <p className="mb-2 text-sm font-medium text-ink-2">Comportements</p>
                   {behaviors.length > 0 ? (
                     <div className="mb-3 space-y-2">
                       {behaviors.map((b) => (
                         <div
                           key={b.id}
-                          className="flex flex-col gap-2 rounded-xl border border-violet-100 bg-violet-50 px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
+                          className="flex flex-col gap-2 rounded-xl border border-[#E9C9E4] bg-acsso-soft px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between"
                         >
                           <div className="min-w-0 flex-1">
                             <div className="flex items-center gap-1.5">
-                              <span className="rounded-full bg-slate-800 px-2 py-0.5 text-xs font-medium text-white">
+                              <span className="rounded-full bg-brand px-2 py-0.5 text-xs font-medium text-white">
                                 {RESOURCE_TYPE_LABELS[b.resource_type]}
                               </span>
-                              <p className="text-xs font-semibold text-violet-800">{BEHAVIOR_LABELS[b.behavior_type]}</p>
+                              <p className="text-xs font-semibold text-acsso-text">{BEHAVIOR_LABELS[b.behavior_type]}</p>
                             </div>
                             {b.resource_type === 'mission' && (
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {b.mission_type_ids.length === 0 ? (
-                                  <span className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">Tous les types</span>
+                                  <span className="rounded-full bg-line px-2 py-0.5 text-xs text-ink-2">Tous les types</span>
                                 ) : (
                                   b.mission_type_ids.map((id) => (
-                                    <span key={id} className="rounded-full bg-slate-200 px-2 py-0.5 text-xs text-slate-600">
+                                    <span key={id} className="rounded-full bg-line px-2 py-0.5 text-xs text-ink-2">
                                       {missionTypeById.get(id)?.name ?? id}
                                     </span>
                                   ))
                                 )}
                                 {b.behavior_type === 'can_see' && (
                                   b.mission_statuses.length === 0 ? (
-                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">Tous les statuts</span>
+                                    <span className="rounded-full border border-accent-ring bg-accent-soft px-2 py-0.5 text-xs text-accent-text">Tous les statuts</span>
                                   ) : (
                                     b.mission_statuses.map((s) => (
-                                      <span key={s} className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-700">
+                                      <span key={s} className="rounded-full border border-accent-ring bg-accent-soft px-2 py-0.5 text-xs text-accent-text">
                                         {ALL_MISSION_STATUSES.find((ms) => ms.value === s)?.label ?? s}
                                       </span>
                                     ))
@@ -606,21 +606,21 @@ export default function AdminRolesPage() {
                           <button
                             type="button"
                             onClick={() => handleDeleteBehavior(role.id, b.id)}
-                            className="shrink-0 self-start rounded-md border border-violet-200 px-2 py-0.5 text-xs text-violet-700 hover:bg-violet-100 sm:self-auto"
+                            className="shrink-0 self-start rounded-md border border-[#E9C9E4] px-2 py-0.5 text-xs text-acsso-text hover:bg-acsso-soft sm:self-auto"
                             aria-label="Supprimer ce comportement"
                           >
-                            ✕
+                            <Icon name="close" size={13} />
                           </button>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <p className="mb-3 text-xs text-slate-400">Aucun comportement défini.</p>
+                    <p className="mb-3 text-xs text-ink-3">Aucun comportement défini.</p>
                   )}
 
                   {/* Add behavior form */}
-                  <div className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm">
-                    <p className="mb-2 text-xs font-medium text-slate-600">Ajouter un comportement</p>
+                  <div className="rounded-xl border border-line bg-surface-card p-3 shadow-card">
+                    <p className="mb-2 text-xs font-medium text-ink-2">Ajouter un comportement</p>
                     <div className="mb-3">
                       <select
                         value={behaviorForm.resourceType}
@@ -630,7 +630,7 @@ export default function AdminRolesPage() {
                           missionTypeIds: [],
                           missionStatuses: [],
                         })}
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
                         {(['mission', 'cursus'] as RoleBehaviorResourceType[]).map((rt) => (
                           <option key={rt} value={rt}>{RESOURCE_TYPE_LABELS[rt]}</option>
@@ -641,7 +641,7 @@ export default function AdminRolesPage() {
                       <select
                         value={behaviorForm.type}
                         onChange={(e) => setBehaviorForm(role.id, { type: e.target.value as RoleBehaviorType | '', missionTypeIds: [], missionStatuses: [] })}
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                        className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
                         <option value="">— Choisir un type de comportement —</option>
                         {(behaviorForm.resourceType === 'cursus' ? CURSUS_BEHAVIOR_TYPES : ALL_BEHAVIOR_TYPES).map((bt) => (
@@ -649,22 +649,22 @@ export default function AdminRolesPage() {
                         ))}
                       </select>
                       {behaviorForm.type ? (
-                        <p className="mt-1 text-xs text-slate-500">{BEHAVIOR_DESCRIPTIONS[behaviorForm.type]}</p>
+                        <p className="mt-1 text-xs text-ink-2">{BEHAVIOR_DESCRIPTIONS[behaviorForm.type]}</p>
                       ) : null}
                     </div>
 
                     {behaviorForm.type && behaviorForm.resourceType === 'mission' ? (
                       <div className="mb-3 space-y-3">
                         <div>
-                          <p className="mb-1.5 text-xs font-medium text-slate-600">Types de missions concernés</p>
+                          <p className="mb-1.5 text-xs font-medium text-ink-2">Types de missions concernés</p>
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
                               onClick={() => setBehaviorForm(role.id, { missionTypeIds: [] })}
                               className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                                 behaviorForm.missionTypeIds.length === 0
-                                  ? 'border-violet-400 bg-violet-100 text-violet-800'
-                                  : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                  ? 'border-[#E9C9E4] bg-acsso-soft text-acsso-text'
+                                  : 'border-line bg-surface-sub text-ink-2 hover:bg-line-row'
                               }`}
                             >
                               Tous les types
@@ -679,8 +679,8 @@ export default function AdminRolesPage() {
                                 }}
                                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                                   behaviorForm.missionTypeIds.includes(mt.id)
-                                    ? 'border-violet-400 bg-violet-100 text-violet-800'
-                                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                    ? 'border-[#E9C9E4] bg-acsso-soft text-acsso-text'
+                                    : 'border-line bg-surface-sub text-ink-2 hover:bg-line-row'
                                 }`}
                               >
                                 {mt.name}
@@ -691,15 +691,15 @@ export default function AdminRolesPage() {
 
                         {behaviorForm.type === 'can_see' && (
                           <div>
-                            <p className="mb-1.5 text-xs font-medium text-slate-600">Statuts visibles</p>
+                            <p className="mb-1.5 text-xs font-medium text-ink-2">Statuts visibles</p>
                             <div className="flex flex-wrap gap-2">
                               <button
                                 type="button"
                                 onClick={() => setBehaviorForm(role.id, { missionStatuses: [] })}
                                 className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                                   behaviorForm.missionStatuses.length === 0
-                                    ? 'border-blue-400 bg-blue-100 text-blue-800'
-                                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                    ? 'border-accent-ring bg-accent-soft text-accent-text'
+                                    : 'border-line bg-surface-sub text-ink-2 hover:bg-line-row'
                                 }`}
                               >
                                 Tous les statuts
@@ -714,8 +714,8 @@ export default function AdminRolesPage() {
                                   }}
                                   className={`rounded-full border px-3 py-1 text-xs font-medium transition-colors ${
                                     behaviorForm.missionStatuses.includes(ms.value)
-                                      ? 'border-blue-400 bg-blue-100 text-blue-800'
-                                      : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                                      ? 'border-accent-ring bg-accent-soft text-accent-text'
+                                      : 'border-line bg-surface-sub text-ink-2 hover:bg-line-row'
                                   }`}
                                 >
                                   {ms.label}
@@ -728,14 +728,13 @@ export default function AdminRolesPage() {
                     ) : null}
 
                     <div className="flex justify-end">
-                      <button
+                      <Button
                         type="button"
                         onClick={() => handleAddBehavior(role.id)}
                         disabled={!behaviorForm.type || addingBehavior[role.id]}
-                        className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                       >
                         {addingBehavior[role.id] ? 'Ajout...' : 'Ajouter le comportement'}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>

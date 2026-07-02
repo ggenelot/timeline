@@ -18,10 +18,10 @@ export function ActivityTooltip({ x, y, profileName, typeName, hours, sharePerce
   return (
     <div
       role="tooltip"
-      className="pointer-events-none fixed z-50 min-w-52 max-w-72 rounded-lg border border-slate-200 bg-white p-3 text-xs text-slate-700 shadow-xl"
+      className="pointer-events-none fixed z-50 min-w-52 max-w-72 rounded-lg border border-line bg-surface-card p-3 text-xs text-ink-2 shadow-lift"
       style={{ left: x + 14, top: y - 8 }}
     >
-      <p className="font-semibold text-slate-900">{profileName}</p>
+      <p className="font-semibold text-ink">{profileName}</p>
       {typeName ? (
         <p className="mt-0.5 flex items-center gap-1.5">
           <span
@@ -36,11 +36,11 @@ export function ActivityTooltip({ x, y, profileName, typeName, hours, sharePerce
         {hours.toFixed(1)} h{sharePercent !== undefined ? ` · ${sharePercent.toFixed(0)} %` : ''}
       </p>
       {acts.length > 0 ? (
-        <ul className="mt-2 space-y-1 border-t border-slate-100 pt-2">
+        <ul className="mt-2 space-y-1 border-t border-line-row pt-2">
           {acts.map((act, i) => (
             <li key={i} className="flex items-start justify-between gap-2">
-              <span className="text-slate-600">{act.missionTitle}</span>
-              <span className="shrink-0 text-slate-400">
+              <span className="text-ink-2">{act.missionTitle}</span>
+              <span className="shrink-0 text-ink-3">
                 {new Date(act.missionDate).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}
                 {' · '}
                 {act.hours}h

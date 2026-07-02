@@ -20,6 +20,11 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/cn';
 import { Profile, Skill, SkillCategory, SkillStatus } from '@/lib/types';
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
@@ -27,16 +32,20 @@ import { Profile, Skill, SkillCategory, SkillStatus } from '@/lib/types';
 // que les couleurs choisies ici se retrouvent identiques partout ailleurs.
 
 const CATEGORY_PALETTE: Record<string, { accent: string; soft: string; softBorder: string }> = {
-  slate: { accent: '#475569', soft: '#f1f5f9', softBorder: '#e2e8f0' },
-  amber: { accent: '#d97706', soft: '#fffbeb', softBorder: '#fde68a' },
-  sky: { accent: '#0284c7', soft: '#f0f9ff', softBorder: '#bae6fd' },
-  violet: { accent: '#7c3aed', soft: '#f5f3ff', softBorder: '#ddd6fe' },
-  emerald: { accent: '#059669', soft: '#ecfdf5', softBorder: '#a7f3d0' },
-  pink: { accent: '#db2777', soft: '#fdf2f8', softBorder: '#fbcfe8' },
-  rose: { accent: '#e11d48', soft: '#fff1f2', softBorder: '#fecdd3' },
-  orange: { accent: '#ea580c', soft: '#fff7ed', softBorder: '#fed7aa' },
-  cyan: { accent: '#0891b2', soft: '#ecfeff', softBorder: '#a5f3fc' },
-  indigo: { accent: '#4f46e5', soft: '#eef2ff', softBorder: '#c7d2fe' },
+  slate: { accent: '#5B6478', soft: '#F4F6FA', softBorder: '#E5E9F0' },
+  amber: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  orange: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  sky: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  blue: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  indigo: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  emerald: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  teal: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  cyan: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  green: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  violet: { accent: '#7A2E86', soft: '#F5EDFA', softBorder: '#E3D6EF' },
+  pink: { accent: '#8E1279', soft: '#F8E6F4', softBorder: '#E9C9E4' },
+  rose: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
+  red: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
 };
 
 function palette(color: string) {
@@ -62,28 +71,6 @@ type CategoryModalState = { id?: string; name: string; color: string };
 type SkillModalState = { categoryId: string; id?: string; code: string; name: string; description: string };
 type StatusModalState = { id?: string; label: string; color: string; mark: string; isValidating: boolean };
 
-// ── Bouton interrupteur ─────────────────────────────────────────
-
-function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-  return (
-    <button
-      type="button"
-      onClick={() => onChange(!value)}
-      style={{
-        position: 'relative', flexShrink: 0, width: 40, height: 23, border: 'none', borderRadius: 99,
-        cursor: 'pointer', background: value ? '#059669' : '#cbd5e1',
-      }}
-      aria-checked={value}
-      role="switch"
-    >
-      <span style={{
-        position: 'absolute', top: 2, left: value ? 19 : 2, width: 19, height: 19, borderRadius: '50%',
-        background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.25)', transition: 'left 0.15s',
-      }} />
-    </button>
-  );
-}
-
 // ── Poignée de glisser-déposer ───────────────────────────────────
 
 function DragHandle({ attributes, listeners, style }: {
@@ -96,9 +83,10 @@ function DragHandle({ attributes, listeners, style }: {
       {...attributes}
       {...listeners}
       title="Glisser pour réordonner"
-      style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
+      className="shrink-0 cursor-grab touch-none leading-none"
+      style={style}
     >
-      ⠿⠿
+      <Icon name="drag_indicator" className="text-ink-3" />
     </span>
   );
 }
@@ -107,7 +95,7 @@ function DragHandle({ attributes, listeners, style }: {
 
 function ColorSwatches({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+    <div className="flex flex-wrap gap-[9px]">
       {AVAILABLE_COLORS.map((c) => {
         const active = value === c.value;
         return (
@@ -117,11 +105,11 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
             onClick={() => onChange(c.value)}
             title={c.label}
             aria-label={c.label}
-            style={{
-              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', background: palette(c.value).accent,
-              border: active ? '2px solid #0f172a' : '2px solid transparent', boxShadow: active ? '0 0 0 2px #fff inset' : 'none',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12,
-            }}
+            className={cn(
+              'inline-flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border-2 text-xs text-white',
+              active ? 'border-brand shadow-[0_0_0_2px_#fff_inset]' : 'border-transparent'
+            )}
+            style={{ background: palette(c.value).accent }}
           >
             {active ? '✓' : ''}
           </button>
@@ -144,21 +132,23 @@ function Modal({ title, subtitle, onClose, children, onSubmit, submitLabel, subm
 }) {
   return (
     <div
-      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '56px 18px', overflowY: 'auto' }}
+      className="fixed inset-0 z-[100] flex items-start justify-center overflow-y-auto bg-[rgba(12,19,38,.55)] px-[18px] py-14"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{ width: '100%', maxWidth: 520, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
+      <div className="w-full max-w-[520px] overflow-hidden rounded-[18px] bg-surface-card shadow-lift">
+        <div className="flex items-start justify-between gap-3 border-b border-line-row px-5 pb-[14px] pt-[18px]">
           <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
-            {subtitle ? <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b' }}>{subtitle}</div> : null}
+            <div className="text-[17px] font-extrabold text-ink">{title}</div>
+            {subtitle ? <div className="mt-[3px] text-[12.5px] text-ink-2">{subtitle}</div> : null}
           </div>
-          <button type="button" onClick={onClose} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
+          <button type="button" onClick={onClose} className="flex h-[30px] w-[30px] shrink-0 cursor-pointer items-center justify-center rounded-lg bg-surface-sub text-ink-2">
+            <Icon name="close" size={18} />
+          </button>
         </div>
-        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #eef1f5', background: '#fafbfc' }}>
-          <button type="button" onClick={onClose} style={{ cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>Annuler</button>
-          <button type="button" onClick={onSubmit} disabled={submitDisabled} style={{ cursor: submitDisabled ? 'not-allowed' : 'pointer', border: 'none', background: submitDisabled ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitDisabled ? 0.6 : 1 }}>{submitLabel}</button>
+        <div className="flex flex-col gap-4 px-5 py-[18px]">{children}</div>
+        <div className="flex items-center justify-end gap-2.5 border-t border-line-row bg-surface-sub px-5 py-[14px]">
+          <Button variant="ghost" onClick={onClose}>Annuler</Button>
+          <Button variant="engage" onClick={onSubmit} disabled={submitDisabled}>{submitLabel}</Button>
         </div>
       </div>
     </div>
@@ -166,10 +156,10 @@ function Modal({ title, subtitle, onClose, children, onSubmit, submitLabel, subm
 }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>{children}</div>;
+  return <div className="mb-[7px] text-[12.5px] font-bold text-ink-2">{children}</div>;
 }
 
-const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' };
+const inputClass = 'w-full rounded-[9px] border border-line-field px-3 py-2.5 text-sm text-ink outline-none';
 
 // ── Ligne de compétence triable ──────────────────────────────────
 
@@ -184,32 +174,34 @@ function SortableSkillRow({ skill, color, onEdit, onRemove }: {
   return (
     <div
       ref={setNodeRef}
+      className={cn(
+        'flex items-start gap-2.5 rounded-xl border border-line-row bg-surface-sub px-[13px] py-[11px]',
+        isDragging ? 'opacity-60 shadow-lift' : ''
+      )}
       style={{
-        transform: CSS.Transform.toString(transform), transition, display: 'flex', alignItems: 'flex-start', gap: 10,
-        border: '1px solid #eef1f5', borderRadius: 12, padding: '11px 13px', background: '#fcfcfd',
-        opacity: isDragging ? 0.6 : 1, boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none', zIndex: isDragging ? 1 : 'auto',
+        transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 1 : 'auto',
       }}
     >
       <DragHandle attributes={attributes} listeners={listeners} style={{ marginTop: 3 }} />
-      <span style={{
-        flexShrink: 0, minWidth: 52, textAlign: 'center', fontSize: 12.5, fontWeight: 800, color: p.accent,
-        background: p.soft, border: `1px solid ${p.softBorder}`, borderRadius: 7, padding: '4px 8px', marginTop: 1,
-      }}>
+      <span
+        className="mt-px min-w-[52px] shrink-0 rounded-[7px] border px-2 py-1 text-center text-[12.5px] font-extrabold"
+        style={{ color: p.accent, background: p.soft, borderColor: p.softBorder }}
+      >
         {skill.code || '—'}
       </span>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{skill.name}</div>
+      <div className="min-w-0 flex-1">
+        <div className="text-sm font-bold text-ink">{skill.name}</div>
         {skill.description ? (
-          <div style={{ marginTop: 3, fontSize: 12.5, color: '#64748b', lineHeight: 1.45 }}>{skill.description}</div>
+          <div className="mt-[3px] text-[12.5px] leading-snug text-ink-2">{skill.description}</div>
         ) : null}
       </div>
-      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+      <span className="inline-flex shrink-0 items-center gap-1">
         <button type="button" onClick={onEdit}
-          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+          className="cursor-pointer rounded-[7px] border border-line-field bg-surface-card px-2.5 py-[5px] text-xs font-bold text-ink-2">
           Modifier
         </button>
         <button type="button" onClick={onRemove} aria-label="Supprimer"
-          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+          className="cursor-pointer bg-transparent px-1.5 py-1 text-[15px] text-bad">✕</button>
       </span>
     </div>
   );
@@ -233,42 +225,44 @@ function SortableCategoryCard({ category, sensors, onSkillDragEnd, onEditCategor
   return (
     <div
       ref={setNodeRef}
+      className={cn(
+        'relative mb-4 overflow-hidden rounded-2xl border border-line bg-surface-card',
+        isDragging ? 'opacity-85 shadow-lift' : 'shadow-card'
+      )}
       style={{
-        transform: CSS.Transform.toString(transform), transition, background: '#fff', border: '1px solid #e7e9ee',
-        borderRadius: 16, boxShadow: isDragging ? '0 12px 30px rgba(15,23,42,.16)' : '0 2px 10px rgba(15,23,42,.05)',
-        marginBottom: 16, overflow: 'hidden', opacity: isDragging ? 0.85 : 1, zIndex: isDragging ? 5 : 'auto', position: 'relative',
+        transform: CSS.Transform.toString(transform), transition, zIndex: isDragging ? 5 : 'auto',
       }}
     >
-      <div style={{ padding: '16px 22px 15px', borderBottom: '1px solid #eef1f5' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 11, flexWrap: 'wrap' }}>
+      <div className="border-b border-line-row px-[22px] pb-[15px] pt-4">
+        <div className="flex flex-wrap items-center gap-[11px]">
           <DragHandle attributes={attributes} listeners={listeners} />
-          <span style={{ flexShrink: 0, width: 12, height: 12, borderRadius: '50%', background: p.accent }} />
-          <span style={{ fontSize: 16, fontWeight: 800, color: '#0f172a' }}>{category.name}</span>
-          <span style={{
-            fontSize: 11.5, fontWeight: 700, color: p.accent, background: p.soft, border: `1px solid ${p.softBorder}`,
-            borderRadius: 99, padding: '2px 9px',
-          }}>
+          <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.accent }} />
+          <span className="text-base font-extrabold text-ink">{category.name}</span>
+          <span
+            className="rounded-full border px-[9px] py-0.5 text-[11.5px] font-bold"
+            style={{ color: p.accent, background: p.soft, borderColor: p.softBorder }}
+          >
             {category.skills.length} compétence{category.skills.length !== 1 ? 's' : ''}
           </span>
-          <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+          <span className="ml-auto inline-flex items-center gap-1.5">
             <button type="button" onClick={onEditCategory}
-              style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+              className="cursor-pointer rounded-[7px] border border-line-field bg-surface-card px-2.5 py-[5px] text-xs font-bold text-ink-2">
               Modifier
             </button>
             <button type="button" onClick={onDeleteCategory}
-              style={{ cursor: 'pointer', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+              className="cursor-pointer rounded-[7px] border border-bad/30 bg-surface-card px-2.5 py-[5px] text-xs font-bold text-bad">
               Supprimer
             </button>
           </span>
         </div>
       </div>
 
-      <div style={{ padding: '14px 22px 18px' }}>
+      <div className="px-[22px] pb-[18px] pt-[14px]">
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onSkillDragEnd}>
           <SortableContext items={category.skills.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div className="flex flex-col gap-2">
               {category.skills.length === 0 ? (
-                <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucune compétence dans cette catégorie.</div>
+                <div className="p-0.5 text-[12.5px] text-ink-3">Aucune compétence dans cette catégorie.</div>
               ) : category.skills.map((skill) => (
                 <SortableSkillRow
                   key={skill.id}
@@ -282,7 +276,7 @@ function SortableCategoryCard({ category, sensors, onSkillDragEnd, onEditCategor
           </SortableContext>
         </DndContext>
         <button type="button" onClick={onAddSkill}
-          style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+          className="mt-[11px] w-full cursor-pointer rounded-[10px] border border-dashed border-line-field bg-surface-card px-[14px] py-2.5 text-left text-[13px] font-bold text-brand">
           + Ajouter une compétence
         </button>
       </div>
@@ -572,54 +566,49 @@ export default function AdminSkillsPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-ink-3">Chargement…</p>
       </div>
     );
   }
 
   if (!profile || profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs.
       </div>
     );
   }
 
   return (
-    <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Compétences
-        </h1>
-        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Définissez les catégories de compétences et les compétences dans chacune d&apos;elles : acronyme, titre et
-          description. L&apos;ordre des compétences dans une catégorie détermine leur niveau.
-        </p>
-      </div>
+    <div className="pb-20">
+      <PageHeader
+        title="Compétences"
+        subtitle="Définissez les catégories de compétences et les compétences dans chacune d'elles : acronyme, titre et description. L'ordre des compétences dans une catégorie détermine leur niveau."
+      />
 
       {error ? (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-4 py-3 text-[13px] text-bad">
           {error}
         </div>
       ) : null}
       {successMsg ? (
-        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#047857' }}>
+        <div className="mb-4 rounded-[10px] border border-ok-line bg-ok-soft px-4 py-3 text-[13px] text-ok-text">
           {successMsg}
         </div>
       ) : null}
 
       {/* ── Catégories ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">
           Catégories de compétences
         </span>
-        <span style={{ fontSize: 11.5, color: '#94a3b8' }}>Glissez <strong>⠿⠿</strong> pour réordonner catégories et compétences</span>
+        <span className="inline-flex items-center gap-1 text-[11.5px] text-ink-3">Glissez <Icon name="drag_indicator" size={16} className="text-ink-3" /> pour réordonner catégories et compétences</span>
       </div>
 
       {categories.length === 0 ? (
-        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucune catégorie pour l&apos;instant. Créez-en une ci-dessous.</p>
+        <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
+          <p className="text-[13.5px] text-ink-3">Aucune catégorie pour l&apos;instant. Créez-en une ci-dessous.</p>
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
@@ -641,54 +630,54 @@ export default function AdminSkillsPage() {
         </DndContext>
       )}
 
-      <div style={{ marginBottom: 32 }}>
+      <div className="mb-8">
         <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
-          style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+          className="w-full cursor-pointer rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
           + Nouvelle catégorie
         </button>
       </div>
 
       {/* ── Statuts ── */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 13, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>
+      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
+        <span className="text-xs font-extrabold uppercase tracking-[.04em] text-ink-3">
           Statuts de compétence
         </span>
-        <span style={{ fontSize: 11.5, color: '#94a3b8' }}>
-          Le statut <strong style={{ color: '#0f172a' }}>{statuses.find((s) => s.protected)?.label ?? 'protégé'}</strong> est protégé : sa clé qualifie l&apos;éligibilité aux missions.
+        <span className="text-[11.5px] text-ink-3">
+          Le statut <strong className="text-ink">{statuses.find((s) => s.protected)?.label ?? 'protégé'}</strong> est protégé : sa clé qualifie l&apos;éligibilité aux missions.
         </span>
       </div>
 
-      <div style={{ background: '#fff', border: '1px solid #e7e9ee', borderRadius: 16, boxShadow: '0 2px 10px rgba(15,23,42,.05)', padding: '14px 22px 18px', marginBottom: 16 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div className="mb-4 rounded-2xl border border-line bg-surface-card px-[22px] pb-[18px] pt-[14px] shadow-card">
+        <div className="flex flex-col gap-2">
           {statuses.length === 0 ? (
-            <div style={{ fontSize: 12.5, color: '#94a3b8', padding: '2px' }}>Aucun statut défini.</div>
+            <div className="p-0.5 text-[12.5px] text-ink-3">Aucun statut défini.</div>
           ) : statuses.map((status, index) => {
             const p = palette(status.color);
             return (
-              <div key={status.id} style={{ display: 'flex', alignItems: 'center', gap: 10, border: '1px solid #eef1f5', borderRadius: 12, padding: '10px 13px', background: '#fcfcfd' }}>
-                <span style={{
-                  flexShrink: 0, minWidth: 30, textAlign: 'center', fontSize: 14, fontWeight: 800, color: p.accent,
-                  background: p.soft, border: `1px solid ${p.softBorder}`, borderRadius: 7, padding: '4px 6px',
-                }} aria-hidden>{status.mark}</span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{status.label}</span>
+              <div key={status.id} className="flex items-center gap-2.5 rounded-xl border border-line-row bg-surface-sub px-[13px] py-2.5">
+                <span
+                  className="min-w-[30px] shrink-0 rounded-[7px] border px-1.5 py-1 text-center text-sm font-extrabold"
+                  style={{ color: p.accent, background: p.soft, borderColor: p.softBorder }}
+                  aria-hidden>{status.mark}</span>
+                <span className="min-w-0 flex-1 text-sm font-bold text-ink">{status.label}</span>
                 {status.is_validating ? (
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: '#059669', background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 5, padding: '1px 7px' }}>validant</span>
+                  <span className="rounded-[5px] border border-ok-line bg-ok-soft px-[7px] py-px text-[10.5px] font-bold text-engage">validant</span>
                 ) : null}
                 {status.protected ? (
-                  <span style={{ fontSize: 10.5, fontWeight: 700, color: '#64748b', background: '#f1f5f9', border: '1px solid #e2e8f0', borderRadius: 5, padding: '1px 7px' }}>protégé</span>
+                  <span className="rounded-[5px] border border-line bg-surface-sub px-[7px] py-px text-[10.5px] font-bold text-ink-2">protégé</span>
                 ) : null}
-                <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                <span className="inline-flex shrink-0 items-center gap-0.5">
                   <button type="button" onClick={() => void handleMoveStatusUp(index)} disabled={index === 0}
-                    style={{ cursor: index === 0 ? 'not-allowed' : 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, padding: '4px 6px', opacity: index === 0 ? 0.3 : 1 }}>↑</button>
+                    className="cursor-pointer bg-transparent px-1.5 py-1 text-[13px] text-ink-3 disabled:cursor-not-allowed disabled:opacity-30">↑</button>
                   <button type="button" onClick={() => void handleMoveStatusDown(index)} disabled={index === statuses.length - 1}
-                    style={{ cursor: index === statuses.length - 1 ? 'not-allowed' : 'pointer', border: 'none', background: 'transparent', color: '#94a3b8', fontSize: 13, padding: '4px 6px', opacity: index === statuses.length - 1 ? 0.3 : 1 }}>↓</button>
+                    className="cursor-pointer bg-transparent px-1.5 py-1 text-[13px] text-ink-3 disabled:cursor-not-allowed disabled:opacity-30">↓</button>
                   <button type="button" onClick={() => setStatusModal({ id: status.id, label: status.label, color: status.color, mark: status.mark, isValidating: status.is_validating })}
-                    style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+                    className="cursor-pointer rounded-[7px] border border-line-field bg-surface-card px-2.5 py-[5px] text-xs font-bold text-ink-2">
                     Modifier
                   </button>
                   {!status.protected ? (
                     <button type="button" onClick={() => void handleDeleteStatus(status.id, status.label)}
-                      style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+                      className="cursor-pointer bg-transparent px-1.5 py-1 text-[15px] text-bad">✕</button>
                   ) : null}
                 </span>
               </div>
@@ -696,7 +685,7 @@ export default function AdminSkillsPage() {
           })}
         </div>
         <button type="button" onClick={() => setStatusModal({ label: '', color: 'slate', mark: '✓', isValidating: false })}
-          style={{ marginTop: 11, cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '10px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', width: '100%', textAlign: 'left' }}>
+          className="mt-[11px] w-full cursor-pointer rounded-[10px] border border-dashed border-line-field bg-surface-card px-[14px] py-2.5 text-left text-[13px] font-bold text-brand">
           + Nouveau statut
         </button>
       </div>
@@ -717,7 +706,7 @@ export default function AdminSkillsPage() {
               onChange={(e) => setCategoryModal((m) => (m ? { ...m, name: e.target.value } : m))}
               onKeyDown={(e) => { if (e.key === 'Enter') submitCategory(); }}
               placeholder="Ex. : Opérationnel, Conduite…"
-              style={inputStyle}
+              className={inputClass}
             />
           </div>
           <div>
@@ -738,13 +727,13 @@ export default function AdminSkillsPage() {
           submitDisabled={savingSkill || !skillModal.name.trim()}
         >
           <div>
-            <FieldLabel>Acronyme <span style={{ color: '#94a3b8', fontWeight: 600 }}>(ex : PSE1, CE…)</span></FieldLabel>
+            <FieldLabel>Acronyme <span className="font-semibold text-ink-3">(ex : PSE1, CE…)</span></FieldLabel>
             <input
               value={skillModal.code}
               onChange={(e) => setSkillModal((m) => (m ? { ...m, code: e.target.value } : m))}
               placeholder="Ex : PSE1"
               maxLength={12}
-              style={{ ...inputStyle, maxWidth: 180, textTransform: 'uppercase' }}
+              className={cn(inputClass, 'max-w-[180px] uppercase')}
             />
           </div>
           <div>
@@ -753,17 +742,17 @@ export default function AdminSkillsPage() {
               value={skillModal.name}
               onChange={(e) => setSkillModal((m) => (m ? { ...m, name: e.target.value } : m))}
               placeholder="Ex : Premiers secours en équipe niveau 1"
-              style={inputStyle}
+              className={inputClass}
             />
           </div>
           <div>
-            <FieldLabel>Description <span style={{ color: '#94a3b8', fontWeight: 600 }}>(optionnelle)</span></FieldLabel>
+            <FieldLabel>Description <span className="font-semibold text-ink-3">(optionnelle)</span></FieldLabel>
             <textarea
               value={skillModal.description}
               onChange={(e) => setSkillModal((m) => (m ? { ...m, description: e.target.value } : m))}
               placeholder="Contenu, prérequis ou critères de validation de la compétence."
               rows={3}
-              style={{ ...inputStyle, resize: 'vertical' }}
+              className={cn(inputClass, 'resize-y')}
             />
           </div>
         </Modal>
@@ -784,7 +773,7 @@ export default function AdminSkillsPage() {
               value={statusModal.label}
               onChange={(e) => setStatusModal((m) => (m ? { ...m, label: e.target.value } : m))}
               placeholder="Ex : Validée, En formation…"
-              style={inputStyle}
+              className={inputClass}
             />
           </div>
           <div>
@@ -797,14 +786,14 @@ export default function AdminSkillsPage() {
               value={statusModal.mark}
               onChange={(e) => setStatusModal((m) => (m ? { ...m, mark: e.target.value } : m))}
               maxLength={2}
-              style={{ ...inputStyle, width: 60, textAlign: 'center' }}
+              className={cn(inputClass, 'w-[60px] text-center')}
             />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '11px 13px', border: '1px solid #eef1f5', borderRadius: 11, background: '#fcfcfd' }}>
+          <div className="flex items-center gap-[11px] rounded-[11px] border border-line-row bg-surface-sub px-[13px] py-[11px]">
             <Toggle value={statusModal.isValidating} onChange={(v) => setStatusModal((m) => (m ? { ...m, isValidating: v } : m))} />
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, color: '#334155' }}>Compte comme « validé »</div>
-              <div style={{ fontSize: 12, color: '#94a3b8' }}>Ce statut qualifie la compétence comme acquise dans le suivi.</div>
+              <div className="text-[13px] font-bold text-ink-2">Compte comme « validé »</div>
+              <div className="text-xs text-ink-3">Ce statut qualifie la compétence comme acquise dans le suivi.</div>
             </div>
           </div>
         </Modal>
