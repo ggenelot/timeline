@@ -7,17 +7,21 @@ import { User } from '@supabase/supabase-js';
 import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { StatusBadge } from '@/components/missions/status-badge';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
+import { SkillBadge, getSkillDotColor } from '@/components/skills/skill-badge';
+import { resolveMissionTypeColor } from '@/lib/mission-timeline';
+import { MissionMaterielAssignmentPicker, CandidateContainer } from '@/components/missions/mission-materiel-assignment-picker';
 import { supabase } from '@/lib/supabase/client';
 import {
   ActivityAct,
   ActivityLog,
-  getMissionCategory,
-  MISSION_CATEGORY_LABELS,
   Mission,
   MissionAssignment,
   MissionAssignmentStatus,
   MissionProposal,
   MissionProposalResponse,
+  MissionRequiredMateriel,
   MissionRequiredSkill,
   Profile,
   ProfileSkill,
@@ -47,6 +51,8 @@ type ActivityLogWithActor = ActivityLog & {
   actor: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
 };
 
+type MissionTypeInfo = { id: string; name: string; color: string };
+
 const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
   mission_created: 'Création',
   mission_status_changed: 'Statut',
@@ -55,25 +61,13 @@ const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
   volunteer_removed: 'Retiré'
 };
 
-const ACTIVITY_TYPE_TINTS: Record<ActivityLog['action_type'], string> = {
-  mission_created: 'border-ok-line bg-ok-soft/50',
-  mission_status_changed: 'border-[#CFDDF6] bg-[#E7EEFB]/50',
-  proposal_response_updated: 'border-warn-line bg-warn-soft/50',
-  volunteer_selected: 'border-[#E3D6EF] bg-[#F5EDFA]/50',
-  volunteer_removed: 'border-bad/30 bg-bad-soft/50'
-};
-
-const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposalResponse, 'no_response'> }> = [
-  { label: 'Disponible', value: 'available' },
-  { label: 'Indisponible', value: 'unavailable' }
-];
 const NO_SKILL_SELECTION_ID = '__no_skill_selection__';
 
 function getDefaultSlackChannelName(title: string, startsAt: string) {
   const slug = title
     .toLowerCase()
     .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 20);
@@ -95,6 +89,25 @@ function formatElapsedSince(dateIso: string | null): string {
   return `Il y a ${months} mois`;
 }
 
+function computeInitials(label: string): string {
+  return (label || 'B')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
+}
+
+function formatDayLabel(dateIso: string): string {
+  const date = new Date(dateIso);
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Aujourd'hui";
+  if (diffDays === 1) return 'Hier';
+  return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
 export default function MissionDetailPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
@@ -103,24 +116,26 @@ export default function MissionDetailPage() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mission, setMission] = useState<MissionWithSkills | null>(null);
+  const [missionTypeInfo, setMissionTypeInfo] = useState<MissionTypeInfo | null>(null);
+  const [skillColorById, setSkillColorById] = useState<Record<string, string | null>>({});
   const [proposals, setProposals] = useState<ProposalWithVolunteer[]>([]);
   const [assignments, setAssignments] = useState<AssignmentWithVolunteer[]>([]);
+  const [requiredMateriels, setRequiredMateriels] = useState<MissionRequiredMateriel[]>([]);
+  const [candidateContainers, setCandidateContainers] = useState<CandidateContainer[]>([]);
   const [activityLogs, setActivityLogs] = useState<ActivityLogWithActor[]>([]);
   const [isHistoryExpanded, setIsHistoryExpanded] = useState(false);
   const [isSkillsDirectoryExpanded, setIsSkillsDirectoryExpanded] = useState(true);
-  const [isAvailabilityExpanded, setIsAvailabilityExpanded] = useState(false);
+  const [isAvailabilityExpanded, setIsAvailabilityExpanded] = useState(true);
   const [isSlackCardExpanded, setIsSlackCardExpanded] = useState(false);
+  const [recapEditing, setRecapEditing] = useState(false);
   const [slackChannelNameDraft, setSlackChannelNameDraft] = useState('');
   const [slackMessageDraft, setSlackMessageDraft] = useState('');
   const [slackFreeMessageDraft, setSlackFreeMessageDraft] = useState('');
   const [activitySearch, setActivitySearch] = useState('');
   const [selectedActivityType, setSelectedActivityType] = useState<'all' | ActivityLog['action_type']>('all');
   const [allVolunteers, setAllVolunteers] = useState<VolunteerOption[]>([]);
-  const [selectedVolunteerSkillId, setSelectedVolunteerSkillId] = useState<'all' | string>('all');
   const [availabilitySearchQuery, setAvailabilitySearchQuery] = useState('');
   const [availabilityStatusFilter, setAvailabilityStatusFilter] = useState<'all' | MissionProposalResponse>('all');
-  const [selectedVolunteerIdToAdd, setSelectedVolunteerIdToAdd] = useState('');
-  const [selectedResponseToAdd, setSelectedResponseToAdd] = useState<Exclude<MissionProposalResponse, 'no_response'>>('available');
   const [pendingAssignments, setPendingAssignments] = useState<Map<string, string>>(new Map());
   const [supportsMissionRequiredSkillReference, setSupportsMissionRequiredSkillReference] = useState(true);
   const [volunteerActivityStats, setVolunteerActivityStats] = useState<Record<string, { lastActivityAt: string | null; monthlyCount: number }>>({});
@@ -137,42 +152,6 @@ export default function MissionDetailPage() {
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
 
   const eligibleProposals = useMemo(() => proposals.filter((proposal) => proposal.response === 'available'), [proposals]);
-
-  const volunteerSkillOptions = useMemo(() => {
-    const seenIds = new Set<string>();
-    const skills: Array<{ id: string; name: string; category_id: string | null; display_order: number }> = [];
-
-    eligibleProposals.forEach((proposal) => {
-      (proposal.volunteer?.profile_skills ?? []).forEach((profileSkill) => {
-        const s = Array.isArray(profileSkill.skill) ? profileSkill.skill[0] : profileSkill.skill;
-        if (s && !seenIds.has(s.id)) {
-          seenIds.add(s.id);
-          skills.push({ id: s.id, name: s.name, category_id: s.category_id ?? null, display_order: s.display_order ?? 0 });
-        }
-      });
-    });
-
-    return skills.sort((a, b) => a.display_order - b.display_order);
-  }, [eligibleProposals]);
-
-  const filteredEligibleProposals = useMemo(() => {
-    if (selectedVolunteerSkillId === 'all') return eligibleProposals;
-
-    const selectedSkill = volunteerSkillOptions.find((s) => s.id === selectedVolunteerSkillId);
-    if (!selectedSkill) return eligibleProposals;
-
-    return eligibleProposals.filter((proposal) => {
-      const volunteerSkills = (proposal.volunteer?.profile_skills ?? []).map((ps) => {
-        const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
-        return s ? { category_id: s.category_id ?? null, display_order: s.display_order ?? 0 } : null;
-      }).filter((s): s is NonNullable<typeof s> => s !== null);
-
-      if (!selectedSkill.category_id) return true;
-      return volunteerSkills.some(
-        (vs) => vs.category_id === selectedSkill.category_id && vs.display_order >= selectedSkill.display_order
-      );
-    });
-  }, [eligibleProposals, selectedVolunteerSkillId, volunteerSkillOptions]);
 
   const isAdmin = profile?.role === 'admin';
 
@@ -192,9 +171,11 @@ export default function MissionDetailPage() {
   const requiredSkills = useMemo(() => {
     return (mission?.mission_required_skills ?? []).map((rs) => ({
       id: rs.id,
+      skill_id: rs.skill_id,
       category_id: rs.skill?.category_id ?? null,
       display_order: rs.skill?.display_order ?? 0,
       name: rs.skill?.name ?? null,
+      quantity: rs.quantity ?? 0
     }));
   }, [mission?.mission_required_skills]);
 
@@ -205,11 +186,12 @@ export default function MissionDetailPage() {
     const rows = allVolunteers.map((volunteer) => {
       const proposal = proposalByVolunteerId.get(volunteer.id);
       const response = proposal?.response ?? 'no_response';
+      const volunteerLabel = volunteer.full_name ?? volunteer.email ?? volunteer.id;
 
       const volunteerSkills = proposal
         ? (proposal.volunteer?.profile_skills ?? []).map((ps) => {
             const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
-            return s ? { category_id: s.category_id ?? null, display_order: s.display_order ?? 0, name: s.name } : null;
+            return s ? { id: s.id, category_id: s.category_id ?? null, display_order: s.display_order ?? 0, name: s.name } : null;
           }).filter((s): s is NonNullable<typeof s> => s !== null)
         : [];
 
@@ -227,12 +209,12 @@ export default function MissionDetailPage() {
       return {
         id: proposal?.id ?? `unlinked-${volunteer.id}`,
         volunteerId: volunteer.id,
-        volunteerLabel: volunteer.full_name ?? volunteer.email ?? volunteer.id,
+        volunteerLabel,
+        initials: computeInitials(volunteerLabel),
+        volunteerSkills,
         matchingRequiredSkills,
         response,
         responseLabel: getProposalResponseLabel(response),
-        responseTone: response === 'available' ? 'text-ok-text' : response === 'unavailable' ? 'text-bad' : 'text-ink-2',
-        responseRowBackground: response === 'available' ? 'bg-ok-soft/50' : response === 'unavailable' ? 'bg-bad-soft/50' : 'bg-surface-sub/60',
         updatedByAdmin: proposal?.updated_by_admin ?? false,
         respondedAt: proposal?.responded_at ?? null,
         statusPriority: responsePriority[response]
@@ -262,17 +244,12 @@ export default function MissionDetailPage() {
         return true;
       }
 
-      const searchableContent = [row.volunteerLabel, ...row.matchingRequiredSkills]
+      const searchableContent = [row.volunteerLabel, ...row.matchingRequiredSkills, ...row.volunteerSkills.map((s) => s.name)]
         .join(' ')
         .toLocaleLowerCase('fr-FR');
       return searchableContent.includes(normalizedSearch);
     });
   }, [availabilitySearchQuery, availabilityStatusFilter, proposalsTableRows]);
-
-  const availableVolunteersToAdd = useMemo(() => {
-    const linkedVolunteerIds = new Set(proposals.map((proposal) => proposal.volunteer_id));
-    return allVolunteers.filter((volunteer) => !linkedVolunteerIds.has(volunteer.id));
-  }, [allVolunteers, proposals]);
 
   useEffect(() => {
     setPendingAssignments(
@@ -285,11 +262,10 @@ export default function MissionDetailPage() {
     );
   }, [assignments]);
 
-
-
   const requiredSkillsVolunteerDirectory = useMemo(() => {
     const requiredSkillsWithQty = (mission?.mission_required_skills ?? []).map((requiredSkill) => ({
       id: requiredSkill.id,
+      skillId: requiredSkill.skill_id,
       name: requiredSkill.skill?.name ?? null,
       quantity: requiredSkill.quantity ?? 0,
       category_id: requiredSkill.skill?.category_id ?? null,
@@ -299,16 +275,8 @@ export default function MissionDetailPage() {
     const availableVolunteers = eligibleProposals
       .map((proposal) => {
         if (!proposal.volunteer) return null;
-        return {
-          id: proposal.volunteer.id,
-          fullName: proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole',
-          initials: (proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'B')
-            .split(/\s+/)
-            .filter(Boolean)
-            .slice(0, 2)
-            .map((part) => part[0]?.toUpperCase() ?? '')
-            .join('')
-        };
+        const fullName = proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole';
+        return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName) };
       })
       .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
 
@@ -328,16 +296,8 @@ export default function MissionDetailPage() {
             return null;
           }
 
-          return {
-            id: proposal.volunteer.id,
-            fullName: proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole',
-            initials: (proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'B')
-              .split(/\s+/)
-              .filter(Boolean)
-              .slice(0, 2)
-              .map((part) => part[0]?.toUpperCase() ?? '')
-              .join('')
-          };
+          const fullName = proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole';
+          return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName) };
         })
         .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
 
@@ -345,6 +305,7 @@ export default function MissionDetailPage() {
 
       return {
         requiredSkillId: requiredSkill.id,
+        skillId: requiredSkill.skillId,
         requiredSkillName: requiredSkill.name ?? 'Sans compétence particulière (bénévole)',
         requiredCount: requiredSkill.quantity,
         volunteers: uniqueVolunteers
@@ -356,15 +317,14 @@ export default function MissionDetailPage() {
       return skillGroups;
     }
 
-    const fallbackVolunteers = availableVolunteers;
-
     return [
       ...skillGroups,
       {
         requiredSkillId: NO_SKILL_SELECTION_ID,
+        skillId: null,
         requiredSkillName: 'Sans compétence particulière',
         requiredCount: 0,
-        volunteers: fallbackVolunteers
+        volunteers: availableVolunteers
       }
     ];
   }, [eligibleProposals, mission?.mission_required_skills]);
@@ -417,6 +377,20 @@ export default function MissionDetailPage() {
     });
   }, [activityLogs, activitySearch, selectedActivityType]);
 
+  const activityLogGroups = useMemo(() => {
+    const groups: Array<{ label: string; events: ActivityLogWithActor[] }> = [];
+    filteredActivityLogs.forEach((log) => {
+      const label = formatDayLabel(log.created_at);
+      const lastGroup = groups[groups.length - 1];
+      if (lastGroup && lastGroup.label === label) {
+        lastGroup.events.push(log);
+      } else {
+        groups.push({ label, events: [log] });
+      }
+    });
+    return groups;
+  }, [filteredActivityLogs]);
+
   async function getAccessToken() {
     const {
       data: { session }
@@ -442,6 +416,57 @@ export default function MissionDetailPage() {
 
     const payload = (await response.json()) as { volunteers: Array<VolunteerOption & { role: string }> };
     setAllVolunteers((payload.volunteers ?? []).map(({ id: volunteerId, full_name, email }) => ({ id: volunteerId, full_name, email })));
+  }
+
+  async function loadMaterielAssignments(id: string) {
+    const { data: requirementsData, error: requirementsErr } = await supabase
+      .from('mission_required_materiels')
+      .select('id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color),assignments:mission_materiel_assignments(id,mission_required_materiel_id,materiel_type_id,assigned_by,created_at,materiel_type:materiel_types(id,name,code))')
+      .eq('mission_id', id);
+
+    if (requirementsErr || !requirementsData) {
+      setRequiredMateriels([]);
+      setCandidateContainers([]);
+      return;
+    }
+
+    const mappedRequirements = requirementsData.map((requirement) => ({
+      ...requirement,
+      category: Array.isArray(requirement.category) ? requirement.category[0] ?? null : requirement.category,
+      assignments: (requirement.assignments ?? []).map((assignment) => ({
+        ...assignment,
+        materiel_type: Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] ?? null : assignment.materiel_type
+      }))
+    }));
+    setRequiredMateriels(mappedRequirements);
+
+    const categoryIds = Array.from(new Set(mappedRequirements.map((requirement) => requirement.category_id)));
+    if (categoryIds.length > 0) {
+      const [containersResult, contentsResult] = await Promise.all([
+        supabase.from('materiel_types').select('id,name,code,category_id').eq('is_container', true).in('category_id', categoryIds),
+        supabase.from('materiel_type_contents').select('child_type_id')
+      ]);
+      const nestedContainerIds = new Set((contentsResult.data ?? []).map((row) => row.child_type_id));
+      setCandidateContainers((containersResult.data ?? []).filter((c) => !nestedContainerIds.has(c.id)));
+    } else {
+      setCandidateContainers([]);
+    }
+  }
+
+  async function refreshActivityLogs(id: string) {
+    const { data: logData } = await supabase
+      .from('activity_logs')
+      .select('id,mission_id,actor_id,action_type,entity_type,entity_id,description,created_at,actor:profiles!activity_logs_actor_id_fkey(id,full_name,email)')
+      .eq('mission_id', id)
+      .order('created_at', { ascending: false })
+      .limit(50);
+
+    setActivityLogs(
+      (logData ?? []).map((log) => ({
+        ...log,
+        actor: Array.isArray(log.actor) ? log.actor[0] ?? null : log.actor
+      }))
+    );
   }
 
   async function loadData() {
@@ -493,6 +518,28 @@ export default function MissionDetailPage() {
     };
 
     setMission(mappedMission);
+
+    const { data: missionTypeData } = await supabase
+      .from('mission_types')
+      .select('id,name,color')
+      .eq('id', mappedMission.mission_type_id)
+      .maybeSingle();
+
+    if (missionTypeData) {
+      setMissionTypeInfo({
+        id: missionTypeData.id,
+        name: missionTypeData.name,
+        color: resolveMissionTypeColor(missionTypeData.name, missionTypeData.color)
+      });
+    }
+
+    const { data: skillRowsData } = await supabase.from('skills').select('id,skill_categories(color)');
+    const nextSkillColorById: Record<string, string | null> = {};
+    (skillRowsData ?? []).forEach((row) => {
+      const category = Array.isArray(row.skill_categories) ? row.skill_categories[0] ?? null : row.skill_categories;
+      nextSkillColorById[row.id] = (category as { color?: string | null } | null)?.color ?? null;
+    });
+    setSkillColorById(nextSkillColorById);
 
     const { data: statusData } = await supabase
       .from('skill_statuses')
@@ -550,19 +597,6 @@ export default function MissionDetailPage() {
       return;
     }
 
-    const { data: logData, error: logsError } = await supabase
-      .from('activity_logs')
-      .select('id,mission_id,actor_id,action_type,entity_type,entity_id,description,created_at,actor:profiles!activity_logs_actor_id_fkey(id,full_name,email)')
-      .eq('mission_id', missionId)
-      .order('created_at', { ascending: false })
-      .limit(50);
-
-    if (logsError) {
-      setError(logsError.message);
-      setLoading(false);
-      return;
-    }
-
     const mappedProposals: ProposalWithVolunteer[] = (proposalData ?? []).map((proposal) => {
       const volunteer = Array.isArray(proposal.volunteer) ? proposal.volunteer[0] ?? null : proposal.volunteer;
 
@@ -591,14 +625,9 @@ export default function MissionDetailPage() {
       volunteer: Array.isArray(assignment.volunteer) ? assignment.volunteer[0] ?? null : assignment.volunteer
     }));
 
-    const mappedLogs: ActivityLogWithActor[] = (logData ?? []).map((log) => ({
-      ...log,
-      actor: Array.isArray(log.actor) ? log.actor[0] ?? null : log.actor
-    }));
-
     setProposals(mappedProposals);
     setAssignments(mappedAssignments);
-    setActivityLogs(mappedLogs);
+    await refreshActivityLogs(missionId);
 
     const since = new Date();
     since.setMonth(since.getMonth() - 1);
@@ -660,6 +689,10 @@ export default function MissionDetailPage() {
       await loadAdminVolunteerDirectory(missionId);
     }
 
+    if (profileData.role === 'admin') {
+      await loadMaterielAssignments(missionId);
+    }
+
     setLoading(false);
   }
 
@@ -694,8 +727,10 @@ export default function MissionDetailPage() {
   }
 
   const canManageMission = profile?.role === 'admin' || (canManageByRole && mission.created_by === user?.id);
-  const missionBlocksSelection = mission.status === 'cancelled' || mission.status === 'confirmed';
+  const missionBlocksSelection = mission.status === 'cancelled';
   const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
+  const showSelection = mission.status !== 'confirmed' || recapEditing;
+  const showRecap = mission.status === 'confirmed' && !recapEditing;
 
   async function setVolunteerResponseByAdmin(volunteerId: string, response: Exclude<MissionProposalResponse, 'no_response'>) {
     if (!isAdmin || !mission) {
@@ -764,16 +799,6 @@ export default function MissionDetailPage() {
     setActionLoading(null);
   }
 
-  async function addVolunteerWithStatus() {
-    if (!selectedVolunteerIdToAdd) {
-      setError('Veuillez sélectionner un bénévole à ajouter.');
-      return;
-    }
-
-    await setVolunteerResponseByAdmin(selectedVolunteerIdToAdd, selectedResponseToAdd);
-    setSelectedVolunteerIdToAdd('');
-  }
-
   async function toggleSelection(volunteerId: string, requiredSkillId: string) {
     if (!mission || missionBlocksSelection) {
       return;
@@ -781,7 +806,7 @@ export default function MissionDetailPage() {
 
     setPendingAssignments((current) => {
       const next = new Map(current);
-      if (next.has(volunteerId)) {
+      if (next.get(volunteerId) === requiredSkillId) {
         next.delete(volunteerId);
       } else {
         next.set(volunteerId, requiredSkillId);
@@ -790,12 +815,11 @@ export default function MissionDetailPage() {
     });
   }
 
-  async function saveCrewSelection() {
+  async function saveCrewSelection(): Promise<boolean> {
     if (!mission || missionBlocksSelection) {
-      return;
+      return false;
     }
 
-    setActionLoading('save-selection');
     setError(null);
     setSuccess(null);
 
@@ -811,8 +835,7 @@ export default function MissionDetailPage() {
       const { error: deleteError } = await supabase.from('mission_assignments').delete().eq('mission_id', mission.id).in('volunteer_id', toDelete);
       if (deleteError) {
         setError(`Impossible de mettre à jour la sélection : ${deleteError.message}`);
-        setActionLoading(null);
-        return;
+        return false;
       }
     }
 
@@ -846,8 +869,7 @@ export default function MissionDetailPage() {
         );
       if (insertError) {
         setError(`Impossible de mettre à jour la sélection : ${insertError.message}`);
-        setActionLoading(null);
-        return;
+        return false;
       }
       const insertedRaw = (inserted ?? []) as unknown as Array<{
         id: string;
@@ -871,8 +893,7 @@ export default function MissionDetailPage() {
         .eq('id', assignment.id);
       if (updateError) {
         setError(`Impossible de mettre à jour la sélection : ${updateError.message}`);
-        setActionLoading(null);
-        return;
+        return false;
       }
     }
 
@@ -900,71 +921,8 @@ export default function MissionDetailPage() {
       return [...withUpdates, ...inserted];
     });
 
-    setActionLoading(null);
-    setSuccess('Sélection de l’équipage mise à jour.');
+    return true;
   }
-
-  async function syncSlackChannel() {
-    if (!mission) {
-      return;
-    }
-
-    const token = await getAccessToken();
-    if (!token) {
-      setError('Session invalide. Reconnectez-vous puis réessayez.');
-      return;
-    }
-
-    setActionLoading('sync-slack-channel');
-    setSlackCreationState('creating');
-    setError(null);
-    setSuccess(null);
-
-    const response = await fetch(`/api/admin/missions/${mission.id}/slack-sync`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        channelName: slackChannelNameDraft,
-        welcomeMessage: slackMessageDraft
-      })
-    });
-
-    const payload = (await response.json()) as {
-      error?: string;
-      message?: string;
-      channel?: { channelId: string | null; channelName: string; created: boolean };
-    };
-
-    if (!response.ok) {
-      setError(payload.error ?? 'Synchronisation Slack impossible.');
-      setActionLoading(null);
-      setSlackCreationState('idle');
-      return;
-    }
-
-    if (payload.channel) {
-      setMission((current) =>
-        current
-          ? {
-              ...current,
-              slack_channel_id: payload.channel?.channelId ?? current.slack_channel_id,
-              slack_channel_name: payload.channel?.channelName ?? current.slack_channel_name,
-              slack_channel_created_at: payload.channel?.created
-                ? new Date().toISOString()
-                : current.slack_channel_created_at
-            }
-          : current
-      );
-    }
-
-    setSuccess(payload.message ?? 'Synchronisation Slack terminée.');
-    setActionLoading(null);
-    setSlackCreationState('created');
-  }
-
 
   async function sendSlackFreeMessage() {
     if (!mission || !mission.slack_channel_id) {
@@ -1011,54 +969,135 @@ export default function MissionDetailPage() {
     setActionLoading(null);
   }
 
-  async function confirmCrewSelection() {
-    if (!mission || missionBlocksSelection) return;
-    if (!areSkillConstraintsMet) {
+  // Seule action de confirmation de toute la page : confirme l'événement,
+  // crée le canal Slack, puis bascule équipage + matériel sur le récapitulatif.
+  async function confirmAndCreateSlackChannel() {
+    if (!mission) return;
+
+    const needsConfirm = mission.status !== 'confirmed';
+
+    if (needsConfirm && !areSkillConstraintsMet) {
       setError('Les contraintes de compétences ne sont pas encore atteintes.');
       return;
     }
-    await saveCrewSelection();
+
+    setActionLoading('confirm-and-slack');
+    setError(null);
+    setSuccess(null);
+
     const token = await getAccessToken();
-    if (!token) return;
-    setActionLoading('confirm-selection');
-    const response = await fetch(`/api/admin/missions/${mission.id}/confirm`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } });
-    const payload = (await response.json()) as { error?: string; message?: string };
-    if (!response.ok) {
-      setError(payload.error ?? 'Confirmation impossible.');
+    if (!token) {
+      setError('Session invalide. Reconnectez-vous puis réessayez.');
       setActionLoading(null);
       return;
     }
-    setMission((current) => (current ? { ...current, status: 'confirmed' } : current));
 
-    const { data: logData } = await supabase
-      .from('activity_logs')
-      .select('id,mission_id,actor_id,action_type,entity_type,entity_id,description,created_at,actor:profiles!activity_logs_actor_id_fkey(id,full_name,email)')
-      .eq('mission_id', mission.id)
-      .order('created_at', { ascending: false })
-      .limit(50);
+    if (needsConfirm) {
+      const savedCrew = await saveCrewSelection();
+      if (!savedCrew) {
+        setActionLoading(null);
+        return;
+      }
 
-    setActivityLogs(
-      (logData ?? []).map((log) => ({
-        ...log,
-        actor: Array.isArray(log.actor) ? log.actor[0] ?? null : log.actor
-      }))
-    );
+      const confirmResponse = await fetch(`/api/admin/missions/${mission.id}/confirm`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const confirmPayload = (await confirmResponse.json()) as { error?: string; message?: string };
+      if (!confirmResponse.ok) {
+        setError(confirmPayload.error ?? 'Confirmation impossible.');
+        setActionLoading(null);
+        return;
+      }
 
-    setSuccess(payload.message ?? 'Mission confirmée.');
-    setIsSkillsDirectoryExpanded(false);
+      setMission((current) => (current ? { ...current, status: 'confirmed' } : current));
+      setRecapEditing(false);
+      await refreshActivityLogs(mission.id);
+    }
+
+    setSlackCreationState('creating');
+
+    const slackResponse = await fetch(`/api/admin/missions/${mission.id}/slack-sync`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        channelName: slackChannelNameDraft,
+        welcomeMessage: slackMessageDraft
+      })
+    });
+
+    const slackPayload = (await slackResponse.json()) as {
+      error?: string;
+      message?: string;
+      channel?: { channelId: string | null; channelName: string; created: boolean };
+    };
+
+    if (!slackResponse.ok) {
+      setError(slackPayload.error ?? 'Synchronisation Slack impossible.');
+      setActionLoading(null);
+      setSlackCreationState('idle');
+      return;
+    }
+
+    if (slackPayload.channel) {
+      setMission((current) =>
+        current
+          ? {
+              ...current,
+              slack_channel_id: slackPayload.channel?.channelId ?? current.slack_channel_id,
+              slack_channel_name: slackPayload.channel?.channelName ?? current.slack_channel_name,
+              slack_channel_created_at: slackPayload.channel?.created
+                ? new Date().toISOString()
+                : current.slack_channel_created_at
+            }
+          : current
+      );
+    }
+
+    setSuccess(slackPayload.message ?? 'Mission confirmée et canal Slack créé.');
+    setSlackCreationState('created');
     setIsSlackCardExpanded(true);
+    setIsSkillsDirectoryExpanded(false);
     setActionLoading(null);
   }
 
-  return (
-    <div className="space-y-6">
-      {error ? <p className="rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</p> : null}
-      {success ? <p className="rounded-lg border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{success}</p> : null}
+  const missionTypeColor = missionTypeInfo?.color ?? '#5B6478';
 
-      <article className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold tracking-[-0.01em] text-ink">{mission.title}</h1>
-          <div className="flex items-center gap-2">
+  return (
+    <div className="space-y-5">
+      {error ? <p className="rounded-2xl border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</p> : null}
+      {success ? (
+        <p className="flex items-center gap-2 rounded-2xl border border-ok-line bg-ok-soft p-3 text-sm font-semibold text-ok-text">
+          <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-ok-bar text-white">
+            <Icon name="check" size={13} />
+          </span>
+          {success}
+        </p>
+      ) : null}
+
+      {/* Hero card */}
+      <article className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="min-w-0">
+            <div
+              className="mb-3 inline-flex items-center gap-1.5 rounded-full px-3 py-1"
+              style={{ background: `${missionTypeColor}1a` }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: missionTypeColor }} />
+              <span className="text-[11px] font-extrabold uppercase tracking-[0.04em]" style={{ color: missionTypeColor }}>
+                {missionTypeInfo?.name ?? '—'}
+              </span>
+            </div>
+            <h1 className="text-[27px] font-extrabold leading-[1.2] tracking-[-0.02em] text-ink">{mission.title}</h1>
+            {mission.description ? (
+              <p className="mt-2.5 max-w-[560px] text-[14.5px] leading-[1.6] text-ink-2">{mission.description}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <MissionStatusBadge status={mission.status} />
             {isAdmin ? (
               <Link
                 href={`/admin/missions/${mission.id}/edit`}
@@ -1067,35 +1106,58 @@ export default function MissionDetailPage() {
                 Modifier
               </Link>
             ) : null}
-            <span className="rounded-full border border-line bg-surface-sub px-3 py-1 text-xs font-semibold text-ink-2">{MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}</span>
-            <MissionStatusBadge status={mission.status} />
           </div>
         </div>
-        <p className="mt-2 text-sm text-ink-2">{mission.description ?? 'Aucune description'}</p>
-        <dl className="mt-3 grid gap-1 text-sm text-ink-2 md:grid-cols-2">
-          <div>
-            <dt className="inline font-medium text-ink">Lieu :</dt> {mission.location ?? 'Non défini'}
+
+        <div className="mt-5 flex flex-wrap gap-6 border-t border-line-row pt-5">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-surface-sub">
+              <Icon name="location_on" size={17} className="text-ink-2" />
+            </span>
+            <div>
+              <div className="text-[10.5px] font-extrabold uppercase tracking-[0.04em] text-ink-3">Lieu</div>
+              <div className="text-[13.5px] font-semibold text-ink-2">{mission.location ?? 'Non défini'}</div>
+            </div>
           </div>
-          <div>
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-surface-sub">
+              <Icon name="calendar_month" size={17} className="text-ink-2" />
+            </span>
+            <div>
+              <div className="text-[10.5px] font-extrabold uppercase tracking-[0.04em] text-ink-3">Date</div>
+              <div className="text-[13.5px] font-semibold text-ink-2">
+                {new Date(mission.starts_at).toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              </div>
+            </div>
           </div>
-          <div>
-            <dt className="inline font-medium text-ink">Début :</dt> {new Date(mission.starts_at).toLocaleString('fr-FR')}
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-[34px] w-[34px] items-center justify-center rounded-[10px] bg-surface-sub">
+              <Icon name="schedule" size={17} className="text-ink-2" />
+            </span>
+            <div>
+              <div className="text-[10.5px] font-extrabold uppercase tracking-[0.04em] text-ink-3">Horaires</div>
+              <div className="text-[13.5px] font-semibold text-ink-2">
+                {new Date(mission.starts_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} –{' '}
+                {new Date(mission.ends_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            </div>
           </div>
-          <div>
-            <dt className="inline font-medium text-ink">Fin :</dt> {new Date(mission.ends_at).toLocaleString('fr-FR')}
-          </div>
-        </dl>
+        </div>
 
         {(mission.mission_required_skills ?? []).length > 0 ? (
-          <div className="mt-3 text-sm text-ink-2">
-            <p className="font-medium text-ink">Compétences requises :</p>
-            <ul className="mt-2 flex flex-wrap gap-1">
-              {(mission.mission_required_skills ?? []).map((requiredSkill) => (
-                <li key={requiredSkill.id} className="inline-flex rounded-full border border-line bg-surface-card px-2 py-0.5 text-xs text-ink-2">
-                  {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
-                </li>
-              ))}
-            </ul>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(mission.mission_required_skills ?? []).map((requiredSkill) => (
+              <span
+                key={requiredSkill.id}
+                className="inline-flex items-center gap-1.5 rounded-full border border-line bg-surface-card py-1.5 pl-2.5 pr-3 text-[12.5px] font-bold text-ink-2"
+              >
+                <span
+                  className="h-1.5 w-1.5 rounded-full"
+                  style={{ background: getSkillDotColor(requiredSkill.skill_id ? skillColorById[requiredSkill.skill_id] : null) }}
+                />
+                {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
+              </span>
+            ))}
           </div>
         ) : null}
 
@@ -1109,374 +1171,425 @@ export default function MissionDetailPage() {
       </article>
 
       {canManageMission ? (
-        <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-ink">Disponibilité des bénévoles</h2>
-            <button
-              type="button"
-              aria-expanded={isAvailabilityExpanded}
-              aria-controls="mission-availability-content"
-              aria-label={isAvailabilityExpanded ? 'Masquer la disponibilité des bénévoles' : 'Afficher la disponibilité des bénévoles'}
-              onClick={() => setIsAvailabilityExpanded((current) => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
-            >
-              <span className={`text-base leading-none transition-transform ${isAvailabilityExpanded ? 'rotate-180' : ''}`}>▾</span>
-            </button>
-          </div>
+        <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
+          <button
+            type="button"
+            onClick={() => setIsAvailabilityExpanded((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+          >
+            <div>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Disponibilité des bénévoles</h2>
+              <p className="mt-1 text-[13px] text-ink-3">{proposalsTableRows.length} bénévoles sollicités</p>
+            </div>
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-ink-2">
+              <Icon name="expand_more" size={18} className={`transition-transform ${isAvailabilityExpanded ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
 
           {isAvailabilityExpanded ? (
-            <>
+            <div className="mt-4">
+              <div className="mb-4 flex flex-wrap gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityStatusFilter('all')}
+                  className={`flex-1 min-w-[170px] rounded-[14px] border px-4 py-3 text-left transition ${
+                    availabilityStatusFilter === 'all' ? 'border-line-field bg-surface-sub' : 'border-line bg-surface-card hover:bg-surface-sub'
+                  }`}
+                >
+                  <span className="block text-[22px] font-extrabold leading-none text-ink">{proposalsTableRows.length}</span>
+                  <span className="mt-1 block text-[12.5px] font-bold text-ink-2">Tous statuts</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityStatusFilter('available')}
+                  className={`flex-1 min-w-[170px] rounded-[14px] border px-4 py-3 text-left transition ${
+                    availabilityStatusFilter === 'available' ? 'border-ok-line bg-ok-soft' : 'border-ok-line/60 bg-ok-soft/40 hover:bg-ok-soft'
+                  }`}
+                >
+                  <span className="block text-[22px] font-extrabold leading-none text-ok-bar">{proposalsByStatus.available}</span>
+                  <span className="mt-1 block text-[12.5px] font-bold text-ok-text">Disponibles</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityStatusFilter('unavailable')}
+                  className={`flex-1 min-w-[170px] rounded-[14px] border px-4 py-3 text-left transition ${
+                    availabilityStatusFilter === 'unavailable' ? 'border-bad/40 bg-bad-soft' : 'border-bad/20 bg-bad-soft/40 hover:bg-bad-soft'
+                  }`}
+                >
+                  <span className="block text-[22px] font-extrabold leading-none text-bad">{proposalsByStatus.unavailable}</span>
+                  <span className="mt-1 block text-[12.5px] font-bold text-bad">Indisponibles</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAvailabilityStatusFilter('no_response')}
+                  className={`flex-1 min-w-[170px] rounded-[14px] border px-4 py-3 text-left transition ${
+                    availabilityStatusFilter === 'no_response' ? 'border-line-field bg-surface-sub' : 'border-line bg-surface-card hover:bg-surface-sub'
+                  }`}
+                >
+                  <span className="block text-[22px] font-extrabold leading-none text-ink-2">{proposalsByStatus.no_response}</span>
+                  <span className="mt-1 block text-[12.5px] font-bold text-ink-2">Sans réponse</span>
+                </button>
+              </div>
 
-          <div id="mission-availability-content" className="space-y-3 rounded-xl border border-line bg-surface-sub p-3">
-            <input
-              type="search"
-              value={availabilitySearchQuery}
-              onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
-              placeholder="Rechercher un bénévole"
-              className="w-full rounded-full border border-line-field bg-surface-card px-4 py-2 text-sm text-ink-2 placeholder:text-ink-3 focus:border-accent focus:outline-none"
-            />
-            <div className="flex flex-wrap gap-2">
-              <button
-                type="button"
-                onClick={() => setAvailabilityStatusFilter('all')}
-                className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                  availabilityStatusFilter === 'all'
-                    ? 'border-brand bg-brand font-semibold text-white'
-                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
-                }`}
-              >
-                Tous statuts {proposalsTableRows.length}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAvailabilityStatusFilter('available')}
-                className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                  availabilityStatusFilter === 'available'
-                    ? 'border-brand bg-brand font-semibold text-white'
-                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
-                }`}
-              >
-                Disponibles {proposalsByStatus.available}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAvailabilityStatusFilter('unavailable')}
-                className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                  availabilityStatusFilter === 'unavailable'
-                    ? 'border-brand bg-brand font-semibold text-white'
-                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
-                }`}
-              >
-                Indisponibles {proposalsByStatus.unavailable}
-              </button>
-              <button
-                type="button"
-                onClick={() => setAvailabilityStatusFilter('no_response')}
-                className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                  availabilityStatusFilter === 'no_response'
-                    ? 'border-brand bg-brand font-semibold text-white'
-                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
-                }`}
-              >
-                Sans réponse {proposalsByStatus.no_response}
-              </button>
-            </div>
-          </div>
+              <input
+                type="search"
+                value={availabilitySearchQuery}
+                onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
+                placeholder="Rechercher un bénévole ou une compétence"
+                className="mb-3.5 w-full rounded-full border border-line-field bg-surface-sub px-4 py-2.5 text-[13.5px] text-ink-2 outline-none focus:border-accent"
+              />
 
-          <div className="max-h-80 overflow-y-auto rounded-xl border border-line">
-            <table className="min-w-full divide-y divide-line text-left text-xs text-ink-2">
-              <thead className="bg-surface-sub text-ink-2">
-                <tr>
-                  <th className="px-3 py-2 font-medium">Bénévole</th>
-                  {isAdmin ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line-row bg-surface-card">
+              <div className="flex flex-col gap-2">
                 {filteredProposalsTableRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={isAdmin ? 2 : 1} className="px-3 py-3 text-ink-3">
-                      Aucun bénévole ne correspond aux filtres sélectionnés.
-                    </td>
-                  </tr>
+                  <p className="py-4 text-center text-[13px] text-ink-3">Aucun bénévole ne correspond aux filtres sélectionnés.</p>
                 ) : (
                   filteredProposalsTableRows.map((row) => (
-                    <tr key={row.id} className={row.responseRowBackground}>
-                      <td className="space-y-1 px-3 py-2">
-                        <p>{row.volunteerLabel}</p>
-                        {row.updatedByAdmin ? (
-                          <p className="inline-flex rounded-full border border-[#E3D6EF] bg-acsso-soft px-2 py-0.5 text-[11px] text-acsso-text">
-                            Modifié par admin
-                          </p>
-                        ) : null}
-                        {row.matchingRequiredSkills.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
-                            {row.matchingRequiredSkills.map((skill) => (
-                              <span key={`${row.id}-${skill}`} className="inline-flex rounded-full border border-[#CFDDF6] bg-[#E7EEFB] px-2 py-0.5 text-[11px] text-[#1E3C87]">
-                                {skill}
-                              </span>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[11px] text-ink-3">Aucune compétence requise identifiée</p>
-                        )}
-                      </td>
+                    <div
+                      key={row.id}
+                      className={`flex flex-wrap items-center gap-3 rounded-[14px] border border-line-row p-2.5 ${
+                        row.response === 'available' ? 'bg-ok-soft/30' : row.response === 'unavailable' ? 'bg-bad-soft/30' : 'bg-transparent'
+                      }`}
+                    >
+                      <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-[12.5px] font-extrabold text-ink-2">
+                        {row.initials}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="text-[13.5px] font-bold text-ink">{row.volunteerLabel}</div>
+                        <div className="mt-1 flex flex-wrap gap-1">
+                          {row.updatedByAdmin ? (
+                            <span className="inline-flex rounded-full border border-[#E3D6EF] bg-acsso-soft px-2 py-0.5 text-[10.5px] font-semibold text-acsso-text">
+                              Modifié par admin
+                            </span>
+                          ) : null}
+                          {row.volunteerSkills.slice(0, 4).map((skill) => (
+                            <SkillBadge key={`${row.id}-${skill.id}`} name={skill.name} color={skillColorById[skill.id]} />
+                          ))}
+                        </div>
+                      </div>
+                      <span
+                        className={`flex-shrink-0 rounded-full px-3 py-1 text-[12px] font-extrabold ${
+                          row.response === 'available'
+                            ? 'bg-ok-soft text-ok-text'
+                            : row.response === 'unavailable'
+                              ? 'bg-bad-soft text-bad'
+                              : 'bg-surface-sub text-ink-2'
+                        }`}
+                      >
+                        {row.responseLabel}
+                      </span>
                       {isAdmin ? (
-                        <td className="px-3 py-2">
-                          <div className="flex flex-wrap gap-1">
-                            <button
-                              type="button"
-                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'available')}
-                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'available'}
-                              className="rounded-md border border-ok-line px-2 py-1 text-xs text-ok-text hover:bg-ok-soft disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Disponible
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'unavailable')}
-                              disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'unavailable'}
-                              className="rounded-md border border-bad/30 px-2 py-1 text-xs text-bad hover:bg-bad-soft disabled:cursor-not-allowed disabled:opacity-50"
-                            >
-                              Indisponible
-                            </button>
-                          </div>
-                        </td>
+                        <div className="flex flex-shrink-0 gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'available')}
+                            disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'available'}
+                            className="rounded-[8px] border border-ok-line bg-surface-card px-2.5 py-1.5 text-[11.5px] font-bold text-ok-text hover:bg-ok-soft disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Disponible
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'unavailable')}
+                            disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'unavailable'}
+                            className="rounded-[8px] border border-bad/30 bg-surface-card px-2.5 py-1.5 text-[11.5px] font-bold text-bad hover:bg-bad-soft disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Indisponible
+                          </button>
+                        </div>
                       ) : null}
-                    </tr>
+                    </div>
                   ))
                 )}
-              </tbody>
-            </table>
-          </div>
-
-            </>
+              </div>
+            </div>
           ) : null}
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-ink">Sélection de l&apos;équipage</h2>
-            {mission.status === 'confirmed' ? (
-              <p className="text-sm text-warn-text">
-                L&apos;événement a été confirmé, il n&apos;est plus possible de changer la composition.
-              </p>
-            ) : null}
-          </div>
+      {canManageMission && showSelection ? (
+        <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
           <button
             type="button"
-            aria-expanded={isSkillsDirectoryExpanded}
-            aria-controls="mission-skills-directory-content"
-            aria-label={isSkillsDirectoryExpanded ? 'Masquer les compétences des bénévoles' : 'Afficher les compétences des bénévoles'}
             onClick={() => setIsSkillsDirectoryExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
+            className="flex w-full items-center justify-between gap-3 text-left"
           >
-            <span className={`text-base leading-none transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`}>▾</span>
+            <div>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Sélection de l&apos;équipage</h2>
+              <p className="mt-1 text-[13px] text-ink-3">Sélectionnez les bénévoles disponibles par compétence requise.</p>
+            </div>
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-ink-2">
+              <Icon name="expand_more" size={18} className={`transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`} />
+            </span>
           </button>
-        </div>
-        {isSkillsDirectoryExpanded ? (
-          <div id="mission-skills-directory-content" className="mt-3 space-y-4">
-            {requiredSkillsVolunteerDirectory.length === 0 ? (
-              <p className="text-sm text-ink-2">Aucune compétence requise sur cette mission.</p>
-            ) : (
-              requiredSkillsVolunteerDirectory.map((skillGroup) => (
-                <div key={skillGroup.requiredSkillId} className="rounded-xl border border-line p-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-ink">{skillGroup.requiredSkillName}</h3>
-                    <span
-                      className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                        skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length >=
-                        skillGroup.requiredCount
-                          ? 'bg-ok-soft text-ok-text'
-                          : 'bg-surface-sub text-ink-2'
-                      }`}
-                    >
-                      {skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length}/
-                      {skillGroup.requiredCount}
-                    </span>
-                  </div>
-                  {skillGroup.volunteers.length === 0 ? (
-                    <p className="mt-2 text-sm text-ink-2">Aucun bénévole correspondant pour le moment.</p>
-                  ) : (
-                    <ul className="mt-3 flex flex-wrap gap-4">
-                      {skillGroup.volunteers.map((volunteer) => {
-                        const selectedSkillId = pendingAssignments.get(volunteer.id);
-                        const isSelectedOnThisSkill = selectedSkillId === skillGroup.requiredSkillId;
-                        const isSelectedElsewhere = Boolean(selectedSkillId) && selectedSkillId !== skillGroup.requiredSkillId;
-                        const canToggle =
-                          canManageMission && !missionBlocksSelection && actionLoading !== volunteer.id && !isSelectedElsewhere;
 
-                        return (
-                          <li key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="group/volunteer relative w-24 text-center">
-                            <button
-                              type="button"
-                              onClick={() => toggleSelection(volunteer.id, skillGroup.requiredSkillId)}
-                              disabled={!canToggle}
-                              className={`group w-full rounded-md p-1 transition ${
-                                isSelectedOnThisSkill
-                                  ? 'bg-ok-soft ring-1 ring-ok-line'
-                                  : isSelectedElsewhere
-                                    ? 'cursor-not-allowed bg-surface-sub opacity-45'
-                                  : 'hover:bg-surface-sub'
-                              } ${
-                                !canToggle ? 'cursor-not-allowed opacity-45' : ''
-                              }`}
-                            >
-                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-line-field bg-surface-sub text-sm font-semibold text-ink-2">
-                                {isSelectedElsewhere ? (
-                                  <>
-                                    <span className="group-hover:hidden">{volunteer.initials || 'B'}</span>
-                                    <span className="hidden px-1 text-[9px] leading-tight text-center group-hover:block">
-                                      Retenu en tant que {requiredSkillNameById.get(selectedSkillId ?? '') ?? 'autre compétence'}
-                                    </span>
-                                  </>
-                                ) : (
-                                  volunteer.initials || 'B'
-                                )}
+          {isSkillsDirectoryExpanded ? (
+            <div className="mt-4 flex flex-col gap-3.5">
+              {requiredSkillsVolunteerDirectory.length === 0 ? (
+                <p className="text-sm text-ink-2">Aucune compétence requise sur cette mission.</p>
+              ) : (
+                requiredSkillsVolunteerDirectory.map((skillGroup) => {
+                  const filledCount = skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length;
+                  const met = filledCount >= skillGroup.requiredCount;
+                  return (
+                    <div key={skillGroup.requiredSkillId} className="rounded-2xl border border-line-row p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="h-[7px] w-[7px] rounded-full" style={{ background: getSkillDotColor(skillGroup.skillId ? skillColorById[skillGroup.skillId] : null) }} />
+                          <h3 className="text-[14.5px] font-extrabold text-ink">{skillGroup.requiredSkillName}</h3>
+                        </div>
+                        {skillGroup.requiredCount > 0 ? (
+                          <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${met ? 'bg-ok-soft text-ok-text' : 'bg-surface-sub text-ink-2'}`}>
+                            {filledCount}/{skillGroup.requiredCount}
+                          </span>
+                        ) : null}
+                      </div>
+                      {skillGroup.volunteers.length === 0 ? (
+                        <p className="mt-2 text-sm text-ink-2">Aucun bénévole correspondant pour le moment.</p>
+                      ) : (
+                        <div className="mt-3.5 flex flex-wrap gap-4">
+                          {skillGroup.volunteers.map((volunteer) => {
+                            const selectedSkillId = pendingAssignments.get(volunteer.id);
+                            const isSelectedOnThisSkill = selectedSkillId === skillGroup.requiredSkillId;
+                            const isSelectedElsewhere = Boolean(selectedSkillId) && selectedSkillId !== skillGroup.requiredSkillId;
+                            const canToggle = !missionBlocksSelection && !isSelectedElsewhere;
+
+                            return (
+                              <div key={`${skillGroup.requiredSkillId}-${volunteer.id}`} className="group/volunteer relative w-[76px] text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => toggleSelection(volunteer.id, skillGroup.requiredSkillId)}
+                                  disabled={!canToggle}
+                                  className="w-full cursor-pointer border-none bg-transparent p-0 disabled:cursor-not-allowed"
+                                  style={{ opacity: isSelectedElsewhere ? 0.4 : 1 }}
+                                >
+                                  <div
+                                    className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 text-[13px] font-extrabold"
+                                    style={{
+                                      background: isSelectedOnThisSkill ? '#E9F7EF' : '#F2F5FA',
+                                      color: isSelectedOnThisSkill ? '#12805A' : '#5B6478',
+                                      borderColor: isSelectedOnThisSkill ? '#BDE7CE' : 'transparent'
+                                    }}
+                                  >
+                                    {volunteer.initials}
+                                  </div>
+                                  <div className="mt-1.5 text-[11.5px] font-semibold leading-[1.25] text-ink-2">{volunteer.fullName}</div>
+                                </button>
+                                <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-line bg-surface-card p-2 text-left text-xs text-ink-2 shadow-lift group-hover/volunteer:block">
+                                  <p className="font-semibold text-ink">Compétences</p>
+                                  <div className="mt-1 flex flex-wrap gap-1">
+                                    {(proposals.find((p) => p.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? []).map((ps) => {
+                                      const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
+                                      if (!s) return null;
+                                      return (
+                                        <span key={`${volunteer.id}-${s.id}`} className="inline-flex rounded-full bg-surface-sub px-2 py-0.5 text-[10px] font-medium text-ink-2">
+                                          {s.name}
+                                        </span>
+                                      );
+                                    })}
+                                  </div>
+                                  <p className="mt-2">Dernière activité : {formatElapsedSince(volunteerActivityStats[volunteer.id]?.lastActivityAt ?? null)}</p>
+                                  <p>Activités (30j) : {volunteerActivityStats[volunteer.id]?.monthlyCount ?? 0}</p>
+                                </div>
                               </div>
-                              <p className="mt-2 text-xs text-ink-2">{volunteer.fullName}</p>
-                            </button>
-                            <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-line bg-surface-card p-2 text-left text-xs text-ink-2 shadow-lift group-hover/volunteer:block">
-                              <p className="font-semibold text-ink">Compétences</p>
-                              <div className="mt-1 flex flex-wrap gap-1">
-                                {(proposals.find((p) => p.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? []).map((ps) => {
-                                  const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
-                                  if (!s) return null;
-                                  return (
-                                    <span key={`${volunteer.id}-${s.id}`} className="inline-flex rounded-full bg-surface-sub px-2 py-0.5 text-[10px] font-medium text-ink-2">
-                                      {s.name}
-                                    </span>
-                                  );
-                                })}
-                              </div>
-                              <p className="mt-2">Dernière activité : {formatElapsedSince(volunteerActivityStats[volunteer.id]?.lastActivityAt ?? null)}</p>
-                              <p>Activités (30j) : {volunteerActivityStats[volunteer.id]?.monthlyCount ?? 0}</p>
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+
+              {mission.status === 'confirmed' && recapEditing ? (
+                <div className="flex justify-end">
+                  <Button variant="primary" onClick={() => setRecapEditing(false)}>
+                    Terminer la modification
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canManageMission && showSelection ? (
+        <MissionMaterielAssignmentPicker
+          requirements={requiredMateriels}
+          candidateContainers={candidateContainers}
+          onChange={() => void loadMaterielAssignments(mission.id)}
+        />
+      ) : null}
+
+      {canManageMission && showRecap ? (
+        <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Équipage &amp; matériel</h2>
+              <p className="mt-1 text-[13px] text-ink-3">Événement confirmé — récapitulatif de la composition.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setRecapEditing(true)}
+              className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]"
+            >
+              Modifier
+            </button>
+          </div>
+
+          <div className="mt-4 flex flex-col gap-3.5">
+            {requiredSkillsVolunteerDirectory.map((skillGroup) => {
+              const members = skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId);
+              return (
+                <div key={skillGroup.requiredSkillId} className="rounded-2xl border border-line-row p-4">
+                  <div className="flex items-center gap-2">
+                    <span className="h-[7px] w-[7px] rounded-full" style={{ background: getSkillDotColor(skillGroup.skillId ? skillColorById[skillGroup.skillId] : null) }} />
+                    <h3 className="text-[14.5px] font-extrabold text-ink">{skillGroup.requiredSkillName}</h3>
+                  </div>
+                  {members.length === 0 ? (
+                    <p className="mt-2 text-[12.5px] text-ink-3">Aucun bénévole affecté.</p>
+                  ) : (
+                    <div className="mt-3.5 flex flex-wrap gap-4">
+                      {members.map((volunteer) => (
+                        <div key={volunteer.id} className="w-[76px] text-center">
+                          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 border-ok-line bg-ok-soft text-[13px] font-extrabold text-ok-text">
+                            {volunteer.initials}
+                          </div>
+                          <div className="mt-1.5 text-[11.5px] font-semibold leading-[1.25] text-ink-2">{volunteer.fullName}</div>
+                        </div>
+                      ))}
+                    </div>
                   )}
                 </div>
-              ))
-            )}
+              );
+            })}
 
-            {canManageMission ? (
-              <div className="sticky bottom-3 flex justify-end">
-                <button
-                  type="button"
-                  onClick={confirmCrewSelection}
-                  disabled={missionBlocksSelection || actionLoading === 'confirm-selection' || actionLoading === 'save-selection'}
-                  className={`rounded-[11px] px-4 py-2 text-sm font-bold text-white shadow ${
-                    areSkillConstraintsMet ? 'bg-brand hover:bg-[#013A8F]' : 'bg-ink-4 hover:bg-ink-3'
-                  } disabled:cursor-not-allowed disabled:opacity-50`}
-                >
-                  {actionLoading === 'confirm-selection' || actionLoading === 'save-selection'
-                    ? 'Confirmation...'
-                    : "Confirmer la sélection de l'équipage"}
-                </button>
+            {requiredMateriels.map((requirement) => (
+              <div key={requirement.id} className="rounded-2xl border border-line-row p-4">
+                <div className="flex items-center gap-2">
+                  <Icon name="inventory_2" size={18} className="text-ink-3" />
+                  <h3 className="text-[14.5px] font-extrabold text-ink">{requirement.category?.name ?? 'Matériel'}</h3>
+                </div>
+                {(requirement.assignments ?? []).length === 0 ? (
+                  <p className="mt-2 text-[12.5px] text-ink-3">Aucun matériel affecté.</p>
+                ) : (
+                  <div className="mt-3.5 flex flex-wrap gap-2">
+                    {(requirement.assignments ?? []).map((assignment) => (
+                      <span
+                        key={assignment.id}
+                        className="rounded-full border border-ok-line bg-ok-soft px-3.5 py-2 text-[12.5px] font-bold text-ok-text"
+                      >
+                        {assignment.materiel_type?.name ?? 'Contenant'}
+                      </span>
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : null}
+            ))}
           </div>
-        ) : null}
-      </section>
-
-      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">Slack</h2>
-          <button
-            type="button"
-            aria-expanded={isSlackCardExpanded}
-            aria-controls="mission-slack-content"
-            aria-label={isSlackCardExpanded ? 'Masquer la carte Slack' : 'Afficher la carte Slack'}
-            onClick={() => setIsSlackCardExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
-          >
-            <span className={`text-base leading-none transition-transform ${isSlackCardExpanded ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-        </div>
-
-        {isSlackCardExpanded ? (
-          <div id="mission-slack-content" className="mt-3 rounded-xl border border-line bg-surface-sub p-3 text-xs text-ink-2">
-            <label className="mt-2 block text-sm">
-              Nom du canal Slack proposé
-              <input
-                type="text"
-                value={slackChannelNameDraft}
-                onChange={(event) => setSlackChannelNameDraft(event.target.value)}
-                disabled={isSlackChannelCreated}
-                title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
-                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
-              />
-            </label>
-            <label className="mt-2 block text-sm">
-              Message d&apos;accueil proposé
-              <textarea
-                value={slackMessageDraft}
-                onChange={(event) => setSlackMessageDraft(event.target.value)}
-                disabled={isSlackChannelCreated}
-                rows={4}
-                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
-              />
-            </label>
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={syncSlackChannel}
-                disabled={slackCreationState === 'creating' || isSlackChannelCreated}
-                title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
-                className={`rounded-[11px] border px-3 py-1.5 text-sm font-bold ${
-                  slackCreationState === 'idle' && !isSlackChannelCreated
-                    ? 'border-line-field text-ink-2 hover:bg-surface-sub'
-                    : 'cursor-not-allowed border-line-field bg-line text-ink-3'
-                }`}
-              >
-                {slackCreationState === 'creating'
-                  ? 'Création en cours'
-                  : isSlackChannelCreated
-                    ? 'Canal créé'
-                    : 'Confirmer la création du canal Slack'}
-              </button>
-            </div>
-            <label className="mt-4 block text-sm">
-              Message libre à envoyer
-              <textarea
-                value={slackFreeMessageDraft}
-                onChange={(event) => setSlackFreeMessageDraft(event.target.value)}
-                rows={3}
-                disabled={!mission.slack_channel_id}
-                placeholder={mission.slack_channel_id ? 'Tapez votre message Slack…' : 'Créez d’abord le canal Slack'}
-                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
-              />
-            </label>
-            <div className="mt-2 flex justify-end">
-              <button
-                type="button"
-                onClick={sendSlackFreeMessage}
-                disabled={!mission.slack_channel_id || actionLoading === 'send-slack-message' || !slackFreeMessageDraft.trim()}
-                className="rounded-[11px] border border-line-field px-3 py-1.5 text-sm font-bold text-ink-2 hover:bg-surface-sub disabled:cursor-not-allowed disabled:bg-line disabled:text-ink-3"
-              >
-                {actionLoading === 'send-slack-message' ? 'Envoi en cours...' : 'Envoyer le message'}
-              </button>
-            </div>
-          </div>
-        ) : null}
-      </section>
+        </section>
+      ) : null}
 
       {canManageMission ? (
-        <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+        <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
+          <button
+            type="button"
+            onClick={() => setIsSlackCardExpanded((current) => !current)}
+            className="flex w-full items-center justify-between gap-3 text-left"
+          >
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-[30px] w-[30px] items-center justify-center rounded-[9px] bg-surface-sub">
+                <Icon name="chat" size={16} className="text-ink-2" />
+              </span>
+              <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Slack</h2>
+              <span
+                className={`rounded-full px-2.5 py-1 text-[11.5px] font-extrabold ${
+                  isSlackChannelCreated ? 'bg-ok-soft text-ok-text' : 'bg-surface-sub text-ink-2'
+                }`}
+              >
+                {isSlackChannelCreated ? 'Canal créé' : 'Non créé'}
+              </span>
+            </div>
+            <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-ink-2">
+              <Icon name="expand_more" size={18} className={`transition-transform ${isSlackCardExpanded ? 'rotate-180' : ''}`} />
+            </span>
+          </button>
+
+          {isSlackCardExpanded ? (
+            <div className="mt-4 flex flex-col gap-3.5">
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-bold text-ink-2">Nom du canal proposé</label>
+                <input
+                  type="text"
+                  value={slackChannelNameDraft}
+                  onChange={(event) => setSlackChannelNameDraft(event.target.value)}
+                  disabled={isSlackChannelCreated}
+                  title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
+                  className="w-full rounded-[10px] border border-line-field px-3.5 py-2.5 text-[13.5px] text-ink disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
+                />
+              </div>
+              <div>
+                <label className="mb-1.5 block text-[12.5px] font-bold text-ink-2">Message d&apos;accueil</label>
+                <textarea
+                  rows={3}
+                  value={slackMessageDraft}
+                  onChange={(event) => setSlackMessageDraft(event.target.value)}
+                  disabled={isSlackChannelCreated}
+                  className="w-full resize-y rounded-[10px] border border-line-field px-3.5 py-2.5 text-[13.5px] text-ink disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
+                />
+              </div>
+
+              {!isSlackChannelCreated ? (
+                <div className="flex justify-end">
+                  <Button
+                    variant="primary"
+                    onClick={() => void confirmAndCreateSlackChannel()}
+                    disabled={actionLoading === 'confirm-and-slack' || missionBlocksSelection}
+                  >
+                    {actionLoading === 'confirm-and-slack' ? 'Création en cours…' : 'Confirmer et créer le canal Slack'}
+                  </Button>
+                </div>
+              ) : null}
+
+              {isSlackChannelCreated ? (
+                <div className="border-t border-line-row pt-3.5">
+                  <label className="mb-1.5 block text-[12.5px] font-bold text-ink-2">Message libre</label>
+                  <textarea
+                    rows={2}
+                    value={slackFreeMessageDraft}
+                    onChange={(event) => setSlackFreeMessageDraft(event.target.value)}
+                    placeholder="Tapez votre message Slack…"
+                    className="w-full rounded-[10px] border border-line-field px-3.5 py-2.5 text-[13.5px] text-ink"
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={sendSlackFreeMessage}
+                      disabled={!mission.slack_channel_id || actionLoading === 'send-slack-message' || !slackFreeMessageDraft.trim()}
+                      className="rounded-[11px] border border-line-field px-4 py-2 text-[12.5px] font-bold text-ink-2 hover:bg-surface-sub disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {actionLoading === 'send-slack-message' ? 'Envoi en cours...' : 'Envoyer'}
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canManageMission ? (
+        <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-ink">Activité des bénévoles</h2>
+            <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Activité des bénévoles</h2>
             <button
               type="button"
               aria-expanded={isActivityExpanded}
               aria-controls="mission-activity-content"
               aria-label={isActivityExpanded ? "Masquer l'activité des bénévoles" : "Afficher l'activité des bénévoles"}
               onClick={() => setIsActivityExpanded((current) => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
+              className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-ink-2"
             >
-              <span className={`text-base leading-none transition-transform ${isActivityExpanded ? 'rotate-180' : ''}`}>▾</span>
+              <Icon name="expand_more" size={18} className={`transition-transform ${isActivityExpanded ? 'rotate-180' : ''}`} />
             </button>
           </div>
           <p className="mt-1 text-sm text-ink-2">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles.</p>
@@ -1489,81 +1602,86 @@ export default function MissionDetailPage() {
         </section>
       ) : null}
 
-      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-ink">Historique</h2>
-          <button
-            type="button"
-            aria-expanded={isHistoryExpanded}
-            aria-controls="mission-history-content"
-            aria-label={isHistoryExpanded ? "Masquer l'historique" : "Afficher l'historique"}
-            onClick={() => setIsHistoryExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
-          >
-            <span className={`text-base leading-none transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`}>▾</span>
-          </button>
-        </div>
-        <p className="mt-1 text-sm text-ink-2">Événements récents de la mission, du plus récent au plus ancien.</p>
+      <section className="rounded-2xl border border-line bg-surface-card p-6 shadow-card">
+        <button
+          type="button"
+          onClick={() => setIsHistoryExpanded((current) => !current)}
+          className="flex w-full items-center justify-between gap-3 text-left"
+        >
+          <div>
+            <h2 className="text-[17px] font-extrabold tracking-[-0.01em] text-ink">Historique</h2>
+            <p className="mt-1 text-[13px] text-ink-3">Événements récents, du plus récent au plus ancien.</p>
+          </div>
+          <span className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-ink-2">
+            <Icon name="expand_more" size={18} className={`transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`} />
+          </span>
+        </button>
 
         {isHistoryExpanded ? (
-          <div id="mission-history-content" className="mt-3 space-y-3">
-          <label className="block">
-            <span className="sr-only">Rechercher dans l&apos;historique</span>
-            <input
-              type="search"
-              value={activitySearch}
-              onChange={(event) => setActivitySearch(event.target.value)}
-              placeholder="Rechercher dans l'historique"
-              className="w-full rounded-full border border-line-field bg-surface-card px-4 py-2 text-sm text-ink-2 placeholder:text-ink-3 focus:border-accent focus:outline-none"
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setSelectedActivityType('all')}
-              className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                selectedActivityType === 'all'
-                  ? 'border-brand bg-brand font-semibold text-white'
-                  : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
-              }`}
-            >
-              Toutes {activityLogs.length}
-            </button>
-            {Object.entries(ACTIVITY_TYPE_LABELS).map(([type, label]) => (
+          <div className="mt-4">
+            <label className="mb-3.5 block">
+              <span className="sr-only">Rechercher dans l&apos;historique</span>
+              <input
+                type="search"
+                value={activitySearch}
+                onChange={(event) => setActivitySearch(event.target.value)}
+                placeholder="Rechercher dans l'historique"
+                className="w-full rounded-full border border-line-field bg-surface-card px-4 py-2.5 text-[13.5px] text-ink-2 outline-none focus:border-accent"
+              />
+            </label>
+            <div className="mb-4.5 flex flex-wrap gap-2">
               <button
-                key={type}
                 type="button"
-                onClick={() => setSelectedActivityType(type as ActivityLog['action_type'])}
-                className={`rounded-full border px-4 py-1.5 text-sm transition ${
-                  selectedActivityType === type
-                    ? 'border-brand bg-brand font-semibold text-white'
-                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
+                onClick={() => setSelectedActivityType('all')}
+                className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-bold transition ${
+                  selectedActivityType === 'all' ? 'border-brand bg-brand text-white' : 'border-line-field bg-surface-card text-ink-2 hover:bg-surface-sub'
                 }`}
               >
-                {label} {activityTypeCounts[type as ActivityLog['action_type']]}
+                Toutes {activityLogs.length}
               </button>
-            ))}
-          </div>
-          {activityLogs.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-2">Aucun historique disponible pour cette mission.</p>
-          ) : filteredActivityLogs.length === 0 ? (
-            <p className="mt-3 text-sm text-ink-2">Aucun résultat avec ces filtres.</p>
-          ) : (
-            <ul className="mt-3 space-y-2">
-              {filteredActivityLogs.map((log) => (
-                <li key={log.id} className={`rounded-xl border p-3 text-sm text-ink-2 ${ACTIVITY_TYPE_TINTS[log.action_type]}`}>
-                  <p className="font-medium">{log.description}</p>
-                  <p className="mt-1 text-xs text-ink-3">
-                    {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
-                  </p>
-                </li>
+              {Object.entries(ACTIVITY_TYPE_LABELS).map(([type, label]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => setSelectedActivityType(type as ActivityLog['action_type'])}
+                  className={`rounded-full border px-3.5 py-1.5 text-[12.5px] font-bold transition ${
+                    selectedActivityType === type
+                      ? 'border-brand bg-brand text-white'
+                      : 'border-line-field bg-surface-card text-ink-2 hover:bg-surface-sub'
+                  }`}
+                >
+                  {label} {activityTypeCounts[type as ActivityLog['action_type']]}
+                </button>
               ))}
-            </ul>
-          )}
-        </div>
+            </div>
+
+            {activityLogGroups.length === 0 ? (
+              <p className="text-[13px] text-ink-3">
+                {activityLogs.length === 0 ? 'Aucun historique disponible pour cette mission.' : 'Aucun résultat avec ces filtres.'}
+              </p>
+            ) : (
+              <div className="relative pl-[22px]">
+                <div className="absolute bottom-1.5 left-[5px] top-1.5 w-[2px] bg-surface" />
+                {activityLogGroups.map((group) => (
+                  <div key={group.label} className="mb-5">
+                    <div className="-ml-[22px] mb-2.5 pl-[22px] text-[11px] font-extrabold uppercase tracking-[0.05em] text-ink-3">{group.label}</div>
+                    {group.events.map((log) => (
+                      <div key={log.id} className="relative mb-3">
+                        <span className="absolute -left-[22px] top-[5px] h-2.5 w-2.5 rounded-full border-2 border-surface-card bg-brand" />
+                        <div className="text-[13.5px] font-bold text-ink">{log.description}</div>
+                        <div className="mt-0.5 text-xs text-ink-3">
+                          {new Date(log.created_at).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })} ·{' '}
+                          {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : null}
       </section>
-
     </div>
   );
 }

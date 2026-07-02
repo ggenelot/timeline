@@ -21,6 +21,27 @@ export function getSkillColorClass(color: string | null | undefined): string {
   return COLOR_CLASSES[color ?? ''] ?? COLOR_CLASSES.slate;
 }
 
+// Nuance représentative de chaque teinte de chip, pour les pastilles rondes
+// (dot) affichées à côté d'un nom de compétence (ex. groupes d'équipage).
+const DOT_HEX_CLASSES: Record<string, string> = {
+  slate: '#94A3B8',
+  sky: '#1E3C87',
+  blue: '#1E3C87',
+  indigo: '#1E3C87',
+  cyan: '#0B6E63',
+  teal: '#0B6E63',
+  emerald: '#0B6E63',
+  violet: '#7A2E86',
+  pink: '#AB0093',
+  rose: '#D14343',
+  amber: '#B4590F',
+  orange: '#B4590F',
+};
+
+export function getSkillDotColor(color: string | null | undefined): string {
+  return DOT_HEX_CLASSES[color ?? ''] ?? DOT_HEX_CLASSES.slate;
+}
+
 export function SkillBadge({ name, color }: { name: string; color?: string | null }) {
   return (
     <span className={cn('inline-flex rounded-[7px] border px-2 py-0.5 text-xs font-medium', getSkillColorClass(color))}>

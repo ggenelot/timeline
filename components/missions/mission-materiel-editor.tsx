@@ -43,7 +43,9 @@ export function MissionMaterielEditor({
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
         <div>
           <AdminSectionLabel>Matériel requis</AdminSectionLabel>
-          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#8A93A6' }}>Optionnel. Définissez le matériel nécessaire pour cette mission.</p>
+          <p style={{ margin: '5px 0 0', fontSize: 12, color: '#8A93A6' }}>
+            Optionnel. Définissez les catégories et quantités nécessaires. L&apos;affectation d&apos;un véhicule précis se fait ensuite sur la fiche mission.
+          </p>
         </div>
         <button
           type="button"

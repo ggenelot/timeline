@@ -6,9 +6,8 @@ import { useParams, useRouter } from 'next/navigation';
 import { MissionForm, MissionFormState, MissionTypeOption, MissionRequirementFormState, MissionMaterielRequirementFormState, MaterielTypeOption } from '@/components/missions/mission-form';
 import { AdminBanner, AdminCard, AdminPageHeader, ghostButtonStyle, dangerButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, Profile, MissionRequiredMateriel } from '@/lib/types';
+import { Mission, Profile } from '@/lib/types';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
-import { MissionMaterielAssignmentPicker, CandidateContainer } from '@/components/missions/mission-materiel-assignment-picker';
 
 function isPositiveInteger(value: string) {
   return /^[1-9]\d*$/.test(value);
@@ -153,8 +152,6 @@ export default function AdminEditMissionPage() {
   const [skills, setSkills] = useState<MissionSkillOption[]>([]);
   const [materielRequirements, setMaterielRequirements] = useState<MissionMaterielRequirementFormState[]>([]);
   const [materielTypes, setMaterielTypes] = useState<MaterielTypeOption[]>([]);
-  const [requiredMateriels, setRequiredMateriels] = useState<MissionRequiredMateriel[]>([]);
-  const [candidateContainers, setCandidateContainers] = useState<CandidateContainer[]>([]);
   const [missionTypes, setMissionTypes] = useState<MissionTypeOption[]>([]);
   const [locationSuggestions, setLocationSuggestions] = useState<string[]>([]);
   const [requirementsError, setRequirementsError] = useState<string | null>(null);
@@ -163,41 +160,6 @@ export default function AdminEditMissionPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
-
-  async function loadMaterielAssignments() {
-    const { data: requirementsData, error: requirementsErr } = await supabase
-      .from('mission_required_materiels')
-      .select('id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color),assignments:mission_materiel_assignments(id,mission_required_materiel_id,materiel_type_id,assigned_by,created_at,materiel_type:materiel_types(id,name,code))')
-      .eq('mission_id', missionId);
-
-    if (requirementsErr || !requirementsData) {
-      setRequiredMateriels([]);
-      setCandidateContainers([]);
-      return;
-    }
-
-    const mappedRequirements = requirementsData.map((requirement) => ({
-      ...requirement,
-      category: Array.isArray(requirement.category) ? requirement.category[0] ?? null : requirement.category,
-      assignments: (requirement.assignments ?? []).map((assignment) => ({
-        ...assignment,
-        materiel_type: Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] ?? null : assignment.materiel_type
-      }))
-    }));
-    setRequiredMateriels(mappedRequirements);
-
-    const categoryIds = Array.from(new Set(mappedRequirements.map((requirement) => requirement.category_id)));
-    if (categoryIds.length > 0) {
-      const [containersResult, contentsResult] = await Promise.all([
-        supabase.from('materiel_types').select('id,name,code,category_id').eq('is_container', true).in('category_id', categoryIds),
-        supabase.from('materiel_type_contents').select('child_type_id')
-      ]);
-      const nestedContainerIds = new Set((contentsResult.data ?? []).map((row) => row.child_type_id));
-      setCandidateContainers((containersResult.data ?? []).filter((c) => !nestedContainerIds.has(c.id)));
-    } else {
-      setCandidateContainers([]);
-    }
-  }
 
   useEffect(() => {
     async function loadData() {
@@ -323,8 +285,6 @@ export default function AdminEditMissionPage() {
 
       setLocationSuggestions(suggestions);
       setLoading(false);
-
-      void loadMaterielAssignments();
     }
 
     void loadData();
@@ -606,12 +566,6 @@ export default function AdminEditMissionPage() {
           }
           />
         </AdminCard>
-
-        <MissionMaterielAssignmentPicker
-          requirements={requiredMateriels}
-          candidateContainers={candidateContainers}
-          onChange={() => void loadMaterielAssignments()}
-        />
       </div>
     </div>
   );
