@@ -171,8 +171,11 @@ export default function OpeDashboardPage() {
   return (
     // Full-bleed par marges (pas de transform, sinon il deviendrait le bloc conteneur
     // des modales `fixed`) : on sort du gabarit max-w-4xl du shell pour prendre toute la largeur.
+    // Sur desktop, le shell décale le contenu de 250px (sidebar fixe) : on compense la
+    // demi-largeur (125px) et on borne la largeur au conteneur réel pour ne pas passer sous
+    // la sidebar. Sur mobile (pas de sidebar), le calcul viewport d'origine reste correct.
     // `overflow-x-clip` neutralise le léger débordement dû à 100vw sans casser le sticky.
-    <div className="mx-[calc(50%_-_50vw)] w-screen overflow-x-clip px-3 sm:px-6 lg:px-10">
+    <div className="mx-[calc(50%_-_50vw)] w-screen overflow-x-clip px-3 sm:px-6 lg:ml-[calc(50%_-_50vw_+_125px)] lg:mr-0 lg:w-[calc(100vw_-_250px)] lg:px-10">
       {/* breadcrumb + titre */}
       <div className="mb-1.5 text-xs font-bold text-ink-4">
         OPE <span className="text-[#CBD2DE]">›</span> <span className="text-ink-3">Tableau de bord</span>
