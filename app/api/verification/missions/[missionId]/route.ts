@@ -60,7 +60,7 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
 
   const { data: existingItems, error: itemsError } = await auth.client
     .from('mission_materiel_verification_items')
-    .select('id,mission_id,mission_materiel_assignment_id,child_type_id,status,note,checked_by,checked_at')
+    .select('id,mission_id,mission_materiel_assignment_id,child_type_id,status,quantity_present,note,checked_by,checked_at')
     .eq('mission_id', missionId);
 
   if (itemsError) {
@@ -149,7 +149,7 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
         child_type_id: leaf.childTypeId,
         child_name: leaf.label,
         expected_quantity: leaf.expectedQuantity,
-        check: check ? { status: check.status, note: check.note } : null
+        check: check ? { status: check.status, note: check.note, quantity_present: check.quantity_present } : null
       });
     }
   }

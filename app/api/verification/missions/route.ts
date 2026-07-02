@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
-import { MissionMaterielVerificationStatus, MissionVerificationSummary } from '@/lib/types';
+import { MissionVerificationMaterielStatus, MissionVerificationMaterielSummary, MissionVerificationSummary } from '@/lib/types';
 
 export async function GET(request: NextRequest) {
   const token = getBearerToken(request);
@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
   const { data: assignments, error: assignmentsError } = await auth.client
     .from('mission_assignments')
-    .select('mission:missions(id,title,starts_at,location,status)')
+    .select('mission:missions(id,title,starts_at,ends_at,location,status,mission_type_id)')
     .eq('volunteer_id', auth.user.id)
     .in('assignment_status', ['selected', 'confirmed']);
 
@@ -23,7 +23,15 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: assignmentsError.message }, { status: 400 });
   }
 
-  type MissionRow = { id: string; title: string; starts_at: string; location: string | null; status: string };
+  type MissionRow = {
+    id: string;
+    title: string;
+    starts_at: string;
+    ends_at: string;
+    location: string | null;
+    status: string;
+    mission_type_id: string;
+  };
   const missions = (assignments ?? [])
     .map((row) => (Array.isArray(row.mission) ? row.mission[0] : row.mission) as MissionRow | null)
     .filter((mission): mission is MissionRow => mission !== null && mission.status === 'confirmed');
@@ -33,6 +41,12 @@ export async function GET(request: NextRequest) {
   }
 
   const missionIds = missions.map((mission) => mission.id);
+
+  const { data: missionTypes, error: missionTypesError } = await auth.client.from('mission_types').select('id,name');
+  if (missionTypesError) {
+    return NextResponse.json({ error: missionTypesError.message }, { status: 400 });
+  }
+  const missionTypeNameById = new Map((missionTypes ?? []).map((row) => [row.id, row.name as string]));
 
   const { data: requiredMateriels, error: requiredError } = await auth.client
     .from('mission_required_materiels')
@@ -54,7 +68,7 @@ export async function GET(request: NextRequest) {
     requiredMaterielIds.length > 0
       ? await auth.client
           .from('mission_materiel_assignments')
-          .select('id,mission_required_materiel_id,materiel_type_id')
+          .select('id,mission_required_materiel_id,materiel_type_id,materiel_type:materiel_types(id,name)')
           .in('mission_required_materiel_id', requiredMaterielIds)
       : { data: [], error: null };
 
@@ -98,21 +112,13 @@ export async function GET(request: NextRequest) {
     return count;
   }
 
-  const totalItemsByMission = new Map<string, number>();
-  for (const row of materielAssignments ?? []) {
-    const missionId = missionByRequirement.get(row.mission_required_materiel_id);
-    if (!missionId) continue;
-    const current = totalItemsByMission.get(missionId) ?? 0;
-    totalItemsByMission.set(missionId, current + countLeafItems(row.materiel_type_id, new Set()));
-  }
-
   const assignmentIds = (materielAssignments ?? []).map((row) => row.id);
 
   const { data: checkedItems, error: checkedError } =
     assignmentIds.length > 0
       ? await auth.client
           .from('mission_materiel_verification_items')
-          .select('mission_id,mission_materiel_assignment_id')
+          .select('mission_materiel_assignment_id,status')
           .in('mission_materiel_assignment_id', assignmentIds)
       : { data: [], error: null };
 
@@ -120,33 +126,49 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: checkedError.message }, { status: 400 });
   }
 
-  const checkedCountByMission = new Map<string, number>();
+  const checkedByAssignment = new Map<string, { checked: number; missing: number }>();
   for (const row of checkedItems ?? []) {
-    checkedCountByMission.set(row.mission_id, (checkedCountByMission.get(row.mission_id) ?? 0) + 1);
+    const current = checkedByAssignment.get(row.mission_materiel_assignment_id) ?? { checked: 0, missing: 0 };
+    current.checked += 1;
+    if (row.status === 'missing' || row.status === 'partial') current.missing += 1;
+    checkedByAssignment.set(row.mission_materiel_assignment_id, current);
   }
 
-  const { data: verifications, error: verificationsError } = await auth.client
-    .from('mission_materiel_verifications')
-    .select('mission_id,status')
-    .in('mission_id', missionIds);
-
-  if (verificationsError) {
-    return NextResponse.json({ error: verificationsError.message }, { status: 400 });
+  function computeMaterielStatus(totalItems: number, checked: number, missing: number): MissionVerificationMaterielStatus {
+    if (checked === 0) return 'not_started';
+    if (missing > 0 && checked >= totalItems) return 'missing';
+    if (checked < totalItems) return 'in_progress';
+    return 'completed';
   }
 
-  const statusByMission = new Map<string, MissionMaterielVerificationStatus>();
-  for (const row of verifications ?? []) {
-    statusByMission.set(row.mission_id, row.status as MissionMaterielVerificationStatus);
+  const materielsByMission = new Map<string, MissionVerificationMaterielSummary[]>();
+  for (const assignment of materielAssignments ?? []) {
+    const missionId = missionByRequirement.get(assignment.mission_required_materiel_id);
+    if (!missionId) continue;
+
+    const containerType = Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] : assignment.materiel_type;
+    const totalItems = countLeafItems(assignment.materiel_type_id, new Set());
+    const { checked, missing } = checkedByAssignment.get(assignment.id) ?? { checked: 0, missing: 0 };
+
+    const list = materielsByMission.get(missionId) ?? [];
+    list.push({
+      mission_materiel_assignment_id: assignment.id,
+      name: containerType?.name ?? 'Matériel',
+      total_items: totalItems,
+      checked_items: checked,
+      status: computeMaterielStatus(totalItems, checked, missing)
+    });
+    materielsByMission.set(missionId, list);
   }
 
   const summaries: MissionVerificationSummary[] = missions.map((mission) => ({
     mission_id: mission.id,
     title: mission.title,
+    category: missionTypeNameById.get(mission.mission_type_id) ?? 'Mission',
     starts_at: mission.starts_at,
+    ends_at: mission.ends_at,
     location: mission.location,
-    status: statusByMission.get(mission.id) ?? 'not_started',
-    total_items: totalItemsByMission.get(mission.id) ?? 0,
-    checked_items: checkedCountByMission.get(mission.id) ?? 0
+    materiels: materielsByMission.get(mission.id) ?? []
   }));
 
   summaries.sort((a, b) => new Date(a.starts_at).getTime() - new Date(b.starts_at).getTime());
