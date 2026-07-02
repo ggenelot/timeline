@@ -1,4 +1,5 @@
-import { MissionMaterielVerificationStatus, MissionProposalResponse, MissionStatus } from '@/lib/types';
+import { BadgeTone } from '@/components/ui/badge';
+import { MissionVerificationMaterielStatus, MissionProposalResponse, MissionStatus } from '@/lib/types';
 
 export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   draft: 'Brouillon',
@@ -8,20 +9,32 @@ export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   cancelled: 'Annulé'
 };
 
-export const MISSION_VERIFICATION_STATUS_LABELS: Record<MissionMaterielVerificationStatus, string> = {
+// Statut d'un matériel affecté à une mission, tel qu'affiché sur « Mes
+// missions » et sur l'écran de vérification scopée : dérivé des items pointés
+// (cf. computeMaterielVerificationStatus côté API), pas stocké tel quel.
+export const MISSION_VERIFICATION_MATERIEL_STATUS_LABELS: Record<MissionVerificationMaterielStatus, string> = {
   not_started: 'À vérifier',
   in_progress: 'En cours',
-  completed: 'Vérifiée'
+  missing: 'Manquant',
+  completed: 'Vérifié'
 };
 
-export function getMissionVerificationStatusBadgeClass(status: MissionMaterielVerificationStatus) {
-  const statusClassMap: Record<MissionMaterielVerificationStatus, string> = {
-    not_started: 'border-line bg-surface-sub text-ink-2',
-    in_progress: 'border-warn-line bg-warn-soft text-warn-text',
-    completed: 'border-ok-line bg-ok-soft text-ok-text'
+export const MISSION_VERIFICATION_MATERIEL_STATUS_TONE: Record<MissionVerificationMaterielStatus, BadgeTone> = {
+  not_started: 'neutral',
+  in_progress: 'warn',
+  missing: 'bad',
+  completed: 'ok'
+};
+
+export function getMissionVerificationMaterielDotClass(status: MissionVerificationMaterielStatus) {
+  const dotClassMap: Record<MissionVerificationMaterielStatus, string> = {
+    not_started: 'bg-ink-4',
+    in_progress: 'bg-warn-bar',
+    missing: 'bg-bad',
+    completed: 'bg-ok-bar'
   };
 
-  return statusClassMap[status];
+  return dotClassMap[status];
 }
 
 export function getMissionStatusBadgeClass(status: MissionStatus) {

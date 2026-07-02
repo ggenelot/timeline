@@ -6,6 +6,7 @@ type ItemCheckBody = {
   mission_materiel_assignment_id?: string;
   child_type_id?: string;
   status?: MissionMaterielVerificationItemStatus;
+  quantity_present?: number | null;
   note?: string | null;
 };
 
@@ -35,8 +36,11 @@ export async function POST(request: NextRequest, { params }: { params: { mission
   if (!body.mission_materiel_assignment_id || !body.child_type_id || !body.status) {
     return NextResponse.json({ error: 'Champs manquants pour enregistrer la vérification.' }, { status: 400 });
   }
-  if (body.status !== 'present' && body.status !== 'missing') {
+  if (body.status !== 'present' && body.status !== 'missing' && body.status !== 'partial') {
     return NextResponse.json({ error: 'Statut de vérification invalide.' }, { status: 400 });
+  }
+  if (body.status === 'partial' && (body.quantity_present === undefined || body.quantity_present === null)) {
+    return NextResponse.json({ error: 'Quantité présente manquante pour un pointage partiel.' }, { status: 400 });
   }
 
   const { data: assignment, error: assignmentError } = await auth.client
@@ -133,6 +137,7 @@ export async function POST(request: NextRequest, { params }: { params: { mission
         mission_materiel_assignment_id: body.mission_materiel_assignment_id,
         child_type_id: body.child_type_id,
         status: body.status,
+        quantity_present: body.status === 'partial' ? body.quantity_present : null,
         note: body.note?.trim() || null,
         checked_by: auth.user.id,
         checked_at: new Date().toISOString()

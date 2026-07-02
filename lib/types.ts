@@ -139,7 +139,7 @@ export type MissionTypeRequiredMateriel = {
 // ── Vérification assistée du matériel ──────────────────────────────────
 
 export type MissionMaterielVerificationStatus = 'not_started' | 'in_progress' | 'completed';
-export type MissionMaterielVerificationItemStatus = 'present' | 'missing';
+export type MissionMaterielVerificationItemStatus = 'present' | 'partial' | 'missing';
 
 export type MissionMaterielVerification = {
   id: string;
@@ -157,6 +157,7 @@ export type MissionMaterielVerificationItem = {
   mission_materiel_assignment_id: string;
   child_type_id: string;
   status: MissionMaterielVerificationItemStatus;
+  quantity_present: number | null;
   note: string | null;
   checked_by: string;
   checked_at: string;
@@ -174,7 +175,7 @@ export type MissionVerificationCard = {
   child_type_id: string;
   child_name: string;
   expected_quantity: number;
-  check: Pick<MissionMaterielVerificationItem, 'status' | 'note'> | null;
+  check: Pick<MissionMaterielVerificationItem, 'status' | 'note' | 'quantity_present'> | null;
 };
 
 export type MissionVerificationDetail = {
@@ -183,14 +184,62 @@ export type MissionVerificationDetail = {
   cards: MissionVerificationCard[];
 };
 
+// Statut d'un matériel (une affectation) sur l'écran « Mes missions » : dérivé
+// des items pointés plutôt que stocké, en plus du not_started/in_progress/
+// completed classique on distingue 'missing' dès qu'un item manquant a été
+// relevé, même une fois tout le matériel pointé.
+export type MissionVerificationMaterielStatus = 'not_started' | 'in_progress' | 'missing' | 'completed';
+
+export type MissionVerificationMaterielSummary = {
+  mission_materiel_assignment_id: string;
+  name: string;
+  total_items: number;
+  checked_items: number;
+  status: MissionVerificationMaterielStatus;
+};
+
 export type MissionVerificationSummary = {
   mission_id: string;
   title: string;
+  category: string;
   starts_at: string;
+  ends_at: string;
   location: string | null;
-  status: MissionMaterielVerificationStatus;
-  total_items: number;
-  checked_items: number;
+  materiels: MissionVerificationMaterielSummary[];
+};
+
+// ── Arborescence de vérification scopée à un matériel (écran 2) ────────
+// Un contenant affecté peut lui-même contenir des sous-contenants ; l'arbre
+// reflète la composition catalogue (materiel_type_contents) sous cette
+// affectation précise, avec le pointage déjà enregistré sur chaque item.
+
+export type VerificationTreeItemNode = {
+  kind: 'item';
+  id: string;
+  child_type_id: string;
+  name: string;
+  quantity: number;
+  check: Pick<MissionMaterielVerificationItem, 'status' | 'note' | 'quantity_present'> | null;
+};
+
+export type VerificationTreeContainerNode = {
+  kind: 'container';
+  id: string;
+  materiel_type_id: string;
+  name: string;
+  children: VerificationTreeNode[];
+  totalItems: number;
+  checkedItems: number;
+  missingItems: number;
+};
+
+export type VerificationTreeNode = VerificationTreeItemNode | VerificationTreeContainerNode;
+
+export type MissionVerificationTree = {
+  mission_id: string;
+  mission_title: string;
+  assignment_id: string;
+  root: VerificationTreeContainerNode;
 };
 
 export type HelpPage = {
