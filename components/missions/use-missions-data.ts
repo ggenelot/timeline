@@ -26,7 +26,6 @@ export function useMissionsData() {
   const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
   const [proposals, setProposals] = useState<MissionProposal[]>([]);
   const [retainedMissionIds, setRetainedMissionIds] = useState<Set<string>>(new Set());
-  const [canCreateMissionTypeIds, setCanCreateMissionTypeIds] = useState<string[]>([]);
   const [canManageMissionTypeIds, setCanManageMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<Map<string, ProposalStats>>(new Map());
   const [error, setError] = useState<string | null>(null);
@@ -123,22 +122,15 @@ export function useMissionsData() {
     if (rolesRes.ok) {
       const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
 
-      const canCreateBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_create');
-      const createIds = canCreateBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
-        ? allTypeIds
-        : Array.from(new Set(canCreateBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
-
       const canManageBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
       const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
         ? allTypeIds
         : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
 
       // Admin status isn't backed by role_behaviors rows, so it must be forced here
-      // to keep "Proposer une mission" / management actions available to admins.
-      setCanCreateMissionTypeIds(isAdmin ? allTypeIds : createIds);
+      // to keep management actions available to admins.
       setCanManageMissionTypeIds(isAdmin ? allTypeIds : manageIds);
     } else if (isAdmin) {
-      setCanCreateMissionTypeIds(allTypeIds);
       setCanManageMissionTypeIds(allTypeIds);
     }
 
@@ -259,7 +251,6 @@ export function useMissionsData() {
     missionTypes,
     proposals,
     retainedMissionIds,
-    canCreateMissionTypeIds,
     canManageMissionTypeIds,
     proposalStatsByMission,
     proposalByMission,
