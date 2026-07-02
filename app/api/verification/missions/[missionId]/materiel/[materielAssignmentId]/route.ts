@@ -118,7 +118,10 @@ export async function GET(
     return { total, checked, missing };
   }
 
-  function buildNode(typeId: string, name: string, path: string, visited: Set<string>): VerificationTreeContainerNode {
+  // multiplier : produit des quantités des contenants ancêtres (ex. 2 poches
+  // contenant chacune 5 compresses → l'item terminal attend 10 compresses),
+  // même logique que collectLeafItems dans la route de détail existante.
+  function buildNode(typeId: string, name: string, path: string, visited: Set<string>, multiplier: number): VerificationTreeContainerNode {
     const nextVisited = new Set(visited).add(typeId);
     const children = contentsByContainer.get(typeId) ?? [];
 
@@ -128,9 +131,10 @@ export async function GET(
         const childType = Array.isArray(content.child_type) ? content.child_type[0] : content.child_type;
         const childName = childType?.name ?? 'Item';
         const childPath = `${path}>${content.child_type_id}`;
+        const childQuantity = multiplier * content.quantity;
 
         if (childType?.is_container) {
-          return buildNode(content.child_type_id, childName, childPath, nextVisited);
+          return buildNode(content.child_type_id, childName, childPath, nextVisited, childQuantity);
         }
 
         const check = checksByChildType.get(content.child_type_id) ?? null;
@@ -139,7 +143,7 @@ export async function GET(
           id: childPath,
           child_type_id: content.child_type_id,
           name: childName,
-          quantity: content.quantity,
+          quantity: childQuantity,
           check: check
             ? { status: check.status as 'present' | 'partial' | 'missing', note: check.note, quantity_present: check.quantity_present }
             : null
@@ -161,7 +165,7 @@ export async function GET(
   }
 
   const rootType = Array.isArray(assignment.materiel_type) ? assignment.materiel_type[0] : assignment.materiel_type;
-  const root = buildNode(assignment.materiel_type_id, rootType?.name ?? 'Matériel', 'root', new Set());
+  const root = buildNode(assignment.materiel_type_id, rootType?.name ?? 'Matériel', 'root', new Set(), 1);
 
   const tree: MissionVerificationTree = {
     mission_id: missionId,

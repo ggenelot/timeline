@@ -103,13 +103,6 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: verificationFetchError.message }, { status: 400 });
   }
 
-  if (verification?.status === 'completed') {
-    return NextResponse.json(
-      { error: 'Cette vérification est terminée et verrouillée. Relancez-la avant de modifier un item.' },
-      { status: 409 }
-    );
-  }
-
   if (!verification) {
     const { error: insertVerificationError } = await auth.client
       .from('mission_materiel_verifications')
@@ -118,10 +111,14 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     if (insertVerificationError) {
       return NextResponse.json({ error: insertVerificationError.message }, { status: 400 });
     }
-  } else if (verification.status === 'not_started') {
+  } else if (verification.status === 'not_started' || verification.status === 'completed') {
+    // L'écran de vérification scopée par matériel n'a plus de geste explicite
+    // "Terminer" / "Relancer" : un nouveau pointage sur une mission déjà
+    // marquée complétée (par l'ancien flow) la rouvre simplement, plutôt que
+    // de bloquer avec un 409 sans issue pour l'utilisateur.
     const { error: updateVerificationError } = await auth.client
       .from('mission_materiel_verifications')
-      .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+      .update({ status: 'in_progress', completed_by: null, completed_at: null, updated_at: new Date().toISOString() })
       .eq('id', verification.id);
 
     if (updateVerificationError) {
