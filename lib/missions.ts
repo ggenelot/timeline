@@ -9,6 +9,21 @@ export const MISSION_STATUS_LABELS: Record<MissionStatus, string> = {
   cancelled: 'Annulé'
 };
 
+// Ordre d'affichage des statuts dans les sélecteurs (ex. dropdown "Changer
+// statut" en masse sur /admin/missions) — distinct de l'ordre des clés
+// ci-dessus, qui suit l'ordre du cycle de vie technique.
+export const MISSION_STATUS_ORDER: MissionStatus[] = ['draft', 'proposed', 'confirmed', 'closed', 'cancelled'];
+
+// Couleur pleine (pastille + texte) utilisée par les habillages "flat" du
+// statut, par opposition au badge à pastille bordée de getMissionStatusBadgeClass.
+export const MISSION_STATUS_COLOR: Record<MissionStatus, string> = {
+  draft: '#B45309',
+  proposed: '#1E3C87',
+  confirmed: '#12805A',
+  closed: '#5B6478',
+  cancelled: '#D14343'
+};
+
 // Statut d'un matériel affecté à une mission, tel qu'affiché sur « Mes
 // missions » et sur l'écran de vérification scopée : dérivé des items pointés
 // (cf. computeMaterielVerificationStatus côté API), pas stocké tel quel.
