@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
     .from('mission_assignments')
     .select('mission:missions(id,title,starts_at,location,status)')
     .eq('volunteer_id', auth.user.id)
-    .eq('assignment_status', 'confirmed');
+    .in('assignment_status', ['selected', 'confirmed']);
 
   if (assignmentsError) {
     return NextResponse.json({ error: assignmentsError.message }, { status: 400 });
