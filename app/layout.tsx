@@ -1,13 +1,27 @@
 import type { Metadata } from 'next';
-import { Hanken_Grotesk } from 'next/font/google';
+import { Source_Sans_3, Anton, Beth_Ellen } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { AuthGuard } from '@/components/auth-guard';
 import { HelpButton } from '@/components/help-button';
 
-const hanken = Hanken_Grotesk({
+const sourceSans = Source_Sans_3({
   subsets: ['latin'],
-  variable: '--font-hanken',
+  variable: '--font-source-sans',
+  display: 'swap',
+});
+
+const anton = Anton({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-anton',
+  display: 'swap',
+});
+
+const bethEllen = Beth_Ellen({
+  subsets: ['latin'],
+  weight: '400',
+  variable: '--font-beth-ellen',
   display: 'swap',
 });
 
@@ -18,7 +32,10 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="fr" className={hanken.variable}>
+    <html
+      lang="fr"
+      className={`${sourceSans.variable} ${anton.variable} ${bethEllen.variable}`}
+    >
       <body>
         <AuthGuard>
           <AppShell>{children}</AppShell>

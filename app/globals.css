@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 body {
-  @apply bg-slate-100 text-slate-900;
-  font-family: var(--font-hanken), -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif;
+  @apply bg-surface text-ink font-sans;
   -webkit-font-smoothing: antialiased;
 }
