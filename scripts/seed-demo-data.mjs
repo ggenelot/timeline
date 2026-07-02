@@ -200,28 +200,6 @@ async function main() {
   }
   log('profile_skills_upserted', { count: profileSkillRows.length });
 
-  const { data: domains, error: domainsError } = await supabase.from('skill_domains').select('id, code');
-  if (domainsError) throw domainsError;
-  const { data: levels, error: levelsError } = await supabase.from('skill_levels').select('id, domain_id, rank');
-  if (levelsError) throw levelsError;
-
-  const progressRows = [];
-  for (const volunteer of volunteers) {
-    for (const domain of randomItems(domains, randomInt(1, 2))) {
-      const domainLevels = levels.filter((l) => l.domain_id === domain.id);
-      if (!domainLevels.length) continue;
-      const level = randomItem(domainLevels);
-      progressRows.push({ profile_id: volunteer.id, domain_id: domain.id, level_id: level.id });
-    }
-  }
-  if (progressRows.length) {
-    const { error } = await supabase
-      .from('profile_domain_progress')
-      .upsert(progressRows, { onConflict: 'profile_id,domain_id' });
-    if (error) throw error;
-  }
-  log('profile_domain_progress_upserted', { count: progressRows.length });
-
   // --- Missions ---
   const { data: missionTypes, error: missionTypesError } = await supabase.from('mission_types').select('id, name');
   if (missionTypesError) throw missionTypesError;
