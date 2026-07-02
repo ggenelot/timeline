@@ -839,13 +839,24 @@ export default function MissionDetailPage() {
             assignment_status: 'selected'
           }))
         )
-        .select('id,volunteer_id,mission_required_skill_id,assignment_status,created_at');
+        .select(
+          supportsMissionRequiredSkillReference
+            ? 'id,volunteer_id,mission_required_skill_id,assignment_status,created_at'
+            : 'id,volunteer_id,assignment_status,created_at'
+        );
       if (insertError) {
         setError(`Impossible de mettre à jour la sélection : ${insertError.message}`);
         setActionLoading(null);
         return;
       }
-      insertedRows = inserted ?? [];
+      const insertedRaw = (inserted ?? []) as unknown as Array<{
+        id: string;
+        volunteer_id: string;
+        mission_required_skill_id?: string | null;
+        assignment_status: MissionAssignmentStatus;
+        created_at: string;
+      }>;
+      insertedRows = insertedRaw.map((row) => ({ ...row, mission_required_skill_id: row.mission_required_skill_id ?? null }));
     }
 
     for (const assignment of toUpdate) {
