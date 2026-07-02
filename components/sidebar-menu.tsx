@@ -24,7 +24,6 @@ type GestionItem = NavItem & {
 const PERSO_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
   { href: '/competences', label: 'Compétences', icon: 'workspace_premium' },
-  { href: '/competences', label: 'Cursus', icon: 'school' },
   { href: '/verification', label: 'Vérification', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
 ];
@@ -32,8 +31,8 @@ const PERSO_ITEMS: NavItem[] = [
 // Onglets de la barre du bas (mobile) — sous-ensemble bénévole.
 const TAB_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
-  { href: '/verification', label: 'Vérif', icon: 'fact_check' },
   { href: '/competences', label: 'Compét.', icon: 'workspace_premium' },
+  { href: '/verification', label: 'Vérif', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
 ];
 
