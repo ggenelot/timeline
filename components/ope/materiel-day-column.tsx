@@ -17,15 +17,15 @@ function Group({
   emptyLabel: string;
 }) {
   return (
-    <div className="rounded-md border border-slate-200 bg-white/60 p-2">
-      <div className="mb-1 flex items-center justify-between">
-        <span className={`text-[11px] font-semibold uppercase tracking-wide ${labelClass}`}>{title}</span>
-        <span className="rounded-full bg-slate-200 px-1.5 text-[11px] font-medium text-slate-600">{count}</span>
+    <div className="rounded-[10px] border border-line bg-surface-card p-2">
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className={`text-[10px] font-bold uppercase tracking-[0.03em] ${labelClass}`}>{title}</span>
+        <span className="rounded-full bg-[#E4E9F2] px-1.5 py-px text-[10px] font-bold text-ink-2">{count}</span>
       </div>
       {count === 0 ? (
-        <p className="text-[11px] italic text-slate-400">{emptyLabel}</p>
+        <p className="text-[10.5px] italic text-ink-3">{emptyLabel}</p>
       ) : (
-        <div className="flex flex-wrap gap-1">{children}</div>
+        <div className="flex flex-wrap gap-[5px]">{children}</div>
       )}
     </div>
   );
@@ -48,35 +48,35 @@ export function MaterielDayColumn({
 }) {
   return (
     <section
-      className={`flex w-72 shrink-0 flex-col rounded-xl border ${
-        isToday ? 'border-sky-300 ring-1 ring-sky-200' : 'border-slate-200'
-      } bg-slate-50`}
+      className={`flex w-[272px] shrink-0 flex-col overflow-hidden rounded-[15px] border bg-surface-sub ${
+        isToday ? 'border-accent-ring shadow-[0_0_0_1px_#FBDCC4]' : 'border-line'
+      }`}
     >
       <header
-        className={`sticky top-0 z-10 flex items-center justify-between rounded-t-xl border-b px-3 py-2 ${
-          isToday ? 'border-sky-200 bg-sky-50' : 'border-slate-200 bg-white/90 backdrop-blur'
+        className={`sticky top-0 z-10 flex items-center justify-between border-b px-[13px] py-[9px] text-[13px] font-bold ${
+          isToday ? 'border-accent-ring bg-accent-soft text-accent-text' : 'border-line-row bg-surface-card text-ink-2'
         }`}
       >
-        <span className="text-sm font-semibold capitalize text-slate-700">{capitalize(label)}</span>
+        <span className="capitalize">{capitalize(label)}</span>
         {isToday ? (
-          <span className="rounded-full bg-sky-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-white">
-            Aujourd&apos;hui
+          <span className="rounded-full bg-accent px-[7px] py-0.5 text-[9px] font-extrabold uppercase tracking-[0.03em] text-white">
+            AUJ.
           </span>
         ) : null}
       </header>
 
-      <div className="flex flex-1 flex-col gap-2 p-2">
-        <Group title="Engagé" count={engaged.length} labelClass="text-orange-600" emptyLabel="Aucun matériel engagé">
+      <div className="flex flex-1 flex-col gap-[7px] p-2.5">
+        <Group title="Engagé" count={engaged.length} labelClass="text-accent-text" emptyLabel="Aucun matériel engagé">
           {engaged.map((m) => (
             <MaterielChip key={m.container_type_id} name={m.name} code={m.code} tone="engaged" />
           ))}
         </Group>
-        <Group title="Disponible" count={available.length} labelClass="text-emerald-600" emptyLabel="Aucun contenant disponible">
+        <Group title="Disponible" count={available.length} labelClass="text-ok-text" emptyLabel="Aucun contenant disponible">
           {available.map((c) => (
             <MaterielChip key={c.id} name={c.name} code={c.code} tone="available" />
           ))}
         </Group>
-        <Group title="Indisponible" count={unavailable.length} labelClass="text-slate-400" emptyLabel="Aucun contenant indisponible">
+        <Group title="Indisponible" count={unavailable.length} labelClass="text-ink-3" emptyLabel="Aucun contenant indisponible">
           {unavailable.map((c) => (
             <MaterielChip
               key={c.id}

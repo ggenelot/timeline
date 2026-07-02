@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { getMissionVerificationStatusBadgeClass, MISSION_VERIFICATION_STATUS_LABELS } from '@/lib/missions';
 import { MissionVerificationSummary } from '@/lib/types';
+import { Card, PageHeader } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 
 export default function VerificationListPage() {
   const [missions, setMissions] = useState<MissionVerificationSummary[]>([]);
@@ -43,55 +45,51 @@ export default function VerificationListPage() {
   }, [router]);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des missions à vérifier...</p>;
+    return <p className="text-sm text-ink-2">Chargement des missions à vérifier...</p>;
   }
 
   if (error) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <p className="text-sm text-bad">{error}</p>;
   }
 
   return (
     <div className="flex flex-col gap-4">
-      <div>
-        <h1 className="text-lg font-semibold text-slate-900">Vérification du matériel</h1>
-        <p className="text-sm text-slate-600">
-          Matériel engagé sur vos missions confirmées. Lancez la vérification pour pointer chaque item.
-        </p>
-      </div>
+      <PageHeader
+        title="Vérification du matériel"
+        subtitle="Matériel engagé sur vos missions confirmées. Lancez la vérification pour pointer chaque item."
+      />
 
       {missions.length === 0 ? (
-        <p className="text-sm text-slate-600">Aucune mission confirmée avec du matériel à vérifier pour le moment.</p>
+        <p className="text-sm text-ink-2">Aucune mission confirmée avec du matériel à vérifier pour le moment.</p>
       ) : (
         <ul className="flex flex-col gap-3">
           {missions.map((mission) => (
-            <li key={mission.mission_id} className="rounded-lg border border-slate-200 bg-white p-4">
-              <Link href={`/verification/${mission.mission_id}`} className="flex items-center justify-between gap-4">
+            <Card as="li" hover key={mission.mission_id}>
+              <Link href={`/verification/${mission.mission_id}`} className="flex items-center justify-between gap-4 p-4">
                 <div className="flex flex-col gap-1">
-                  <span className="font-medium text-slate-900">{mission.title}</span>
-                  <span className="text-xs text-slate-500">
+                  <span className="font-bold text-ink">{mission.title}</span>
+                  <span className="text-xs text-ink-3">
                     {new Date(mission.starts_at).toLocaleString('fr-FR', { dateStyle: 'medium', timeStyle: 'short' })}
                     {mission.location ? ` · ${mission.location}` : ''}
                   </span>
                   {mission.total_items > 0 ? (
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-ink-3">
                       {mission.checked_items} / {mission.total_items} items vérifiés
                     </span>
                   ) : (
-                    <span className="text-xs text-slate-400">Aucun matériel requis défini sur cette mission.</span>
+                    <span className="text-xs text-ink-4">Aucun matériel requis défini sur cette mission.</span>
                   )}
                 </div>
                 <div className="flex items-center gap-3">
                   <span
-                    className={`rounded border px-2 py-1 text-xs font-medium uppercase ${getMissionVerificationStatusBadgeClass(mission.status)}`}
+                    className={`rounded-full border px-2.5 py-1 text-[10.5px] font-bold uppercase ${getMissionVerificationStatusBadgeClass(mission.status)}`}
                   >
                     {MISSION_VERIFICATION_STATUS_LABELS[mission.status]}
                   </span>
-                  <span aria-hidden="true" className="text-xl text-slate-400">
-                    →
-                  </span>
+                  <Icon name="chevron_right" size={20} className="text-ink-3" />
                 </div>
               </Link>
-            </li>
+            </Card>
           ))}
         </ul>
       )}

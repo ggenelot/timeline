@@ -6,6 +6,9 @@ import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import { VerificationCardStack } from '@/components/verification/verification-card-stack';
 import { MissionMaterielVerificationItemStatus, MissionVerificationCard, MissionVerificationDetail } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 
 async function getAccessToken() {
   const { data } = await supabase.auth.getSession();
@@ -127,11 +130,11 @@ export default function VerificationMissionPage() {
   }
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement de la vérification...</p>;
+    return <p className="text-sm text-ink-2">Chargement de la vérification...</p>;
   }
 
   if (error && !detail) {
-    return <p className="text-sm text-red-600">{error}</p>;
+    return <p className="text-sm text-bad">{error}</p>;
   }
 
   if (!detail) {
@@ -141,10 +144,11 @@ export default function VerificationMissionPage() {
   if (detail.cards.length === 0) {
     return (
       <div className="flex flex-col gap-3">
-        <Link href="/verification" className="text-sm text-slate-500">
-          ← Retour
+        <Link href="/verification" className="inline-flex items-center gap-1 text-sm font-medium text-ink-2 hover:text-ink">
+          <Icon name="arrow_back" size={18} />
+          Retour
         </Link>
-        <p className="text-sm text-slate-600">Aucun matériel requis n’est défini sur cette mission.</p>
+        <p className="text-sm text-ink-2">Aucun matériel requis n’est défini sur cette mission.</p>
       </div>
     );
   }
@@ -155,18 +159,19 @@ export default function VerificationMissionPage() {
 
   return (
     <div className="flex flex-col gap-5">
-      <Link href="/verification" className="text-sm text-slate-500">
-        ← Retour
+      <Link href="/verification" className="inline-flex items-center gap-1 text-sm font-medium text-ink-2 hover:text-ink">
+        <Icon name="arrow_back" size={18} />
+        Retour
       </Link>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-bad">{error}</p> : null}
 
       {isCompleted ? (
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-            <p className="text-sm font-medium text-emerald-800">Vérification terminée.</p>
+          <div className="rounded-2xl border border-ok-line bg-ok-soft p-4">
+            <p className="text-sm font-semibold text-ok-text">Vérification terminée.</p>
             {missingCards.length > 0 ? (
-              <ul className="mt-2 list-inside list-disc text-sm text-emerald-800">
+              <ul className="mt-2 list-inside list-disc text-sm text-ok-text">
                 {missingCards.map((card) => (
                   <li key={`${card.mission_materiel_assignment_id}:${card.child_type_id}`}>
                     {card.category_name} — {card.container_name} — {card.child_name}
@@ -175,24 +180,24 @@ export default function VerificationMissionPage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-1 text-sm text-emerald-700">Tout le matériel était présent.</p>
+              <p className="mt-1 text-sm text-ok-text">Tout le matériel était présent.</p>
             )}
           </div>
-          <button
-            type="button"
+          <Button
+            variant="ghost"
             onClick={() => void handleReopen()}
             disabled={saving}
-            className="self-start rounded border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 disabled:opacity-50"
+            className="self-start"
           >
             Refaire la vérification
-          </button>
+          </Button>
         </div>
       ) : allChecked ? (
         <div className="flex flex-col gap-4">
-          <div className="rounded-lg border border-slate-200 bg-white p-4">
-            <p className="text-sm font-medium text-slate-800">Tous les items ont été pointés.</p>
+          <Card className="p-4">
+            <p className="text-sm font-semibold text-ink">Tous les items ont été pointés.</p>
             {missingCards.length > 0 ? (
-              <ul className="mt-2 list-inside list-disc text-sm text-rose-700">
+              <ul className="mt-2 list-inside list-disc text-sm text-bad">
                 {missingCards.map((card) => (
                   <li key={`${card.mission_materiel_assignment_id}:${card.child_type_id}`}>
                     {card.category_name} — {card.container_name} — {card.child_name}
@@ -200,17 +205,18 @@ export default function VerificationMissionPage() {
                 ))}
               </ul>
             ) : (
-              <p className="mt-1 text-sm text-emerald-700">Tout le matériel est présent.</p>
+              <p className="mt-1 text-sm text-ok-text">Tout le matériel est présent.</p>
             )}
-          </div>
-          <button
-            type="button"
+          </Card>
+          <Button
+            variant="engage"
+            icon="check"
             onClick={() => void handleComplete()}
             disabled={saving}
-            className="self-start rounded border border-emerald-400 bg-emerald-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+            className="self-start"
           >
             Terminer la vérification
-          </button>
+          </Button>
         </div>
       ) : (
         <VerificationCardStack cards={detail.cards} onDecide={handleDecide} saving={saving} />

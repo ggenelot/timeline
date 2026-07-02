@@ -26,15 +26,15 @@ export function TypeFilter({
             type="button"
             onClick={() => onToggle(type.name)}
             aria-pressed={!isOff}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+            className={`inline-flex items-center gap-[7px] rounded-full border px-[13px] py-1.5 text-[12.5px] font-semibold transition ${
               isOff
-                ? 'border-slate-200 bg-slate-50 text-slate-400 line-through'
-                : 'border-slate-300 bg-white text-slate-700 hover:bg-slate-50'
+                ? 'border-line bg-surface-sub text-ink-3 line-through'
+                : 'border-line-field bg-surface-card text-ink hover:bg-surface-sub'
             }`}
           >
             <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: isOff ? '#cbd5e1' : color }}
+              className="h-[9px] w-[9px] rounded-full"
+              style={{ backgroundColor: isOff ? '#A6AEBE' : color }}
             />
             {type.name}
           </button>

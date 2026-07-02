@@ -12,6 +12,8 @@ import { EventDetailModal } from '@/components/ope/event-detail-modal';
 import { TypeFilter, type OpeTypeOption } from '@/components/ope/type-filter';
 import { PersonSearch } from '@/components/ope/person-search';
 import { PersonActivityPanel } from '@/components/ope/person-activity-panel';
+import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -153,7 +155,7 @@ export default function OpeDashboardPage() {
 
   if (allowed === false) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-[15px] border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée au pilotage opérationnel (admin, responsable ou gestionnaire de missions).
       </div>
     );
@@ -166,48 +168,64 @@ export default function OpeDashboardPage() {
     { day: 'numeric', month: 'short' }
   )}`;
 
-  const btn = 'rounded-md border border-slate-300 bg-white px-2.5 py-1 text-sm text-slate-700 hover:bg-slate-50';
-
   return (
     // Full-bleed par marges (pas de transform, sinon il deviendrait le bloc conteneur
     // des modales `fixed`) : on sort du gabarit max-w-4xl du shell pour prendre toute la largeur.
     // `overflow-x-clip` neutralise le léger débordement dû à 100vw sans casser le sticky.
     <div className="mx-[calc(50%_-_50vw)] w-screen overflow-x-clip px-3 sm:px-6 lg:px-10">
       {/* breadcrumb + titre */}
-      <div className="mb-3 text-xs font-semibold text-slate-400">
-        OPE <span className="text-slate-300">›</span> <span className="text-slate-500">Tableau de bord</span>
+      <div className="mb-1.5 text-xs font-bold text-ink-4">
+        OPE <span className="text-[#CBD2DE]">›</span> <span className="text-ink-3">Tableau de bord</span>
       </div>
       <div className="mb-4">
-        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900">Tableau de bord OPE</h1>
-        <p className="mt-1 text-sm text-slate-500">
+        <h1 className="text-[26px] font-black tracking-[-0.02em] text-ink">Tableau de bord OPE</h1>
+        <p className="mt-0.5 text-sm text-ink-2">
           Suivi de l&apos;engagement des moyens et des personnes sur les prochains jours.
         </p>
       </div>
 
       {/* Toolbar sticky */}
-      <div className="sticky top-0 z-20 -mx-3 mb-4 border-b border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" onClick={() => setOffsetDays((o) => o - days)} className={btn}>
-            ← Précédent
-          </button>
-          <button type="button" onClick={() => setOffsetDays(0)} className={btn}>
-            Aujourd&apos;hui
-          </button>
-          <button type="button" onClick={() => setOffsetDays((o) => o + days)} className={btn}>
-            Suivant →
-          </button>
-          <span className="ml-1 text-sm font-medium text-slate-600">{rangeLabel}</span>
+      <div className="sticky top-0 z-20 -mx-3 mb-4 border-b border-line bg-surface/95 px-3 py-2 backdrop-blur sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Navigation de période */}
+          <div className="flex items-center overflow-hidden rounded-[11px] border border-line-field bg-surface-card">
+            <button
+              type="button"
+              onClick={() => setOffsetDays((o) => o - days)}
+              aria-label="Période précédente"
+              className="flex h-[38px] w-9 items-center justify-center border-r border-[#ECEFF5] text-ink-2 transition hover:bg-surface-sub"
+            >
+              <Icon name="chevron_left" size={20} />
+            </button>
+            <button
+              type="button"
+              onClick={() => setOffsetDays(0)}
+              className="flex h-[38px] items-center border-r border-[#ECEFF5] px-3.5 text-[13.5px] font-semibold text-ink transition hover:bg-surface-sub"
+            >
+              Aujourd&apos;hui
+            </button>
+            <button
+              type="button"
+              onClick={() => setOffsetDays((o) => o + days)}
+              aria-label="Période suivante"
+              className="flex h-[38px] w-9 items-center justify-center text-ink-2 transition hover:bg-surface-sub"
+            >
+              <Icon name="chevron_right" size={20} />
+            </button>
+          </div>
+          <span className="text-sm font-semibold text-ink-2">{rangeLabel}</span>
 
-          <div className="ml-auto flex items-center gap-2">
-            <div className="inline-flex overflow-hidden rounded-md border border-slate-300">
+          <div className="ml-auto flex items-center gap-2.5">
+            <div className="flex gap-1 rounded-[10px] bg-[#E4E9F2] p-1">
               {([7, 14] as const).map((d) => (
                 <button
                   key={d}
                   type="button"
                   onClick={() => setDays(d)}
-                  className={`px-3 py-1 text-sm ${
-                    days === d ? 'bg-slate-800 text-white' : 'bg-white text-slate-700 hover:bg-slate-50'
-                  }`}
+                  className={cn(
+                    'rounded-[7px] px-3.5 py-1.5 text-[13px] font-semibold transition',
+                    days === d ? 'bg-brand text-white' : 'text-ink-2 hover:text-ink'
+                  )}
                 >
                   {d} j
                 </button>
@@ -232,7 +250,7 @@ export default function OpeDashboardPage() {
       </div>
 
       {error ? (
-        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</div>
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-3 py-2 text-sm text-bad">{error}</div>
       ) : null}
 
       {/* Board unifié : activités + matériel dans un SEUL scroll horizontal,
@@ -240,7 +258,7 @@ export default function OpeDashboardPage() {
       {loading && !data ? (
         <div className="flex gap-3 overflow-x-auto pb-2">
           {Array.from({ length: days }).map((_, i) => (
-            <div key={i} className="h-64 w-72 shrink-0 animate-pulse rounded-xl border border-slate-200 bg-slate-100" />
+            <div key={i} className="h-64 w-[272px] shrink-0 animate-pulse rounded-[15px] border border-line bg-surface-sub" />
           ))}
         </div>
       ) : (
@@ -264,15 +282,15 @@ export default function OpeDashboardPage() {
 
             {/* Étiquette de section, épinglée à gauche pendant le scroll horizontal */}
             <div className="sticky left-0 mb-2 mt-6 w-fit">
-              <h2 className="text-lg font-bold text-slate-900">Matériel par jour</h2>
-              <p className="mt-0.5 text-sm text-slate-500">
+              <h2 className="text-[17px] font-extrabold text-ink">Matériel par jour</h2>
+              <p className="mt-0.5 text-[13px] text-ink-3">
                 Contenants engagés sur les activités, disponibles, et indisponibles (hors service).
               </p>
             </div>
 
             {/* Bande matériel — colonnes alignées avec les activités via le scroll commun */}
             {containers.length === 0 ? (
-              <p className="sticky left-0 w-fit rounded-lg border border-dashed border-slate-300 bg-slate-50 p-4 text-sm text-slate-500">
+              <p className="sticky left-0 w-fit rounded-[10px] border border-dashed border-line-field bg-surface-sub p-4 text-sm text-ink-3">
                 Aucun contenant dans le catalogue. Ajoutez des contenants dans « Matériel » pour suivre leur engagement.
               </p>
             ) : (

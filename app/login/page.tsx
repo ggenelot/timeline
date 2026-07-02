@@ -1,8 +1,11 @@
 'use client';
 
 import { FormEvent, Suspense, useState } from 'react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
 
 function LoginPageContent() {
   const [identifier, setIdentifier] = useState('');
@@ -56,49 +59,96 @@ function LoginPageContent() {
   }
 
   return (
-    <div className="mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-      <h1 className="mb-1 text-xl font-semibold text-slate-900">Connexion</h1>
-      <p className="mb-6 text-sm text-slate-600">Utilisez votre compte Timeline pour accéder aux missions.</p>
-
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label htmlFor="identifier" className="mb-1 block text-sm font-medium text-slate-700">
-            Identifiant
-          </label>
-          <input
-            id="identifier"
-            type="text"
-            required
-            value={identifier}
-            onChange={(event) => setIdentifier(event.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-slate-300 focus:ring"
+    <div className="mx-auto max-w-md overflow-hidden rounded-[26px] border border-line bg-surface-card shadow-lift">
+      {/* Héros navy — logo de l'antenne à l'honneur */}
+      <div
+        className="relative overflow-hidden px-8 pb-16 pt-12"
+        style={{ background: 'linear-gradient(160deg,#013A8F 0%,#002D74 55%,#001A45 100%)' }}
+      >
+        <div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(135deg,rgba(255,255,255,.05) 0 2px,transparent 2px 16px)'
+          }}
+        />
+        <div className="relative flex flex-col items-center gap-4">
+          <Image
+            src="/logo.png"
+            alt="Protec du 8 & du 9"
+            width={128}
+            height={128}
+            priority
+            className="drop-shadow-[0_12px_24px_rgba(0,0,0,.35)]"
           />
+          <div className="text-center text-white">
+            <div className="font-display text-[23px] tracking-[0.05em]">PROTEC DU 8 &amp; DU 9</div>
+            <div className="mt-1 text-[12px] tracking-[0.2em] text-[#9FB6E0]">
+              PROTECTION CIVILE PARIS SEINE
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Feuille blanche remontante */}
+      <div className="relative -mt-8 rounded-t-[30px] bg-surface-card px-8 pb-8 pt-8">
+        <div className="mb-6 text-center">
+          <div className="text-[24px] font-black tracking-[-0.01em] text-ink">Connexion</div>
+          <div className="mt-1.5 font-hand text-[15px] text-accent-text">contente de te revoir</div>
         </div>
 
-        <div>
-          <label htmlFor="password" className="mb-1 block text-sm font-medium text-slate-700">
-            Mot de passe
-          </label>
-          <input
-            id="password"
-            type="password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="w-full rounded-md border border-slate-300 px-3 py-2 outline-none ring-slate-300 focus:ring"
-          />
-        </div>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label
+              htmlFor="identifier"
+              className="mb-1.5 block text-[12.5px] font-bold text-ink-2"
+            >
+              Identifiant
+            </label>
+            <div className="flex h-[52px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-line-field bg-surface-sub px-4 focus-within:border-brand">
+              <Icon name="person" size={20} className="text-ink-3" />
+              <input
+                id="identifier"
+                type="text"
+                required
+                value={identifier}
+                onChange={(event) => setIdentifier(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-4"
+              />
+            </div>
+          </div>
 
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
+          <div>
+            <label
+              htmlFor="password"
+              className="mb-1.5 block text-[12.5px] font-bold text-ink-2"
+            >
+              Mot de passe
+            </label>
+            <div className="flex h-[52px] items-center gap-2.5 rounded-[14px] border-[1.5px] border-line-field bg-surface-sub px-4 focus-within:border-brand">
+              <Icon name="lock" size={20} className="text-ink-3" />
+              <input
+                id="password"
+                type="password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+                className="min-w-0 flex-1 bg-transparent text-[15px] text-ink outline-none placeholder:text-ink-4"
+              />
+            </div>
+          </div>
 
-        <button
-          type="submit"
-          disabled={loading}
-          className="w-full rounded-md bg-slate-900 px-4 py-2 text-sm text-white hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {loading ? 'Connexion...' : 'Se connecter'}
-        </button>
-      </form>
+          {error ? (
+            <p className="rounded-[10px] border border-bad/30 bg-bad-soft px-3 py-2 text-sm text-bad">
+              {error}
+            </p>
+          ) : null}
+
+          <Button type="submit" variant="primary" disabled={loading} className="h-[52px] w-full rounded-[14px] text-[15.5px]">
+            {loading ? 'Connexion...' : 'Se connecter'}
+          </Button>
+        </form>
+      </div>
     </div>
   );
 }

@@ -40,6 +40,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Material Symbols Rounded — police d'icônes (non dispo via next/font pour cette version). */}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display -- police d'icônes chargée globalement (App Router root layout) ; display:block volontaire pour éviter le FOUT des ligatures */}
         <link
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,0,0&display=block"
           rel="stylesheet"

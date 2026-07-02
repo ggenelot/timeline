@@ -6,6 +6,9 @@ import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposalResponse, MissionRequiredSkill, MissionStatus } from '@/lib/types';
 import { formatMissionDuration, MissionRelation } from '@/lib/mission-timeline';
 import { getMissionStatusBadgeClass, MISSION_STATUS_LABELS } from '@/lib/missions';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
+import { cn } from '@/lib/cn';
 
 type Volunteer = { name: string; skills: Array<{ name: string; color?: string | null }> };
 
@@ -132,16 +135,11 @@ export function MissionTimelineCard({
     onResponse?.();
   }
 
-  const ghostButtonClass =
-    'rounded-[9px] border border-[#e2e8f0] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#64748b] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50';
-  const primaryButtonClass =
-    'rounded-[9px] bg-[#059669] px-[18px] py-2 text-[13px] font-bold text-white hover:bg-[#047857] disabled:cursor-not-allowed disabled:opacity-50';
-
   const status: MissionStatus = mission.status;
 
   return (
     <article
-      className="rounded-2xl border border-[#e7e9ee] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-opacity"
+      className="overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card transition hover:-translate-y-px hover:shadow-lift"
       style={{ opacity: isUnavailable ? 0.66 : 1 }}
     >
       <button
@@ -150,38 +148,38 @@ export function MissionTimelineCard({
         className="flex w-full items-start justify-between gap-3 px-[18px] pb-3 pt-4 text-left"
       >
         <div className="min-w-0">
-          <div className="text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: typeColor }}>
+          <div className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: typeColor }}>
             {missionTypeName ?? '—'}
           </div>
-          <h3 className="mt-0.5 text-[16px] font-[650] leading-[1.3] text-[#0f172a]">{mission.title}</h3>
-          <div className="mt-1 text-[13px] text-[#64748b]">
+          <h3 className="mt-0.5 text-[16px] font-bold leading-[1.3] text-ink">{mission.title}</h3>
+          <div className="mt-1 text-[13px] text-ink-2">
             {dayLabel} · {mission.location?.trim() || 'Lieu non défini'}
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[13px] font-semibold tabular-nums text-[#334155]">{timeRange}</div>
-          <div className="text-[12px] text-[#94a3b8]">{duration}</div>
+          <div className="text-[13px] font-bold tabular-nums text-ink-2">{timeRange}</div>
+          <div className="text-[12px] text-ink-3">{duration}</div>
         </div>
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] pb-[14px]">
-        <div className="inline-flex items-center gap-[7px] text-[13px] font-semibold">
+        <div className="inline-flex items-center gap-[7px] text-[13px] font-bold">
           {requiredSkills.length === 0 ? (
             <>
-              <span className="h-[6px] w-[6px] rounded-full bg-[#cbd5e1]" />
-              <span className="text-[#64748b]">Ouvert à tous</span>
+              <span className="h-[7px] w-[7px] rounded-full bg-ink-4" />
+              <span className="text-ink-3">Ouvert à tous</span>
             </>
           ) : missingCount > 0 ? (
             <>
-              <span className="h-[6px] w-[6px] rounded-full bg-[#f59e0b]" />
-              <span className="text-[#b45309]">
+              <span className="h-[7px] w-[7px] rounded-full bg-warn-bar" />
+              <span className="text-warn-text">
                 Manque {missingCount} bénévole{missingCount > 1 ? 's' : ''}
               </span>
             </>
           ) : (
             <>
-              <span className="h-[6px] w-[6px] rounded-full bg-[#10b981]" />
-              <span className="text-[#047857]">Équipe complète</span>
+              <span className="h-[7px] w-[7px] rounded-full bg-ok-bar" />
+              <span className="text-ok-text">Équipe complète</span>
             </>
           )}
         </div>
@@ -189,37 +187,36 @@ export function MissionTimelineCard({
         <div className="flex flex-wrap items-center justify-end gap-2">
           {isBenevole ? (
             !canPropose ? null : relation === 'retenu' ? (
-              <span className="text-[13px] font-bold text-[#047857]">✓ Retenu sur cette mission</span>
+              <span className="inline-flex items-center gap-1 text-[13px] font-bold text-ok-text">
+                <Icon name="check" size={16} />Retenu sur cette mission
+              </span>
             ) : relation === 'engaged' ? (
               <>
                 <span className="text-[13px]">
-                  <span className="font-bold text-[#047857]">✓ Engagé</span>
-                  <span className="text-[#64748b]"> · en attente de sélection</span>
+                  <span className="inline-flex items-center gap-1 font-bold text-ok-text">
+                    <Icon name="check" size={15} />Engagé
+                  </span>
+                  <span className="text-ink-2"> · en attente de sélection</span>
                 </span>
-                <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
+                <Button variant="ghost" disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
                   {pendingAction === 'unavailable' ? 'Envoi…' : 'Se désengager'}
-                </button>
+                </Button>
               </>
             ) : relation === 'declined' ? (
               <>
-                <span className="text-[13px] text-[#94a3b8]">Indisponible</span>
-                <button
-                  type="button"
-                  disabled={pendingAction !== null}
-                  onClick={() => respond('available')}
-                  className="rounded-[9px] border border-[#cbd5e1] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#047857] hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
-                >
+                <span className="text-[13px] text-ink-3">Indisponible</span>
+                <Button variant="ghost" className="text-ok-text" disabled={pendingAction !== null} onClick={() => respond('available')}>
                   {pendingAction === 'available' ? 'Envoi…' : 'Me rendre disponible'}
-                </button>
+                </Button>
               </>
             ) : (
               <>
-                <button type="button" disabled={pendingAction !== null} onClick={() => respond('unavailable')} className={ghostButtonClass}>
+                <Button variant="ghost" disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
                   {pendingAction === 'unavailable' ? 'Envoi…' : 'Non disponible'}
-                </button>
-                <button type="button" disabled={pendingAction !== null} onClick={() => respond('available')} className={primaryButtonClass}>
+                </Button>
+                <Button variant="engage" icon="add_task" disabled={pendingAction !== null} onClick={() => respond('available')}>
                   {pendingAction === 'available' ? 'Envoi…' : "S'engager"}
-                </button>
+                </Button>
               </>
             )
           ) : (
@@ -230,17 +227,15 @@ export function MissionTimelineCard({
               {canEdit ? (
                 <>
                   {status === 'draft' && onPublishDraft ? (
-                    <button
-                      type="button"
-                      onClick={() => void onPublishDraft(mission.id)}
-                      className="rounded-[9px] border border-emerald-300 bg-emerald-50 px-[13px] py-[7px] text-[13px] font-semibold text-emerald-700 hover:bg-emerald-100"
-                    >
+                    <Button variant="engage" onClick={() => void onPublishDraft(mission.id)}>
                       Passer en proposé
-                    </button>
+                    </Button>
                   ) : null}
                   <Link
                     href={`/missions/${mission.id}`}
-                    className="rounded-[9px] border border-[#e2e8f0] bg-white px-[13px] py-[7px] text-[13px] font-semibold text-[#334155] hover:bg-slate-50"
+                    className={cn(
+                      'inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]'
+                    )}
                   >
                     Gérer
                   </Link>
@@ -251,28 +246,27 @@ export function MissionTimelineCard({
         </div>
       </div>
 
-      {error ? <div className="px-[18px] pb-3 text-[12px] text-red-600">{error}</div> : null}
+      {error ? <div className="px-[18px] pb-3 text-[12px] text-bad">{error}</div> : null}
 
       {expanded ? (
-        <div className="border-t border-[#eef1f5] bg-[#fafbfc] px-[18px] py-[15px]">
+        <div className="border-t border-line-row bg-surface-sub px-[18px] py-[15px]">
           {mission.description?.trim() ? (
-            <p className="text-[13px] leading-[1.55] text-[#475569]">{mission.description}</p>
+            <p className="text-[13px] leading-[1.55] text-ink-2">{mission.description}</p>
           ) : null}
 
           {skillCoverage.length > 0 ? (
             <div className="mt-3">
-              <div className="text-[12px] font-bold text-[#475569]">Compétences requises</div>
+              <div className="text-[12px] font-bold text-ink-2">Compétences requises</div>
               <div className="mt-2 flex flex-wrap gap-2">
                 {skillCoverage.map((skill) => {
                   const met = skill.have >= skill.need;
                   return (
                     <span
                       key={skill.name}
-                      className={`rounded-[7px] border px-2 py-0.5 text-[12px] font-medium ${
-                        met
-                          ? 'border-[#a7f3d0] bg-[#ecfdf5] text-[#047857]'
-                          : 'border-[#fde68a] bg-[#fffbeb] text-[#b45309]'
-                      }`}
+                      className={cn(
+                        'rounded-[7px] border px-2 py-0.5 text-[12px] font-semibold',
+                        met ? 'border-ok-line bg-ok-soft text-ok-text' : 'border-warn-line bg-warn-soft text-warn-text'
+                      )}
                     >
                       {skill.name} {skill.have}/{skill.need}
                     </span>
@@ -283,13 +277,13 @@ export function MissionTimelineCard({
           ) : null}
 
           <div className="mt-3">
-            <div className="text-[12px] font-bold text-[#475569]">
+            <div className="text-[12px] font-bold text-ink-2">
               {isBenevole ? 'Déjà engagés' : 'Disponibles'} · {availableVolunteers.length}
             </div>
             {availableVolunteers.length > 0 ? (
-              <p className="mt-1 text-[13px] text-[#64748b]">{availableVolunteers.map((volunteer) => volunteer.name).join(', ')}</p>
+              <p className="mt-1 text-[13px] text-ink-2">{availableVolunteers.map((volunteer) => volunteer.name).join(', ')}</p>
             ) : (
-              <p className="mt-1 text-[13px] text-[#94a3b8]">Personne pour l’instant.</p>
+              <p className="mt-1 text-[13px] text-ink-3">Personne pour l’instant.</p>
             )}
           </div>
         </div>
