@@ -169,7 +169,7 @@ Importer un lot de missions depuis un Google Sheet public. Le sheet doit être p
 
 ### Installation complète depuis zéro
 
-Voir le **README.md** à la racine du dépôt pour les instructions pas à pas.
+Voir [`docs/INSTALLATION.md`](./INSTALLATION.md) pour les instructions pas à pas, ou le [`README.md`](../README.md) pour un déploiement rapide sur Vercel + Supabase.
 
 Résumé :
 

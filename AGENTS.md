@@ -251,6 +251,7 @@ gh workflow run supabase-prod.yml
 
 ## 8. Documentation
 
-- Maintenir `README.md` à jour lors de tout changement de variable d'environnement, de commande, ou de fonctionnalité majeure.
+- `README.md` est la vitrine du projet (pitch, screenshots, fonctionnalités, déploiement Vercel + Supabase) : la garder courte et à jour sur toute nouvelle fonctionnalité majeure ou changement du parcours de déploiement.
+- Le détail technique vit dans `docs/INSTALLATION.md` (setup local, variables d'environnement, scripts, tests, déploiement avancé) et `docs/ARCHITECTURE.md` (structure du code, modèle de données, Slack) : les maintenir à jour lors de tout changement de variable d'environnement, de commande, de table ou d'endpoint.
 - Mettre à jour `.env.example` en parallèle de tout ajout de variable d'environnement.
 - Les guides utilisateur sont dans `docs/`.
