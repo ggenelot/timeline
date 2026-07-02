@@ -361,23 +361,9 @@ using (
   )
 );
 
-drop policy if exists "profile_domain_progress_select_strict" on public.profile_domain_progress;
-create policy "profile_domain_progress_select_strict"
-on public.profile_domain_progress
-for select
-using (
-  public.current_user_role() = 'admin'
-  or profile_domain_progress.profile_id = auth.uid()
-  or (
-    public.has_role_behavior(auth.uid(), 'mission', 'can_manage')
-    and exists (
-      select 1
-      from public.profiles p
-      where p.id = profile_domain_progress.profile_id
-        and p.role = 'benevole'
-    )
-  )
-);
+-- profile_domain_progress (Option B skill domains/levels) is dead schema:
+-- superseded by skill_categories (20260517100000) and dropped outside the
+-- migration system. No policy to migrate here.
 
 -- 'responsable' never granted real extra rights here (benevole already
 -- covered these reads) — simplify rather than reintroduce a dynamic check.
@@ -388,16 +374,4 @@ for select
 to authenticated
 using (true);
 
-drop policy if exists "skill_domains_select_authenticated" on public.skill_domains;
-create policy "skill_domains_select_authenticated"
-on public.skill_domains
-for select
-to authenticated
-using (true);
-
-drop policy if exists "skill_levels_select_authenticated" on public.skill_levels;
-create policy "skill_levels_select_authenticated"
-on public.skill_levels
-for select
-to authenticated
-using (true);
+-- skill_domains / skill_levels (Option B) are dead schema too — see note above.
