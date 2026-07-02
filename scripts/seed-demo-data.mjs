@@ -65,7 +65,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-const DEMO_PASSWORD = process.env.DEMO_SEED_PASSWORD || 'DemoPass123!';
+const DEMO_PASSWORD = process.env.DEMO_SEED_PASSWORD || 'protec1234';
 const VOLUNTEER_COUNT = Number(process.env.DEMO_SEED_VOLUNTEER_COUNT || 30);
 const RESPONSABLE_COUNT = Number(process.env.DEMO_SEED_RESPONSABLE_COUNT || 4);
 const ADMIN_COUNT = Number(process.env.DEMO_SEED_ADMIN_COUNT || 2);

@@ -90,3 +90,28 @@ Le déploiement des migrations passe par les workflows GitHub Actions (`supabase
 6. Dans **Auth → URL Configuration** du projet staging, renseigner le Site URL et les Redirect URLs avec l'URL stable de la branche `staging` sur Vercel (et un wildcard pour les Preview Deployments par PR si besoin).
 7. Répliquer manuellement depuis le projet production ce qui n'est pas couvert par les migrations : providers Auth (ex. Slack SSO), buckets Storage, extensions activées hors migration.
 8. Dans Vercel, ajouter les variables d'environnement (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) pointant vers ce projet staging, scopées à l'environnement Preview — distinctes des variables Production.
+
+### Piège : scope par branche vs "All Preview Deployments"
+
+Dans Vercel, une variable scopée "Preview" peut en plus être restreinte à **une branche précise** (un sélecteur de branche apparaît sous le nom de la variable dans la liste). Deux erreurs vécues lors de la mise en place :
+
+- **Une variable Preview restreinte à une seule branche ne s'applique qu'aux previews de cette branche.** Toute autre branche retombe sur une autre entrée existante pour la même clé (souvent une vieille variable "All Environments" qui pointe vers la prod) — d'où des previews qui s'authentifient silencieusement contre la production. Pour que les valeurs staging s'appliquent à toutes les previews, il faut choisir **"All Preview Deployments"**, pas une branche spécifique.
+- **Une variable historique scopée "All Environments" couvre aussi Production.** En retirant son scope Preview pour ne garder que Production, bien vérifier que la case "Production" reste cochée et que la valeur de production est conservée — sinon le prochain build sur `main` échoue avec `Missing NEXT_PUBLIC_SUPABASE_URL environment variable` (l'erreur vient de `lib/supabase/server.ts`, levée au moment du `next build`, qui ne distingue pas les scopes : il échoue dès que la variable est absente pour l'environnement en cours de build).
+
+Après toute modification de scope sur `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`, vérifier qu'il existe bien une entrée couvrant Production (avec la valeur prod) et une couvrant "All Preview Deployments" (avec la valeur staging), puis redéclencher un build sur `main` et sur une preview pour confirmer.
+
+### Tester une preview pointant vers staging
+
+Le projet staging a sa propre base Auth, distincte de la production — les comptes humains réels (ex. comptes Slack synchronisés) n'y existent pas. Pour tester :
+
+1. Si le projet staging n'a pas encore été initialisé avec les données de démo, lancer `npm run demo:setup` (ou au minimum `npm run demo:create-test-accounts`) avec les variables d'environnement pointant vers le projet staging (`--force` requis par `create-test-accounts.mjs` car l'URL ne ressemble pas à une instance locale — à utiliser uniquement sur staging, jamais sur la prod).
+2. Se connecter sur la preview avec les comptes fixes suivants (mot de passe `protec1234` pour tous) :
+
+   | Identifiant | Rôle | Usage |
+   |---|---|---|
+   | `admin` | Admin | tout voir et tout faire, `/admin/volunteers`, `/admin/gestion`, `/admin/competences` |
+   | `responsable` | Responsable | gérer ses missions, valider les propositions (`/missions`) |
+   | `benevole` / `benevole2` / `benevole3` | Bénévole | répondre aux missions proposées, `/my-missions` |
+
+   Voir le README (§ "Comptes de démonstration" et "Parcours de test manuel") pour le détail des parcours par rôle.
+3. Ne jamais utiliser de comptes humains réels (ex. Clara, Gabriel.g) pour vérifier qu'une preview est bien isolée de la prod : si la connexion réussit avec un compte réel, c'est le signe que la preview pointe encore vers la production (cf. piège de scope ci-dessus).

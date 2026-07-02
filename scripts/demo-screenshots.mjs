@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE_URL = process.env.E2E_BASE_URL || process.env.APP_BASE_URL || 'http://localhost:3000';
-const PASSWORD = process.env.E2E_TEST_PASSWORD || 'DemoPass123!';
+const PASSWORD = process.env.E2E_TEST_PASSWORD || 'protec1234';
 const OUT_DIR = path.join(repoRoot, 'docs', 'images');
 
 function log(event, data = {}) {
