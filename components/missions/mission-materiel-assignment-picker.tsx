@@ -52,7 +52,12 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
 
   return (
     <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-      <h2 className="text-lg font-semibold text-ink">Affectation du matériel</h2>
+      <div>
+        <h2 className="text-lg font-semibold text-ink">Matériel &amp; véhicules</h2>
+        <p className="mt-1 text-sm text-ink-2">
+          Sélectionnez le matériel précis par catégorie requise (les catégories et quantités se gèrent depuis Modifier).
+        </p>
+      </div>
 
       {error ? <p className="text-sm text-bad">{error}</p> : null}
 
@@ -65,9 +70,12 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
           return (
             <div key={requirement.id} className="rounded-xl border border-line p-3">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-ink">{requirement.category?.name ?? 'Matériel'}</h3>
+                <div className="flex items-center gap-2">
+                  <Icon name="inventory_2" size={18} className="text-ink-3" />
+                  <h3 className="text-[14.5px] font-extrabold text-ink">{requirement.category?.name ?? 'Matériel'}</h3>
+                </div>
                 <span
-                  className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
+                  className={`inline-flex rounded-full px-3 py-1 text-xs font-extrabold ${
                     isComplete ? 'bg-ok-soft text-ok-text' : 'bg-surface-sub text-ink-2'
                   }`}
                 >
