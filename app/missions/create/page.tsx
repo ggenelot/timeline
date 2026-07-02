@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, RoleBehavior } from '@/lib/types';
+import { Button } from '@/components/ui/button';
 
 type MissionTypeOption = { id: string; name: string };
 
@@ -125,48 +126,48 @@ export default function VolunteerCreateMissionPage() {
     router.push(`/missions/${mission.id}`);
   }
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
 
-  if (!profile) return <p className="text-sm text-red-600">Accès refusé.</p>;
+  if (!profile) return <p className="text-sm text-bad">Accès refusé.</p>;
 
   if (allowedMissionTypeIds.length === 0) {
     return (
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+      <div className="rounded-2xl border border-warn-line bg-warn-soft p-4 text-sm text-warn-text">
         Vous n&apos;avez pas de rôle vous permettant de créer des missions. Contactez un administrateur.
       </div>
     );
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4 md:p-6">
+    <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card md:p-6">
       <div>
-        <h1 className="text-xl font-semibold text-slate-900">Proposer une mission</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          La mission sera créée en <span className="font-medium text-amber-700">brouillon</span> et devra être validée par un administrateur avant d&apos;être proposée aux bénévoles.
+        <h1 className="text-[26px] font-black leading-tight tracking-[-0.02em] text-ink">Proposer une mission</h1>
+        <p className="mt-1 text-sm text-ink-2">
+          La mission sera créée en <span className="font-medium text-warn-text">brouillon</span> et devra être validée par un administrateur avant d&apos;être proposée aux bénévoles.
         </p>
         {roleNames.length > 0 ? (
-          <p className="mt-1 text-xs text-slate-400">
+          <p className="mt-1 text-xs text-ink-3">
             Vos rôles : {roleNames.join(', ')}
           </p>
         ) : null}
       </div>
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Titre <span className="text-red-500">*</span></label>
+          <label className="mb-1 block text-sm font-medium text-ink-2">Titre <span className="text-bad">*</span></label>
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent-ring"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Type d&apos;événement <span className="text-red-500">*</span></label>
+          <label className="mb-1 block text-sm font-medium text-ink-2">Type d&apos;événement <span className="text-bad">*</span></label>
           <div className="flex flex-wrap gap-2">
             {allMissionTypes.filter((mt) => allowedMissionTypeIds.includes(mt.id)).map((mt) => (
               <button
@@ -175,8 +176,8 @@ export default function VolunteerCreateMissionPage() {
                 onClick={() => setMissionTypeId(mt.id)}
                 className={`rounded-full border px-4 py-1.5 text-sm font-medium transition-colors ${
                   missionTypeId === mt.id
-                    ? 'border-emerald-400 bg-emerald-100 text-emerald-800'
-                    : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    ? 'border-ok-line bg-ok-soft text-ok-text'
+                    : 'border-line-field bg-surface-sub text-ink-2 hover:bg-line-row'
                 }`}
               >
                 {mt.name}
@@ -186,92 +187,88 @@ export default function VolunteerCreateMissionPage() {
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Description</label>
+          <label className="mb-1 block text-sm font-medium text-ink-2">Description</label>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent-ring"
           />
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Lieu</label>
+          <label className="mb-1 block text-sm font-medium text-ink-2">Lieu</label>
           <input
             type="text"
             value={location}
             onChange={(e) => setLocation(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-accent-ring"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Début <span className="text-red-500">*</span></label>
+            <label className="mb-1 block text-sm font-medium text-ink-2">Début <span className="text-bad">*</span></label>
             <div className="flex gap-2">
               <input
                 type="date"
                 value={startsAtDate}
                 onChange={(e) => setStartsAtDate(e.target.value)}
                 required
-                className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="flex-1 rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent-ring"
               />
               <input
                 type="time"
                 value={startsAtTime}
                 onChange={(e) => setStartsAtTime(e.target.value)}
                 required
-                className="w-28 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-28 rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent-ring"
               />
             </div>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-slate-700">Fin <span className="text-red-500">*</span></label>
+            <label className="mb-1 block text-sm font-medium text-ink-2">Fin <span className="text-bad">*</span></label>
             <div className="flex gap-2">
               <input
                 type="date"
                 value={endsAtDate}
                 onChange={(e) => setEndsAtDate(e.target.value)}
                 required
-                className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="flex-1 rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent-ring"
               />
               <input
                 type="time"
                 value={endsAtTime}
                 onChange={(e) => setEndsAtTime(e.target.value)}
                 required
-                className="w-28 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+                className="w-28 rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent-ring"
               />
             </div>
           </div>
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-slate-700">Nombre de bénévoles requis <span className="text-red-500">*</span></label>
+          <label className="mb-1 block text-sm font-medium text-ink-2">Nombre de bénévoles requis <span className="text-bad">*</span></label>
           <input
             type="number"
             min={1}
             value={requiredVolunteers}
             onChange={(e) => setRequiredVolunteers(e.target.value)}
-            className="w-32 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-32 rounded-[10px] border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent-ring"
           />
         </div>
 
-        <div className="flex items-center justify-between border-t border-slate-100 pt-4">
-          <button
-            type="button"
-            onClick={() => router.back()}
-            className="rounded-lg border border-slate-200 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
-          >
+        <div className="flex items-center justify-between border-t border-line-row pt-4">
+          <Button variant="ghost" onClick={() => router.back()}>
             Annuler
-          </button>
-          <button
+          </Button>
+          <Button
             type="submit"
+            variant="primary"
             disabled={submitting || !missionTypeId}
-            className="rounded-lg bg-slate-900 px-5 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
           >
             {submitting ? 'Envoi...' : 'Soumettre en brouillon'}
-          </button>
+          </Button>
         </div>
       </form>
     </section>

@@ -21,20 +21,25 @@ import {
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, MaterielCategory } from '@/lib/types';
+import { Icon } from '@/components/ui/icon';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Modal } from '@/components/ui/modal';
+import { cn } from '@/lib/cn';
 
 // ── Palette des catégories (même palette que les compétences) ────────
 
 const CATEGORY_PALETTE: Record<string, { accent: string; soft: string; softBorder: string }> = {
-  slate: { accent: '#475569', soft: '#f1f5f9', softBorder: '#e2e8f0' },
-  amber: { accent: '#d97706', soft: '#fffbeb', softBorder: '#fde68a' },
-  sky: { accent: '#0284c7', soft: '#f0f9ff', softBorder: '#bae6fd' },
-  violet: { accent: '#7c3aed', soft: '#f5f3ff', softBorder: '#ddd6fe' },
-  emerald: { accent: '#059669', soft: '#ecfdf5', softBorder: '#a7f3d0' },
-  pink: { accent: '#db2777', soft: '#fdf2f8', softBorder: '#fbcfe8' },
-  rose: { accent: '#e11d48', soft: '#fff1f2', softBorder: '#fecdd3' },
-  orange: { accent: '#ea580c', soft: '#fff7ed', softBorder: '#fed7aa' },
-  cyan: { accent: '#0891b2', soft: '#ecfeff', softBorder: '#a5f3fc' },
-  indigo: { accent: '#4f46e5', soft: '#eef2ff', softBorder: '#c7d2fe' },
+  slate: { accent: '#5B6478', soft: '#F4F6FA', softBorder: '#E5E9F0' },
+  amber: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  sky: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  violet: { accent: '#7A2E86', soft: '#F5EDFA', softBorder: '#E3D6EF' },
+  emerald: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  pink: { accent: '#8E1279', soft: '#F8E6F4', softBorder: '#E9C9E4' },
+  rose: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
+  orange: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  cyan: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  indigo: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
 };
 
 function palette(color: string) {
@@ -68,16 +73,17 @@ function DragHandle({ attributes, listeners, style }: {
       {...attributes}
       {...listeners}
       title="Glisser pour réordonner"
-      style={{ flexShrink: 0, cursor: 'grab', color: '#cbd5e1', fontSize: 13, lineHeight: 1, letterSpacing: -3, touchAction: 'none', ...style }}
+      className="shrink-0 cursor-grab touch-none"
+      style={style}
     >
-      ⠿⠿
+      <Icon name="drag_indicator" className="text-ink-3" />
     </span>
   );
 }
 
 function ColorSwatches({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   return (
-    <div style={{ display: 'flex', gap: 9, flexWrap: 'wrap' }}>
+    <div className="flex flex-wrap gap-[9px]">
       {AVAILABLE_COLORS.map((c) => {
         const active = value === c.value;
         return (
@@ -87,13 +93,13 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
             onClick={() => onChange(c.value)}
             title={c.label}
             aria-label={c.label}
-            style={{
-              width: 28, height: 28, borderRadius: '50%', cursor: 'pointer', background: palette(c.value).accent,
-              border: active ? '2px solid #0f172a' : '2px solid transparent', boxShadow: active ? '0 0 0 2px #fff inset' : 'none',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 12,
-            }}
+            className={cn(
+              'inline-flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs text-white',
+              active ? 'border-ink shadow-[0_0_0_2px_#fff_inset]' : 'border-transparent'
+            )}
+            style={{ background: palette(c.value).accent }}
           >
-            {active ? '✓' : ''}
+            {active ? <Icon name="check" size={14} /> : ''}
           </button>
         );
       })}
@@ -101,39 +107,11 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
   );
 }
 
-function Modal({ title, onClose, children, onSubmit, submitLabel, submitDisabled }: {
-  title: string;
-  onClose: () => void;
-  children: React.ReactNode;
-  onSubmit: () => void;
-  submitLabel: string;
-  submitDisabled?: boolean;
-}) {
-  return (
-    <div
-      style={{ position: 'fixed', inset: 0, zIndex: 100, background: 'rgba(15,23,42,.45)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '56px 18px', overflowY: 'auto' }}
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-    >
-      <div style={{ width: '100%', maxWidth: 480, background: '#fff', borderRadius: 18, boxShadow: '0 24px 60px rgba(15,23,42,.3)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '18px 20px 14px', borderBottom: '1px solid #eef1f5' }}>
-          <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>{title}</div>
-          <button type="button" onClick={onClose} style={{ flexShrink: 0, cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', width: 30, height: 30, borderRadius: 8, fontSize: 16 }}>✕</button>
-        </div>
-        <div style={{ padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>{children}</div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, padding: '14px 20px', borderTop: '1px solid #eef1f5', background: '#fafbfc' }}>
-          <button type="button" onClick={onClose} style={{ cursor: 'pointer', border: '1px solid #e2e8f0', background: '#fff', color: '#64748b', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}>Annuler</button>
-          <button type="button" onClick={onSubmit} disabled={submitDisabled} style={{ cursor: submitDisabled ? 'not-allowed' : 'pointer', border: 'none', background: submitDisabled ? '#94a3b8' : '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitDisabled ? 0.6 : 1 }}>{submitLabel}</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function FieldLabel({ children }: { children: React.ReactNode }) {
-  return <div style={{ fontSize: 12.5, fontWeight: 700, color: '#334155', marginBottom: 7 }}>{children}</div>;
+  return <div className="mb-1.5 text-[12.5px] font-bold text-ink-2">{children}</div>;
 }
 
-const inputStyle: React.CSSProperties = { width: '100%', border: '1px solid #cbd5e1', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#0f172a', outline: 'none', fontFamily: 'inherit' };
+const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
 
 function SortableCategoryRow({ category, onEdit, onDelete }: {
   category: CategoryWithTypes;
@@ -146,29 +124,29 @@ function SortableCategoryRow({ category, onEdit, onDelete }: {
   return (
     <div
       ref={setNodeRef}
+      className="mb-2 flex items-center gap-[11px] rounded-2xl border border-line bg-surface-card px-[14px] py-3 shadow-card"
       style={{
-        transform: CSS.Transform.toString(transform), transition, display: 'flex', alignItems: 'center', gap: 11,
-        border: '1px solid #eef1f5', borderRadius: 12, padding: '12px 14px', background: '#fff',
-        opacity: isDragging ? 0.6 : 1, boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : 'none', zIndex: isDragging ? 1 : 'auto',
-        marginBottom: 8,
+        transform: CSS.Transform.toString(transform), transition,
+        opacity: isDragging ? 0.6 : 1, boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : undefined, zIndex: isDragging ? 1 : 'auto',
       }}
     >
       <DragHandle attributes={attributes} listeners={listeners} />
-      <span style={{ flexShrink: 0, width: 12, height: 12, borderRadius: '50%', background: p.accent }} />
-      <span style={{ flex: 1, minWidth: 0, fontSize: 14.5, fontWeight: 700, color: '#0f172a' }}>{category.name}</span>
-      <span style={{
-        fontSize: 11.5, fontWeight: 700, color: p.accent, background: p.soft, border: `1px solid ${p.softBorder}`,
-        borderRadius: 99, padding: '2px 9px', flexShrink: 0,
-      }}>
+      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.accent }} />
+      <span className="min-w-0 flex-1 text-[14.5px] font-bold text-ink">{category.name}</span>
+      <span
+        className="shrink-0 rounded-full border px-[9px] py-0.5 text-[11.5px] font-bold"
+        style={{ color: p.accent, background: p.soft, borderColor: p.softBorder }}
+      >
         {count} contenant{count !== 1 ? 's' : ''}
       </span>
-      <span style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-        <button type="button" onClick={onEdit}
-          style={{ cursor: 'pointer', border: '1px solid #cbd5e1', background: '#fff', color: '#475569', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}>
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <Button variant="ghost" onClick={onEdit} className="rounded-[7px] px-2.5 py-[5px] text-xs">
           Modifier
-        </button>
+        </Button>
         <button type="button" onClick={onDelete} aria-label="Supprimer"
-          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#dc2626', fontSize: 15, padding: '4px 6px' }}>✕</button>
+          className="p-1 text-bad">
+          <Icon name="delete" size={18} />
+        </button>
       </span>
     </div>
   );
@@ -294,46 +272,41 @@ export default function AdminMaterielCategoriesPage() {
 
   if (loading) {
     return (
-      <div style={{ display: 'flex', minHeight: '40vh', alignItems: 'center', justifyContent: 'center' }}>
-        <p style={{ color: '#94a3b8' }}>Chargement…</p>
+      <div className="flex min-h-[40vh] items-center justify-center">
+        <p className="text-ink-3">Chargement…</p>
       </div>
     );
   }
 
   if (!profile || profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs.
       </div>
     );
   }
 
   return (
-    <div style={{ paddingBottom: 80 }}>
-      <div style={{ marginBottom: 18 }}>
-        <h1 style={{ margin: 0, fontSize: 25, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
-          Types de matériel
-        </h1>
-        <p style={{ margin: '7px 0 0', fontSize: 13.5, color: '#64748b', lineHeight: 1.5, maxWidth: 680 }}>
-          Définissez les types de matériel (ex. Ambulance, Lot A, Véhicule de transport). Un contenant porte un type ;
-          une mission réclame un type en quantité, sans préciser lequel.
-        </p>
-      </div>
+    <div className="pb-20">
+      <PageHeader
+        title="Types de matériel"
+        subtitle="Définissez les types de matériel (ex. Ambulance, Lot A, Véhicule de transport). Un contenant porte un type ; une mission réclame un type en quantité, sans préciser lequel."
+      />
 
       {error ? (
-        <div style={{ background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#dc2626' }}>
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-4 py-3 text-[13px] text-bad">
           {error}
         </div>
       ) : null}
       {successMsg ? (
-        <div style={{ background: '#ecfdf5', border: '1px solid #a7f3d0', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#047857' }}>
+        <div className="mb-4 rounded-[10px] border border-ok-line bg-ok-soft px-4 py-3 text-[13px] text-ok-text">
           {successMsg}
         </div>
       ) : null}
 
       {categories.length === 0 ? (
-        <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', marginBottom: 16 }}>
-          <p style={{ margin: 0, color: '#94a3b8', fontSize: 13.5 }}>Aucun type pour l&apos;instant. Créez-en un ci-dessous.</p>
+        <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
+          <p className="text-[13.5px] text-ink-3">Aucun type pour l&apos;instant. Créez-en un ci-dessous.</p>
         </div>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
@@ -350,9 +323,9 @@ export default function AdminMaterielCategoriesPage() {
         </DndContext>
       )}
 
-      <div style={{ marginTop: 8 }}>
+      <div className="mt-2">
         <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
-          style={{ cursor: 'pointer', border: '1px dashed #cbd5e1', background: '#fff', color: '#2563eb', borderRadius: 10, padding: '11px 16px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', width: '100%' }}>
+          className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
           + Nouveau type
         </button>
       </div>
@@ -361,24 +334,32 @@ export default function AdminMaterielCategoriesPage() {
         <Modal
           title={categoryModal.id ? 'Modifier le type' : 'Nouveau type'}
           onClose={() => setCategoryModal(null)}
-          onSubmit={submitCategory}
-          submitLabel={savingCategory ? 'Enregistrement…' : categoryModal.id ? 'Enregistrer' : 'Créer'}
-          submitDisabled={savingCategory || !categoryModal.name.trim()}
+          maxWidth={480}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => setCategoryModal(null)}>Annuler</Button>
+              <Button variant="engage" onClick={submitCategory} disabled={savingCategory || !categoryModal.name.trim()}>
+                {savingCategory ? 'Enregistrement…' : categoryModal.id ? 'Enregistrer' : 'Créer'}
+              </Button>
+            </>
+          }
         >
-          <div>
-            <FieldLabel>Nom</FieldLabel>
-            <input
-              value={categoryModal.name}
-              onChange={(e) => setCategoryModal((m) => (m ? { ...m, name: e.target.value } : m))}
-              onKeyDown={(e) => { if (e.key === 'Enter') submitCategory(); }}
-              placeholder="Ex. : Ambulance, Lot A, Véhicule de transport…"
-              style={inputStyle}
-              autoFocus
-            />
-          </div>
-          <div>
-            <FieldLabel>Couleur</FieldLabel>
-            <ColorSwatches value={categoryModal.color} onChange={(color) => setCategoryModal((m) => (m ? { ...m, color } : m))} />
+          <div className="flex flex-col gap-4">
+            <div>
+              <FieldLabel>Nom</FieldLabel>
+              <input
+                value={categoryModal.name}
+                onChange={(e) => setCategoryModal((m) => (m ? { ...m, name: e.target.value } : m))}
+                onKeyDown={(e) => { if (e.key === 'Enter') submitCategory(); }}
+                placeholder="Ex. : Ambulance, Lot A, Véhicule de transport…"
+                className={inputClass}
+                autoFocus
+              />
+            </div>
+            <div>
+              <FieldLabel>Couleur</FieldLabel>
+              <ColorSwatches value={categoryModal.color} onChange={(color) => setCategoryModal((m) => (m ? { ...m, color } : m))} />
+            </div>
           </div>
         </Modal>
       ) : null}

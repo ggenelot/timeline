@@ -115,7 +115,7 @@ const FREQUENCY_OPTIONS: Array<{ value: RecurrenceFrequency; label: string }> = 
   { value: 'monthly', label: 'Mensuelle' }
 ];
 
-const fieldLabelText = { fontSize: 13, fontWeight: 700, color: '#334155', marginBottom: 7 } as const;
+const fieldLabelText = { fontSize: 13, fontWeight: 700, color: '#5B6478', marginBottom: 7 } as const;
 
 export function MissionForm({
   form,
@@ -258,7 +258,7 @@ export function MissionForm({
               </button>
             ))}
             {missionTypes.length === 0 && (
-              <p style={{ fontSize: 13, color: '#94a3b8', margin: 0 }}>Chargement des types de mission...</p>
+              <p style={{ fontSize: 13, color: '#8A93A6', margin: 0 }}>Chargement des types de mission...</p>
             )}
           </div>
         </div>
@@ -303,8 +303,8 @@ export function MissionForm({
       ) : null}
 
       {recurrence !== undefined && onRecurrenceChange ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #eef1f5', background: '#fcfcfd', borderRadius: 12, padding: 14 }}>
-          <label style={{ display: 'flex', cursor: 'pointer', alignItems: 'center', gap: 9, fontSize: 13.5, fontWeight: 700, color: '#334155' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 13, border: '1px solid #EEF1F6', background: '#F7F9FC', borderRadius: 12, padding: 14 }}>
+          <label style={{ display: 'flex', cursor: 'pointer', alignItems: 'center', gap: 9, fontSize: 13.5, fontWeight: 700, color: '#5B6478' }}>
             <input
               type="checkbox"
               checked={recurrence.enabled}
@@ -383,7 +383,7 @@ export function MissionForm({
             id="mission-created-by"
             type="text"
             value={createdByLabel}
-            style={{ ...adminInputStyle, background: '#f1f5f9', color: '#64748b' }}
+            style={{ ...adminInputStyle, background: '#F2F5FA', color: '#5B6478' }}
             disabled
             readOnly
           />

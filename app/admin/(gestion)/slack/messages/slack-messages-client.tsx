@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
 
 type TemplateVariable = { key: string; label: string };
 
@@ -73,37 +75,38 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
   const cancel = () => { setText(tpl.template); setEditing(false); setError(null); setSuccess(false); };
 
   return (
-    <div className="rounded-lg border border-slate-200 bg-white">
+    <div className="rounded-2xl border border-line bg-surface-card shadow-card">
       <div className="flex items-start justify-between gap-4 p-4">
         <div className="min-w-0">
-          <p className="font-medium text-slate-900">{tpl.label}</p>
-          {tpl.description && <p className="mt-0.5 text-sm text-slate-500">{tpl.description}</p>}
+          <p className="font-medium text-ink">{tpl.label}</p>
+          {tpl.description && <p className="mt-0.5 text-sm text-ink-2">{tpl.description}</p>}
           {tpl.updated_at && (
-            <p className="mt-0.5 text-xs text-slate-400">
+            <p className="mt-0.5 text-xs text-ink-3">
               Modifié le {new Date(tpl.updated_at).toLocaleString('fr-FR')}
             </p>
           )}
         </div>
         {!editing && (
-          <button
+          <Button
+            variant="ghost"
             onClick={() => { setEditing(true); setSuccess(false); }}
-            className="shrink-0 rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50"
+            className="shrink-0 px-3 py-1.5"
           >
             Modifier
-          </button>
+          </Button>
         )}
       </div>
 
-      <div className="border-t border-slate-100 px-4 pb-4 pt-3">
+      <div className="border-t border-line-row px-4 pb-4 pt-3">
         {editing ? (
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
             rows={text.split('\n').length + 1}
-            className="w-full rounded border border-slate-300 p-2 font-mono text-sm focus:border-slate-500 focus:outline-none"
+            className="w-full rounded-lg border border-line-field p-2 font-mono text-sm text-ink focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         ) : (
-          <pre className="whitespace-pre-wrap rounded bg-slate-50 p-3 font-mono text-sm text-slate-700">{text}</pre>
+          <pre className="whitespace-pre-wrap rounded-lg bg-surface-sub p-3 font-mono text-sm text-ink-2">{text}</pre>
         )}
 
         {tpl.available_variables.length > 0 && (
@@ -112,7 +115,7 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
               <span
                 key={v.key}
                 title={v.label}
-                className="cursor-default rounded bg-slate-100 px-2 py-0.5 font-mono text-xs text-slate-600"
+                className="cursor-default rounded bg-surface-sub px-2 py-0.5 font-mono text-xs text-ink-2"
               >
                 {`{{${v.key}}}`}
               </span>
@@ -120,31 +123,33 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
           </div>
         )}
 
-        {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-        {success && !editing && <p className="mt-2 text-sm text-green-600">Sauvegardé.</p>}
+        {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+        {success && !editing && <p className="mt-2 text-sm text-ok-text">Sauvegardé.</p>}
 
         {editing && (
           <div className="mt-3 flex items-center gap-2">
-            <button
+            <Button
               onClick={save}
               disabled={saving || text.trim() === ''}
-              className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white disabled:opacity-50"
+              className="px-3 py-1.5"
             >
               {saving ? 'Sauvegarde…' : 'Sauvegarder'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={reset}
               disabled={resetting}
-              className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 disabled:opacity-50"
+              className="px-3 py-1.5"
             >
               {resetting ? 'Réinitialisation…' : 'Réinitialiser par défaut'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
               onClick={cancel}
-              className="rounded border border-slate-300 px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50"
+              className="px-3 py-1.5"
             >
               Annuler
-            </button>
+            </Button>
           </div>
         )}
       </div>
@@ -181,17 +186,19 @@ export function SlackMessagesClient() {
 
   return (
     <div className="space-y-6 p-6">
-      <div>
-        <h1 className="text-2xl font-semibold text-slate-900">Admin Slack</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Personnalisez les messages envoyés automatiquement par le bot Slack.
-          Utilisez les variables <code className="rounded bg-slate-100 px-1 font-mono text-xs">{'{{variable}}'}</code> pour insérer des valeurs dynamiques.
-          Une ligne contenant une variable sans valeur est automatiquement supprimée du message.
-        </p>
-      </div>
+      <PageHeader
+        title="Admin Slack"
+        subtitle={
+          <>
+            Personnalisez les messages envoyés automatiquement par le bot Slack.
+            Utilisez les variables <code className="rounded bg-surface-sub px-1 font-mono text-xs text-ink-2">{'{{variable}}'}</code> pour insérer des valeurs dynamiques.
+            Une ligne contenant une variable sans valeur est automatiquement supprimée du message.
+          </>
+        }
+      />
 
-      {loading && <p className="text-sm text-slate-500">Chargement des templates…</p>}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {loading && <p className="text-sm text-ink-2">Chargement des templates…</p>}
+      {error && <p className="text-sm text-bad">{error}</p>}
 
       {!loading && !error && (
         <div className="space-y-4">

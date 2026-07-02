@@ -56,11 +56,11 @@ const ACTIVITY_TYPE_LABELS: Record<ActivityLog['action_type'], string> = {
 };
 
 const ACTIVITY_TYPE_TINTS: Record<ActivityLog['action_type'], string> = {
-  mission_created: 'border-emerald-200 bg-emerald-50/50',
-  mission_status_changed: 'border-blue-200 bg-blue-50/50',
-  proposal_response_updated: 'border-amber-200 bg-amber-50/50',
-  volunteer_selected: 'border-violet-200 bg-violet-50/50',
-  volunteer_removed: 'border-rose-200 bg-rose-50/50'
+  mission_created: 'border-ok-line bg-ok-soft/50',
+  mission_status_changed: 'border-[#CFDDF6] bg-[#E7EEFB]/50',
+  proposal_response_updated: 'border-warn-line bg-warn-soft/50',
+  volunteer_selected: 'border-[#E3D6EF] bg-[#F5EDFA]/50',
+  volunteer_removed: 'border-bad/30 bg-bad-soft/50'
 };
 
 const adminResponseOptions: Array<{ label: string; value: Exclude<MissionProposalResponse, 'no_response'> }> = [
@@ -231,8 +231,8 @@ export default function MissionDetailPage() {
         matchingRequiredSkills,
         response,
         responseLabel: getProposalResponseLabel(response),
-        responseTone: response === 'available' ? 'text-emerald-700' : response === 'unavailable' ? 'text-rose-700' : 'text-slate-600',
-        responseRowBackground: response === 'available' ? 'bg-emerald-50/50' : response === 'unavailable' ? 'bg-rose-50/50' : 'bg-slate-100/60',
+        responseTone: response === 'available' ? 'text-ok-text' : response === 'unavailable' ? 'text-bad' : 'text-ink-2',
+        responseRowBackground: response === 'available' ? 'bg-ok-soft/50' : response === 'unavailable' ? 'bg-bad-soft/50' : 'bg-surface-sub/60',
         updatedByAdmin: proposal?.updated_by_admin ?? false,
         respondedAt: proposal?.responded_at ?? null,
         statusPriority: responsePriority[response]
@@ -679,14 +679,14 @@ export default function MissionDetailPage() {
   }, [mission]);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement du détail mission...</p>;
+    return <p className="text-sm text-ink-2">Chargement du détail mission...</p>;
   }
 
   if (!mission) {
     return (
       <div className="space-y-4">
-        <p className="text-sm text-red-600">{error ?? 'Mission introuvable.'}</p>
-        <Link href="/missions" className="text-sm text-slate-700 underline">
+        <p className="text-sm text-bad">{error ?? 'Mission introuvable.'}</p>
+        <Link href="/missions" className="text-sm font-medium text-brand underline">
           Retour à la liste
         </Link>
       </div>
@@ -1052,46 +1052,46 @@ export default function MissionDetailPage() {
 
   return (
     <div className="space-y-6">
-      {error ? <p className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
-      {success ? <p className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{success}</p> : null}
+      {error ? <p className="rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</p> : null}
+      {success ? <p className="rounded-lg border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{success}</p> : null}
 
-      <article className="rounded-lg border border-slate-200 bg-white p-4">
+      <article className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h1 className="text-2xl font-bold tracking-[-0.01em] text-[#0f172a]">{mission.title}</h1>
+          <h1 className="text-2xl font-bold tracking-[-0.01em] text-ink">{mission.title}</h1>
           <div className="flex items-center gap-2">
             {isAdmin ? (
               <Link
                 href={`/admin/missions/${mission.id}/edit`}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]"
               >
                 Modifier
               </Link>
             ) : null}
-            <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-semibold text-slate-700">{MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}</span>
+            <span className="rounded-full border border-line bg-surface-sub px-3 py-1 text-xs font-semibold text-ink-2">{MISSION_CATEGORY_LABELS[getMissionCategory(mission.mission_type_id)]}</span>
             <MissionStatusBadge status={mission.status} />
           </div>
         </div>
-        <p className="mt-2 text-sm text-[#64748b]">{mission.description ?? 'Aucune description'}</p>
-        <dl className="mt-3 grid gap-1 text-sm text-[#64748b] md:grid-cols-2">
+        <p className="mt-2 text-sm text-ink-2">{mission.description ?? 'Aucune description'}</p>
+        <dl className="mt-3 grid gap-1 text-sm text-ink-2 md:grid-cols-2">
           <div>
-            <dt className="inline font-medium text-slate-700">Lieu :</dt> {mission.location ?? 'Non défini'}
+            <dt className="inline font-medium text-ink">Lieu :</dt> {mission.location ?? 'Non défini'}
           </div>
           <div>
           </div>
           <div>
-            <dt className="inline font-medium text-slate-700">Début :</dt> {new Date(mission.starts_at).toLocaleString('fr-FR')}
+            <dt className="inline font-medium text-ink">Début :</dt> {new Date(mission.starts_at).toLocaleString('fr-FR')}
           </div>
           <div>
-            <dt className="inline font-medium text-slate-700">Fin :</dt> {new Date(mission.ends_at).toLocaleString('fr-FR')}
+            <dt className="inline font-medium text-ink">Fin :</dt> {new Date(mission.ends_at).toLocaleString('fr-FR')}
           </div>
         </dl>
 
         {(mission.mission_required_skills ?? []).length > 0 ? (
-          <div className="mt-3 text-sm text-[#64748b]">
-            <p className="font-medium text-slate-700">Compétences requises :</p>
+          <div className="mt-3 text-sm text-ink-2">
+            <p className="font-medium text-ink">Compétences requises :</p>
             <ul className="mt-2 flex flex-wrap gap-1">
               {(mission.mission_required_skills ?? []).map((requiredSkill) => (
-                <li key={requiredSkill.id} className="inline-flex rounded-full border border-slate-200 bg-white px-2 py-0.5 text-xs text-slate-700">
+                <li key={requiredSkill.id} className="inline-flex rounded-full border border-line bg-surface-card px-2 py-0.5 text-xs text-ink-2">
                   {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
                 </li>
               ))}
@@ -1103,22 +1103,22 @@ export default function MissionDetailPage() {
           <div className="mt-4 flex flex-col items-start gap-3">
             <ProposalButton missionId={mission.id} volunteerId={profile.id} disabled={false} missionStatus={mission.status} currentResponse={myProposal?.response ?? null} />
             {myProposal ? <StatusBadge status={myProposal.status} /> : null}
-            {!myProposal ? <p className="text-xs text-[#64748b]">Aucune réponse enregistrée pour cette mission.</p> : null}
+            {!myProposal ? <p className="text-xs text-ink-2">Aucune réponse enregistrée pour cette mission.</p> : null}
           </div>
         ) : null}
       </article>
 
       {canManageMission ? (
-        <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
+        <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Disponibilité des bénévoles</h2>
+            <h2 className="text-lg font-semibold text-ink">Disponibilité des bénévoles</h2>
             <button
               type="button"
               aria-expanded={isAvailabilityExpanded}
               aria-controls="mission-availability-content"
               aria-label={isAvailabilityExpanded ? 'Masquer la disponibilité des bénévoles' : 'Afficher la disponibilité des bénévoles'}
               onClick={() => setIsAvailabilityExpanded((current) => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
             >
               <span className={`text-base leading-none transition-transform ${isAvailabilityExpanded ? 'rotate-180' : ''}`}>▾</span>
             </button>
@@ -1127,13 +1127,13 @@ export default function MissionDetailPage() {
           {isAvailabilityExpanded ? (
             <>
 
-          <div id="mission-availability-content" className="space-y-3 rounded border border-slate-200 bg-slate-50 p-3">
+          <div id="mission-availability-content" className="space-y-3 rounded-xl border border-line bg-surface-sub p-3">
             <input
               type="search"
               value={availabilitySearchQuery}
               onChange={(event) => setAvailabilitySearchQuery(event.target.value)}
               placeholder="Rechercher un bénévole"
-              className="w-full rounded-full border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-full border border-line-field bg-surface-card px-4 py-2 text-sm text-ink-2 placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
             <div className="flex flex-wrap gap-2">
               <button
@@ -1141,8 +1141,8 @@ export default function MissionDetailPage() {
                 onClick={() => setAvailabilityStatusFilter('all')}
                 className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'all'
-                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                    ? 'border-brand bg-brand font-semibold text-white'
+                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 Tous statuts {proposalsTableRows.length}
@@ -1152,8 +1152,8 @@ export default function MissionDetailPage() {
                 onClick={() => setAvailabilityStatusFilter('available')}
                 className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'available'
-                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                    ? 'border-brand bg-brand font-semibold text-white'
+                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 Disponibles {proposalsByStatus.available}
@@ -1163,8 +1163,8 @@ export default function MissionDetailPage() {
                 onClick={() => setAvailabilityStatusFilter('unavailable')}
                 className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'unavailable'
-                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                    ? 'border-brand bg-brand font-semibold text-white'
+                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 Indisponibles {proposalsByStatus.unavailable}
@@ -1174,8 +1174,8 @@ export default function MissionDetailPage() {
                 onClick={() => setAvailabilityStatusFilter('no_response')}
                 className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   availabilityStatusFilter === 'no_response'
-                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                    ? 'border-brand bg-brand font-semibold text-white'
+                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 Sans réponse {proposalsByStatus.no_response}
@@ -1183,18 +1183,18 @@ export default function MissionDetailPage() {
             </div>
           </div>
 
-          <div className="max-h-80 overflow-y-auto rounded border border-slate-200">
-            <table className="min-w-full divide-y divide-slate-200 text-left text-xs text-slate-700">
-              <thead className="bg-slate-50 text-slate-600">
+          <div className="max-h-80 overflow-y-auto rounded-xl border border-line">
+            <table className="min-w-full divide-y divide-line text-left text-xs text-ink-2">
+              <thead className="bg-surface-sub text-ink-2">
                 <tr>
                   <th className="px-3 py-2 font-medium">Bénévole</th>
                   {isAdmin ? <th className="px-3 py-2 font-medium">Action admin</th> : null}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-100 bg-white">
+              <tbody className="divide-y divide-line-row bg-surface-card">
                 {filteredProposalsTableRows.length === 0 ? (
                   <tr>
-                    <td colSpan={isAdmin ? 2 : 1} className="px-3 py-3 text-slate-500">
+                    <td colSpan={isAdmin ? 2 : 1} className="px-3 py-3 text-ink-3">
                       Aucun bénévole ne correspond aux filtres sélectionnés.
                     </td>
                   </tr>
@@ -1204,20 +1204,20 @@ export default function MissionDetailPage() {
                       <td className="space-y-1 px-3 py-2">
                         <p>{row.volunteerLabel}</p>
                         {row.updatedByAdmin ? (
-                          <p className="inline-flex rounded-full border border-purple-200 bg-purple-50 px-2 py-0.5 text-[11px] text-purple-700">
+                          <p className="inline-flex rounded-full border border-[#E3D6EF] bg-acsso-soft px-2 py-0.5 text-[11px] text-acsso-text">
                             Modifié par admin
                           </p>
                         ) : null}
                         {row.matchingRequiredSkills.length > 0 ? (
                           <div className="flex flex-wrap gap-1">
                             {row.matchingRequiredSkills.map((skill) => (
-                              <span key={`${row.id}-${skill}`} className="inline-flex rounded-full border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] text-blue-700">
+                              <span key={`${row.id}-${skill}`} className="inline-flex rounded-full border border-[#CFDDF6] bg-[#E7EEFB] px-2 py-0.5 text-[11px] text-[#1E3C87]">
                                 {skill}
                               </span>
                             ))}
                           </div>
                         ) : (
-                          <p className="text-[11px] text-slate-500">Aucune compétence requise identifiée</p>
+                          <p className="text-[11px] text-ink-3">Aucune compétence requise identifiée</p>
                         )}
                       </td>
                       {isAdmin ? (
@@ -1227,7 +1227,7 @@ export default function MissionDetailPage() {
                               type="button"
                               onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'available')}
                               disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'available'}
-                              className="rounded-md border border-emerald-300 px-2 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-md border border-ok-line px-2 py-1 text-xs text-ok-text hover:bg-ok-soft disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Disponible
                             </button>
@@ -1235,7 +1235,7 @@ export default function MissionDetailPage() {
                               type="button"
                               onClick={() => setVolunteerResponseByAdmin(row.volunteerId, 'unavailable')}
                               disabled={actionLoading === `admin-response-${row.volunteerId}` || row.response === 'unavailable'}
-                              className="rounded-md border border-rose-300 px-2 py-1 text-xs text-rose-700 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                              className="rounded-md border border-bad/30 px-2 py-1 text-xs text-bad hover:bg-bad-soft disabled:cursor-not-allowed disabled:opacity-50"
                             >
                               Indisponible
                             </button>
@@ -1254,12 +1254,12 @@ export default function MissionDetailPage() {
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Sélection de l&apos;équipage</h2>
+            <h2 className="text-lg font-semibold text-ink">Sélection de l&apos;équipage</h2>
             {mission.status === 'confirmed' ? (
-              <p className="text-sm text-amber-700">
+              <p className="text-sm text-warn-text">
                 L&apos;événement a été confirmé, il n&apos;est plus possible de changer la composition.
               </p>
             ) : null}
@@ -1270,7 +1270,7 @@ export default function MissionDetailPage() {
             aria-controls="mission-skills-directory-content"
             aria-label={isSkillsDirectoryExpanded ? 'Masquer les compétences des bénévoles' : 'Afficher les compétences des bénévoles'}
             onClick={() => setIsSkillsDirectoryExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
           >
             <span className={`text-base leading-none transition-transform ${isSkillsDirectoryExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
@@ -1278,18 +1278,18 @@ export default function MissionDetailPage() {
         {isSkillsDirectoryExpanded ? (
           <div id="mission-skills-directory-content" className="mt-3 space-y-4">
             {requiredSkillsVolunteerDirectory.length === 0 ? (
-              <p className="text-sm text-slate-600">Aucune compétence requise sur cette mission.</p>
+              <p className="text-sm text-ink-2">Aucune compétence requise sur cette mission.</p>
             ) : (
               requiredSkillsVolunteerDirectory.map((skillGroup) => (
-                <div key={skillGroup.requiredSkillId} className="rounded-md border border-slate-200 p-3">
+                <div key={skillGroup.requiredSkillId} className="rounded-xl border border-line p-3">
                   <div className="flex items-center justify-between gap-3">
-                    <h3 className="text-sm font-semibold text-slate-900">{skillGroup.requiredSkillName}</h3>
+                    <h3 className="text-sm font-semibold text-ink">{skillGroup.requiredSkillName}</h3>
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
                         skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length >=
                         skillGroup.requiredCount
-                          ? 'bg-emerald-100 text-emerald-800'
-                          : 'bg-slate-100 text-slate-700'
+                          ? 'bg-ok-soft text-ok-text'
+                          : 'bg-surface-sub text-ink-2'
                       }`}
                     >
                       {skillGroup.volunteers.filter((volunteer) => pendingAssignments.get(volunteer.id) === skillGroup.requiredSkillId).length}/
@@ -1297,7 +1297,7 @@ export default function MissionDetailPage() {
                     </span>
                   </div>
                   {skillGroup.volunteers.length === 0 ? (
-                    <p className="mt-2 text-sm text-slate-600">Aucun bénévole correspondant pour le moment.</p>
+                    <p className="mt-2 text-sm text-ink-2">Aucun bénévole correspondant pour le moment.</p>
                   ) : (
                     <ul className="mt-3 flex flex-wrap gap-4">
                       {skillGroup.volunteers.map((volunteer) => {
@@ -1315,15 +1315,15 @@ export default function MissionDetailPage() {
                               disabled={!canToggle}
                               className={`group w-full rounded-md p-1 transition ${
                                 isSelectedOnThisSkill
-                                  ? 'bg-emerald-50 ring-1 ring-emerald-300'
+                                  ? 'bg-ok-soft ring-1 ring-ok-line'
                                   : isSelectedElsewhere
-                                    ? 'cursor-not-allowed bg-slate-100 opacity-45'
-                                  : 'hover:bg-slate-50'
+                                    ? 'cursor-not-allowed bg-surface-sub opacity-45'
+                                  : 'hover:bg-surface-sub'
                               } ${
                                 !canToggle ? 'cursor-not-allowed opacity-45' : ''
                               }`}
                             >
-                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-slate-300 bg-slate-100 text-sm font-semibold text-slate-700">
+                              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border border-line-field bg-surface-sub text-sm font-semibold text-ink-2">
                                 {isSelectedElsewhere ? (
                                   <>
                                     <span className="group-hover:hidden">{volunteer.initials || 'B'}</span>
@@ -1335,16 +1335,16 @@ export default function MissionDetailPage() {
                                   volunteer.initials || 'B'
                                 )}
                               </div>
-                              <p className="mt-2 text-xs text-slate-700">{volunteer.fullName}</p>
+                              <p className="mt-2 text-xs text-ink-2">{volunteer.fullName}</p>
                             </button>
-                            <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-slate-200 bg-white p-2 text-left text-xs text-slate-700 shadow-lg group-hover/volunteer:block">
-                              <p className="font-semibold text-slate-900">Compétences</p>
+                            <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 hidden w-56 -translate-x-1/2 rounded-md border border-line bg-surface-card p-2 text-left text-xs text-ink-2 shadow-lift group-hover/volunteer:block">
+                              <p className="font-semibold text-ink">Compétences</p>
                               <div className="mt-1 flex flex-wrap gap-1">
                                 {(proposals.find((p) => p.volunteer_id === volunteer.id)?.volunteer?.profile_skills ?? []).map((ps) => {
                                   const s = Array.isArray(ps.skill) ? ps.skill[0] : ps.skill;
                                   if (!s) return null;
                                   return (
-                                    <span key={`${volunteer.id}-${s.id}`} className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-700">
+                                    <span key={`${volunteer.id}-${s.id}`} className="inline-flex rounded-full bg-surface-sub px-2 py-0.5 text-[10px] font-medium text-ink-2">
                                       {s.name}
                                     </span>
                                   );
@@ -1368,8 +1368,8 @@ export default function MissionDetailPage() {
                   type="button"
                   onClick={confirmCrewSelection}
                   disabled={missionBlocksSelection || actionLoading === 'confirm-selection' || actionLoading === 'save-selection'}
-                  className={`rounded-md px-4 py-2 text-sm font-medium text-white shadow ${
-                    areSkillConstraintsMet ? 'bg-slate-900 hover:bg-slate-800' : 'bg-slate-400 hover:bg-slate-500'
+                  className={`rounded-[11px] px-4 py-2 text-sm font-bold text-white shadow ${
+                    areSkillConstraintsMet ? 'bg-brand hover:bg-[#013A8F]' : 'bg-ink-4 hover:bg-ink-3'
                   } disabled:cursor-not-allowed disabled:opacity-50`}
                 >
                   {actionLoading === 'confirm-selection' || actionLoading === 'save-selection'
@@ -1382,23 +1382,23 @@ export default function MissionDetailPage() {
         ) : null}
       </section>
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Slack</h2>
+          <h2 className="text-lg font-semibold text-ink">Slack</h2>
           <button
             type="button"
             aria-expanded={isSlackCardExpanded}
             aria-controls="mission-slack-content"
             aria-label={isSlackCardExpanded ? 'Masquer la carte Slack' : 'Afficher la carte Slack'}
             onClick={() => setIsSlackCardExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
           >
             <span className={`text-base leading-none transition-transform ${isSlackCardExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
         </div>
 
         {isSlackCardExpanded ? (
-          <div id="mission-slack-content" className="mt-3 rounded-md border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700">
+          <div id="mission-slack-content" className="mt-3 rounded-xl border border-line bg-surface-sub p-3 text-xs text-ink-2">
             <label className="mt-2 block text-sm">
               Nom du canal Slack proposé
               <input
@@ -1407,7 +1407,7 @@ export default function MissionDetailPage() {
                 onChange={(event) => setSlackChannelNameDraft(event.target.value)}
                 disabled={isSlackChannelCreated}
                 title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
               />
             </label>
             <label className="mt-2 block text-sm">
@@ -1417,7 +1417,7 @@ export default function MissionDetailPage() {
                 onChange={(event) => setSlackMessageDraft(event.target.value)}
                 disabled={isSlackChannelCreated}
                 rows={4}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
               />
             </label>
             <div className="mt-2 flex justify-end">
@@ -1426,10 +1426,10 @@ export default function MissionDetailPage() {
                 onClick={syncSlackChannel}
                 disabled={slackCreationState === 'creating' || isSlackChannelCreated}
                 title={mission.slack_channel_id ? `${mission.slack_channel_name} (${mission.slack_channel_id})` : undefined}
-                className={`rounded-md border px-3 py-1.5 text-sm ${
+                className={`rounded-[11px] border px-3 py-1.5 text-sm font-bold ${
                   slackCreationState === 'idle' && !isSlackChannelCreated
-                    ? 'border-slate-300 text-slate-700 hover:bg-slate-100'
-                    : 'cursor-not-allowed border-slate-300 bg-slate-200 text-slate-500'
+                    ? 'border-line-field text-ink-2 hover:bg-surface-sub'
+                    : 'cursor-not-allowed border-line-field bg-line text-ink-3'
                 }`}
               >
                 {slackCreationState === 'creating'
@@ -1447,7 +1447,7 @@ export default function MissionDetailPage() {
                 rows={3}
                 disabled={!mission.slack_channel_id}
                 placeholder={mission.slack_channel_id ? 'Tapez votre message Slack…' : 'Créez d’abord le canal Slack'}
-                className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                className="mt-1 w-full rounded-[10px] border border-line-field px-2 py-1.5 disabled:cursor-not-allowed disabled:bg-surface-sub disabled:text-ink-3"
               />
             </label>
             <div className="mt-2 flex justify-end">
@@ -1455,7 +1455,7 @@ export default function MissionDetailPage() {
                 type="button"
                 onClick={sendSlackFreeMessage}
                 disabled={!mission.slack_channel_id || actionLoading === 'send-slack-message' || !slackFreeMessageDraft.trim()}
-                className="rounded-md border border-slate-300 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"
+                className="rounded-[11px] border border-line-field px-3 py-1.5 text-sm font-bold text-ink-2 hover:bg-surface-sub disabled:cursor-not-allowed disabled:bg-line disabled:text-ink-3"
               >
                 {actionLoading === 'send-slack-message' ? 'Envoi en cours...' : 'Envoyer le message'}
               </button>
@@ -1465,21 +1465,21 @@ export default function MissionDetailPage() {
       </section>
 
       {canManageMission ? (
-        <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
           <div className="flex items-center justify-between gap-3">
-            <h2 className="text-lg font-semibold text-slate-900">Activité des bénévoles</h2>
+            <h2 className="text-lg font-semibold text-ink">Activité des bénévoles</h2>
             <button
               type="button"
               aria-expanded={isActivityExpanded}
               aria-controls="mission-activity-content"
               aria-label={isActivityExpanded ? "Masquer l'activité des bénévoles" : "Afficher l'activité des bénévoles"}
               onClick={() => setIsActivityExpanded((current) => !current)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
             >
               <span className={`text-base leading-none transition-transform ${isActivityExpanded ? 'rotate-180' : ''}`}>▾</span>
             </button>
           </div>
-          <p className="mt-1 text-sm text-slate-600">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles.</p>
+          <p className="mt-1 text-sm text-ink-2">Heures cumulées sur l&apos;année roulante pour les bénévoles disponibles.</p>
 
           {isActivityExpanded ? (
             <div id="mission-activity-content" className="mt-4">
@@ -1489,21 +1489,21 @@ export default function MissionDetailPage() {
         </section>
       ) : null}
 
-      <section className="rounded-lg border border-slate-200 bg-white p-4">
+      <section className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-slate-900">Historique</h2>
+          <h2 className="text-lg font-semibold text-ink">Historique</h2>
           <button
             type="button"
             aria-expanded={isHistoryExpanded}
             aria-controls="mission-history-content"
             aria-label={isHistoryExpanded ? "Masquer l'historique" : "Afficher l'historique"}
             onClick={() => setIsHistoryExpanded((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-slate-300 bg-white text-slate-700 transition hover:bg-slate-100"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-line-field bg-surface-card text-ink-2 transition hover:bg-surface-sub"
           >
             <span className={`text-base leading-none transition-transform ${isHistoryExpanded ? 'rotate-180' : ''}`}>▾</span>
           </button>
         </div>
-        <p className="mt-1 text-sm text-[#64748b]">Événements récents de la mission, du plus récent au plus ancien.</p>
+        <p className="mt-1 text-sm text-ink-2">Événements récents de la mission, du plus récent au plus ancien.</p>
 
         {isHistoryExpanded ? (
           <div id="mission-history-content" className="mt-3 space-y-3">
@@ -1514,7 +1514,7 @@ export default function MissionDetailPage() {
               value={activitySearch}
               onChange={(event) => setActivitySearch(event.target.value)}
               placeholder="Rechercher dans l'historique"
-              className="w-full rounded-full border border-[#e2e8f0] bg-white px-4 py-2 text-sm text-slate-700 placeholder:text-slate-400 focus:border-emerald-500 focus:outline-none"
+              className="w-full rounded-full border border-line-field bg-surface-card px-4 py-2 text-sm text-ink-2 placeholder:text-ink-3 focus:border-accent focus:outline-none"
             />
           </label>
           <div className="flex flex-wrap gap-2">
@@ -1523,8 +1523,8 @@ export default function MissionDetailPage() {
               onClick={() => setSelectedActivityType('all')}
               className={`rounded-full border px-4 py-1.5 text-sm transition ${
                 selectedActivityType === 'all'
-                  ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                  : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                  ? 'border-brand bg-brand font-semibold text-white'
+                  : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
               }`}
             >
               Toutes {activityLogs.length}
@@ -1536,8 +1536,8 @@ export default function MissionDetailPage() {
                 onClick={() => setSelectedActivityType(type as ActivityLog['action_type'])}
                 className={`rounded-full border px-4 py-1.5 text-sm transition ${
                   selectedActivityType === type
-                    ? 'border-[#0f172a] bg-[#0f172a] font-semibold text-white'
-                    : 'border-[#e2e8f0] bg-white font-medium text-[#475569] hover:bg-slate-50'
+                    ? 'border-brand bg-brand font-semibold text-white'
+                    : 'border-line-field bg-surface-card font-medium text-ink-2 hover:bg-surface-sub'
                 }`}
               >
                 {label} {activityTypeCounts[type as ActivityLog['action_type']]}
@@ -1545,15 +1545,15 @@ export default function MissionDetailPage() {
             ))}
           </div>
           {activityLogs.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-600">Aucun historique disponible pour cette mission.</p>
+            <p className="mt-3 text-sm text-ink-2">Aucun historique disponible pour cette mission.</p>
           ) : filteredActivityLogs.length === 0 ? (
-            <p className="mt-3 text-sm text-slate-600">Aucun résultat avec ces filtres.</p>
+            <p className="mt-3 text-sm text-ink-2">Aucun résultat avec ces filtres.</p>
           ) : (
             <ul className="mt-3 space-y-2">
               {filteredActivityLogs.map((log) => (
-                <li key={log.id} className={`rounded border p-3 text-sm text-slate-700 ${ACTIVITY_TYPE_TINTS[log.action_type]}`}>
+                <li key={log.id} className={`rounded-xl border p-3 text-sm text-ink-2 ${ACTIVITY_TYPE_TINTS[log.action_type]}`}>
                   <p className="font-medium">{log.description}</p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs text-ink-3">
                     {new Date(log.created_at).toLocaleString('fr-FR')} · {log.actor?.full_name ?? log.actor?.email ?? 'Système'}
                   </p>
                 </li>

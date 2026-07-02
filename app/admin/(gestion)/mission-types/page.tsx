@@ -9,6 +9,9 @@ import {
   Profile,
   Skill,
 } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { PageHeader } from '@/components/ui/card';
+import { Icon } from '@/components/ui/icon';
 
 type SkillRow = { skill_id: string; quantity: number };
 
@@ -47,7 +50,7 @@ function SkillsEditor({
           <select
             value={row.skill_id}
             onChange={(e) => updateRow(idx, { skill_id: e.target.value })}
-            className="flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
           >
             {allSkills.map((s) => (
               <option key={s.id} value={s.id} disabled={rows.some((r, i) => i !== idx && r.skill_id === s.id)}>
@@ -60,14 +63,14 @@ function SkillsEditor({
             min={1}
             value={row.quantity}
             onChange={(e) => updateRow(idx, { quantity: Math.max(1, parseInt(e.target.value, 10) || 1) })}
-            className="w-16 rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-16 rounded-lg border border-line-field bg-surface-sub px-2 py-1.5 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
           <button
             type="button"
             onClick={() => removeRow(idx)}
-            className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-500 hover:bg-red-50"
+            className="rounded-md border border-bad/30 px-2 py-1 text-xs text-bad hover:bg-bad-soft"
           >
-            ✕
+            <Icon name="close" size={13} />
           </button>
         </div>
       ))}
@@ -75,7 +78,7 @@ function SkillsEditor({
         type="button"
         onClick={addSkill}
         disabled={rows.length >= allSkills.length}
-        className="text-xs text-slate-500 hover:text-slate-700 disabled:opacity-40"
+        className="text-xs text-ink-2 hover:text-ink disabled:opacity-40"
       >
         + Ajouter une compétence
       </button>
@@ -128,81 +131,80 @@ function MissionTypeForm({
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="rounded-xl border border-line bg-surface-card p-4 shadow-card">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Nom *</label>
+          <label className="mb-1 block text-xs font-medium text-ink-2">Nom *</label>
           <input
             type="text"
             placeholder="Ex. : Maraude nocturne, DPS foot, Formation PSE1…"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
         <div className="sm:col-span-2">
-          <label className="mb-1 block text-xs font-medium text-slate-600">Description</label>
+          <label className="mb-1 block text-xs font-medium text-ink-2">Description</label>
           <input
             type="text"
             placeholder="Description courte (optionnel)"
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Secouristes requis par défaut</label>
+          <label className="mb-1 block text-xs font-medium text-ink-2">Secouristes requis par défaut</label>
           <input
             type="number"
             min={1}
             value={requiredVolunteers}
             onChange={(e) => setRequiredVolunteers(Math.max(1, parseInt(e.target.value, 10) || 1))}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Heure de début par défaut</label>
+          <label className="mb-1 block text-xs font-medium text-ink-2">Heure de début par défaut</label>
           <input
             type="time"
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
         <div>
-          <label className="mb-1 block text-xs font-medium text-slate-600">Heure de fin par défaut</label>
+          <label className="mb-1 block text-xs font-medium text-ink-2">Heure de fin par défaut</label>
           <input
             type="time"
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="w-full rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
           />
         </div>
         {allSkills.length > 0 && (
           <div className="sm:col-span-2">
-            <label className="mb-2 block text-xs font-medium text-slate-600">Compétences requises par défaut</label>
+            <label className="mb-2 block text-xs font-medium text-ink-2">Compétences requises par défaut</label>
             <SkillsEditor rows={skills} allSkills={allSkills} onChange={setSkills} />
           </div>
         )}
       </div>
       <div className="mt-4 flex gap-2 justify-end">
         {onCancel && (
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onCancel}
-            className="rounded-lg border border-slate-200 px-3 py-2 text-sm text-slate-600 hover:bg-slate-50"
           >
             Annuler
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           type="button"
           onClick={handleSubmit}
           disabled={!name.trim() || submitting}
-          className="rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {submitting ? 'Enregistrement...' : submitLabel}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -353,11 +355,11 @@ export default function AdminMissionTypesPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-slate-600">Chargement...</p>;
+  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
 
   if (!profile || profile.role !== 'admin') {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-xl border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs.
       </div>
     );
@@ -365,20 +367,16 @@ export default function AdminMissionTypesPage() {
 
   return (
     <div className="space-y-8">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Missions</h1>
-        <p className="mt-1 text-sm text-slate-500">
-          Définissez les types de missions proposés par l&apos;antenne — maraudes, postes de secours, formations, etc. —
-          et renseignez leurs paramètres par défaut : catégorie, nombre de secouristes, horaires habituels et
-          compétences requises.
-        </p>
-      </header>
+      <PageHeader
+        title="Missions"
+        subtitle="Définissez les types de missions proposés par l'antenne — maraudes, postes de secours, formations, etc. — et renseignez leurs paramètres par défaut : catégorie, nombre de secouristes, horaires habituels et compétences requises."
+      />
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
-      {successMsg ? <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">{successMsg}</div> : null}
+      {error ? <div className="rounded-xl border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
+      {successMsg ? <div className="rounded-xl border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{successMsg}</div> : null}
 
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">Nouveau type de mission</h2>
+      <section className="rounded-2xl border border-line bg-surface-card p-5 shadow-card md:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Nouveau type de mission</h2>
         <MissionTypeForm
           allSkills={allSkills}
           onSubmit={handleCreate}
@@ -387,13 +385,13 @@ export default function AdminMissionTypesPage() {
         />
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-gradient-to-b from-white to-slate-50/40 p-5 shadow-sm md:p-6">
-        <h2 className="mb-4 text-lg font-semibold text-slate-800">Types existants</h2>
+      <section className="rounded-2xl border border-line bg-surface-card p-5 shadow-card md:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Types existants</h2>
 
         {missionTypes.length === 0 ? (
-          <p className="text-sm text-slate-400">Aucun type de mission défini.</p>
+          <p className="text-sm text-ink-3">Aucun type de mission défini.</p>
         ) : (
-          <div className="divide-y divide-slate-100 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          <div className="divide-y divide-line-row overflow-hidden rounded-xl border border-line bg-surface-card">
             {missionTypes.map((mt) => {
               const isEditing = editingId === mt.id;
               const skills: SkillRow[] = (mt.required_skills ?? []).map((s: MissionTypeRequiredSkill) => ({
@@ -420,19 +418,19 @@ export default function AdminMissionTypesPage() {
                   ) : (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                       <div className="min-w-0 space-y-1.5">
-                        <p className="font-medium text-slate-800">{mt.name}</p>
-                        {mt.description ? <p className="text-sm text-slate-500">{mt.description}</p> : null}
+                        <p className="font-medium text-ink">{mt.name}</p>
+                        {mt.description ? <p className="text-sm text-ink-2">{mt.description}</p> : null}
                         <div className="flex flex-wrap gap-2 text-xs">
-                          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700">
+                          <span className="rounded-full border border-accent-ring bg-accent-soft px-2 py-0.5 text-accent-text">
                             {mt.default_required_volunteers} secouriste{mt.default_required_volunteers > 1 ? 's' : ''}
                           </span>
                           {mt.default_start_time || mt.default_end_time ? (
-                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-amber-700">
+                            <span className="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-warn-text">
                               {formatTime(mt.default_start_time)} – {formatTime(mt.default_end_time)}
                             </span>
                           ) : null}
                           {(mt.required_skills ?? []).map((s: MissionTypeRequiredSkill) => (
-                            <span key={s.id} className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-700">
+                            <span key={s.id} className="rounded-full border border-[#E9C9E4] bg-acsso-soft px-2 py-0.5 text-acsso-text">
                               {s.skill?.name ?? '—'}{s.quantity > 1 ? ` ×${s.quantity}` : ''}
                             </span>
                           ))}
@@ -442,14 +440,14 @@ export default function AdminMissionTypesPage() {
                         <button
                           type="button"
                           onClick={() => setEditingId(mt.id)}
-                          className="rounded-md border border-slate-200 px-2.5 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                          className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 hover:bg-surface-sub"
                         >
                           Modifier
                         </button>
                         <button
                           type="button"
                           onClick={() => handleDelete(mt.id, mt.name)}
-                          className="rounded-md border border-red-200 px-2.5 py-1 text-xs text-red-600 hover:bg-red-50"
+                          className="rounded-md border border-bad/30 px-2.5 py-1 text-xs text-bad hover:bg-bad-soft"
                         >
                           Supprimer
                         </button>

@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
+import { PageHeader } from '@/components/ui/card';
 
 type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'created_at'>;
 
@@ -79,58 +80,56 @@ export function AdminVolunteersClient({ created }: AdminVolunteersClientProps) {
   }, [volunteers]);
 
   if (loading) {
-    return <p className="text-sm text-slate-600">Chargement des bénévoles...</p>;
+    return <p className="text-sm text-ink-2">Chargement des bénévoles...</p>;
   }
 
   if (!profile) {
-    return <p className="text-sm text-red-600">{error ?? 'Accès refusé.'}</p>;
+    return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
   }
 
   return (
     <div className="space-y-6">
-      <div className="rounded-lg border border-slate-200 bg-white p-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-xl font-semibold text-slate-900">Gestion des bénévoles</h1>
-            <p className="mt-1 text-sm text-slate-600">{volunteerCountLabel} enregistré(s).</p>
-          </div>
+      <PageHeader
+        title="Gestion des bénévoles"
+        subtitle={`${volunteerCountLabel} enregistré(s).`}
+        actions={
           <Link
             href="/admin/volunteers/create"
-            className="rounded-md bg-slate-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-slate-800"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[11px] bg-brand px-4 py-2 text-sm font-bold text-white shadow-[0_8px_18px_-6px_rgba(0,45,116,.5)] transition hover:bg-[#013A8F]"
           >
             Ajouter un bénévole
           </Link>
-        </div>
-      </div>
+        }
+      />
 
       {created ? (
-        <div className="rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-700">
+        <div className="rounded-md border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">
           Le bénévole a été ajouté avec succès.
         </div>
       ) : null}
 
-      {error ? <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div> : null}
+      {error ? <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
       {volunteers.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-sm text-slate-600">
+        <div className="rounded-2xl border border-dashed border-line-field bg-surface-card p-6 text-sm text-ink-2">
           Aucun bénévole enregistré pour le moment.
         </div>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
-          <table className="min-w-full divide-y divide-slate-200 text-sm">
-            <thead className="bg-slate-50 text-left text-slate-700">
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface-card">
+          <table className="min-w-full divide-y divide-line text-sm">
+            <thead className="bg-surface-sub text-left text-ink-2">
               <tr>
                 <th className="px-4 py-2 font-medium">Nom</th>
                 <th className="px-4 py-2 font-medium">Identifiant</th>
                 <th className="px-4 py-2 font-medium">Créé le</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className="divide-y divide-line-row">
               {volunteers.map((volunteer) => (
                 <tr key={volunteer.id}>
-                  <td className="px-4 py-2 text-slate-900">{volunteer.full_name ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{volunteer.identifier ?? '—'}</td>
-                  <td className="px-4 py-2 text-slate-700">{new Date(volunteer.created_at).toLocaleString('fr-FR')}</td>
+                  <td className="px-4 py-2 text-ink">{volunteer.full_name ?? '—'}</td>
+                  <td className="px-4 py-2 text-ink-2">{volunteer.identifier ?? '—'}</td>
+                  <td className="px-4 py-2 text-ink-2">{new Date(volunteer.created_at).toLocaleString('fr-FR')}</td>
                 </tr>
               ))}
             </tbody>

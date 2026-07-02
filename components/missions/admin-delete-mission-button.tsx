@@ -49,7 +49,7 @@ export function AdminDeleteMissionButton({ missionId, className, style, onDelete
       onClick={handleDelete}
       disabled={deleting}
       style={style ? { ...style, ...(deleting ? { opacity: 0.55, cursor: 'not-allowed' } : null) } : undefined}
-      className={style ? undefined : (className ?? 'fixed bottom-6 right-6 z-50 rounded-full bg-red-600 px-6 py-3 text-sm font-semibold text-white shadow-lg transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60')}
+      className={style ? undefined : (className ?? 'fixed bottom-6 right-6 z-50 rounded-full bg-bad px-6 py-3 text-sm font-semibold text-white shadow-lift transition hover:bg-[#BC3A3A] disabled:cursor-not-allowed disabled:opacity-60')}
     >
       {deleting ? 'Suppression...' : 'Supprimer la mission'}
     </button>

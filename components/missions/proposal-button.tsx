@@ -3,6 +3,8 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { MissionProposalResponse, MissionStatus } from '@/lib/types';
+import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 
 type ProposalButtonProps = {
   missionId: string;
@@ -124,16 +126,18 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
   }
 
   if (missionBlocksResponse) {
-    return <p className="text-sm text-slate-600">Cette mission n&apos;accepte plus de réponses bénévoles.</p>;
+    return <p className="text-sm text-ink-2">Cette mission n&apos;accepte plus de réponses bénévoles.</p>;
   }
 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-end gap-3">
         {localResponse ? (
-          <div className="mr-auto flex items-center gap-2 text-sm text-slate-700">
-            <p className="text-slate-500">Etat actuel</p>
-            <p className="font-semibold text-slate-900">{localResponse === 'available' ? '✓ Engagé' : 'Non disponible'}</p>
+          <div className="mr-auto flex items-center gap-2 text-sm text-ink-2">
+            <p className="text-ink-3">Etat actuel</p>
+            <p className="inline-flex items-center gap-1 font-semibold text-ink">
+              {localResponse === 'available' ? <><Icon name="check" size={16} />Engagé</> : 'Non disponible'}
+            </p>
           </div>
         ) : null}
         {(localResponse
@@ -145,25 +149,18 @@ export function ProposalButton({ missionId, volunteerId, disabled, missionStatus
           const isDisengageAction = localResponse === 'available' && option.value === 'unavailable';
 
           return (
-            <button
+            <Button
               key={option.value}
-              type="button"
+              variant={isDisengageAction ? 'danger' : isAvailableOption ? 'engage' : 'ghost'}
               disabled={disabled || loadingResponse !== null}
               onClick={() => upsertResponse(option.value)}
-              className={`rounded-md border px-3 py-1 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50 ${
-                isDisengageAction
-                  ? 'border-rose-500 bg-rose-500 text-white hover:bg-rose-400'
-                  : isAvailableOption
-                    ? 'border-emerald-400 bg-emerald-400 text-slate-900 hover:bg-emerald-300'
-                    : 'border-slate-300 bg-white text-slate-900 hover:bg-slate-100'
-              }`}
             >
               {isSaving ? 'Envoi...' : isDisengageAction ? 'Se désengager' : option.label}
-            </button>
+            </Button>
           );
         })}
       </div>
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-bad">{error}</p> : null}
     </div>
   );
 }

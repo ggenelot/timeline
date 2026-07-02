@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import type { RoleBehavior } from '@/lib/types';
 
 // ── Données renvoyées par l'API ───────────────────────────────
@@ -92,16 +94,20 @@ type DashboardData = {
 // couleurs nommées, configurable depuis la page « Compétences ».
 
 const CATEGORY_PALETTE: Record<string, { accent: string; soft: string; softBorder: string }> = {
-  slate: { accent: '#475569', soft: '#f1f5f9', softBorder: '#e2e8f0' },
-  amber: { accent: '#d97706', soft: '#fffbeb', softBorder: '#fde68a' },
-  sky: { accent: '#0284c7', soft: '#f0f9ff', softBorder: '#bae6fd' },
-  violet: { accent: '#7c3aed', soft: '#f5f3ff', softBorder: '#ddd6fe' },
-  emerald: { accent: '#059669', soft: '#ecfdf5', softBorder: '#a7f3d0' },
-  pink: { accent: '#db2777', soft: '#fdf2f8', softBorder: '#fbcfe8' },
-  rose: { accent: '#e11d48', soft: '#fff1f2', softBorder: '#fecdd3' },
-  orange: { accent: '#ea580c', soft: '#fff7ed', softBorder: '#fed7aa' },
-  cyan: { accent: '#0891b2', soft: '#ecfeff', softBorder: '#a5f3fc' },
-  indigo: { accent: '#4f46e5', soft: '#eef2ff', softBorder: '#c7d2fe' },
+  slate: { accent: '#5B6478', soft: '#F4F6FA', softBorder: '#E5E9F0' },
+  amber: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  orange: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  sky: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  blue: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  indigo: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  emerald: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  teal: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  cyan: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  green: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  violet: { accent: '#7A2E86', soft: '#F5EDFA', softBorder: '#E3D6EF' },
+  pink: { accent: '#8E1279', soft: '#F8E6F4', softBorder: '#E9C9E4' },
+  rose: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
+  red: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
 };
 
 function palette(color: string) {
@@ -379,10 +385,10 @@ export default function CompetencesDashboardPage() {
             sector: p?.sector ?? '',
             initials: initials(p?.full_name ?? p?.email ?? '?'),
             statusLabel: ss?.label ?? st,
-            ring: ss?.ring ?? '#cbd5e1',
-            avatarBg: ss?.soft ?? '#f1f5f9',
-            avatarColor: ss?.text ?? '#64748b',
-            text: ss?.text ?? '#64748b',
+            ring: ss?.ring ?? '#DCE2EC',
+            avatarBg: ss?.soft ?? '#F7F9FC',
+            avatarColor: ss?.text ?? '#5B6478',
+            text: ss?.text ?? '#5B6478',
             cursus: cursusDef,
             cursusEnrolled,
           };
@@ -433,7 +439,7 @@ export default function CompetencesDashboardPage() {
         name: p.full_name ?? p.email,
         sector: p.sector ?? '',
         initials: initials(p.full_name ?? p.email),
-        bg: idx % 2 === 0 ? '#fff' : '#fcfdfe',
+        bg: idx % 2 === 0 ? '#FFFFFF' : '#F7F9FC',
       }));
   }, [cat, data, matchPerson]);
 
@@ -640,69 +646,48 @@ export default function CompetencesDashboardPage() {
 
   if (allowed === false) {
     return (
-      <div
-        style={{
-          borderRadius: 12,
-          border: '1px solid #fecaca',
-          background: '#fef2f2',
-          padding: 16,
-          fontSize: 14,
-          color: '#b91c1c',
-        }}
-      >
+      <div className="rounded-xl border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
         Accès refusé : page réservée aux administrateurs de cursus.
       </div>
     );
   }
 
   if (loading || !data || !cat) {
-    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
+    return <p className="text-sm text-ink-2">Chargement…</p>;
   }
 
   const editorVw = typeof window !== 'undefined' ? window.innerWidth : 1080;
   const statusTiles: Array<{ key: 'all' | string; label: string; n: number; color: string }> = [
-    { key: 'all', label: 'Tous', n: catStats.total, color: '#0f172a' },
+    { key: 'all', label: 'Tous', n: catStats.total, color: '#002D74' },
     ...data.statuses.map((s) => ({ key: s.key, label: s.label, n: catStats.counts[s.key] ?? 0, color: palette(s.color).accent })),
   ];
 
   return (
-    <div style={{ fontFamily: "'Hanken Grotesk', -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif" }}>
+    <div>
       {/* breadcrumb */}
-      <div style={{ fontSize: 12.5, color: '#94a3b8', fontWeight: 600, marginBottom: 14 }}>
-        Compétences <span style={{ color: '#cbd5e1' }}>›</span>{' '}
-        <span style={{ color: '#475569' }}>Tableau de bord</span>
+      <div className="mb-[14px] text-[12.5px] font-semibold text-ink-3">
+        Compétences <span className="text-ink-4">›</span>{' '}
+        <span className="text-ink-2">Tableau de bord</span>
       </div>
 
       {/* title */}
-      <div style={{ marginBottom: 20 }}>
-        <h1 style={{ margin: 0, fontSize: 27, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.02em' }}>
+      <div className="mb-5">
+        <h1 className="text-[26px] font-black tracking-[-0.02em] text-ink">
           Suivi des compétences
         </h1>
-        <div style={{ marginTop: 6, fontSize: 14, color: '#64748b' }}>
+        <div className="mt-1.5 text-sm text-ink-2">
           Qui détient quoi, par catégorie de compétence et par bénévole.
         </div>
       </div>
 
       {error ? (
-        <div
-          style={{
-            marginBottom: 16,
-            borderRadius: 10,
-            border: '1px solid #fecaca',
-            background: '#fef2f2',
-            padding: '10px 14px',
-            fontSize: 13,
-            color: '#b91c1c',
-          }}
-        >
+        <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-[14px] py-2.5 text-[13px] text-bad">
           {error}
         </div>
       ) : null}
 
       {/* category nav */}
-      <div
-        style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 4, marginBottom: 20 }}
-      >
+      <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
         {data.categories.map((c) => {
           const active = c.id === cat.id;
           const cp = palette(c.color);
@@ -716,27 +701,15 @@ export default function CompetencesDashboardPage() {
                 setQuery('');
                 setExpandedSkillIds(new Set());
               }}
-              style={{
-                flex: 'none',
-                cursor: 'pointer',
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 9,
-                border: `1px solid ${active ? cp.accent : '#e2e8f0'}`,
-                borderRadius: 11,
-                padding: '9px 15px',
-                fontSize: 13.5,
-                fontWeight: 700,
-                fontFamily: 'inherit',
-                background: active ? cp.accent : '#fff',
-                color: active ? '#fff' : '#475569',
-              }}
+              className={cn(
+                'inline-flex flex-none cursor-pointer items-center gap-[9px] rounded-[11px] border px-[15px] py-[9px] text-[13.5px] font-bold',
+                active ? 'text-white' : 'border-line bg-surface-card text-ink-2'
+              )}
+              style={active ? { borderColor: cp.accent, background: cp.accent } : undefined}
             >
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: active ? '#fff' : cp.accent }} />
+              <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: active ? '#fff' : cp.accent }} />
               {c.name}
-              <span
-                style={{ fontSize: 12, fontWeight: 700, color: active ? 'rgba(255,255,255,.7)' : '#94a3b8' }}
-              >
+              <span className={cn('text-xs font-bold', active ? 'text-white/70' : 'text-ink-3')}>
                 {c.skills.length}
               </span>
             </button>
@@ -745,59 +718,24 @@ export default function CompetencesDashboardPage() {
       </div>
 
       {/* category summary */}
-      <div
-        style={{
-          background: '#fff',
-          border: '1px solid #e7e9ee',
-          borderRadius: 16,
-          boxShadow: '0 2px 10px rgba(15,23,42,.04)',
-          padding: '20px 22px',
-          marginBottom: 16,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 20,
-            flexWrap: 'wrap',
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
+      <div className="mb-4 rounded-2xl border border-line bg-surface-card px-[22px] py-5 shadow-card">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="min-w-0">
             <div
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 11.5,
-                fontWeight: 700,
-                letterSpacing: '.1em',
-                textTransform: 'uppercase',
-                color: pal.accent,
-                marginBottom: 7,
-              }}
+              className="mb-[7px] inline-flex items-center gap-2 text-[11.5px] font-bold uppercase tracking-[.1em]"
+              style={{ color: pal.accent }}
             >
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: pal.accent }} />
+              <span className="h-2 w-2 rounded-full" style={{ background: pal.accent }} />
               Catégorie de compétence
             </div>
-            <h2 style={{ margin: 0, fontSize: 23, fontWeight: 800, color: '#0f172a', letterSpacing: '-0.01em' }}>
+            <h2 className="text-[23px] font-extrabold tracking-[-0.01em] text-ink">
               {cat.name}
             </h2>
-            <div style={{ marginTop: 7, fontSize: 13.5, color: '#64748b' }}>
+            <div className="mt-[7px] text-[13.5px] text-ink-2">
               {cat.skills.length} compétences · {catStats.peopleCount} bénévoles concernés
             </div>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              flex: 'none',
-              maxWidth: '100%',
-              overflowX: 'auto',
-              paddingBottom: 2,
-            }}
-          >
+          <div className="flex max-w-full flex-none gap-2.5 overflow-x-auto pb-0.5">
             {statusTiles.map((tile) => {
               const active = statusFilter === tile.key;
               return (
@@ -806,20 +744,14 @@ export default function CompetencesDashboardPage() {
                   type="button"
                   onClick={() => setStatusFilter(tile.key)}
                   title={`Filtrer sur « ${tile.label} »`}
+                  className="min-w-[66px] flex-none cursor-pointer rounded-[10px] border px-2 py-1 text-center"
                   style={{
-                    flex: 'none',
-                    cursor: 'pointer',
-                    textAlign: 'center',
-                    minWidth: 66,
-                    border: `1px solid ${active ? tile.color : 'transparent'}`,
-                    borderRadius: 10,
+                    borderColor: active ? tile.color : 'transparent',
                     background: active ? `${tile.color}14` : 'transparent',
-                    padding: '4px 8px',
-                    fontFamily: 'inherit',
                   }}
                 >
-                  <div style={{ fontSize: 24, fontWeight: 800, color: tile.color, lineHeight: 1 }}>{tile.n}</div>
-                  <div style={{ marginTop: 4, fontSize: 11.5, fontWeight: 600, color: '#64748b', whiteSpace: 'nowrap' }}>
+                  <div className="text-2xl font-extrabold leading-none" style={{ color: tile.color }}>{tile.n}</div>
+                  <div className="mt-1 whitespace-nowrap text-[11.5px] font-semibold text-ink-2">
                     {tile.label}
                   </div>
                 </button>
@@ -830,16 +762,8 @@ export default function CompetencesDashboardPage() {
       </div>
 
       {/* controls */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 18 }}>
-        <div
-          style={{
-            display: 'inline-flex',
-            background: '#fff',
-            border: '1px solid #e2e8f0',
-            borderRadius: 10,
-            padding: 3,
-          }}
-        >
+      <div className="mb-[18px] flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-[10px] border border-line bg-surface-card p-[3px]">
           {(['arbre', 'tableau', 'chronologie'] as const).map((v) => {
             const active = view === v;
             return (
@@ -847,17 +771,10 @@ export default function CompetencesDashboardPage() {
                 key={v}
                 type="button"
                 onClick={() => setView(v)}
-                style={{
-                  cursor: 'pointer',
-                  border: 'none',
-                  borderRadius: 7,
-                  padding: '7px 15px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: 'inherit',
-                  background: active ? '#0f172a' : 'transparent',
-                  color: active ? '#fff' : '#64748b',
-                }}
+                className={cn(
+                  'cursor-pointer rounded-[7px] px-[15px] py-[7px] text-[13px] font-bold',
+                  active ? 'bg-brand text-white' : 'bg-transparent text-ink-2'
+                )}
               >
                 {v === 'arbre' ? 'Vue arbre' : v === 'tableau' ? 'Vue tableau' : 'Chronologie'}
               </button>
@@ -870,35 +787,14 @@ export default function CompetencesDashboardPage() {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Rechercher un bénévole…"
-            style={{
-              flex: 1,
-              minWidth: 180,
-              maxWidth: 280,
-              border: '1px solid #e2e8f0',
-              borderRadius: 10,
-              padding: '9px 13px',
-              fontSize: 13.5,
-              color: '#0f172a',
-              outline: 'none',
-              background: '#fff',
-              fontFamily: 'inherit',
-            }}
+            className="min-w-[180px] max-w-[280px] flex-1 rounded-[10px] border border-line bg-surface-card px-[13px] py-[9px] text-[13.5px] text-ink outline-none"
           />
         ) : (
           <>
             <select
               value={chronoProfileId}
               onChange={(e) => setChronoProfileId(e.target.value)}
-              style={{
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                padding: '9px 13px',
-                fontSize: 13.5,
-                color: '#0f172a',
-                outline: 'none',
-                background: '#fff',
-                fontFamily: 'inherit',
-              }}
+              className="rounded-[10px] border border-line bg-surface-card px-[13px] py-[9px] text-[13.5px] text-ink outline-none"
             >
               <option value="all">Tous les bénévoles</option>
               {data.profiles.map((p) => (
@@ -910,16 +806,7 @@ export default function CompetencesDashboardPage() {
             <select
               value={chronoCursusId}
               onChange={(e) => setChronoCursusId(e.target.value)}
-              style={{
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                padding: '9px 13px',
-                fontSize: 13.5,
-                color: '#0f172a',
-                outline: 'none',
-                background: '#fff',
-                fontFamily: 'inherit',
-              }}
+              className="rounded-[10px] border border-line bg-surface-card px-[13px] py-[9px] text-[13.5px] text-ink outline-none"
             >
               <option value="all">Tous les cursus</option>
               {data.allCursus.map((c) => (
@@ -932,19 +819,7 @@ export default function CompetencesDashboardPage() {
               value={chronoQuery}
               onChange={(e) => setChronoQuery(e.target.value)}
               placeholder="Rechercher (bénévole, compétence, lieu…)"
-              style={{
-                flex: 1,
-                minWidth: 200,
-                maxWidth: 320,
-                border: '1px solid #e2e8f0',
-                borderRadius: 10,
-                padding: '9px 13px',
-                fontSize: 13.5,
-                color: '#0f172a',
-                outline: 'none',
-                background: '#fff',
-                fontFamily: 'inherit',
-              }}
+              className="min-w-[200px] max-w-[320px] flex-1 rounded-[10px] border border-line bg-surface-card px-[13px] py-[9px] text-[13.5px] text-ink outline-none"
             />
           </>
         )}
@@ -952,97 +827,54 @@ export default function CompetencesDashboardPage() {
 
       {/* ARBRE */}
       {view === 'arbre' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div className="flex flex-col gap-[14px]">
           {arbreSkills.map((sk) => (
             <div
               key={sk.id}
-              style={{
-                background: '#fff',
-                border: '1px solid #e7e9ee',
-                borderRadius: 16,
-                boxShadow: '0 1px 3px rgba(15,23,42,.04)',
-                overflow: 'hidden',
-              }}
+              className="overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card"
             >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: '15px 18px',
-                  borderBottom: '1px solid #f1f5f9',
-                }}
-              >
+              <div className="flex items-center gap-3 border-b border-line-row px-[18px] py-[15px]">
                 <span
-                  style={{
-                    flex: 'none',
-                    minWidth: 52,
-                    textAlign: 'center',
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: pal.accent,
-                    background: pal.soft,
-                    border: `1px solid ${pal.softBorder}`,
-                    borderRadius: 8,
-                    padding: '5px 9px',
-                  }}
+                  className="min-w-[52px] flex-none rounded-lg border px-[9px] py-[5px] text-center text-[13px] font-extrabold"
+                  style={{ color: pal.accent, background: pal.soft, borderColor: pal.softBorder }}
                 >
                   {sk.code}
                 </span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>{sk.name}</div>
-                  {sk.metaLine ? <div style={{ marginTop: 2, fontSize: 12.5, color: '#94a3b8' }}>{sk.metaLine}</div> : null}
+                <div className="min-w-0 flex-1">
+                  <div className="text-[15px] font-extrabold text-ink">{sk.name}</div>
+                  {sk.metaLine ? <div className="mt-0.5 text-[12.5px] text-ink-3">{sk.metaLine}</div> : null}
                 </div>
                 <button
                   type="button"
                   onClick={() => toggleExpanded(sk.id)}
                   title={sk.expanded ? 'Afficher uniquement la compétence la plus haute' : 'Afficher tous les bénévoles ayant cette compétence'}
-                  style={{
-                    flex: 'none',
-                    cursor: 'pointer',
-                    border: `1px solid ${sk.expanded ? '#0f172a' : 'transparent'}`,
-                    fontSize: 13,
-                    fontWeight: 800,
-                    color: sk.expanded ? '#fff' : '#334155',
-                    background: sk.expanded ? '#0f172a' : '#f1f5f9',
-                    borderRadius: 8,
-                    padding: '5px 11px',
-                    fontFamily: 'inherit',
-                  }}
+                  className={cn(
+                    'flex-none cursor-pointer rounded-lg border px-[11px] py-[5px] text-[13px] font-extrabold',
+                    sk.expanded ? 'border-brand bg-brand text-white' : 'border-transparent bg-surface-sub text-ink-2'
+                  )}
                 >
                   {sk.countLabel}
                 </button>
               </div>
 
               {sk.hasHolders ? (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9, padding: '15px 18px' }}>
+                <div className="flex flex-wrap gap-[9px] px-[18px] py-[15px]">
                   {sk.holders.map((h) => {
                     const inner = (
                       <>
                         <span
-                          style={{
-                            flex: 'none',
-                            width: 32,
-                            height: 32,
-                            borderRadius: '50%',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 12,
-                            fontWeight: 800,
-                            background: h.avatarBg,
-                            color: h.avatarColor,
-                          }}
+                          className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-extrabold"
+                          style={{ background: h.avatarBg, color: h.avatarColor }}
                         >
                           {h.initials}
                         </span>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                        <div className="min-w-0">
+                          <div className="text-[13.5px] font-bold leading-tight text-ink">
                             {h.name}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 2 }}>
-                            {h.sector ? <span style={{ fontSize: 11.5, color: '#94a3b8' }}>{h.sector}</span> : null}
-                            <span style={{ fontSize: 11, fontWeight: 700, color: h.text }}>
+                          <div className="mt-0.5 flex items-center gap-1.5">
+                            {h.sector ? <span className="text-[11.5px] text-ink-3">{h.sector}</span> : null}
+                            <span className="text-[11px] font-bold" style={{ color: h.text }}>
                               {h.sector ? '· ' : ''}
                               {h.statusLabel}
                             </span>
@@ -1066,15 +898,11 @@ export default function CompetencesDashboardPage() {
                     return (
                       <div
                         key={h.pid}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 10,
-                          background: '#fff',
-                          border: `1.5px solid ${h.ring}`,
-                          borderRadius: 12,
-                          padding: h.cursus ? '8px 10px 8px 9px' : '8px 13px 8px 9px',
-                        }}
+                        className={cn(
+                          'flex items-center gap-2.5 rounded-xl border-[1.5px] bg-surface-card',
+                          h.cursus ? 'py-2 pl-[9px] pr-2.5' : 'py-2 pl-[9px] pr-[13px]'
+                        )}
+                        style={{ borderColor: h.ring }}
                       >
                         {inner}
                         {h.cursus && h.cursusEnrolled ? (
@@ -1102,7 +930,7 @@ export default function CompetencesDashboardPage() {
                   })}
                 </div>
               ) : (
-                <div style={{ padding: '14px 18px', fontSize: 13, color: '#94a3b8' }}>{sk.emptyLabel}</div>
+                <div className="px-[18px] py-[14px] text-[13px] text-ink-3">{sk.emptyLabel}</div>
               )}
             </div>
           ))}
@@ -1111,61 +939,22 @@ export default function CompetencesDashboardPage() {
 
       {/* TABLEAU */}
       {view === 'tableau' ? (
-        <div
-          style={{
-            background: '#fff',
-            border: '1px solid #e7e9ee',
-            borderRadius: 16,
-            boxShadow: '0 1px 3px rgba(15,23,42,.04)',
-            overflow: 'hidden',
-          }}
-        >
-          <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '70vh' }}>
-            <div style={{ minWidth: 'max-content' }}>
+        <div className="overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card">
+          <div className="max-h-[70vh] overflow-auto">
+            <div className="min-w-max">
               {/* header row */}
-              <div
-                style={{
-                  display: 'flex',
-                  borderBottom: '1px solid #e7e9ee',
-                  background: '#f8fafc',
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 2,
-                }}
-              >
-                <div
-                  style={{
-                    flex: 'none',
-                    width: 210,
-                    padding: '12px 16px',
-                    fontSize: 11,
-                    fontWeight: 800,
-                    letterSpacing: '.04em',
-                    textTransform: 'uppercase',
-                    color: '#94a3b8',
-                    position: 'sticky',
-                    left: 0,
-                    background: '#f8fafc',
-                    borderRight: '1px solid #eef1f5',
-                  }}
-                >
+              <div className="sticky top-0 z-[2] flex border-b border-line bg-surface-sub">
+                <div className="sticky left-0 w-[210px] flex-none border-r border-line-row bg-surface-sub px-4 py-3 text-[11px] font-extrabold uppercase tracking-[.04em] text-ink-3">
                   Bénévole
                 </div>
                 {tableCols.map((col) => (
                   <div
                     key={col.id}
                     title={col.name}
-                    style={{
-                      flex: 'none',
-                      width: 96,
-                      padding: '12px 6px',
-                      textAlign: 'center',
-                      borderLeft: '1px solid #f1f5f9',
-                      background: '#f8fafc',
-                    }}
+                    className="w-24 flex-none border-l border-line-row bg-surface-sub px-1.5 py-3 text-center"
                   >
-                    <div style={{ fontSize: 12.5, fontWeight: 800, color: pal.accent }}>{col.code}</div>
-                    <div style={{ marginTop: 2, fontSize: 10, color: '#94a3b8' }}>{col.count}</div>
+                    <div className="text-[12.5px] font-extrabold" style={{ color: pal.accent }}>{col.code}</div>
+                    <div className="mt-0.5 text-[10px] text-ink-3">{col.count}</div>
                   </div>
                 ))}
               </div>
@@ -1174,52 +963,29 @@ export default function CompetencesDashboardPage() {
               {tableRows.map((row) => (
                 <div
                   key={row.pid}
-                  style={{ display: 'flex', borderBottom: '1px solid #f1f5f9', background: row.bg }}
+                  className="flex border-b border-line-row"
+                  style={{ background: row.bg }}
                 >
                   <div
-                    style={{
-                      flex: 'none',
-                      width: 210,
-                      padding: '11px 16px',
-                      position: 'sticky',
-                      left: 0,
-                      background: row.bg,
-                      borderRight: '1px solid #eef1f5',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 10,
-                    }}
+                    className="sticky left-0 flex w-[210px] flex-none items-center gap-2.5 border-r border-line-row px-4 py-[11px]"
+                    style={{ background: row.bg }}
                   >
-                    <span
-                      style={{
-                        flex: 'none',
-                        width: 30,
-                        height: 30,
-                        borderRadius: '50%',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 11,
-                        fontWeight: 800,
-                        background: '#f1f5f9',
-                        color: '#64748b',
-                      }}
-                    >
+                    <span className="inline-flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-surface-sub text-[11px] font-extrabold text-ink-2">
                       {row.initials}
                     </span>
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#0f172a', lineHeight: 1.2 }}>
+                    <div className="min-w-0">
+                      <div className="text-[13px] font-bold leading-tight text-ink">
                         {row.name}
                       </div>
-                      {row.sector ? <div style={{ fontSize: 11, color: '#94a3b8' }}>{row.sector}</div> : null}
+                      {row.sector ? <div className="text-[11px] text-ink-3">{row.sector}</div> : null}
                     </div>
                   </div>
                   {tableCols.map((col) => {
                     const st = eff(row.pid, col.id);
                     const ss = st ? statusByKey[st] : null;
                     let bg = 'transparent';
-                    let border = '1px dashed #e5e9f0';
-                    let color = '#cbd5e1';
+                    let border = '1px dashed #E6EAF2';
+                    let color = '#A6AEBE';
                     let mark = '·';
                     if (ss) {
                       if (ss.isValidating) {
@@ -1240,34 +1006,11 @@ export default function CompetencesDashboardPage() {
                         type="button"
                         title={`${col.name}${ss ? ` — ${ss.label}` : ' — cliquer pour définir'}`}
                         onClick={(e) => openEditor(e, row.pid, col)}
-                        style={{
-                          flex: 'none',
-                          width: 96,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          border: 'none',
-                          borderLeft: '1px solid #f6f8fa',
-                          background: 'transparent',
-                          padding: '9px 0',
-                          cursor: 'pointer',
-                          fontFamily: 'inherit',
-                        }}
+                        className="flex w-24 flex-none cursor-pointer items-center justify-center border-l border-line-row bg-transparent py-[9px]"
                       >
                         <span
-                          style={{
-                            width: 30,
-                            height: 30,
-                            borderRadius: 9,
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontSize: 13,
-                            fontWeight: 800,
-                            background: bg,
-                            border,
-                            color,
-                          }}
+                          className="inline-flex h-[30px] w-[30px] items-center justify-center rounded-[9px] text-[13px] font-extrabold"
+                          style={{ background: bg, border, color }}
                         >
                           {mark}
                         </span>
@@ -1283,114 +1026,46 @@ export default function CompetencesDashboardPage() {
 
       {/* CHRONOLOGIE */}
       {view === 'chronologie' ? (
-        <div style={{ position: 'relative' }}>
+        <div className="relative">
           {chronoDayGroups.length > 0 ? (
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                left: 23,
-                width: 2,
-                background: '#e3e7ee',
-                pointerEvents: 'none',
-              }}
-            />
+            <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-0.5 bg-line" />
           ) : null}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <div className="flex flex-col gap-1">
           {chronoDayGroups.length === 0 ? (
-            <div
-              style={{
-                background: '#fff',
-                border: '1px solid #e7e9ee',
-                borderRadius: 16,
-                padding: '24px 18px',
-                textAlign: 'center',
-                fontSize: 13.5,
-                color: '#94a3b8',
-              }}
-            >
+            <div className="rounded-2xl border border-line bg-surface-card px-[18px] py-6 text-center text-[13.5px] text-ink-3">
               Aucun événement de montée en compétence ne correspond à ces filtres.
             </div>
           ) : (
             chronoDayGroups.map((day) => (
-              <div key={day.key} style={{ marginBottom: 14 }}>
-                <div
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 800,
-                    letterSpacing: '.06em',
-                    textTransform: 'uppercase',
-                    color: '#94a3b8',
-                    padding: '4px 2px 8px 56px',
-                  }}
-                >
+              <div key={day.key} className="mb-[14px]">
+                <div className="pb-2 pl-14 pr-0.5 pt-1 text-xs font-extrabold uppercase tracking-[.06em] text-ink-3">
                   {day.label}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="flex flex-col gap-2.5">
                   {day.events.map((g) => {
                     const expanded = expandedEventIds.has(g.key);
                     const cp = palette(cursusColorById[g.cursusId] ?? 'slate');
                     return (
-                      <div key={g.key} style={{ position: 'relative', paddingLeft: 56 }}>
+                      <div key={g.key} className="relative pl-14">
                       <span
-                        style={{
-                          position: 'absolute',
-                          left: 24,
-                          top: 28,
-                          width: 14,
-                          height: 14,
-                          borderRadius: '50%',
-                          transform: 'translate(-50%, -50%)',
-                          background: cp.accent,
-                          boxShadow: '0 0 0 4px #f8fafc',
-                        }}
+                        className="absolute left-6 top-7 h-[14px] w-[14px] -translate-x-1/2 -translate-y-1/2 rounded-full shadow-[0_0_0_4px_#F7F9FC]"
+                        style={{ background: cp.accent }}
                       />
-                      <div
-                        style={{
-                          background: '#fff',
-                          border: '1px solid #e7e9ee',
-                          borderRadius: 14,
-                          boxShadow: '0 1px 3px rgba(15,23,42,.04)',
-                          overflow: 'hidden',
-                        }}
-                      >
-                        <div style={{ padding: '13px 16px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                      <div className="overflow-hidden rounded-[14px] border border-line bg-surface-card shadow-card">
+                        <div className="px-4 py-[13px]">
+                          <div className="flex items-center justify-between gap-2.5">
                             <a
                               href={`/competences?profile=${encodeURIComponent(g.profileId)}&cursus=${encodeURIComponent(g.cursusId)}`}
                               title={`Cahier de doublure de ${g.profileName} — ${g.cursusName}`}
-                              style={{
-                                flex: 'none',
-                                fontSize: 12,
-                                fontWeight: 800,
-                                color: cp.accent,
-                                background: cp.soft,
-                                border: `1px solid ${cp.softBorder}`,
-                                borderRadius: 8,
-                                padding: '5px 9px',
-                                textDecoration: 'none',
-                                cursor: 'pointer',
-                                whiteSpace: 'nowrap',
-                              }}
+                              className="flex-none cursor-pointer whitespace-nowrap rounded-lg border px-[9px] py-[5px] text-xs font-extrabold no-underline"
+                              style={{ color: cp.accent, background: cp.soft, borderColor: cp.softBorder }}
                             >
                               {g.cursusCode}
                             </a>
-                            <span style={{ flex: 1, fontSize: 13.5, fontWeight: 700, color: '#0f172a', textAlign: 'center' }}>
+                            <span className="flex-1 text-center text-[13.5px] font-bold text-ink">
                               {g.profileName}
                             </span>
-                            <span
-                              style={{
-                                flex: 'none',
-                                fontSize: 12,
-                                fontWeight: 800,
-                                color: '#fff',
-                                background: '#059669',
-                                borderRadius: 999,
-                                padding: '2px 9px',
-                                fontVariantNumeric: 'tabular-nums',
-                              }}
-                            >
+                            <span className="flex-none rounded-full bg-engage px-[9px] py-0.5 text-xs font-extrabold tabular-nums text-white">
                               +{g.competences.length}
                             </span>
                           </div>
@@ -1398,21 +1073,11 @@ export default function CompetencesDashboardPage() {
                             type="button"
                             onClick={() => toggleEventExpanded(g.key)}
                             aria-expanded={expanded}
-                            style={{
-                              display: 'block',
-                              width: '100%',
-                              textAlign: 'left',
-                              cursor: 'pointer',
-                              border: 'none',
-                              background: 'transparent',
-                              fontFamily: 'inherit',
-                              padding: 0,
-                              marginTop: 9,
-                            }}
+                            className="mt-[9px] block w-full cursor-pointer border-none bg-transparent p-0 text-left"
                           >
-                            <div style={{ marginTop: 0, fontSize: 12, color: '#64748b', display: 'flex', flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+                            <div className="flex flex-wrap items-center gap-1.5 text-xs text-ink-2">
                               {g.phaseName ? (
-                                <span style={{ fontWeight: 700, color: '#475569' }}>{g.phaseName}</span>
+                                <span className="font-bold text-ink-2">{g.phaseName}</span>
                               ) : null}
                               {g.eventName || g.eventLieu ? (
                                 <span>
@@ -1423,7 +1088,7 @@ export default function CompetencesDashboardPage() {
                               ) : null}
                             </div>
                             {g.supervisorName ? (
-                              <div style={{ marginTop: 3, fontSize: 12, color: '#475569' }}>
+                              <div className="mt-[3px] text-xs text-ink-2">
                                 Encadré par <strong>{g.supervisorName}</strong>
                                 {g.supervisorAntenne ? ` · ${g.supervisorAntenne}` : ''}
                               </div>
@@ -1431,47 +1096,27 @@ export default function CompetencesDashboardPage() {
                           </button>
                         </div>
                         {expanded ? (
-                          <div style={{ borderTop: '1px solid #f1f5f9', padding: '12px 16px 14px' }}>
+                          <div className="border-t border-line-row px-4 pb-[14px] pt-3">
                             {g.supervisorComment ? (
-                              <div style={{ marginBottom: 8, fontSize: 12, color: '#475569', fontStyle: 'italic', lineHeight: 1.45 }}>
-                                « {g.supervisorComment} » <span style={{ fontStyle: 'normal', color: '#94a3b8' }}>— doubleur</span>
+                              <div className="mb-2 text-xs italic leading-snug text-ink-2">
+                                « {g.supervisorComment} » <span className="not-italic text-ink-3">— doubleur</span>
                               </div>
                             ) : null}
                             {g.message ? (
-                              <div style={{ marginBottom: 8, fontSize: 12, color: '#94a3b8', lineHeight: 1.45 }}>
+                              <div className="mb-2 text-xs leading-snug text-ink-3">
                                 Note perso : {g.message}
                               </div>
                             ) : null}
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            <div className="flex flex-col gap-1.5">
                               {g.competences.map((c) => (
                                 <div
                                   key={c.id}
-                                  style={{
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 10,
-                                    borderLeft: '3px solid #d1fae5',
-                                    padding: '6px 10px',
-                                  }}
+                                  className="flex items-center gap-2.5 border-l-[3px] border-ok-line px-2.5 py-1.5"
                                 >
-                                  <span
-                                    style={{
-                                      flexShrink: 0,
-                                      width: 20,
-                                      height: 20,
-                                      borderRadius: '50%',
-                                      display: 'inline-flex',
-                                      alignItems: 'center',
-                                      justifyContent: 'center',
-                                      fontSize: 10.5,
-                                      fontWeight: 800,
-                                      background: '#059669',
-                                      color: '#fff',
-                                    }}
-                                  >
+                                  <span className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-engage text-[10.5px] font-extrabold text-white">
                                     ✓
                                   </span>
-                                  <span style={{ fontSize: 13, fontWeight: 700, color: '#0f172a' }}>{c.name}</span>
+                                  <span className="text-[13px] font-bold text-ink">{c.name}</span>
                                 </div>
                               ))}
                             </div>
@@ -1494,29 +1139,22 @@ export default function CompetencesDashboardPage() {
         <>
           <div
             onClick={() => setEditor(null)}
-            style={{ position: 'fixed', inset: 0, zIndex: 60 }}
+            className="fixed inset-0 z-[60]"
           />
           <div
+            className="fixed z-[61] w-[230px] overflow-hidden rounded-xl border border-line bg-surface-card shadow-lift"
             style={{
-              position: 'fixed',
               left: Math.max(12, Math.min(editor.x - 115, editorVw - 242)),
               top: editor.y + 8,
-              zIndex: 61,
-              width: 230,
-              background: '#fff',
-              border: '1px solid #e2e8f0',
-              borderRadius: 12,
-              boxShadow: '0 16px 40px rgba(15,23,42,.22)',
-              overflow: 'hidden',
             }}
           >
-            <div style={{ padding: '11px 13px', borderBottom: '1px solid #f1f5f9' }}>
-              <div style={{ fontSize: 12.5, fontWeight: 800, color: '#0f172a' }}>
+            <div className="border-b border-line-row px-[13px] py-[11px]">
+              <div className="text-[12.5px] font-extrabold text-ink">
                 {editor.skillCode} · {editor.profileName}
               </div>
-              <div style={{ marginTop: 2, fontSize: 11, color: '#94a3b8' }}>{editor.skillName}</div>
+              <div className="mt-0.5 text-[11px] text-ink-3">{editor.skillName}</div>
             </div>
-            <div style={{ padding: 6 }}>
+            <div className="p-1.5">
               {data.statuses.map((s) => {
                 const p = palette(s.color);
                 const active = (editor.current ?? 'none') === s.key;
@@ -1528,35 +1166,17 @@ export default function CompetencesDashboardPage() {
                       void setStatus(editor.profileId, editor.skillId, s.key);
                       setEditor(null);
                     }}
-                    style={{
-                      cursor: 'pointer',
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 9,
-                      border: 'none',
-                      background: 'transparent',
-                      borderRadius: 8,
-                      padding: '9px 10px',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      fontFamily: 'inherit',
-                      color: '#334155',
-                      textAlign: 'left',
-                    }}
+                    className="flex w-full cursor-pointer items-center gap-[9px] rounded-lg bg-transparent px-2.5 py-[9px] text-left text-[13px] font-bold text-ink-2"
                   >
                     <span
+                      className="h-[13px] w-[13px] flex-none rounded"
                       style={{
-                        flex: 'none',
-                        width: 13,
-                        height: 13,
-                        borderRadius: 4,
                         background: s.is_validating ? p.accent : p.soft,
                         border: s.is_validating ? 'none' : `1.5px solid ${p.accent}`,
                       }}
                     />
-                    <span style={{ flex: 1 }}>{s.label}</span>
-                    {active ? <span style={{ color: '#059669', fontSize: 13 }}>✓</span> : null}
+                    <span className="flex-1">{s.label}</span>
+                    {active ? <span className="text-[13px] text-engage">✓</span> : null}
                   </button>
                 );
               })}
@@ -1566,35 +1186,11 @@ export default function CompetencesDashboardPage() {
                   void setStatus(editor.profileId, editor.skillId, 'none');
                   setEditor(null);
                 }}
-                style={{
-                  cursor: 'pointer',
-                  width: '100%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 9,
-                  border: 'none',
-                  background: 'transparent',
-                  borderRadius: 8,
-                  padding: '9px 10px',
-                  fontSize: 13,
-                  fontWeight: 700,
-                  fontFamily: 'inherit',
-                  color: '#334155',
-                  textAlign: 'left',
-                }}
+                className="flex w-full cursor-pointer items-center gap-[9px] rounded-lg bg-transparent px-2.5 py-[9px] text-left text-[13px] font-bold text-ink-2"
               >
-                <span
-                  style={{
-                    flex: 'none',
-                    width: 13,
-                    height: 13,
-                    borderRadius: 4,
-                    background: '#fff',
-                    border: '1.5px dashed #cbd5e1',
-                  }}
-                />
-                <span style={{ flex: 1 }}>Non acquise</span>
-                {editor.current === null ? <span style={{ color: '#059669', fontSize: 13 }}>✓</span> : null}
+                <span className="h-[13px] w-[13px] flex-none rounded border-[1.5px] border-dashed border-line-field bg-surface-card" />
+                <span className="flex-1">Non acquise</span>
+                {editor.current === null ? <span className="text-[13px] text-engage">✓</span> : null}
               </button>
             </div>
           </div>
@@ -1604,87 +1200,47 @@ export default function CompetencesDashboardPage() {
       {/* confirmation de création d'un cahier de doublure */}
       {createCursusTarget ? (
         <>
-          <div onClick={closeCreateCursus} style={{ position: 'fixed', inset: 0, zIndex: 100 }} />
+          <div onClick={closeCreateCursus} className="fixed inset-0 z-[100]" />
           <div
+            className="fixed z-[101] w-[260px] rounded-xl border border-line bg-surface-card p-[14px] shadow-lift"
             style={{
-              position: 'fixed',
               left: Math.max(12, Math.min(createCursusTarget.x - 130, editorVw - 272)),
               top: createCursusTarget.y + 8,
-              zIndex: 101,
-              width: 260,
-              background: '#fff',
-              border: '1px solid #e2e8f0',
-              borderRadius: 12,
-              boxShadow: '0 16px 40px rgba(15,23,42,.22)',
-              padding: 14,
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>Créer un cahier de doublure</div>
-            <div style={{ marginTop: 6, fontSize: 12.5, color: '#64748b' }}>
+            <div className="text-[13px] font-extrabold text-ink">Créer un cahier de doublure</div>
+            <div className="mt-1.5 text-[12.5px] text-ink-2">
               {createCursusTarget.name} → <strong>{createCursusTarget.cursus.name}</strong>
             </div>
             {createCursusError ? (
-              <div style={{ marginTop: 8, background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, padding: '6px 10px', fontSize: 12, color: '#dc2626' }}>
+              <div className="mt-2 rounded-lg border border-bad/30 bg-bad-soft px-2.5 py-1.5 text-xs text-bad">
                 {createCursusError}
               </div>
             ) : null}
-            <div style={{ marginTop: 10, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                onClick={closeCreateCursus}
-                style={{ cursor: 'pointer', border: 'none', background: '#f1f5f9', color: '#64748b', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit' }}
-              >
+            <div className="mt-2.5 flex justify-end gap-2">
+              <Button variant="subtle" onClick={closeCreateCursus} className="px-3 py-[7px] text-[12.5px]">
                 Annuler
-              </button>
-              <button
-                type="button"
-                disabled={createCursusSubmitting}
-                onClick={confirmCreateCursus}
-                style={{ cursor: createCursusSubmitting ? 'not-allowed' : 'pointer', border: 'none', background: '#0f172a', color: '#fff', borderRadius: 8, padding: '7px 12px', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', opacity: createCursusSubmitting ? 0.6 : 1 }}
-              >
+              </Button>
+              <Button variant="primary" disabled={createCursusSubmitting} onClick={confirmCreateCursus} className="px-3 py-[7px] text-[12.5px]">
                 Créer
-              </button>
+              </Button>
             </div>
           </div>
         </>
       ) : null}
 
       {/* legend */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 18,
-          flexWrap: 'wrap',
-          marginTop: 18,
-          padding: '13px 18px',
-          background: '#fff',
-          border: '1px solid #e7e9ee',
-          borderRadius: 13,
-          fontSize: 12.5,
-          color: '#64748b',
-        }}
-      >
-        <span
-          style={{
-            fontWeight: 700,
-            color: '#94a3b8',
-            textTransform: 'uppercase',
-            letterSpacing: '.04em',
-            fontSize: 11,
-          }}
-        >
+      <div className="mt-[18px] flex flex-wrap items-center gap-[18px] rounded-[13px] border border-line bg-surface-card px-[18px] py-[13px] text-[12.5px] text-ink-2">
+        <span className="text-[11px] font-bold uppercase tracking-[.04em] text-ink-3">
           Statut
         </span>
         {data.statuses.map((s) => {
           const p = palette(s.color);
           return (
-            <span key={s.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 7 }}>
+            <span key={s.id} className="inline-flex items-center gap-[7px]">
               <span
+                className="h-[14px] w-[14px] rounded-[5px]"
                 style={{
-                  width: 14,
-                  height: 14,
-                  borderRadius: 5,
                   background: s.is_validating ? p.accent : p.soft,
                   border: s.is_validating ? 'none' : `1.5px solid ${p.accent}`,
                 }}
@@ -1693,7 +1249,7 @@ export default function CompetencesDashboardPage() {
             </span>
           );
         })}
-        <span style={{ marginLeft: 'auto', fontSize: 12, color: '#cbd5e1' }}>
+        <span className="ml-auto text-xs text-ink-4">
           Le contour de chaque bénévole reflète son statut.
         </span>
       </div>

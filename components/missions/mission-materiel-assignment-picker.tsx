@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { MissionRequiredMateriel } from '@/lib/types';
+import { Icon } from '@/components/ui/icon';
 
 export type CandidateContainer = {
   id: string;
@@ -50,10 +51,10 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
   }
 
   return (
-    <section className="space-y-4 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 className="text-lg font-semibold text-slate-900">Affectation du matériel</h2>
+    <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+      <h2 className="text-lg font-semibold text-ink">Affectation du matériel</h2>
 
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="text-sm text-bad">{error}</p> : null}
 
       <div className="space-y-4">
         {requirements.map((requirement) => {
@@ -62,12 +63,12 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
           const isComplete = assignments.length >= requirement.quantity;
 
           return (
-            <div key={requirement.id} className="rounded-md border border-slate-200 p-3">
+            <div key={requirement.id} className="rounded-xl border border-line p-3">
               <div className="flex items-center justify-between gap-3">
-                <h3 className="text-sm font-semibold text-slate-900">{requirement.category?.name ?? 'Matériel'}</h3>
+                <h3 className="text-sm font-semibold text-ink">{requirement.category?.name ?? 'Matériel'}</h3>
                 <span
                   className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ${
-                    isComplete ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-100 text-slate-700'
+                    isComplete ? 'bg-ok-soft text-ok-text' : 'bg-surface-sub text-ink-2'
                   }`}
                 >
                   {assignments.length}/{requirement.quantity}
@@ -82,10 +83,10 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
                         type="button"
                         onClick={() => void unassign(assignment.id)}
                         disabled={pending === assignment.id}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-sm text-emerald-800 ring-1 ring-emerald-300 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-3 py-1 text-sm text-ok-text ring-1 ring-ok-line disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {assignment.materiel_type?.name ?? 'Contenant'}
-                        <span aria-hidden="true">✕</span>
+                        <Icon name="close" size={14} />
                       </button>
                     </li>
                   ))}
@@ -93,7 +94,7 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
               ) : null}
 
               {candidates.length === 0 ? (
-                <p className="mt-2 text-sm text-slate-600">Aucun contenant disponible pour ce type de matériel.</p>
+                <p className="mt-2 text-sm text-ink-2">Aucun contenant disponible pour ce type de matériel.</p>
               ) : (
                 <ul className="mt-2 flex flex-wrap gap-2">
                   {candidates
@@ -106,7 +107,7 @@ export function MissionMaterielAssignmentPicker({ requirements, candidateContain
                             type="button"
                             onClick={() => void assign(requirement.id, container.id)}
                             disabled={usedElsewhere || pending === container.id || isComplete}
-                            className="inline-flex rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm text-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                            className="inline-flex rounded-full border border-line-field bg-surface-sub px-3 py-1 text-sm text-ink-2 disabled:cursor-not-allowed disabled:opacity-40"
                             title={usedElsewhere ? 'Déjà affecté à un autre besoin de cette mission' : undefined}
                           >
                             {container.name}

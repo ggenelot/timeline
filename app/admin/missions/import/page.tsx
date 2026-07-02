@@ -16,6 +16,7 @@ import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, Miss
 import { supabase } from '@/lib/supabase/client';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
 import { AdminBanner, AdminCard, AdminPageHeader, AdminSectionLabel, adminInputStyle, ghostButtonStyle, primaryButtonStyle, pillStyle } from '@/components/admin/ui';
+import { Icon } from '@/components/ui/icon';
 
 type ImportFilter = 'nouveau' | 'modifié' | 'doublon' | 'invalide';
 
@@ -27,17 +28,17 @@ const IMPORT_STATUS_LABELS: Record<ImportFilter, string> = {
 };
 
 const IMPORT_STATUS_BADGE: Record<ImportFilter, string> = {
-  nouveau: 'bg-emerald-100 text-emerald-800 ring-1 ring-inset ring-emerald-200',
-  modifié: 'bg-amber-100 text-amber-800 ring-1 ring-inset ring-amber-200',
-  doublon: 'bg-slate-200 text-slate-700 ring-1 ring-inset ring-slate-300',
-  invalide: 'bg-rose-100 text-rose-800 ring-1 ring-inset ring-rose-200'
+  nouveau: 'bg-ok-soft text-ok-text ring-1 ring-inset ring-ok-line',
+  modifié: 'bg-warn-soft text-warn-text ring-1 ring-inset ring-warn-line',
+  doublon: 'bg-surface-sub text-ink-2 ring-1 ring-inset ring-line',
+  invalide: 'bg-bad-soft text-bad ring-1 ring-inset ring-bad/30'
 };
 
 const IMPORT_STATUS_CARD: Record<ImportFilter, string> = {
   nouveau: '',
-  modifié: 'border-amber-200 bg-amber-50/60',
-  doublon: 'border-slate-300 bg-slate-100/70',
-  invalide: 'border-rose-200 bg-rose-50/65'
+  modifié: 'border-warn-line bg-warn-soft/60',
+  doublon: 'border-line bg-surface-sub/70',
+  invalide: 'border-bad/30 bg-bad-soft/65'
 };
 
 const MISSION_CATEGORY_BADGE_CLASSES: Record<string, string> = {
@@ -315,14 +316,14 @@ const MissionImportRow = memo(function MissionImportRow({
           <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ${IMPORT_STATUS_BADGE[rowStatus]}`}>
             {IMPORT_STATUS_LABELS[rowStatus]}
           </span>
-          <span className="text-slate-400">|</span>
+          <span className="text-ink-4">|</span>
           <span className={`rounded-full px-3 py-1.5 text-xs font-bold ${MISSION_CATEGORY_BADGE_CLASSES[getMissionCategory(liveRow.mission_type_id)] ?? 'bg-amber-400 text-slate-900'}`}>
             {MISSION_CATEGORY_LABELS[getMissionCategory(liveRow.mission_type_id)]}
           </span>
         </>
       }
       headerRight={
-        <span className="text-xs text-slate-400">Bloc #{row.sourceBlockIndex + 1}</span>
+        <span className="text-xs text-ink-4">Bloc #{row.sourceBlockIndex + 1}</span>
       }
       title={liveRow.title || 'Sans intitulé'}
       metadata={
@@ -330,39 +331,41 @@ const MissionImportRow = memo(function MissionImportRow({
       }
       location={<>Lieu : {liveRow.location || '-'}</>}
       description={
-        <div className="grid gap-x-4 gap-y-1 text-slate-700 md:grid-cols-2">
-          <p><span className="font-medium text-slate-900">Etat DO :</span> {liveRow.do_status || '-'}</p>
-          <p><span className="font-medium text-slate-900">Retenue :</span> {liveRow.retained_status || '-'}</p>
-          <p><span className="font-medium text-slate-900">Type source :</span> {liveRow.source_type_label || '-'}</p>
-          <p><span className="font-medium text-slate-900">Réversion :</span> {liveRow.reversion_expected || '-'}</p>
-          <p><span className="font-medium text-slate-900">Réversion réelle :</span> {liveRow.reversion_actual || '-'}</p>
-          <p><span className="font-medium text-slate-900">Validation :</span> {liveRow.validation_date || '-'}</p>
-          <p className="md:col-span-2"><span className="font-medium text-slate-900">Nombre de secouristes :</span> {liveRow.requirements_notes || '-'}</p>
-          <p className="md:col-span-2"><span className="font-medium text-slate-900">Matériel spécifique :</span> {liveRow.equipment_notes || '-'}</p>
+        <div className="grid gap-x-4 gap-y-1 text-ink-2 md:grid-cols-2">
+          <p><span className="font-medium text-ink">Etat DO :</span> {liveRow.do_status || '-'}</p>
+          <p><span className="font-medium text-ink">Retenue :</span> {liveRow.retained_status || '-'}</p>
+          <p><span className="font-medium text-ink">Type source :</span> {liveRow.source_type_label || '-'}</p>
+          <p><span className="font-medium text-ink">Réversion :</span> {liveRow.reversion_expected || '-'}</p>
+          <p><span className="font-medium text-ink">Réversion réelle :</span> {liveRow.reversion_actual || '-'}</p>
+          <p><span className="font-medium text-ink">Validation :</span> {liveRow.validation_date || '-'}</p>
+          <p className="md:col-span-2"><span className="font-medium text-ink">Nombre de secouristes :</span> {liveRow.requirements_notes || '-'}</p>
+          <p className="md:col-span-2"><span className="font-medium text-ink">Matériel spécifique :</span> {liveRow.equipment_notes || '-'}</p>
         </div>
       }
       actions={
         <div className="flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
-            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-xs text-slate-700 hover:bg-slate-100"
+            className="inline-flex items-center gap-1 rounded-[9px] border border-line-field bg-surface-card px-3 py-1 text-xs font-semibold text-ink-2 hover:bg-surface-sub"
             onClick={handleToggleEdit}
             disabled={importing}
           >
+            <Icon name={isEditing ? 'close' : 'edit'} size={15} />
             {isEditing ? 'Fermer' : 'Éditer'}
           </button>
           <button
             type="button"
-            className="rounded-md border border-red-300 bg-white px-3 py-1 text-xs text-red-700 hover:bg-red-50"
+            className="inline-flex items-center gap-1 rounded-[9px] border border-bad/30 bg-surface-card px-3 py-1 text-xs font-semibold text-bad hover:bg-bad-soft"
             onClick={() => onDelete(row.rowId)}
             disabled={importing}
           >
+            <Icon name="delete" size={15} />
             Supprimer
           </button>
           {rowStatus === 'nouveau' ? (
             <button
               type="button"
-              className="rounded-md border border-emerald-300 bg-white px-3 py-1 text-xs text-emerald-700 hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-[9px] border border-ok-line bg-surface-card px-3 py-1 text-xs font-semibold text-ok-text hover:bg-ok-soft disabled:cursor-not-allowed disabled:opacity-60"
               onClick={() => {
                 if (normalizedMission) {
                   onImportSingle(normalizedMission);
@@ -370,6 +373,7 @@ const MissionImportRow = memo(function MissionImportRow({
               }}
               disabled={importing || checkingDuplicates || !isImportable}
             >
+              <Icon name="check" size={15} />
               Importer
             </button>
           ) : null}
@@ -379,31 +383,31 @@ const MissionImportRow = memo(function MissionImportRow({
         <>
           {isEditing ? (
             <div className="grid gap-2 md:grid-cols-2">
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Intitulé *
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.title} onChange={(e) => updateDraft({ title: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.title} onChange={(e) => updateDraft({ title: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Lieu
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.location} onChange={(e) => updateDraft({ location: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.location} onChange={(e) => updateDraft({ location: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Date *
-                <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.date} onChange={(e) => updateDraft({ date: e.target.value })} />
+                <input type="date" className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.date} onChange={(e) => updateDraft({ date: e.target.value })} />
               </label>
               <div className="grid grid-cols-2 gap-2">
-                <label className="text-slate-700">
+                <label className="text-sm font-semibold text-ink-2">
                   Début *
-                  <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.startTime} onChange={(e) => updateDraft({ startTime: e.target.value })} />
+                  <input type="time" className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.startTime} onChange={(e) => updateDraft({ startTime: e.target.value })} />
                 </label>
-                <label className="text-slate-700">
+                <label className="text-sm font-semibold text-ink-2">
                   Fin *
-                  <input type="time" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.endTime} onChange={(e) => updateDraft({ endTime: e.target.value })} />
+                  <input type="time" className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.endTime} onChange={(e) => updateDraft({ endTime: e.target.value })} />
                 </label>
               </div>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Catégorie
-                <select className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.mission_type_id} onChange={(e) => updateDraft({ mission_type_id: e.target.value })}>
+                <select className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.mission_type_id} onChange={(e) => updateDraft({ mission_type_id: e.target.value })}>
                   {MISSION_TYPE_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>
                       {option.label}
@@ -411,43 +415,43 @@ const MissionImportRow = memo(function MissionImportRow({
                   ))}
                 </select>
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Etat DO
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.do_status} onChange={(e) => updateDraft({ do_status: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.do_status} onChange={(e) => updateDraft({ do_status: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Retenue
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.retained_status} onChange={(e) => updateDraft({ retained_status: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.retained_status} onChange={(e) => updateDraft({ retained_status: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Type source
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.source_type_label} onChange={(e) => updateDraft({ source_type_label: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.source_type_label} onChange={(e) => updateDraft({ source_type_label: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Réversion
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.reversion_expected} onChange={(e) => updateDraft({ reversion_expected: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.reversion_expected} onChange={(e) => updateDraft({ reversion_expected: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Réversion réelle
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.reversion_actual} onChange={(e) => updateDraft({ reversion_actual: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.reversion_actual} onChange={(e) => updateDraft({ reversion_actual: e.target.value })} />
               </label>
-              <label className="text-slate-700">
+              <label className="text-sm font-semibold text-ink-2">
                 Validation
-                <input type="date" className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.validation_date} onChange={(e) => updateDraft({ validation_date: e.target.value })} />
+                <input type="date" className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.validation_date} onChange={(e) => updateDraft({ validation_date: e.target.value })} />
               </label>
-              <label className="text-slate-700 md:col-span-2">
+              <label className="text-sm font-semibold text-ink-2 md:col-span-2">
                 Nombre de secouristes
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.requirements_notes} onChange={(e) => updateDraft({ requirements_notes: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.requirements_notes} onChange={(e) => updateDraft({ requirements_notes: e.target.value })} />
               </label>
-              <label className="text-slate-700 md:col-span-2">
+              <label className="text-sm font-semibold text-ink-2 md:col-span-2">
                 Matériel spécifique
-                <input className="mt-1 w-full rounded border border-slate-300 px-2 py-1 text-sm" value={liveRow.equipment_notes} onChange={(e) => updateDraft({ equipment_notes: e.target.value })} />
+                <input className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-2 py-1 text-sm text-ink focus:border-accent focus:outline-none focus:ring-2 focus:ring-accent-ring" value={liveRow.equipment_notes} onChange={(e) => updateDraft({ equipment_notes: e.target.value })} />
               </label>
             </div>
           ) : null}
 
           {liveRow.issues.length > 0 ? (
-            <ul className={`space-y-1 rounded-md border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 ${isEditing ? 'mt-3' : ''}`}>
+            <ul className={`space-y-1 rounded-[10px] border border-warn-line bg-warn-soft p-3 text-xs text-warn-text ${isEditing ? 'mt-3' : ''}`}>
               {liveRow.issues.map((issue, index) => (
                 <li key={`${row.rowId}-warning-${index}`}>Warning: {issue}</li>
               ))}
@@ -455,13 +459,13 @@ const MissionImportRow = memo(function MissionImportRow({
           ) : null}
 
           {liveValidation.errors.length > 0 ? (
-            <ul className={`space-y-1 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 ${isEditing || liveRow.issues.length > 0 ? 'mt-3' : ''}`}>
+            <ul className={`space-y-1 rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-xs text-bad ${isEditing || liveRow.issues.length > 0 ? 'mt-3' : ''}`}>
               {liveValidation.errors.map((issue, index) => (
                 <li key={`${row.rowId}-error-${index}`}>Erreur: {issue}</li>
               ))}
             </ul>
           ) : rowStatus === 'nouveau' && !isEditing ? (
-            <p className="text-xs text-emerald-700">Ligne valide.</p>
+            <p className="text-xs text-ok-text">Ligne valide.</p>
           ) : null}
         </>
       }
@@ -911,7 +915,7 @@ export default function AdminMissionImportPage() {
   }, [importStatus]);
 
   if (loadingProfile) {
-    return <p style={{ fontSize: 14, color: '#64748b' }}>Chargement…</p>;
+    return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement…</p>;
   }
 
   if (!profile || profile.role !== 'admin') {
@@ -937,7 +941,7 @@ export default function AdminMissionImportPage() {
               accept=".csv,.xlsx,.xls"
               onChange={handleFileChange}
               disabled={analyzing || importing}
-              className="min-w-0 flex-1 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-emerald-700"
+              className="min-w-0 flex-1 rounded-[10px] border border-line bg-surface-sub px-3 py-2 text-sm text-ink-2 file:mr-3 file:rounded-md file:border-0 file:bg-engage file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-engage-hover"
             />
             <button
               type="button"
@@ -948,7 +952,7 @@ export default function AdminMissionImportPage() {
               {loadingFromGoogleSheet ? 'Chargement du Google Sheet…' : 'Importer depuis Google Sheet public'}
             </button>
           </div>
-          {fileName ? <p style={{ margin: '10px 0 0', fontSize: 12, color: '#94a3b8' }}>Fichier sélectionné : <span style={{ fontWeight: 700, color: '#334155' }}>{fileName}</span></p> : null}
+          {fileName ? <p style={{ margin: '10px 0 0', fontSize: 12, color: '#8A93A6' }}>Fichier sélectionné : <span style={{ fontWeight: 700, color: '#5B6478' }}>{fileName}</span></p> : null}
         </AdminCard>
 
       {rows.length > 0 ? (
@@ -975,8 +979,8 @@ export default function AdminMissionImportPage() {
                   </button>
                 ))}
               </div>
-              {checkingDuplicates ? <p style={{ margin: 0, fontSize: 12, color: '#94a3b8' }}>Vérification des doublons en base en cours…</p> : null}
-              {duplicateCheckError ? <p style={{ margin: 0, fontSize: 12, color: '#b45309' }}>{duplicateCheckError}</p> : null}
+              {checkingDuplicates ? <p style={{ margin: 0, fontSize: 12, color: '#8A93A6' }}>Vérification des doublons en base en cours…</p> : null}
+              {duplicateCheckError ? <p style={{ margin: 0, fontSize: 12, color: '#B45309' }}>{duplicateCheckError}</p> : null}
             </div>
           </AdminCard>
 
@@ -985,26 +989,27 @@ export default function AdminMissionImportPage() {
               type="button"
               onClick={handleImport}
               disabled={importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates}
-              style={{ ...primaryButtonStyle, ...(importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
+              style={{ ...primaryButtonStyle, display: 'inline-flex', alignItems: 'center', gap: 6, ...(importing || dedupAnalysis.readyMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
             >
+              <Icon name="upload" size={18} />
               {importing ? 'Import en cours…' : `Importer toutes les nouvelles missions (${dedupAnalysis.readyMissions.length})`}
             </button>
             <button
               type="button"
               onClick={handleUpdateModified}
               disabled={importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates}
-              style={{ cursor: 'pointer', border: 'none', background: '#d97706', color: '#fff', borderRadius: 9, padding: '10px 18px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', ...(importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
+              style={{ cursor: 'pointer', border: 'none', background: '#B45309', color: '#fff', borderRadius: 11, padding: '10px 18px', fontSize: 13.5, fontWeight: 700, fontFamily: 'inherit', ...(importing || dedupAnalysis.modifiedMissions.length === 0 || checkingDuplicates ? { opacity: 0.55, cursor: 'not-allowed' } : null) }}
             >
               {importing ? 'Mise à jour en cours…' : `Mettre à jour les missions modifiées (${dedupAnalysis.modifiedMissions.length})`}
             </button>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, border: '1px solid #e7e9ee', background: '#fff', borderRadius: 9, padding: '8px 12px', boxShadow: '0 2px 10px rgba(15,23,42,.05)' }}>
-              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#94a3b8' }}>Statut import</span>
-              <div style={{ display: 'inline-flex', border: '1px solid #e2e8f0', background: '#f1f5f9', borderRadius: 999, padding: 2 }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 12, border: '1px solid #E6EAF2', background: '#fff', borderRadius: 11, padding: '8px 12px', boxShadow: '0 6px 18px -12px rgba(20,32,58,.2)' }}>
+              <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8A93A6' }}>Statut import</span>
+              <div style={{ display: 'inline-flex', border: '1px solid #E6EAF2', background: '#F7F9FC', borderRadius: 999, padding: 2 }}>
                 <button
                   type="button"
                   onClick={() => setImportStatus('draft')}
                   disabled={importing}
-                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'draft' ? '#fff' : 'transparent', color: importStatus === 'draft' ? '#0f172a' : '#64748b', boxShadow: importStatus === 'draft' ? '0 1px 2px rgba(15,23,42,.12)' : 'none' }}
+                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'draft' ? '#fff' : 'transparent', color: importStatus === 'draft' ? '#16203A' : '#5B6478', boxShadow: importStatus === 'draft' ? '0 1px 2px rgba(20,32,58,.12)' : 'none' }}
                 >
                   Brouillon
                 </button>
@@ -1012,7 +1017,7 @@ export default function AdminMissionImportPage() {
                   type="button"
                   onClick={() => setImportStatus('proposed')}
                   disabled={importing}
-                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'proposed' ? '#ecfdf5' : 'transparent', color: importStatus === 'proposed' ? '#047857' : '#64748b', boxShadow: importStatus === 'proposed' ? '0 1px 2px rgba(15,23,42,.12)' : 'none' }}
+                  style={{ cursor: 'pointer', border: 'none', borderRadius: 999, padding: '5px 13px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', background: importStatus === 'proposed' ? '#E9F7EF' : 'transparent', color: importStatus === 'proposed' ? '#12805A' : '#5B6478', boxShadow: importStatus === 'proposed' ? '0 1px 2px rgba(20,32,58,.12)' : 'none' }}
                 >
                   Proposé
                 </button>
@@ -1038,7 +1043,7 @@ export default function AdminMissionImportPage() {
             })}
 
             {visibleRows.length === 0 ? (
-              <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #e2e8f0', borderRadius: 16, padding: '36px 24px', fontSize: 13.5, color: '#94a3b8' }}>
+              <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #DCE2EC', borderRadius: 16, padding: '36px 24px', fontSize: 13.5, color: '#8A93A6' }}>
                 Aucune mission avec le filtre &quot;{IMPORT_STATUS_LABELS[activeFilter]}&quot;
                 {searchQuery.trim() ? ` et la recherche "${searchQuery}"` : ''}.
               </div>
@@ -1054,7 +1059,7 @@ export default function AdminMissionImportPage() {
                 >
                   ← Précédent
                 </button>
-                <span style={{ fontSize: 13, color: '#64748b' }}>
+                <span style={{ fontSize: 13, color: '#5B6478' }}>
                   Page {page + 1} / {totalPages} ({visibleRows.length} missions)
                 </span>
                 <button

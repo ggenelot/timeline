@@ -3,6 +3,8 @@ import { useMemo, useState } from 'react';
 import { ProposalButton } from '@/components/missions/proposal-button';
 import { SkillBadge } from '@/components/skills/skill-badge';
 import { MissionCardShell } from '@/components/missions/mission-card-shell';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import {
   Mission,
   MissionProposalResponse,
@@ -36,23 +38,23 @@ const MISSION_STATUS_LABELS = {
 const MISSION_STATUS_STYLES: Record<Mission['status'], { cardClassName: string; railClassName: string }> = {
   draft: {
     cardClassName: 'pl-10',
-    railClassName: 'bg-amber-400 text-amber-950'
+    railClassName: 'bg-warn-bar text-white'
   },
   proposed: {
     cardClassName: 'pl-10',
-    railClassName: 'bg-sky-400 text-sky-950'
+    railClassName: 'bg-accent text-white'
   },
   confirmed: {
     cardClassName: 'pl-10',
-    railClassName: 'bg-emerald-400 text-emerald-950'
+    railClassName: 'bg-ok-bar text-white'
   },
   closed: {
     cardClassName: 'pl-10',
-    railClassName: 'bg-slate-400 text-slate-950'
+    railClassName: 'bg-ink-3 text-white'
   },
   cancelled: {
     cardClassName: 'pl-10',
-    railClassName: 'bg-rose-400 text-rose-950'
+    railClassName: 'bg-bad text-white'
   }
 };
 
@@ -104,8 +106,8 @@ export function MissionCard({
     <MissionCardShell
       headerLeft={(
         <>
-          <span className="rounded-full bg-slate-700 px-2 py-0.5 text-[11px] font-bold text-white">{missionTypeName ?? '—'}</span>
-          <h2 className="text-sm font-semibold text-slate-900">{mission.title}</h2>
+          <span className="rounded-full bg-brand px-2 py-0.5 text-[11px] font-bold text-white">{missionTypeName ?? '—'}</span>
+          <h2 className="text-sm font-semibold text-ink">{mission.title}</h2>
         </>
       )}
       compact
@@ -117,7 +119,7 @@ export function MissionCard({
           </span>
         </div>
       )}
-      headerRight={<span className="text-[11px] text-slate-600">{doStatusLabel}</span>}
+      headerRight={<span className="text-[11px] text-ink-2">{doStatusLabel}</span>}
       title={null}
       metadata={
         <>
@@ -135,15 +137,20 @@ export function MissionCard({
             {canEdit ? (
               <>
                 {mission.status === 'draft' && onPublishDraft ? (
-                  <button
-                    type="button"
+                  <Button
+                    variant="engage"
                     onClick={() => void onPublishDraft(mission.id)}
-                    className="pointer-events-auto inline-flex rounded-md border border-emerald-300 bg-emerald-50 px-3 py-1 text-sm text-emerald-700 hover:bg-emerald-100"
+                    className="pointer-events-auto"
                   >
                     Passer en proposé
-                  </button>
+                  </Button>
                 ) : null}
-                <Link href={`/missions/${mission.id}`} className="pointer-events-auto inline-flex rounded-md border border-slate-300 bg-white px-3 py-1 text-sm text-slate-700 hover:bg-slate-100">
+                <Link
+                  href={`/missions/${mission.id}`}
+                  className={cn(
+                    'pointer-events-auto inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]'
+                  )}
+                >
                   Gérer
                 </Link>
               </>
@@ -158,14 +165,14 @@ export function MissionCard({
       footer={
         <>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <div className="text-sm font-semibold text-slate-700">Dispos :</div>
+            <div className="text-sm font-semibold text-ink">Dispos :</div>
             {skillFilters.length > 0 ? (
               <>
                 <button
                   type="button"
                   onClick={() => setSelectedSkillFilter('all')}
                   className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
-                    selectedSkillFilter === 'all' ? 'border-slate-600 bg-slate-600 text-white' : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                    selectedSkillFilter === 'all' ? 'border-brand bg-brand text-white' : 'border-line bg-surface-sub text-ink-2 hover:bg-line'
                   }`}
                 >
                   Toutes {availableVolunteers.length}
@@ -177,10 +184,10 @@ export function MissionCard({
                     onClick={() => setSelectedSkillFilter(skill.name)}
                     className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition ${
                       selectedSkillFilter === skill.name
-                        ? 'border-slate-600 bg-slate-600 text-white'
+                        ? 'border-brand bg-brand text-white'
                         : skill.availableCount > skill.requiredCount
-                          ? 'border-emerald-200 bg-emerald-50 text-emerald-800 hover:bg-emerald-100'
-                          : 'border-slate-200 bg-slate-100 text-slate-700 hover:bg-slate-200'
+                          ? 'border-ok-line bg-ok-soft text-ok-text hover:bg-ok-soft'
+                          : 'border-line bg-surface-sub text-ink-2 hover:bg-line'
                     }`}
                   >
                     {skill.name} {skill.availableCount}/{skill.requiredCount}
@@ -194,7 +201,7 @@ export function MissionCard({
               {filteredAvailableVolunteers.map((volunteer, index) => (
                 <span key={`${volunteer.name}-${index}`} className="group relative inline-flex items-center">
                   <span className="cursor-help underline decoration-dotted underline-offset-2">{volunteer.name}</span>
-                  <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max max-w-72 -translate-x-1/2 rounded-md bg-slate-900 px-2 py-1 text-xs text-white shadow-md group-hover:block">
+                  <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-2 hidden w-max max-w-72 -translate-x-1/2 rounded-md bg-ink px-2 py-1 text-xs text-white shadow-md group-hover:block">
                     {volunteer.skills.length > 0 ? (
                       <span className="inline-flex flex-wrap gap-1">
                         {volunteer.skills.map((skill) => (

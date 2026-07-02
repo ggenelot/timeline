@@ -28,7 +28,7 @@ export function ActivityBarChart({ rows, scaleMax, ticks }: Props) {
 
   if (rows.length === 0) {
     return (
-      <p className="py-6 text-center text-sm text-slate-500">
+      <p className="py-6 text-center text-sm text-ink-3">
         Aucune activité sur la période.
       </p>
     );
@@ -45,7 +45,7 @@ export function ActivityBarChart({ rows, scaleMax, ticks }: Props) {
         {ticks.map((tick) => (
           <span
             key={tick}
-            className="absolute -translate-x-1/2 text-[10px] text-slate-400"
+            className="absolute -translate-x-1/2 text-[10px] text-ink-3"
             style={{ left: `${(tick / scaleMax) * 100}%` }}
           >
             {tick}h
@@ -58,12 +58,12 @@ export function ActivityBarChart({ rows, scaleMax, ticks }: Props) {
         {rows.map((row) => (
           <div key={row.typeName} className="flex items-center gap-2">
             <span
-              className="w-36 shrink-0 truncate text-right text-xs text-slate-600"
+              className="w-36 shrink-0 truncate text-right text-xs text-ink-2"
               title={row.typeName}
             >
               {row.typeName}
             </span>
-            <div className="relative flex h-7 min-w-0 flex-1 overflow-hidden rounded bg-slate-100">
+            <div className="relative flex h-7 min-w-0 flex-1 overflow-hidden rounded bg-surface-sub">
               {row.segments.map((seg) => (
                 <button
                   key={seg.profileId}
@@ -98,7 +98,7 @@ export function ActivityBarChart({ rows, scaleMax, ticks }: Props) {
                 />
               ))}
             </div>
-            <span className="w-12 shrink-0 text-xs text-slate-500">{row.totalHours.toFixed(1)}h</span>
+            <span className="w-12 shrink-0 text-xs text-ink-3">{row.totalHours.toFixed(1)}h</span>
           </div>
         ))}
       </div>
