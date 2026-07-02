@@ -159,7 +159,7 @@ npm run test:e2e:p0        # Suite Playwright P0 uniquement
 | Responsable | `responsable@pcivile.test` |
 | Bénévole | `benevole@pcivile.test` |
 
-Mot de passe via la variable d'env `E2E_TEST_PASSWORD` (défaut : `DemoPass123!`).
+Mot de passe via la variable d'env `E2E_TEST_PASSWORD` (défaut : `protec1234`).
 
 ### Écrire des tests
 

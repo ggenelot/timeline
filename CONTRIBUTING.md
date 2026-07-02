@@ -105,7 +105,7 @@ Après toute modification de scope sur `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC
 Le projet staging a sa propre base Auth, distincte de la production — les comptes humains réels (ex. comptes Slack synchronisés) n'y existent pas. Pour tester :
 
 1. Si le projet staging n'a pas encore été initialisé avec les données de démo, lancer `npm run demo:setup` (ou au minimum `npm run demo:create-test-accounts`) avec les variables d'environnement pointant vers le projet staging (`--force` requis par `create-test-accounts.mjs` car l'URL ne ressemble pas à une instance locale — à utiliser uniquement sur staging, jamais sur la prod).
-2. Se connecter sur la preview avec les comptes fixes suivants (mot de passe `DemoPass123!` pour tous) :
+2. Se connecter sur la preview avec les comptes fixes suivants (mot de passe `protec1234` pour tous) :
 
    | Identifiant | Rôle | Usage |
    |---|---|---|

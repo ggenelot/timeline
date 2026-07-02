@@ -202,7 +202,7 @@ Cette commande applique toutes les migrations du dossier `supabase/migrations/` 
 npm run demo:create-test-accounts
 ```
 
-Crée (de façon idempotente) les 5 comptes `auth.users` fixes utilisés par les tests E2E et les captures d'écran de démo, mot de passe `DemoPass123!` (configurable via `E2E_TEST_PASSWORD`) :
+Crée (de façon idempotente) les 5 comptes `auth.users` fixes utilisés par les tests E2E et les captures d'écran de démo, mot de passe `protec1234` (configurable via `E2E_TEST_PASSWORD`) :
 
 | Email | Rôle applicatif |
 |---|---|
@@ -239,7 +239,7 @@ npm run db:seed:demo
 
 Ce script crée (idempotent — relancer ne duplique pas les données) :
 
-- ~36 comptes (`auth.users` + profils) répartis admin / responsable / bénévole, avec emails `demo-*@timeline.demo` et le même mot de passe `DemoPass123!`.
+- ~36 comptes (`auth.users` + profils) répartis admin / responsable / bénévole, avec emails `demo-*@timeline.demo` et le même mot de passe `protec1234`.
 - Des compétences et niveaux de progression variés par bénévole.
 - ~25 missions couvrant tous les statuts, types et plages de dates (passées et futures).
 - Des propositions et affectations d'équipe réalistes sur ces missions.
@@ -308,7 +308,7 @@ L'application fonctionne sans Slack. Ces variables sont requises uniquement si l
 | Variable | Description |
 |---|---|
 | `E2E_BASE_URL` | URL de base pour les tests E2E (par défaut : `APP_BASE_URL` ou `http://localhost:3000`) |
-| `E2E_TEST_PASSWORD` | Mot de passe des comptes de test E2E (par défaut : `DemoPass123!`) |
+| `E2E_TEST_PASSWORD` | Mot de passe des comptes de test E2E (par défaut : `protec1234`) |
 | `SLACK_TEST_EMAIL` | Email du compte Slack utilisé dans les tests SSO |
 | `SLACK_TEST_PASSWORD` | Mot de passe du compte Slack de test |
 | `SLACK_TEST_WORKSPACE_URL` | URL du workspace Slack de test |
@@ -364,11 +364,11 @@ Les migrations se trouvent dans `supabase/migrations/` et sont appliquées dans 
 
 | Email | Mot de passe | Rôle | Ce qu'il peut faire |
 |---|---|---|---|
-| `admin@pcivile.test` | `DemoPass123!` | Admin | Tout voir et tout faire |
-| `responsable@pcivile.test` | `DemoPass123!` | Responsable | Gérer ses missions, valider les propositions |
-| `benevole@pcivile.test` | `DemoPass123!` | Bénévole | Répondre aux missions proposées, voir ses missions retenues |
-| `benevole2@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
-| `benevole3@pcivile.test` | `DemoPass123!` | Bénévole | Idem |
+| `admin@pcivile.test` | `protec1234` | Admin | Tout voir et tout faire |
+| `responsable@pcivile.test` | `protec1234` | Responsable | Gérer ses missions, valider les propositions |
+| `benevole@pcivile.test` | `protec1234` | Bénévole | Répondre aux missions proposées, voir ses missions retenues |
+| `benevole2@pcivile.test` | `protec1234` | Bénévole | Idem |
+| `benevole3@pcivile.test` | `protec1234` | Bénévole | Idem |
 
 Ce sont les comptes stables utilisés par les tests E2E, provisionnés via `npm run demo:create-test-accounts` (voir [étape 6](#installation-depuis-zéro)). Si le script de démo (voir [étape 7bis](#installation-depuis-zéro)) a été exécuté, de nombreux autres comptes `demo-*@timeline.demo` existent également — pour les parcourir, utiliser Supabase Studio (Authentication → Users) ou la page `/admin/volunteers` de l'application.
 

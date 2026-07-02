@@ -70,7 +70,7 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
 
 // Must match the fallback used by scripts/demo-screenshots.mjs and
 // tests/e2e/helpers.ts - these accounts are useless if the password diverges.
-const PASSWORD = process.env.E2E_TEST_PASSWORD || 'DemoPass123!';
+const PASSWORD = process.env.E2E_TEST_PASSWORD || 'protec1234';
 
 const FIXED_ACCOUNTS = [
   { email: 'admin@pcivile.test', identifier: 'admin', fullName: 'Alice Admin' },

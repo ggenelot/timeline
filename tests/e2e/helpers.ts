@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test';
 // since that script runs via `node`, not the Playwright test runner - keep
 // both in sync if the login form changes).
 
-export const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'DemoPass123!';
+export const E2E_PASSWORD = process.env.E2E_TEST_PASSWORD ?? 'protec1234';
 
 export const TEST_USERS = {
   admin: 'admin@pcivile.test',
