@@ -3,12 +3,13 @@ import { MissionProposal, MissionStatus } from '@/lib/types';
 export type MissionRelation = 'pending' | 'engaged' | 'retenu' | 'declined';
 
 // Explicit type → color mapping from the design handoff (matched on mission_types.name).
+// Catégories de la refonte : opé (orange) / for (navy) / ac.sso (magenta).
 const TYPE_COLOR_BY_NAME: Record<string, string> = {
-  'Poste de secours': '#2563eb',
-  Maraude: '#7c3aed',
-  Formation: '#d97706',
-  Garde: '#0d9488',
-  "Vie de l'antenne": '#64748b'
+  'Poste de secours': '#FF7F30', // opé
+  Garde: '#FF7F30', // opé
+  Formation: '#00378F', // for
+  Maraude: '#AB0093', // ac.sso
+  "Vie de l'antenne": '#5B6478' // neutre
 };
 
 // Fallback for configurable types that store a named color (same convention as skill categories).
@@ -57,11 +58,11 @@ export function missionMonthLabel(iso: string): string {
 
 // Couleur du nœud de frise pour la vue admin, par statut de mission.
 export const MISSION_STATUS_NODE_COLOR: Record<MissionStatus, string> = {
-  draft: '#f59e0b',
-  proposed: '#2563eb',
-  confirmed: '#059669',
-  closed: '#64748b',
-  cancelled: '#dc2626'
+  draft: '#F59E0B', // warn
+  proposed: '#1E3C87', // navy
+  confirmed: '#22B26B', // ok
+  closed: '#8A93A6', // ink-3
+  cancelled: '#D14343' // bad
 };
 
 export function groupMissionsByMonth<T extends { starts_at: string }>(

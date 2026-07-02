@@ -16,9 +16,9 @@ export const MISSION_VERIFICATION_STATUS_LABELS: Record<MissionMaterielVerificat
 
 export function getMissionVerificationStatusBadgeClass(status: MissionMaterielVerificationStatus) {
   const statusClassMap: Record<MissionMaterielVerificationStatus, string> = {
-    not_started: 'border-slate-300 bg-slate-100 text-slate-700',
-    in_progress: 'border-amber-200 bg-amber-50 text-amber-700',
-    completed: 'border-emerald-200 bg-emerald-50 text-emerald-700'
+    not_started: 'border-line bg-surface-sub text-ink-2',
+    in_progress: 'border-warn-line bg-warn-soft text-warn-text',
+    completed: 'border-ok-line bg-ok-soft text-ok-text'
   };
 
   return statusClassMap[status];
@@ -26,11 +26,11 @@ export function getMissionVerificationStatusBadgeClass(status: MissionMaterielVe
 
 export function getMissionStatusBadgeClass(status: MissionStatus) {
   const statusClassMap: Record<MissionStatus, string> = {
-    draft: 'border-slate-300 bg-slate-100 text-slate-700',
-    proposed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-    closed: 'border-slate-300 bg-slate-100 text-slate-700',
-    confirmed: 'border-amber-200 bg-amber-50 text-amber-700',
-    cancelled: 'border-rose-200 bg-rose-50 text-rose-700'
+    draft: 'border-warn-line bg-warn-soft text-warn-text',
+    proposed: 'border-[#CFDDF6] bg-[#E7EEFB] text-[#1E3C87]',
+    closed: 'border-line bg-surface-sub text-ink-2',
+    confirmed: 'border-ok-line bg-ok-soft text-ok-text',
+    cancelled: 'border-bad/30 bg-bad-soft text-bad'
   };
 
   return statusClassMap[status];
