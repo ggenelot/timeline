@@ -99,11 +99,16 @@ export function MissionManagementTable({
     const failedCount = ids.length - updatedCount;
 
     setPendingBulkAction(false);
-    setConfirmationMessage(
-      `Statut « ${MISSION_STATUS_LABELS[status]} » appliqué à ${updatedCount} mission(s).${
-        failedCount > 0 ? ` ${failedCount} non éligible(s), ignorée(s).` : ''
-      }`
-    );
+    // Si rien n'a réellement été mis à jour, l'erreur détaillée remontée par
+    // onBulkStatusChange s'affiche déjà via la bannière d'erreur de la page ;
+    // pas la peine d'ajouter un message de succès trompeur ici.
+    if (updatedCount > 0) {
+      setConfirmationMessage(
+        `Statut « ${MISSION_STATUS_LABELS[status]} » appliqué à ${updatedCount} mission(s).${
+          failedCount > 0 ? ` ${failedCount} non éligible(s), ignorée(s).` : ''
+        }`
+      );
+    }
     clearSelection();
   }
 
@@ -116,7 +121,11 @@ export function MissionManagementTable({
     setPendingBulkAction(true);
     const { deletedCount } = await onBulkDelete(Array.from(selectedIds));
     setPendingBulkAction(false);
-    setConfirmationMessage(`${deletedCount} mission(s) supprimée(s).`);
+    // Idem : un échec silencieux (RLS) remonte déjà via la bannière d'erreur
+    // de la page, inutile d'afficher "0 mission(s) supprimée(s)." en plus.
+    if (deletedCount > 0) {
+      setConfirmationMessage(`${deletedCount} mission(s) supprimée(s).`);
+    }
     clearSelection();
   }
 
