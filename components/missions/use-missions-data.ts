@@ -3,16 +3,21 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Mission, MissionProposal, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
+import { Mission, MissionProposal, MissionRequiredMateriel, MissionRequiredSkill, MissionStatus, Profile, RoleBehavior } from '@/lib/types';
 import { groupMissionsByMonth, MissionRelation, relationForProposal, resolveMissionTypeColor } from '@/lib/mission-timeline';
 
 export type MissionType = { id: string; name: string; color?: string | null };
 
 export type MissionWithRequiredSkills = Mission & {
   mission_required_skills: MissionRequiredSkill[] | null;
+  mission_required_materiels: MissionRequiredMateriel[] | null;
 };
 
 export type VolunteerWithSkills = { name: string; skills: Array<{ name: string; color?: string | null }> };
+
+export type RetainedVolunteer = { name: string };
+
+const RETAINED_ASSIGNMENT_STATUSES = ['selected', 'confirmed'];
 
 export type ProposalStats = {
   availableCount: number;
@@ -28,6 +33,7 @@ export function useMissionsData() {
   const [retainedMissionIds, setRetainedMissionIds] = useState<Set<string>>(new Set());
   const [canManageMissionTypeIds, setCanManageMissionTypeIds] = useState<string[]>([]);
   const [proposalStatsByMission, setProposalStatsByMission] = useState<Map<string, ProposalStats>>(new Map());
+  const [retainedVolunteersByMission, setRetainedVolunteersByMission] = useState<Map<string, RetainedVolunteer[]>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -59,7 +65,7 @@ export function useMissionsData() {
       supabase
         .from('missions')
         .select(
-          'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))'
+          'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order)),mission_required_materiels(id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color))'
         )
         .order('starts_at', { ascending: true }),
       supabase
@@ -94,6 +100,10 @@ export function useMissionsData() {
       mission_required_skills: (mission.mission_required_skills ?? []).map((requiredSkill) => ({
         ...requiredSkill,
         skill: Array.isArray(requiredSkill.skill) ? requiredSkill.skill[0] ?? null : requiredSkill.skill
+      })),
+      mission_required_materiels: (mission.mission_required_materiels ?? []).map((requiredMateriel) => ({
+        ...requiredMateriel,
+        category: Array.isArray(requiredMateriel.category) ? requiredMateriel.category[0] ?? null : requiredMateriel.category
       }))
     }));
     setMissions(mappedMissions);
@@ -109,13 +119,29 @@ export function useMissionsData() {
     // ── Wave 2 : proposals (need mission ids) + role behaviors ────────────────
     // Behaviors are needed for every role: volunteers may have can_create rights,
     // and admins/responsables need them to declare their own availability too.
-    const [proposalsRes, rolesRes] = await Promise.all([
+    const [proposalsRes, rolesRes, retainedAssignmentsRes] = await Promise.all([
       supabase
         .from('mission_proposals')
         .select('id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,updated_at,source,created_at')
         .in('mission_id', mappedMissions.map((mission) => mission.id)),
-      fetch('/api/roles/mine', { headers: authHeaders })
+      fetch('/api/roles/mine', { headers: authHeaders }),
+      supabase
+        .from('mission_assignments')
+        .select('mission_id,assignment_status,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name)')
+        .in('mission_id', mappedMissions.map((mission) => mission.id))
+        .in('assignment_status', RETAINED_ASSIGNMENT_STATUSES)
     ]);
+
+    const nextRetainedVolunteersByMission = new Map<string, RetainedVolunteer[]>();
+    if (!retainedAssignmentsRes.error) {
+      (retainedAssignmentsRes.data ?? []).forEach((row) => {
+        const volunteer = Array.isArray(row.volunteer) ? row.volunteer[0] : row.volunteer;
+        const list = nextRetainedVolunteersByMission.get(row.mission_id) ?? [];
+        list.push({ name: volunteer?.full_name?.trim() || 'Sans nom' });
+        nextRetainedVolunteersByMission.set(row.mission_id, list);
+      });
+    }
+    setRetainedVolunteersByMission(nextRetainedVolunteersByMission);
 
     const isAdmin = profileData.role === 'admin';
 
@@ -366,6 +392,7 @@ export function useMissionsData() {
     retainedMissionIds,
     canManageMissionTypeIds,
     proposalStatsByMission,
+    retainedVolunteersByMission,
     proposalByMission,
     relationByMission,
     missionTypeById,
