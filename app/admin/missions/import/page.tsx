@@ -1068,6 +1068,7 @@ export default function AdminMissionImportPage() {
 
       const payload = (await response.json()) as {
         error?: string;
+        warning?: string;
         updated?: number;
         failed?: number;
       };
@@ -1078,6 +1079,10 @@ export default function AdminMissionImportPage() {
       }
 
       setSuccess(`Mise à jour terminée : ${payload.updated ?? 0} mission(s) mise(s) à jour, ${payload.failed ?? 0} en échec.`);
+
+      if (payload.warning) {
+        setError(payload.warning);
+      }
     } finally {
       setImporting(false);
     }

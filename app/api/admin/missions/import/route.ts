@@ -432,6 +432,7 @@ export async function PATCH(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   let updated = 0;
   let failed = 0;
+  const requirementFailures: string[] = [];
 
   for (const entry of entries) {
     if (!entry || typeof entry !== 'object') {
@@ -505,25 +506,50 @@ export async function PATCH(request: NextRequest) {
     updated += 1;
 
     // Réconcilie les besoins déclarés dans le flux d'import (delete-all puis insert-all : plus
-    // simple qu'une réconciliation fine, acceptable pour ce flux de resynchro en masse).
-    await serviceClient.from('mission_required_skills').delete().eq('mission_id', id);
+    // simple qu'une réconciliation fine, acceptable pour ce flux de resynchro en masse). Un échec
+    // ici ne doit pas se traduire par un succès silencieux : la mission peut se retrouver avec ses
+    // besoins vidés (delete réussi, insert échoué) sans que l'admin en soit informé.
+    const missionLabel = mission.title.trim() || id;
+
+    const { error: deleteSkillsError } = await serviceClient.from('mission_required_skills').delete().eq('mission_id', id);
+    if (deleteSkillsError) {
+      requirementFailures.push(`${missionLabel} : échec de suppression des besoins en bénévoles existants (${deleteSkillsError.message})`);
+    }
+
     const skillRows = (mission.required_skills ?? [])
       .filter((requirement) => requirement.quantity > 0)
       .map((requirement) => ({ mission_id: id, skill_id: requirement.skill_id, quantity: requirement.quantity }));
     if (skillRows.length > 0) {
-      await serviceClient.from('mission_required_skills').insert(skillRows);
+      const { error: insertSkillsError } = await serviceClient.from('mission_required_skills').insert(skillRows);
+      if (insertSkillsError) {
+        requirementFailures.push(`${missionLabel} : échec de synchronisation des besoins en bénévoles (${insertSkillsError.message})`);
+      }
     }
 
-    await serviceClient.from('mission_required_materiels').delete().eq('mission_id', id);
+    const { error: deleteMaterielsError } = await serviceClient.from('mission_required_materiels').delete().eq('mission_id', id);
+    if (deleteMaterielsError) {
+      requirementFailures.push(`${missionLabel} : échec de suppression du matériel requis existant (${deleteMaterielsError.message})`);
+    }
+
     const materielRows = (mission.required_materiels ?? [])
       .filter((requirement) => requirement.quantity > 0)
       .map((requirement) => ({ mission_id: id, category_id: requirement.category_id, quantity: requirement.quantity }));
     if (materielRows.length > 0) {
-      await serviceClient.from('mission_required_materiels').insert(materielRows);
+      const { error: insertMaterielsError } = await serviceClient.from('mission_required_materiels').insert(materielRows);
+      if (insertMaterielsError) {
+        requirementFailures.push(`${missionLabel} : échec de synchronisation du matériel requis (${insertMaterielsError.message})`);
+      }
     }
   }
 
-  return NextResponse.json({ updated, failed });
+  return NextResponse.json({
+    updated,
+    failed,
+    warning:
+      requirementFailures.length > 0
+        ? `Mission(s) mise(s) à jour mais besoins non synchronisés pour : ${requirementFailures.join(' | ')}.`
+        : undefined
+  });
 }
 
 export async function GET(request: NextRequest) {
