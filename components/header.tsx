@@ -1,11 +1,11 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { useMemo } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { Profile } from '@/lib/types';
 import { Icon } from '@/components/ui/icon';
+import { useBranding } from '@/lib/branding/branding-context';
 
 export function Header({
   session,
@@ -18,6 +18,8 @@ export function Header({
   menuOpen: boolean;
   onToggleMenu: () => void;
 }) {
+  const branding = useBranding();
+
   const greetingName = useMemo(() => {
     const fullName = profile?.full_name?.trim();
     if (fullName) {
@@ -42,7 +44,8 @@ export function Header({
           </button>
         ) : null}
         <Link href="/missions" className="flex items-center gap-2">
-          <Image src="/logo.png" alt="" width={32} height={32} className="h-8 w-8 object-contain" priority />
+          {/* eslint-disable-next-line @next/next/no-img-element -- logo personnalisable (URL admin), hôte inconnu à la compilation */}
+          <img src={branding.logoUrl ?? '/logo.png'} alt="" width={32} height={32} className="h-8 w-8 object-contain" />
           <span className="text-[17px] font-extrabold text-ink">Timeline</span>
         </Link>
         {session ? (

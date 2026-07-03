@@ -103,7 +103,7 @@ export function VerificationCardFlow({ items, rootName, onBack, onFinish, onDeci
         <button
           type="button"
           onClick={() => onFinish(decisions)}
-          className="self-start rounded-[11px] bg-brand px-4 py-2 text-sm font-bold text-white transition hover:bg-[#013A8F]"
+          className="self-start rounded-[11px] bg-brand px-4 py-2 text-sm font-bold text-white transition hover:bg-brand-for"
         >
           Retour à l’arborescence
         </button>

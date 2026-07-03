@@ -658,7 +658,7 @@ export default function CompetencesDashboardPage() {
 
   const editorVw = typeof window !== 'undefined' ? window.innerWidth : 1080;
   const statusTiles: Array<{ key: 'all' | string; label: string; n: number; color: string }> = [
-    { key: 'all', label: 'Tous', n: catStats.total, color: '#002D74' },
+    { key: 'all', label: 'Tous', n: catStats.total, color: 'var(--color-brand, #002D74)' },
     ...data.statuses.map((s) => ({ key: s.key, label: s.label, n: catStats.counts[s.key] ?? 0, color: palette(s.color).accent })),
   ];
 

@@ -9,8 +9,22 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        brand: { DEFAULT: '#002D74', for: '#00378F' },
-        accent: { DEFAULT: '#FF7F30', text: '#B4590F', soft: '#FFF1E7', ring: '#FBDCC4' },
+        // Marque/accent personnalisables (page /admin/apparence ou variables
+        // d'environnement, voir lib/branding/) : les valeurs ci-dessous ne
+        // servent que de repli si la variable CSS n'est jamais posée. Les
+        // couleurs DEFAULT passent par des canaux RGB bruts (`--*-rgb`) et non
+        // une couleur déjà résolue, pour que Tailwind puisse générer les
+        // variantes d'opacité (`ring-brand/30`) via `<alpha-value>`.
+        brand: {
+          DEFAULT: 'rgb(var(--color-brand-rgb, 0 45 116) / <alpha-value>)',
+          for: 'var(--color-brand-for, #00378F)'
+        },
+        accent: {
+          DEFAULT: 'rgb(var(--color-accent-rgb, 255 127 48) / <alpha-value>)',
+          text: 'var(--color-accent-text, #B4590F)',
+          soft: 'var(--color-accent-soft, #FFF1E7)',
+          ring: 'var(--color-accent-ring, #FBDCC4)'
+        },
         acsso: { DEFAULT: '#AB0093', text: '#8E1279', soft: '#F8E6F4' },
         ink: { DEFAULT: '#16203A', 2: '#5B6478', 3: '#8A93A6', 4: '#A6AEBE' },
         surface: { DEFAULT: '#F2F5FA', card: '#FFFFFF', sub: '#F7F9FC' },
@@ -22,9 +36,11 @@ const config: Config = {
         engage: { DEFAULT: '#059669', dark: '#15935D', hover: '#047857' }
       },
       fontFamily: {
-        sans: ['var(--font-source-sans)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-anton)', 'sans-serif'],
-        hand: ['var(--font-beth-ellen)', 'cursive']
+        // *-active bascule vers une police personnalisée si réglée en admin,
+        // sinon retombe sur les polices next/font par défaut (voir css-vars.ts).
+        sans: ['var(--font-sans-active)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display-active)', 'sans-serif'],
+        hand: ['var(--font-hand-active)', 'cursive']
       },
       boxShadow: {
         card: '0 6px 18px -12px rgba(20,32,58,.2)',

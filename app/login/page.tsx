@@ -1,11 +1,11 @@
 'use client';
 
 import { FormEvent, Suspense, useState } from 'react';
-import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
+import { useBranding } from '@/lib/branding/branding-context';
 
 function LoginPageContent() {
   const [identifier, setIdentifier] = useState('');
@@ -13,6 +13,7 @@ function LoginPageContent() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+  const branding = useBranding();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -63,7 +64,10 @@ function LoginPageContent() {
       {/* Héros navy — logo de l'antenne à l'honneur */}
       <div
         className="relative overflow-hidden px-8 pb-16 pt-12"
-        style={{ background: 'linear-gradient(160deg,#013A8F 0%,#002D74 55%,#001A45 100%)' }}
+        style={{
+          background:
+            'linear-gradient(160deg, color-mix(in srgb, white 8%, var(--color-brand, #002D74)) 0%, var(--color-brand, #002D74) 55%, color-mix(in srgb, black 25%, var(--color-brand, #002D74)) 100%)'
+        }}
       >
         <div
           className="pointer-events-none absolute inset-0"
@@ -73,13 +77,13 @@ function LoginPageContent() {
           }}
         />
         <div className="relative flex flex-col items-center gap-4">
-          <Image
-            src="/logo.png"
-            alt="Protec du 8 & du 9"
+          {/* eslint-disable-next-line @next/next/no-img-element -- logo personnalisable (URL admin), hôte inconnu à la compilation */}
+          <img
+            src={branding.logoUrl ?? '/logo.png'}
+            alt="Logo"
             width={128}
             height={128}
-            priority
-            className="drop-shadow-[0_12px_24px_rgba(0,0,0,.35)]"
+            className="h-32 w-32 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,.35)]"
           />
           <div className="text-center text-white">
             <div className="font-display text-[23px] tracking-[0.05em]">PROTEC DU 8 &amp; DU 9</div>

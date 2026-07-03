@@ -4,7 +4,7 @@ import { Icon } from './icon';
 export type ButtonVariant = 'primary' | 'engage' | 'ghost' | 'danger' | 'subtle';
 
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
-  primary: 'bg-brand text-white shadow-[0_8px_18px_-6px_rgba(0,45,116,.5)] hover:bg-[#013A8F]',
+  primary: 'bg-brand text-white shadow-[0_8px_18px_-6px_var(--color-brand-shadow,rgba(0,45,116,.5))] hover:bg-brand-for',
   engage: 'bg-engage text-white shadow-[0_4px_10px_-2px_rgba(21,147,93,.4)] hover:bg-engage-hover',
   ghost: 'border-[1.5px] border-line-field bg-surface-card text-ink-2 hover:bg-[#F4F6FB]',
   danger: 'bg-bad text-white hover:bg-[#BC3A3A]',
