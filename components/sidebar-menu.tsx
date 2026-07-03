@@ -237,7 +237,10 @@ function SidebarProfile({ profile, tabIndex }: { profile: Profile | null; tabInd
       <div className="flex items-center gap-2.5">
         <span
           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-          style={{ background: 'linear-gradient(to bottom right, color-mix(in srgb, white 20%, var(--color-accent)), var(--color-accent))' }}
+          style={{
+            background:
+              'linear-gradient(to bottom right, color-mix(in srgb, white 20%, var(--color-accent, #FF7F30)), var(--color-accent, #FF7F30))'
+          }}
         >
           {getInitials(profile)}
         </span>

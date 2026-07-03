@@ -10,11 +10,17 @@ const config: Config = {
     extend: {
       colors: {
         // Marque/accent personnalisables (page /admin/apparence ou variables
-        // d'environnement, voir lib/branding/) : les valeurs hex ci-dessous
-        // ne servent que de repli si la variable CSS n'est jamais posée.
-        brand: { DEFAULT: 'var(--color-brand, #002D74)', for: 'var(--color-brand-for, #00378F)' },
+        // d'environnement, voir lib/branding/) : les valeurs ci-dessous ne
+        // servent que de repli si la variable CSS n'est jamais posée. Les
+        // couleurs DEFAULT passent par des canaux RGB bruts (`--*-rgb`) et non
+        // une couleur déjà résolue, pour que Tailwind puisse générer les
+        // variantes d'opacité (`ring-brand/30`) via `<alpha-value>`.
+        brand: {
+          DEFAULT: 'rgb(var(--color-brand-rgb, 0 45 116) / <alpha-value>)',
+          for: 'var(--color-brand-for, #00378F)'
+        },
         accent: {
-          DEFAULT: 'var(--color-accent, #FF7F30)',
+          DEFAULT: 'rgb(var(--color-accent-rgb, 255 127 48) / <alpha-value>)',
           text: 'var(--color-accent-text, #B4590F)',
           soft: 'var(--color-accent-soft, #FFF1E7)',
           ring: 'var(--color-accent-ring, #FBDCC4)'

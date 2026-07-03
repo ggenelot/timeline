@@ -66,7 +66,7 @@ function LoginPageContent() {
         className="relative overflow-hidden px-8 pb-16 pt-12"
         style={{
           background:
-            'linear-gradient(160deg, color-mix(in srgb, white 8%, var(--color-brand)) 0%, var(--color-brand) 55%, color-mix(in srgb, black 25%, var(--color-brand)) 100%)'
+            'linear-gradient(160deg, color-mix(in srgb, white 8%, var(--color-brand, #002D74)) 0%, var(--color-brand, #002D74) 55%, color-mix(in srgb, black 25%, var(--color-brand, #002D74)) 100%)'
         }}
       >
         <div

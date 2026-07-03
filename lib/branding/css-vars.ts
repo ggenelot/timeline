@@ -1,6 +1,20 @@
 import { AppSettings } from '@/lib/types';
 
 /**
+ * "#RRGGBB" → "R G B" (canaux décimaux). Nécessaire pour piloter les
+ * utilitaires Tailwind avec opacité (`ring-brand/30`) : Tailwind ne peut
+ * substituer `<alpha-value>` que si le thème référence des canaux bruts via
+ * `rgb(var(--x) / <alpha-value>)`, pas une couleur déjà résolue (hex ou var()).
+ */
+function hexToRgbChannels(hex: string, fallback: string): string {
+  const match = /^#([0-9a-fA-F]{6})$/.exec(hex.trim());
+  if (!match) return fallback;
+
+  const int = parseInt(match[1], 16);
+  return `${(int >> 16) & 255} ${(int >> 8) & 255} ${int & 255}`;
+}
+
+/**
  * Dérive les nuances (hover, texte, fond adouci…) des deux couleurs de marque
  * via color-mix() plutôt que de stocker une palette complète en base : un
  * admin ne choisit que deux couleurs, le reste suit automatiquement.
@@ -10,9 +24,11 @@ export function buildBrandCssVars(settings: AppSettings): Record<string, string>
 
   return {
     '--color-brand': brandColor,
+    '--color-brand-rgb': hexToRgbChannels(brandColor, '0 45 116'),
     '--color-brand-for': `color-mix(in srgb, white 14%, ${brandColor})`,
     '--color-brand-shadow': `color-mix(in srgb, transparent 50%, ${brandColor})`,
     '--color-accent': accentColor,
+    '--color-accent-rgb': hexToRgbChannels(accentColor, '255 127 48'),
     '--color-accent-text': `color-mix(in srgb, black 30%, ${accentColor})`,
     '--color-accent-soft': `color-mix(in srgb, white 91%, ${accentColor})`,
     '--color-accent-ring': `color-mix(in srgb, white 72%, ${accentColor})`,

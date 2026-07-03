@@ -60,6 +60,11 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
+    // Posé immédiatement (repli env/maquette) : si le fetch échoue ou que la
+    // table n'est pas encore migrée, la charte par défaut reste appliquée au
+    // lieu de laisser les variables CSS indéfinies.
+    applyToDocument(INITIAL_SETTINGS);
+
     async function load() {
       const { data, error } = await supabase
         .from('app_settings')
