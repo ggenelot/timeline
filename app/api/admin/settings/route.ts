@@ -44,17 +44,27 @@ export async function PATCH(request: NextRequest) {
   if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
 
-  const body = (await request.json().catch(() => ({}))) as {
-    logoUrl?: string | null;
-    brandColor?: string;
-    accentColor?: string;
-    fontSans?: string | null;
-    fontDisplay?: string | null;
-    fontHand?: string | null;
-    orgName?: string;
-    orgTagline?: string;
-    loginGreeting?: string;
-  };
+  const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>;
+
+  // Le body vient d'un client non fiable : on ne fait confiance qu'aux clés
+  // dont la valeur a le type attendu avant tout .trim(), sans quoi
+  // `{ orgName: null }` ferait planter la route avant la validation métier.
+  const nullableFields = ['logoUrl', 'fontSans', 'fontDisplay', 'fontHand'] as const;
+  const requiredFields = ['brandColor', 'accentColor', 'orgName', 'orgTagline', 'loginGreeting'] as const;
+
+  for (const field of nullableFields) {
+    if (rawBody[field] !== undefined && rawBody[field] !== null && typeof rawBody[field] !== 'string') {
+      return NextResponse.json({ error: `Champ "${field}" invalide.` }, { status: 400 });
+    }
+  }
+  for (const field of requiredFields) {
+    if (rawBody[field] !== undefined && typeof rawBody[field] !== 'string') {
+      return NextResponse.json({ error: `Champ "${field}" invalide.` }, { status: 400 });
+    }
+  }
+
+  const body = rawBody as Partial<Record<(typeof nullableFields)[number], string | null>> &
+    Partial<Record<(typeof requiredFields)[number], string>>;
 
   if (body.brandColor !== undefined && !HEX_COLOR.test(body.brandColor)) {
     return NextResponse.json({ error: 'Couleur de marque invalide (format #RRGGBB attendu).' }, { status: 400 });
