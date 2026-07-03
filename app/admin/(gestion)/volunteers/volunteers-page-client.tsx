@@ -9,6 +9,7 @@ import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge'
 import { Button } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
+import { initials } from '@/components/ope/atoms';
 import { cn } from '@/lib/cn';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
@@ -20,7 +21,7 @@ type VolunteerSkillRow = {
   skill: SkillRef | SkillRef[] | null;
 };
 
-type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at'> & {
+type VolunteerProfile = Pick<Profile, 'id' | 'full_name' | 'identifier' | 'role' | 'slack_user_id' | 'slack_team_id' | 'slack_username' | 'slack_connected_at' | 'avatar_url'> & {
   profile_skills: VolunteerSkillRow[] | null;
 };
 
@@ -68,7 +69,7 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
       const [volunteersRes, categoriesRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id,full_name,identifier,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill_id,skill:skills(id,name,category_id,display_order))')
+          .select('id,full_name,identifier,role,slack_user_id,slack_team_id,slack_username,slack_connected_at,avatar_url,profile_skills(skill_id,skill:skills(id,name,category_id,display_order))')
           .eq('role', 'benevole')
           .order('full_name', { ascending: true }),
         supabase
@@ -271,7 +272,14 @@ export function VolunteersPageClient({ created, edited }: VolunteersPageClientPr
                 {filteredVolunteers.map(({ volunteer, skills }) => (
                   <tr key={volunteer.id}>
                     <td className="px-4 py-2 font-medium">
-                      <Link href={`/admin/volunteers/${volunteer.id}`} className="font-semibold text-ink hover:underline">
+                      <Link href={`/admin/volunteers/${volunteer.id}`} className="flex items-center gap-2 font-semibold text-ink hover:underline">
+                        {volunteer.avatar_url ? (
+                          <img src={volunteer.avatar_url} alt="" className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                        ) : (
+                          <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#E4E8F0] text-[10px] font-semibold text-ink-2">
+                            {initials(volunteer.full_name)}
+                          </span>
+                        )}
                         {volunteer.full_name ?? '—'}
                       </Link>
                     </td>

@@ -12,6 +12,7 @@ export type Profile = {
   slack_team_id?: string | null;
   slack_username?: string | null;
   slack_connected_at?: string | null;
+  avatar_url?: string | null;
 };
 
 // Réglages de charte graphique (logo, couleurs, polices), éditables depuis
