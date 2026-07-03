@@ -1,6 +1,8 @@
 import {
   buildMissionDedupKey,
   buildMissionsPreview,
+  inferMaterielNeedsFromNotes,
+  inferSkillNeedsFromNotes,
   parseCsvContent,
   parseParisLocalToUtcIso,
   utcIsoToParisParts
@@ -90,4 +92,29 @@ Validation;;14/04/2026;15/04/2026`;
   assert(tourAuto?.reversion_actual === 955.2, 'Tour Auto: réversion réelle importée incorrectement.');
   assert(tourAuto?.source_type_label === 'Soirée/Weekend', 'Tour Auto: type source importé incorrect.');
   assert(tourAuto?.validation_date === '2026-04-14', 'Tour Auto: date de validation importée incorrectement.');
+
+  const cpSkill = { id: 'skill-cp', name: 'CP', code: 'CP' };
+  const pse1Skill = { id: 'skill-pse1', name: 'PSE1', code: 'PSE1' };
+  const availableSkills = [cpSkill, pse1Skill];
+
+  const needsSimple = inferSkillNeedsFromNotes('2 SR dont 1 CP', availableSkills);
+  assert(needsSimple[cpSkill.id] === 1, 'Le besoin "2 SR dont 1 CP" doit reconnaître 1 CP.');
+  assert(needsSimple[''] === 1, 'Le reliquat générique doit valoir 1 (2 - 1 CP).');
+
+  const needsPse1 = inferSkillNeedsFromNotes('2 PSE1', availableSkills);
+  assert(needsPse1[pse1Skill.id] === 2, 'Le besoin "2 PSE1" doit reconnaître 2 PSE1.');
+  assert(!(('' in needsPse1) && needsPse1[''] > 0), 'Aucun reliquat générique attendu quand tout est reconnu.');
+
+  const needsEmpty = inferSkillNeedsFromNotes('', availableSkills);
+  assert(Object.keys(needsEmpty).length === 0, 'Une note vide ne doit produire aucun besoin.');
+
+  const needsUnrecognized = inferSkillNeedsFromNotes('3 bénévoles', availableSkills);
+  assert(needsUnrecognized[''] === 3, 'Une note non reconnue doit tomber entièrement dans le générique.');
+
+  const materielCategories = [{ id: 'cat-lot-c', name: 'Lot de secours C' }];
+  const materielNeeds = inferMaterielNeedsFromNotes('1 lot de secours C', materielCategories);
+  assert(materielNeeds['cat-lot-c'] === 1, 'Le matériel "1 lot de secours C" doit être reconnu.');
+
+  const materielNoMatch = inferMaterielNeedsFromNotes('1 lot C', materielCategories);
+  assert(Object.keys(materielNoMatch).length === 0, 'Une note matériel non reconnue ne doit rien pré-remplir (pas de repli générique).');
 }

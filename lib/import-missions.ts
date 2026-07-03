@@ -47,6 +47,16 @@ export type NormalizedMissionImport = {
   raw_import_payload: Record<string, string | null>;
 };
 
+export type ImportSkillRequirementPayload = { skill_id: string | null; quantity: number };
+export type ImportMaterielRequirementPayload = { category_id: string; quantity: number };
+
+// Payload envoyé à /api/admin/missions/import : la mission normalisée, augmentée des besoins en
+// bénévoles/matériel définis dans le flux d'import (éditeurs à pastilles).
+export type MissionImportApiPayload = NormalizedMissionImport & {
+  required_skills: ImportSkillRequirementPayload[];
+  required_materiels: ImportMaterielRequirementPayload[];
+};
+
 export type MissionImportPreviewItem = {
   block: RawMissionBlock;
   normalized: NormalizedMissionImport | null;
@@ -125,6 +135,120 @@ export function buildMissionDedupKey(params: { title: string; missionDate: strin
   }
 
   return `${normalizedTitle}__${normalizedDate}`;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Cherche, pour chaque entrée (compétence ou catégorie de matériel), les occurrences de ses
+ * tokens (code, nom) dans les notes libres, et associe à chaque occurrence trouvée la quantité
+ * la plus proche qui la précède (ex: "1 CP" → CP: 1). Les tokens les plus longs sont testés en
+ * premier pour éviter qu'un token court ne "consomme" une portion de texte appartenant à un
+ * token plus spécifique.
+ */
+function matchQuantifiedTokens(
+  notes: string,
+  entries: Array<{ id: string; tokens: string[] }>
+): { matches: Record<string, number>; matchedTotal: number } {
+  const normalizedNotes = sanitize(notes);
+  const matches: Record<string, number> = {};
+  let matchedTotal = 0;
+
+  const candidates = entries
+    .flatMap((entry) => entry.tokens.map((token) => ({ id: entry.id, token: sanitize(token) })))
+    .filter((candidate) => candidate.token.length > 0)
+    .sort((a, b) => b.token.length - a.token.length);
+
+  const claimed = new Array(normalizedNotes.length).fill(false);
+
+  candidates.forEach(({ id, token }) => {
+    const pattern = new RegExp(`\\b${escapeRegExp(token)}\\b`, 'g');
+    let match: RegExpExecArray | null;
+
+    while ((match = pattern.exec(normalizedNotes))) {
+      const start = match.index;
+      const end = start + token.length;
+
+      if (claimed.slice(start, end).some(Boolean)) {
+        continue;
+      }
+
+      for (let i = start; i < end; i += 1) {
+        claimed[i] = true;
+      }
+
+      const before = normalizedNotes.slice(Math.max(0, start - 8), start);
+      const numberMatch = before.match(/(\d+)\D*$/);
+      const quantity = numberMatch ? Number.parseInt(numberMatch[1], 10) : 1;
+
+      if (Number.isFinite(quantity) && quantity > 0) {
+        matches[id] = (matches[id] ?? 0) + quantity;
+        matchedTotal += quantity;
+      }
+    }
+  });
+
+  return { matches, matchedTotal };
+}
+
+/**
+ * Pré-remplit l'éditeur "Besoins en bénévoles" à partir de la note libre `requirements_notes`
+ * (ex: "2 SR dont 1 CP"). Les compétences reconnues (par code ou nom) dans le référentiel sont
+ * extraites avec leur quantité ; le reste du décompte total tombe dans le besoin générique
+ * (clé `''`, "bénévole sans compétence particulière"). Heuristique volontairement best-effort :
+ * l'utilisateur corrige ensuite via les pastilles.
+ */
+export function inferSkillNeedsFromNotes(
+  notes: string | null | undefined,
+  availableSkills: Array<{ id: string; name: string; code?: string | null }>
+): Record<string, number> {
+  if (!notes || !notes.trim()) {
+    return {};
+  }
+
+  const entries = availableSkills
+    .map((skill) => ({
+      id: skill.id,
+      tokens: [skill.code, skill.name].filter((token): token is string => Boolean(token && token.trim()))
+    }))
+    .filter((entry) => entry.tokens.length > 0);
+
+  const { matches, matchedTotal } = matchQuantifiedTokens(notes, entries);
+
+  const totalMatch = sanitize(notes).match(/\d+/);
+  const total = totalMatch ? Number.parseInt(totalMatch[0], 10) : 0;
+  const genericRemainder = Math.max(0, total - matchedTotal);
+
+  const needs: Record<string, number> = { ...matches };
+
+  if (genericRemainder > 0) {
+    needs[''] = (needs[''] ?? 0) + genericRemainder;
+  } else if (total === 0 && matchedTotal === 0) {
+    needs[''] = 1;
+  }
+
+  return needs;
+}
+
+/**
+ * Même principe que `inferSkillNeedsFromNotes` pour l'éditeur "Matériel requis", à partir de
+ * `equipment_notes` (ex: "1 lot C"). Pas de repli générique ici : une catégorie de matériel est
+ * obligatoire pour chaque besoin, donc une note non reconnue ne pré-remplit rien.
+ */
+export function inferMaterielNeedsFromNotes(
+  notes: string | null | undefined,
+  availableMateriels: Array<{ id: string; name: string }>
+): Record<string, number> {
+  if (!notes || !notes.trim()) {
+    return {};
+  }
+
+  const entries = availableMateriels.map((materiel) => ({ id: materiel.id, tokens: [materiel.name] }));
+  const { matches } = matchQuantifiedTokens(notes, entries);
+
+  return matches;
 }
 
 function normalizeCell(value: unknown) {

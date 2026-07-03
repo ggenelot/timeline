@@ -16,7 +16,7 @@ type MissionRequirementsEditorProps = {
   submitting: boolean;
 };
 
-const GENERIC_VOLUNTEER_LABEL = 'Sans compétence particulière (bénévole)';
+export const GENERIC_VOLUNTEER_LABEL = 'Sans compétence particulière (bénévole)';
 
 export function MissionRequirementsEditor({
   requirements,
