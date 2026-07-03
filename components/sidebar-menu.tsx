@@ -169,14 +169,14 @@ function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
       {/* eslint-disable-next-line @next/next/no-img-element -- logo personnalisable (URL admin), hôte inconnu à la compilation */}
       <img
         src={branding.logoUrl ?? '/logo.png'}
-        alt="Protection Civile Paris 8 & 9"
+        alt={branding.orgTagline}
         width={36}
         height={36}
         className="h-9 w-9 shrink-0 object-contain"
       />
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="text-[18px] font-extrabold text-ink">Timeline</span>
-        <span className="truncate text-[11.5px] text-ink-3">Protection Civile Paris 8 &amp; 9</span>
+        <span className="truncate text-[11.5px] text-ink-3">{branding.orgTagline}</span>
       </span>
     </Link>
   );
