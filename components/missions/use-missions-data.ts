@@ -222,26 +222,39 @@ export function useMissionsData() {
       const missionById = new Map(missions.map((mission) => [mission.id, mission]));
       let updatedCount = 0;
       const rawUpdateIds: string[] = [];
+      let errorMessage: string | null = null;
 
       if (targetStatus === 'confirmed' || targetStatus === 'cancelled') {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token ?? '';
         const endpoint = targetStatus === 'confirmed' ? 'confirm' : 'cancel';
 
-        await Promise.all(
+        const results = await Promise.all(
           missionIds.map(async (missionId) => {
             const currentStatus = missionById.get(missionId)?.status;
             const eligible =
               targetStatus === 'confirmed' ? currentStatus === 'proposed' : currentStatus !== 'confirmed' && currentStatus !== 'cancelled';
-            if (!eligible) return;
+            if (!eligible) return false;
 
             const response = await fetch(`/api/admin/missions/${missionId}/${endpoint}`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}` }
             });
-            if (response.ok) updatedCount += 1;
+            return response.ok;
           })
         );
+
+        const routeUpdatedCount = results.filter(Boolean).length;
+        updatedCount += routeUpdatedCount;
+
+        // Ineligibilité (statut de départ incompatible) ou échec d'appel API :
+        // dans les deux cas, sans ce message le clic semble n'avoir aucun effet.
+        if (routeUpdatedCount < missionIds.length) {
+          errorMessage =
+            targetStatus === 'confirmed'
+              ? `${missionIds.length - routeUpdatedCount} mission(s) n'ont pas pu être confirmée(s) (seule une mission "Proposée" peut être confirmée).`
+              : `${missionIds.length - routeUpdatedCount} mission(s) n'ont pas pu être annulée(s) (une mission déjà confirmée ne peut pas être annulée).`;
+        }
       } else {
         rawUpdateIds.push(...missionIds.filter((missionId) => missionById.get(missionId)?.status !== targetStatus));
         updatedCount += missionIds.length - rawUpdateIds.length;
@@ -251,13 +264,24 @@ export function useMissionsData() {
         const { data, error: updateError } = await supabase.from('missions').update({ status: targetStatus }).in('id', rawUpdateIds).select('id');
 
         if (updateError) {
-          setError(`Impossible de changer le statut de certaines missions : ${updateError.message}`);
+          errorMessage = `Impossible de changer le statut de certaines missions : ${updateError.message}`;
         } else {
-          updatedCount += data?.length ?? 0;
+          const rawUpdatedCount = data?.length ?? 0;
+          updatedCount += rawUpdatedCount;
+          // Une policy RLS qui refuse la mise à jour ne renvoie pas d'erreur :
+          // elle exclut silencieusement les lignes concernées du résultat.
+          if (rawUpdatedCount < rawUpdateIds.length) {
+            errorMessage = "Certaines missions n'ont pas pu être mises à jour (droits insuffisants ou statut modifié entre-temps).";
+          }
         }
       }
 
+      // loadData() remet l'erreur à zéro en tête de fonction : on ne peut donc
+      // afficher le message qu'après l'avoir attendue, sinon il est effacé
+      // avant même d'être rendu.
       await loadData();
+      if (errorMessage) setError(errorMessage);
+
       return { updatedCount, failedCount: missionIds.length - updatedCount };
     },
     [missions, loadData]
@@ -271,14 +295,27 @@ export function useMissionsData() {
 
       const { data, error: deleteError } = await supabase.from('missions').delete().in('id', missionIds).select('id');
 
+      let errorMessage: string | null = null;
+      let deletedCount = 0;
+
       if (deleteError) {
-        setError(`Impossible de supprimer les missions sélectionnées : ${deleteError.message}`);
-        await loadData();
-        return { deletedCount: 0 };
+        errorMessage = `Impossible de supprimer les missions sélectionnées : ${deleteError.message}`;
+      } else {
+        deletedCount = data?.length ?? 0;
+        // Comme pour AdminDeleteMissionButton : une policy RLS qui refuse la
+        // suppression ne renvoie pas d'erreur, elle renvoie simplement 0 ligne.
+        if (deletedCount < missionIds.length) {
+          errorMessage =
+            deletedCount === 0
+              ? "Aucune mission n'a pu être supprimée. Vérifiez vos droits d'accès puis actualisez la page."
+              : `${missionIds.length - deletedCount} mission(s) n'ont pas pu être supprimée(s) (droits insuffisants ou déjà supprimées).`;
+        }
       }
 
       await loadData();
-      return { deletedCount: data?.length ?? 0 };
+      if (errorMessage) setError(errorMessage);
+
+      return { deletedCount };
     },
     [loadData]
   );
