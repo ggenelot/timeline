@@ -13,6 +13,9 @@ type AppSettingsRow = {
   font_sans: string | null;
   font_display: string | null;
   font_hand: string | null;
+  org_name: string | null;
+  org_tagline: string | null;
+  login_greeting: string | null;
 };
 
 const CUSTOM_FONTS_LINK_ID = 'branding-custom-fonts';
@@ -68,7 +71,7 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
     async function load() {
       const { data, error } = await supabase
         .from('app_settings')
-        .select('logo_url,brand_color,accent_color,font_sans,font_display,font_hand')
+        .select('logo_url,brand_color,accent_color,font_sans,font_display,font_hand,org_name,org_tagline,login_greeting')
         .eq('id', 1)
         .maybeSingle<AppSettingsRow>();
 
@@ -80,7 +83,10 @@ export function BrandingProvider({ children }: { children: React.ReactNode }) {
         accentColor: data.accent_color || INITIAL_SETTINGS.accentColor,
         fontSans: data.font_sans || INITIAL_SETTINGS.fontSans,
         fontDisplay: data.font_display || INITIAL_SETTINGS.fontDisplay,
-        fontHand: data.font_hand || INITIAL_SETTINGS.fontHand
+        fontHand: data.font_hand || INITIAL_SETTINGS.fontHand,
+        orgName: data.org_name || INITIAL_SETTINGS.orgName,
+        orgTagline: data.org_tagline || INITIAL_SETTINGS.orgTagline,
+        loginGreeting: data.login_greeting || INITIAL_SETTINGS.loginGreeting
       };
 
       setSettings(resolved);

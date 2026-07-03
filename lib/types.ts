@@ -23,6 +23,9 @@ export type AppSettings = {
   fontSans: string | null;
   fontDisplay: string | null;
   fontHand: string | null;
+  orgName: string;
+  orgTagline: string;
+  loginGreeting: string;
 };
 
 export type SkillCategory = {

@@ -86,9 +86,9 @@ function LoginPageContent() {
             className="h-32 w-32 object-contain drop-shadow-[0_12px_24px_rgba(0,0,0,.35)]"
           />
           <div className="text-center text-white">
-            <div className="font-display text-[23px] tracking-[0.05em]">PROTEC DU 8 &amp; DU 9</div>
-            <div className="mt-1 text-[12px] tracking-[0.2em] text-[#9FB6E0]">
-              PROTECTION CIVILE PARIS SEINE
+            <div className="font-display text-[23px] uppercase tracking-[0.05em]">{branding.orgName}</div>
+            <div className="mt-1 text-[12px] uppercase tracking-[0.2em] text-[#9FB6E0]">
+              {branding.orgTagline}
             </div>
           </div>
         </div>
@@ -98,7 +98,7 @@ function LoginPageContent() {
       <div className="relative -mt-8 rounded-t-[30px] bg-surface-card px-8 pb-8 pt-8">
         <div className="mb-6 text-center">
           <div className="text-[24px] font-black tracking-[-0.01em] text-ink">Connexion</div>
-          <div className="mt-1.5 font-hand text-[15px] text-accent-text">contente de te revoir</div>
+          <div className="mt-1.5 font-hand text-[15px] text-accent-text">{branding.loginGreeting}</div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
