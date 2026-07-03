@@ -197,6 +197,13 @@ export function VolunteerTimelineView({
         })}
       </div>
 
+      {monthGroups.length > 0 ? (
+        <p className="mt-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3">
+          <span aria-hidden="true">👆</span>
+          Glissez une carte à droite pour vous engager, à gauche pour vous rendre indisponible
+        </p>
+      ) : null}
+
       {/* Frise */}
       <div className="relative mt-6">
         <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-line" />

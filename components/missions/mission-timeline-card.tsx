@@ -1,7 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent, MouseEvent as ReactMouseEvent } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, MissionProposalResponse, MissionRequiredSkill, MissionStatus } from '@/lib/types';
 import { formatMissionDuration, MissionRelation } from '@/lib/mission-timeline';
@@ -9,6 +10,11 @@ import { getMissionStatusBadgeClass, MISSION_STATUS_LABELS } from '@/lib/mission
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+
+// Design handoff "Missions Timeline — Swipe to (Un)available" : seuils/animation repris tels quels.
+const SWIPE_THRESHOLD = 84;
+const SWIPE_CLAMP = 160;
+const SWIPE_TAP_TOLERANCE = 6;
 
 type Volunteer = { name: string; skills: Array<{ name: string; color?: string | null }> };
 
@@ -51,9 +57,19 @@ export function MissionTimelineCard({
 }: MissionTimelineCardProps) {
   const [pendingAction, setPendingAction] = useState<MissionProposalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragX, setDragX] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+
+  const dragStartXRef = useRef<number | null>(null);
+  const activePointerIdRef = useRef<number | null>(null);
+  const didDragRef = useRef(false);
 
   const isBenevole = variant === 'benevole';
   const isUnavailable = isBenevole && relation === 'declined';
+
+  // Une mission retenue n'a plus d'action bénévole possible ; on ne branche donc pas le geste dessus.
+  const swipeCapable = isBenevole && canPropose && relation !== 'retenu';
+  const swipeInteractive = swipeCapable && pendingAction === null;
 
   const skillCoverage = useMemo(
     () =>
@@ -135,12 +151,93 @@ export function MissionTimelineCard({
     onResponse?.();
   }
 
+  function resetDrag() {
+    dragStartXRef.current = null;
+    activePointerIdRef.current = null;
+    setIsDragging(false);
+    setDragX(0);
+  }
+
+  function handlePointerDown(event: ReactPointerEvent<HTMLElement>) {
+    if (!swipeInteractive) return;
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    dragStartXRef.current = event.clientX;
+    activePointerIdRef.current = event.pointerId;
+    didDragRef.current = false;
+    // Pas de setPointerCapture ici : ça retargete aussi l'event "click" vers cet élément et
+    // empêche les boutons/le header (imbriqués) de recevoir leur clic sur un simple tap.
+  }
+
+  function handlePointerMove(event: ReactPointerEvent<HTMLElement>) {
+    if (!swipeInteractive) return;
+    if (dragStartXRef.current === null || activePointerIdRef.current !== event.pointerId) return;
+    const rawDx = event.clientX - dragStartXRef.current;
+    if (!didDragRef.current && Math.abs(rawDx) > SWIPE_TAP_TOLERANCE) {
+      didDragRef.current = true;
+      // On ne capture le pointeur qu'une fois le geste identifié comme un glissement,
+      // pour ne pas perturber les taps sur les boutons/le header.
+      try {
+        event.currentTarget.setPointerCapture(event.pointerId);
+      } catch {
+        // Certains environnements (tests, anciens navigateurs) n'implémentent pas l'API.
+      }
+    }
+    if (!didDragRef.current) return;
+    setIsDragging(true);
+    setDragX(Math.max(-SWIPE_CLAMP, Math.min(SWIPE_CLAMP, rawDx)));
+  }
+
+  function handlePointerUp(event: ReactPointerEvent<HTMLElement>) {
+    if (activePointerIdRef.current !== event.pointerId) return;
+    const finalDx = dragX;
+    const wasDrag = didDragRef.current;
+    resetDrag();
+    if (!wasDrag) return;
+    if (finalDx > SWIPE_THRESHOLD) {
+      void respond('available');
+    } else if (finalDx < -SWIPE_THRESHOLD) {
+      void respond('unavailable');
+    }
+  }
+
+  function handlePointerCancel(event: ReactPointerEvent<HTMLElement>) {
+    if (activePointerIdRef.current !== event.pointerId) return;
+    resetDrag();
+  }
+
+  // Un tap qui a légèrement bougé (au-delà de SWIPE_TAP_TOLERANCE) ne doit pas déclencher les boutons/le repli de la carte.
+  function handleClickCapture(event: ReactMouseEvent<HTMLElement>) {
+    if (didDragRef.current) {
+      event.preventDefault();
+      event.stopPropagation();
+      didDragRef.current = false;
+    }
+  }
+
+  const rightRevealOpacity = Math.max(0, Math.min(1, dragX / SWIPE_THRESHOLD));
+  const leftRevealOpacity = Math.max(0, Math.min(1, -dragX / SWIPE_THRESHOLD));
+
   const status: MissionStatus = mission.status;
 
-  return (
+  const cardArticle = (
     <article
-      className="overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card transition hover:-translate-y-px hover:shadow-lift"
-      style={{ opacity: isUnavailable ? 0.66 : 1 }}
+      className={cn(
+        'overflow-hidden rounded-2xl border border-line bg-surface-card shadow-card transition hover:shadow-lift',
+        !swipeCapable && 'hover:-translate-y-px'
+      )}
+      style={{
+        opacity: isUnavailable ? 0.66 : 1,
+        transform: swipeCapable ? `translateX(${dragX}px)` : undefined,
+        transition: swipeCapable ? (isDragging ? 'none' : 'transform .28s cubic-bezier(.2,.8,.2,1)') : undefined,
+        touchAction: swipeCapable ? 'pan-y' : undefined,
+        userSelect: isDragging ? 'none' : undefined,
+        cursor: swipeInteractive ? 'grab' : undefined
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerCancel}
+      onClickCapture={handleClickCapture}
     >
       <button
         type="button"
@@ -289,5 +386,31 @@ export function MissionTimelineCard({
         </div>
       ) : null}
     </article>
+  );
+
+  if (!swipeCapable) {
+    return cardArticle;
+  }
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl">
+      <div
+        className="absolute inset-0 flex items-center gap-2 pl-7 text-white"
+        style={{ background: '#1a7f4e', opacity: rightRevealOpacity }}
+        aria-hidden="true"
+      >
+        <Icon name="check" size={20} />
+        <span className="text-[13px] font-bold">Disponible</span>
+      </div>
+      <div
+        className="absolute inset-0 flex items-center justify-end gap-2 pr-7 text-white"
+        style={{ background: '#c0392b', opacity: leftRevealOpacity }}
+        aria-hidden="true"
+      >
+        <span className="text-[13px] font-bold">Indisponible</span>
+        <Icon name="close" size={20} />
+      </div>
+      {cardArticle}
+    </div>
   );
 }
