@@ -86,6 +86,7 @@ export function MissionManagementTable({
     const ids = Array.from(selectedIds);
     setStatusMenuOpen(false);
     setPendingBulkAction(true);
+    setConfirmationMessage(null);
 
     // Le passage brouillon → proposé réutilise l'action existante
     // (publishDraftMission) plutôt que de dupliquer sa logique.
@@ -119,6 +120,7 @@ export function MissionManagementTable({
     if (!confirmed) return;
 
     setPendingBulkAction(true);
+    setConfirmationMessage(null);
     const { deletedCount } = await onBulkDelete(Array.from(selectedIds));
     setPendingBulkAction(false);
     // Idem : un échec silencieux (RLS) remonte déjà via la bannière d'erreur

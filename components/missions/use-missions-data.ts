@@ -222,32 +222,43 @@ export function useMissionsData() {
       const missionById = new Map(missions.map((mission) => [mission.id, mission]));
       let updatedCount = 0;
       const rawUpdateIds: string[] = [];
+      let errorMessage: string | null = null;
 
       if (targetStatus === 'confirmed' || targetStatus === 'cancelled') {
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token ?? '';
         const endpoint = targetStatus === 'confirmed' ? 'confirm' : 'cancel';
 
-        await Promise.all(
+        const results = await Promise.all(
           missionIds.map(async (missionId) => {
             const currentStatus = missionById.get(missionId)?.status;
             const eligible =
               targetStatus === 'confirmed' ? currentStatus === 'proposed' : currentStatus !== 'confirmed' && currentStatus !== 'cancelled';
-            if (!eligible) return;
+            if (!eligible) return false;
 
             const response = await fetch(`/api/admin/missions/${missionId}/${endpoint}`, {
               method: 'POST',
               headers: { Authorization: `Bearer ${token}` }
             });
-            if (response.ok) updatedCount += 1;
+            return response.ok;
           })
         );
+
+        const routeUpdatedCount = results.filter(Boolean).length;
+        updatedCount += routeUpdatedCount;
+
+        // Ineligibilité (statut de départ incompatible) ou échec d'appel API :
+        // dans les deux cas, sans ce message le clic semble n'avoir aucun effet.
+        if (routeUpdatedCount < missionIds.length) {
+          errorMessage =
+            targetStatus === 'confirmed'
+              ? `${missionIds.length - routeUpdatedCount} mission(s) n'ont pas pu être confirmée(s) (seule une mission "Proposée" peut être confirmée).`
+              : `${missionIds.length - routeUpdatedCount} mission(s) n'ont pas pu être annulée(s) (une mission déjà confirmée ne peut pas être annulée).`;
+        }
       } else {
         rawUpdateIds.push(...missionIds.filter((missionId) => missionById.get(missionId)?.status !== targetStatus));
         updatedCount += missionIds.length - rawUpdateIds.length;
       }
-
-      let errorMessage: string | null = null;
 
       if (rawUpdateIds.length > 0) {
         const { data, error: updateError } = await supabase.from('missions').update({ status: targetStatus }).in('id', rawUpdateIds).select('id');
