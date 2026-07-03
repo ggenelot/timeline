@@ -363,7 +363,11 @@ function SummaryPill({ label, quantity, tone }: { label: string; quantity: numbe
   );
 }
 
-const TABLE_GRID_CLASS = 'grid grid-cols-[90px_1.6fr_1fr_1fr_0.9fr_0.9fr_1.3fr_130px] items-center gap-3';
+// minmax(floor, fr) donne à chaque colonne une largeur minimale réelle : la grille ne peut jamais
+// se tasser en dessous, ce qui force le conteneur scrollable (overflow-x-auto) à afficher un
+// scroll latéral plutôt que de tronquer le contenu (titre, lieu...) de façon irrécupérable.
+const TABLE_GRID_CLASS =
+  'grid grid-cols-[90px_minmax(220px,1.6fr)_minmax(130px,1fr)_minmax(130px,1fr)_minmax(110px,0.9fr)_minmax(100px,0.9fr)_minmax(200px,1.3fr)_150px] items-center gap-3';
 
 const PAGE_SIZE = 25;
 
@@ -443,20 +447,20 @@ const MissionImportRow = memo(function MissionImportRow({
       >
         <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${IMPORT_STATUS_BADGE[rowStatus]}`}>{IMPORT_STATUS_LABELS[rowStatus]}</span>
 
-        <div className="min-w-0">
+        <div>
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 shrink-0 rounded-full ${MISSION_CATEGORY_BADGE_CLASSES[category] ?? 'bg-amber-400'}`} />
-            <span className="truncate text-[14.5px] font-bold text-ink">{liveRow.title || 'Sans intitulé'}</span>
+            <span className="whitespace-nowrap text-[14.5px] font-bold text-ink">{liveRow.title || 'Sans intitulé'}</span>
           </div>
-          <div className="mt-0.5 text-[12.5px] text-ink-3">{MISSION_CATEGORY_LABELS[category]}</div>
+          <div className="mt-0.5 whitespace-nowrap text-[12.5px] text-ink-3">{MISSION_CATEGORY_LABELS[category]}</div>
         </div>
 
-        <div className="text-[13px] text-ink-2">
+        <div className="whitespace-nowrap text-[13px] text-ink-2">
           {liveRow.date || '—'}
           <div className="text-xs text-ink-3">{liveRow.startTime || '—'} – {liveRow.endTime || '—'}</div>
         </div>
 
-        <div className="truncate text-[13px] text-ink-2">{liveRow.location || '—'}</div>
+        <div className="whitespace-nowrap text-[13px] text-ink-2">{liveRow.location || '—'}</div>
 
         <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-bold ${getSkillColorClass(doStatusTone(liveRow.do_status))}`}>
           {liveRow.do_status || '—'}
@@ -1266,7 +1270,7 @@ export default function AdminMissionImportPage() {
             </AdminCard>
 
             <div className="overflow-x-auto rounded-2xl bg-white shadow-card">
-              <div className="min-w-[960px]">
+              <div>
                 <div className={`${TABLE_GRID_CLASS} border-b border-line-row bg-surface-sub px-5 py-3`}>
                   {['Statut', 'Mission', 'Date / heure', 'Lieu', 'Etat DO', 'Réversion', 'Besoins', 'Actions'].map((col) => (
                     <span key={col} className="text-[11px] font-bold uppercase tracking-wide text-ink-3">
@@ -1275,7 +1279,7 @@ export default function AdminMissionImportPage() {
                   ))}
                 </div>
 
-                <div className="min-w-[960px]">
+                <div>
                   {paginatedRows.map((row) => {
                     const rowStatus = rowStatuses.get(row.rowId) ?? 'invalide';
                     return (
