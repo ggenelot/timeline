@@ -14,6 +14,9 @@ type SettingsForm = {
   fontSans: string;
   fontDisplay: string;
   fontHand: string;
+  orgName: string;
+  orgTagline: string;
+  loginGreeting: string;
 };
 
 type SettingsRow = {
@@ -23,6 +26,9 @@ type SettingsRow = {
   font_sans: string | null;
   font_display: string | null;
   font_hand: string | null;
+  org_name: string;
+  org_tagline: string;
+  login_greeting: string;
 };
 
 const EMPTY_FORM: SettingsForm = {
@@ -31,7 +37,10 @@ const EMPTY_FORM: SettingsForm = {
   accentColor: '#FF7F30',
   fontSans: '',
   fontDisplay: '',
-  fontHand: ''
+  fontHand: '',
+  orgName: 'Protec du 8 & du 9',
+  orgTagline: 'Protection Civile Paris Seine',
+  loginGreeting: 'contente de te revoir'
 };
 
 function toForm(row: SettingsRow): SettingsForm {
@@ -41,7 +50,10 @@ function toForm(row: SettingsRow): SettingsForm {
     accentColor: row.accent_color,
     fontSans: row.font_sans ?? '',
     fontDisplay: row.font_display ?? '',
-    fontHand: row.font_hand ?? ''
+    fontHand: row.font_hand ?? '',
+    orgName: row.org_name,
+    orgTagline: row.org_tagline,
+    loginGreeting: row.login_greeting
   };
 }
 
@@ -98,6 +110,31 @@ function FontField({
         className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
       />
       <p className="mt-1 text-xs text-ink-3">Nom d&apos;une police Google Fonts. Laisser vide pour la police par défaut ({placeholder}).</p>
+    </div>
+  );
+}
+
+function TextField({
+  label,
+  value,
+  onChange,
+  help
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  help?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-ink-2">{label}</label>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
+      />
+      {help ? <p className="mt-1 text-xs text-ink-3">{help}</p> : null}
     </div>
   );
 }
@@ -164,7 +201,10 @@ export default function AdminApparencePage() {
         accentColor: form.accentColor,
         fontSans: form.fontSans || null,
         fontDisplay: form.fontDisplay || null,
-        fontHand: form.fontHand || null
+        fontHand: form.fontHand || null,
+        orgName: form.orgName,
+        orgTagline: form.orgTagline,
+        loginGreeting: form.loginGreeting
       })
     });
 
@@ -193,7 +233,7 @@ export default function AdminApparencePage() {
     <div className="space-y-8">
       <PageHeader
         title="Apparence"
-        subtitle="Personnalisez le logo, les couleurs de marque et les polices sans toucher au code. Ces réglages s'appliquent à toute l'application, y compris avant connexion."
+        subtitle="Personnalisez le logo, les couleurs de marque, les polices et les textes de la page de connexion sans toucher au code. Ces réglages s'appliquent à toute l'application, y compris avant connexion."
       />
 
       {error ? <div className="rounded-xl border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
@@ -234,6 +274,15 @@ export default function AdminApparencePage() {
           <FontField label="Police principale (texte)" value={form.fontSans} placeholder="Source Sans 3" onChange={(v) => setForm((f) => ({ ...f, fontSans: v }))} />
           <FontField label="Police des titres" value={form.fontDisplay} placeholder="Anton" onChange={(v) => setForm((f) => ({ ...f, fontDisplay: v }))} />
           <FontField label="Police décorative" value={form.fontHand} placeholder="Beth Ellen" onChange={(v) => setForm((f) => ({ ...f, fontHand: v }))} />
+        </div>
+      </Card>
+
+      <Card className="p-5 md:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Textes de la page de connexion</h2>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <TextField label="Nom de l'association" value={form.orgName} onChange={(v) => setForm((f) => ({ ...f, orgName: v }))} help="Affiché en grand sous le logo." />
+          <TextField label="Slogan" value={form.orgTagline} onChange={(v) => setForm((f) => ({ ...f, orgTagline: v }))} help="Affiché sous le nom de l'association." />
+          <TextField label="Message d'accueil" value={form.loginGreeting} onChange={(v) => setForm((f) => ({ ...f, loginGreeting: v }))} help="Affiché sous « Connexion »." />
         </div>
       </Card>
 
