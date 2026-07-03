@@ -4,7 +4,7 @@ import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
 const MISSION_TYPES_SELECT = `
   id,name,description,default_required_volunteers,default_start_time,default_end_time,created_at,
-  required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category))
+  required_skills:mission_type_required_skills(id,mission_type_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order))
 `;
 
 export async function GET(request: NextRequest) {
