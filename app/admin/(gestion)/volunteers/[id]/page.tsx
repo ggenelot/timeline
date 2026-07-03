@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Skill, SkillCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, getMissionCategory, MissionStatus } from '@/lib/types';
 import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
 import { Button } from '@/components/ui/button';
+import { initials } from '@/components/ope/atoms';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
@@ -18,6 +19,7 @@ type VolunteerProfile = {
   slack_team_id: string | null;
   slack_username: string | null;
   slack_connected_at: string | null;
+  avatar_url: string | null;
   profile_skills: Array<{ skill_id: string }> | null;
 };
 
@@ -133,7 +135,7 @@ export default function VolunteerProfilePage() {
       const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes, availableProposalsRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id,full_name,identifier,slack_user_id,slack_team_id,slack_username,slack_connected_at,profile_skills(skill_id)')
+          .select('id,full_name,identifier,slack_user_id,slack_team_id,slack_username,slack_connected_at,avatar_url,profile_skills(skill_id)')
           .eq('id', volunteerId)
           .single(),
         supabase
@@ -284,14 +286,23 @@ export default function VolunteerProfilePage() {
     <div className="space-y-5">
       <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <Link href="/admin/volunteers" className="mb-1 inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink-2">
-              ← Bénévoles
-            </Link>
-            <h1 className="text-xl font-semibold text-ink">{volunteer.full_name ?? '—'}</h1>
-            {volunteer.identifier && (
-              <p className="mt-0.5 text-sm text-ink-3">{volunteer.identifier}</p>
+          <div className="flex items-start gap-3">
+            {volunteer.avatar_url ? (
+              <img src={volunteer.avatar_url} alt="" className="h-12 w-12 shrink-0 rounded-full object-cover" />
+            ) : (
+              <span className="inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#E4E8F0] text-sm font-semibold text-ink-2">
+                {initials(volunteer.full_name)}
+              </span>
             )}
+            <div>
+              <Link href="/admin/volunteers" className="mb-1 inline-flex items-center gap-1 text-xs text-ink-3 hover:text-ink-2">
+                ← Bénévoles
+              </Link>
+              <h1 className="text-xl font-semibold text-ink">{volunteer.full_name ?? '—'}</h1>
+              {volunteer.identifier && (
+                <p className="mt-0.5 text-sm text-ink-3">{volunteer.identifier}</p>
+              )}
+            </div>
           </div>
           {isAdmin && (
             <Link

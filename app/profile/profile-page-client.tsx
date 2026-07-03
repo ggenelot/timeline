@@ -56,7 +56,7 @@ export function ProfilePageClient() {
 
       const { data, error: profileError } = await supabase
         .from('profiles')
-        .select('id,full_name,email,role,sector,created_at,slack_user_id,slack_team_id,slack_username,slack_connected_at')
+        .select('id,full_name,email,role,sector,created_at,slack_user_id,slack_team_id,slack_username,slack_connected_at,avatar_url')
         .eq('id', authData.user.id)
         .single();
 
@@ -272,10 +272,15 @@ export function ProfilePageClient() {
 
       <Card className="p-4">
         <p className={overlineClass}>Mon compte</p>
-        <div className="mt-3 space-y-1.5 text-sm text-ink-2">
-          <p><span className="font-semibold text-ink">Nom :</span> {profile.full_name ?? 'Non renseigné'}</p>
-          <p><span className="font-semibold text-ink">Email :</span> {profile.email}</p>
-          <p><span className="font-semibold text-ink">Rôle :</span> {profile.role}</p>
+        <div className="mt-3 flex items-start gap-3">
+          {profile.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-14 w-14 shrink-0 rounded-full object-cover" />
+          ) : null}
+          <div className="space-y-1.5 text-sm text-ink-2">
+            <p><span className="font-semibold text-ink">Nom :</span> {profile.full_name ?? 'Non renseigné'}</p>
+            <p><span className="font-semibold text-ink">Email :</span> {profile.email}</p>
+            <p><span className="font-semibold text-ink">Rôle :</span> {profile.role}</p>
+          </div>
         </div>
       </Card>
 

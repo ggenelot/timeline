@@ -32,6 +32,18 @@ export type SlackOpenIdTokenResponse = {
 
 type SlackFlow = 'bot_install' | 'slack_login';
 
+export type SlackUserProfileImages = {
+  image_192?: string;
+  image_512?: string;
+  image_1024?: string;
+  image_72?: string;
+};
+
+export function pickSlackAvatarUrl(profile: SlackUserProfileImages | null | undefined): string | null {
+  if (!profile) return null;
+  return profile.image_512 ?? profile.image_1024 ?? profile.image_192 ?? profile.image_72 ?? null;
+}
+
 
 const SLACK_ERROR_MESSAGES: Record<string, string> = {
   token_absent: 'Token Slack manquant. Configurez SLACK_BOT_TOKEN côté serveur.',
@@ -119,7 +131,7 @@ export class SlackService {
 
 
   async getUserInfo(slackUserId: string, accessToken?: string) {
-    return this.callApi<{ user?: { name?: string } }>('users.info', {
+    return this.callApi<{ user?: { name?: string; profile?: SlackUserProfileImages } }>('users.info', {
       user: slackUserId
     }, accessToken);
   }

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { SlackService } from '@/lib/slack/service';
+import { SlackService, pickSlackAvatarUrl } from '@/lib/slack/service';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { getSlackConfig } from '@/lib/slack/config';
 
@@ -47,9 +47,11 @@ export async function GET(request: NextRequest) {
     }
 
     let slackUsername: string | null = null;
+    let avatarUrl: string | null = null;
     try {
       const userInfo = await slack.getUserInfo(slackUserId);
       slackUsername = userInfo.user?.name ?? null;
+      avatarUrl = pickSlackAvatarUrl(userInfo.user?.profile);
     } catch (error) {
       console.warn('[slack/connect/callback] users.info failed, continuing without slack username', {
         state,
@@ -64,7 +66,8 @@ export async function GET(request: NextRequest) {
         slack_user_id: slackUserId,
         slack_team_id: slackTeamId,
         slack_username: slackUsername,
-        slack_connected_at: new Date().toISOString()
+        slack_connected_at: new Date().toISOString(),
+        ...(avatarUrl ? { avatar_url: avatarUrl } : {})
       })
       .eq('id', stateRow.profile_id);
 

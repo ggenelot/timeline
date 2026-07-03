@@ -17,7 +17,7 @@ Deno.serve(async (req) => {
     const members = (slackData.members ?? []).filter((m: any) => !m.is_bot && !m.deleted && !m.is_app_user && m.id !== 'USLACKBOT');
 
     const teamId = Deno.env.get('SLACK_TEAM_ID') ?? null;
-    const { data: profiles } = await supabase.from('profiles').select('id,full_name,email,slack_user_id,slack_team_id');
+    const { data: profiles } = await supabase.from('profiles').select('id,full_name,email,slack_user_id,slack_team_id,avatar_url');
     const { data: identities } = await supabase.from('slack_identities').select('profile_id,slack_user_id,slack_team_id');
 
     const bySlack = new Map<string, any>();
@@ -25,6 +25,8 @@ Deno.serve(async (req) => {
     for (const i of identities ?? []) bySlack.set(`${i.slack_team_id}:${i.slack_user_id}`, { profileId: i.profile_id });
     const byEmail = new Map<string, any>();
     for (const p of profiles ?? []) if (p.email) byEmail.set(p.email.toLowerCase(), p);
+    const avatarByProfileId = new Map<string, string>();
+    for (const p of profiles ?? []) if (p.avatar_url) avatarByProfileId.set(p.id, p.avatar_url);
 
     const results: any[] = [];
     for (const m of members) {
@@ -39,6 +41,13 @@ Deno.serve(async (req) => {
       if (STATUS_TO_INVITE.has(timelineStatus)) {
         const invite_token = crypto.randomUUID();
         await supabase.from('slack_invitations').upsert({ ...row, invite_token }, { onConflict: 'slack_team_id,slack_user_id', ignoreDuplicates: false }).neq('status', 'accepted');
+      }
+      if (linked?.profileId) {
+        const avatarUrl = m.profile?.image_512 ?? m.profile?.image_1024 ?? m.profile?.image_192 ?? m.profile?.image_72 ?? null;
+        if (avatarUrl && avatarByProfileId.get(linked.profileId) !== avatarUrl) {
+          await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', linked.profileId);
+          avatarByProfileId.set(linked.profileId, avatarUrl);
+        }
       }
     }
 
