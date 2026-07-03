@@ -197,7 +197,7 @@ function VerificationTree({
               event.stopPropagation();
               onVerify(node);
             }}
-            className="shrink-0 rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-white transition hover:bg-[#013A8F]"
+            className="shrink-0 rounded-full bg-brand px-3 py-1.5 text-xs font-bold text-white transition hover:bg-brand-for"
           >
             Vérifier
           </button>

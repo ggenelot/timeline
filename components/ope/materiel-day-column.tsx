@@ -49,7 +49,7 @@ export function MaterielDayColumn({
   return (
     <section
       className={`flex w-[272px] shrink-0 flex-col overflow-hidden rounded-[15px] border bg-surface-sub ${
-        isToday ? 'border-accent-ring shadow-[0_0_0_1px_#FBDCC4]' : 'border-line'
+        isToday ? 'border-accent-ring shadow-[0_0_0_1px_var(--color-accent-ring)]' : 'border-line'
       }`}
     >
       <header

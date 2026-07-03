@@ -37,7 +37,7 @@ export const cardStyle: CSSProperties = {
 export const primaryButtonStyle: CSSProperties = {
   cursor: 'pointer',
   border: 'none',
-  background: '#002D74',
+  background: 'var(--color-brand, #002D74)',
   color: '#fff',
   borderRadius: 11,
   padding: '10px 18px',
@@ -81,9 +81,9 @@ export function pillStyle(active: boolean): CSSProperties {
     fontWeight: 700,
     fontFamily: 'inherit',
     transition: 'background .12s, border-color .12s',
-    border: `1px solid ${active ? '#FBDCC4' : '#DCE2EC'}`,
-    background: active ? '#FFF1E7' : '#fff',
-    color: active ? '#B4590F' : '#5B6478',
+    border: `1px solid ${active ? 'var(--color-accent-ring, #FBDCC4)' : '#DCE2EC'}`,
+    background: active ? 'var(--color-accent-soft, #FFF1E7)' : '#fff',
+    color: active ? 'var(--color-accent-text, #B4590F)' : '#5B6478',
   };
 }
 

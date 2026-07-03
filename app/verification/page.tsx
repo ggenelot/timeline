@@ -30,7 +30,7 @@ function ArrowButton({ href }: { href: string }) {
       href={href}
       onClick={(event) => event.stopPropagation()}
       aria-label="Lancer la vérification"
-      className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-brand text-white transition hover:bg-[#013A8F]"
+      className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full bg-brand text-white transition hover:bg-brand-for"
     >
       <Icon name="arrow_forward" size={18} />
     </Link>

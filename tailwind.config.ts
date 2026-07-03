@@ -9,8 +9,16 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        brand: { DEFAULT: '#002D74', for: '#00378F' },
-        accent: { DEFAULT: '#FF7F30', text: '#B4590F', soft: '#FFF1E7', ring: '#FBDCC4' },
+        // Marque/accent personnalisables (page /admin/apparence ou variables
+        // d'environnement, voir lib/branding/) : les valeurs hex ci-dessous
+        // ne servent que de repli si la variable CSS n'est jamais posée.
+        brand: { DEFAULT: 'var(--color-brand, #002D74)', for: 'var(--color-brand-for, #00378F)' },
+        accent: {
+          DEFAULT: 'var(--color-accent, #FF7F30)',
+          text: 'var(--color-accent-text, #B4590F)',
+          soft: 'var(--color-accent-soft, #FFF1E7)',
+          ring: 'var(--color-accent-ring, #FBDCC4)'
+        },
         acsso: { DEFAULT: '#AB0093', text: '#8E1279', soft: '#F8E6F4' },
         ink: { DEFAULT: '#16203A', 2: '#5B6478', 3: '#8A93A6', 4: '#A6AEBE' },
         surface: { DEFAULT: '#F2F5FA', card: '#FFFFFF', sub: '#F7F9FC' },
@@ -22,9 +30,11 @@ const config: Config = {
         engage: { DEFAULT: '#059669', dark: '#15935D', hover: '#047857' }
       },
       fontFamily: {
-        sans: ['var(--font-source-sans)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-anton)', 'sans-serif'],
-        hand: ['var(--font-beth-ellen)', 'cursive']
+        // *-active bascule vers une police personnalisée si réglée en admin,
+        // sinon retombe sur les polices next/font par défaut (voir css-vars.ts).
+        sans: ['var(--font-sans-active)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display-active)', 'sans-serif'],
+        hand: ['var(--font-hand-active)', 'cursive']
       },
       boxShadow: {
         card: '0 6px 18px -12px rgba(20,32,58,.2)',

@@ -1,7 +1,6 @@
 'use client';
 
 import Link from 'next/link';
-import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Session } from '@supabase/supabase-js';
@@ -9,6 +8,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Profile, RoleBehavior, RoleBehaviorResourceType } from '@/lib/types';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
+import { useBranding } from '@/lib/branding/branding-context';
 
 type NavItem = {
   href: string;
@@ -48,6 +48,7 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', domain: 'mission', icon: 'dashboard' },
   { href: '/admin/stats', label: 'Statistiques', domain: 'mission', icon: 'bar_chart' },
   { href: '/admin/slack', label: 'Slack', domain: 'admin-only', icon: 'forum' },
+  { href: '/admin/apparence', label: 'Apparence', domain: 'admin-only', icon: 'palette' },
   { href: '/admin/help', label: 'Aide', domain: 'admin-only', icon: 'help' }
 ];
 
@@ -161,15 +162,17 @@ function NavSection({ label, children }: { label: string; children: React.ReactN
 }
 
 function SidebarBrand({ onNavigate }: { onNavigate?: () => void }) {
+  const branding = useBranding();
+
   return (
     <Link href="/missions" onClick={onNavigate} className="flex items-center gap-2.5 px-3 py-1">
-      <Image
-        src="/logo.png"
+      {/* eslint-disable-next-line @next/next/no-img-element -- logo personnalisable (URL admin), hôte inconnu à la compilation */}
+      <img
+        src={branding.logoUrl ?? '/logo.png'}
         alt="Protection Civile Paris 8 & 9"
         width={36}
         height={36}
         className="h-9 w-9 shrink-0 object-contain"
-        priority
       />
       <span className="flex min-w-0 flex-col leading-tight">
         <span className="text-[18px] font-extrabold text-ink">Timeline</span>
@@ -232,7 +235,10 @@ function SidebarProfile({ profile, tabIndex }: { profile: Profile | null; tabInd
   return (
     <div className="mt-auto border-t border-line p-3">
       <div className="flex items-center gap-2.5">
-        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#FFB27A] to-[#FF7F30] text-xs font-bold text-white">
+        <span
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+          style={{ background: 'linear-gradient(to bottom right, color-mix(in srgb, white 20%, var(--color-accent)), var(--color-accent))' }}
+        >
           {getInitials(profile)}
         </span>
         <span className="flex min-w-0 flex-col leading-tight">

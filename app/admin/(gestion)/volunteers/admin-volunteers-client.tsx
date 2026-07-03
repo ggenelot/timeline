@@ -95,7 +95,7 @@ export function AdminVolunteersClient({ created }: AdminVolunteersClientProps) {
         actions={
           <Link
             href="/admin/volunteers/create"
-            className="inline-flex items-center justify-center gap-1.5 rounded-[11px] bg-brand px-4 py-2 text-sm font-bold text-white shadow-[0_8px_18px_-6px_rgba(0,45,116,.5)] transition hover:bg-[#013A8F]"
+            className="inline-flex items-center justify-center gap-1.5 rounded-[11px] bg-brand px-4 py-2 text-sm font-bold text-white shadow-[0_8px_18px_-6px_var(--color-brand-shadow)] transition hover:bg-brand-for"
           >
             Ajouter un bénévole
           </Link>

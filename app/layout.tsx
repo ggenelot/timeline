@@ -4,6 +4,7 @@ import './globals.css';
 import { AppShell } from '@/components/app-shell';
 import { AuthGuard } from '@/components/auth-guard';
 import { HelpButton } from '@/components/help-button';
+import { BrandingProvider } from '@/lib/branding/branding-context';
 
 const sourceSans = Source_Sans_3({
   subsets: ['latin'],
@@ -47,10 +48,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body>
-        <AuthGuard>
-          <AppShell>{children}</AppShell>
-          <HelpButton />
-        </AuthGuard>
+        {/* Logo/couleurs/polices personnalisables — voir lib/branding/. Appliquées côté client (CSS custom properties) une fois lues depuis `app_settings`. */}
+        <BrandingProvider>
+          <AuthGuard>
+            <AppShell>{children}</AppShell>
+            <HelpButton />
+          </AuthGuard>
+        </BrandingProvider>
       </body>
     </html>
   );

@@ -14,6 +14,17 @@ export type Profile = {
   slack_connected_at?: string | null;
 };
 
+// Réglages de charte graphique (logo, couleurs, polices), éditables depuis
+// /admin/apparence — voir lib/branding/. Table singleton `app_settings`.
+export type AppSettings = {
+  logoUrl: string | null;
+  brandColor: string;
+  accentColor: string;
+  fontSans: string | null;
+  fontDisplay: string | null;
+  fontHand: string | null;
+};
+
 export type SkillCategory = {
   id: string;
   name: string;
