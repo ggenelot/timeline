@@ -447,12 +447,14 @@ const MissionImportRow = memo(function MissionImportRow({
       >
         <span className={`w-fit rounded-full px-2.5 py-1 text-xs font-bold ${IMPORT_STATUS_BADGE[rowStatus]}`}>{IMPORT_STATUS_LABELS[rowStatus]}</span>
 
-        <div>
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className={`h-2 w-2 shrink-0 rounded-full ${MISSION_CATEGORY_BADGE_CLASSES[category] ?? 'bg-amber-400'}`} />
-            <span className="whitespace-nowrap text-[14.5px] font-bold text-ink">{liveRow.title || 'Sans intitulé'}</span>
+            <span className="truncate text-[14.5px] font-bold text-ink" title={liveRow.title || undefined}>
+              {liveRow.title || 'Sans intitulé'}
+            </span>
           </div>
-          <div className="mt-0.5 whitespace-nowrap text-[12.5px] text-ink-3">{MISSION_CATEGORY_LABELS[category]}</div>
+          <div className="mt-0.5 text-[12.5px] text-ink-3">{MISSION_CATEGORY_LABELS[category]}</div>
         </div>
 
         <div className="whitespace-nowrap text-[13px] text-ink-2">
@@ -460,7 +462,9 @@ const MissionImportRow = memo(function MissionImportRow({
           <div className="text-xs text-ink-3">{liveRow.startTime || '—'} – {liveRow.endTime || '—'}</div>
         </div>
 
-        <div className="whitespace-nowrap text-[13px] text-ink-2">{liveRow.location || '—'}</div>
+        <div className="min-w-0 truncate text-[13px] text-ink-2" title={liveRow.location || undefined}>
+          {liveRow.location || '—'}
+        </div>
 
         <span className={`w-fit rounded-full border px-2.5 py-1 text-xs font-bold ${getSkillColorClass(doStatusTone(liveRow.do_status))}`}>
           {liveRow.do_status || '—'}
