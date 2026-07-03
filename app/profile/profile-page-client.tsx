@@ -189,7 +189,8 @@ export function ProfilePageClient() {
             slack_user_id: null,
             slack_team_id: null,
             slack_username: null,
-            slack_connected_at: null
+            slack_connected_at: null,
+            avatar_url: null
           }
         : previous
     );

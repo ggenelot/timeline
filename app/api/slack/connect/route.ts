@@ -17,7 +17,8 @@ export async function DELETE(request: NextRequest) {
     .update({
       slack_user_id: null,
       slack_team_id: null,
-      slack_connected_at: null
+      slack_connected_at: null,
+      avatar_url: null
     })
     .eq('id', auth.profile.id);
 

@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
     let slackUsername: string | null = null;
     let avatarUrl: string | null = null;
     try {
-      const userInfo = await slack.getUserInfo(slackUserId);
+      const userInfo = await slack.getUserInfo(slackUserId, oauth.authed_user?.access_token);
       slackUsername = userInfo.user?.name ?? null;
       avatarUrl = pickSlackAvatarUrl(userInfo.user?.profile);
     } catch (error) {
