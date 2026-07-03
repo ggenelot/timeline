@@ -233,6 +233,10 @@ export default function AdminMissionTypesPage() {
     if (typesRes.ok) {
       const json = (await typesRes.json()) as { missionTypes: MissionType[] };
       setMissionTypes(json.missionTypes);
+      setError(null);
+    } else {
+      const json = (await typesRes.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? 'Impossible de charger les types de mission.');
     }
     if (!skillsRes.error && skillsRes.data) {
       setAllSkills(skillsRes.data as Skill[]);
