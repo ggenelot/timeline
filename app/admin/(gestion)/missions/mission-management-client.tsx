@@ -83,6 +83,7 @@ export function MissionManagementClient() {
     missionTypeById,
     typeColorById,
     proposalStatsByMission,
+    retainedVolunteersByMission,
     canManageMissionTypeIds,
     error,
     loading,
@@ -332,6 +333,7 @@ export function MissionManagementClient() {
           missionTypeById={missionTypeById}
           typeColorById={typeColorById}
           proposalStatsByMission={proposalStatsByMission}
+          retainedVolunteersByMission={retainedVolunteersByMission}
           isAdmin={isAdmin}
           canManageMissionTypeIds={canManageMissionTypeIds}
           onPublishDraft={publishDraftMission}

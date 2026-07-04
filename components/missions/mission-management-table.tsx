@@ -2,17 +2,27 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MISSION_STATUS_COLOR, MISSION_STATUS_LABELS, MISSION_STATUS_ORDER } from '@/lib/missions';
+import { formatMissionRequirementLabel, MISSION_STATUS_COLOR, MISSION_STATUS_LABELS, MISSION_STATUS_ORDER } from '@/lib/missions';
 import { MissionStatus } from '@/lib/types';
-import { MissionType, MissionWithRequiredSkills, ProposalStats } from '@/components/missions/use-missions-data';
+import { MissionType, MissionWithRequiredSkills, ProposalStats, RetainedVolunteer } from '@/components/missions/use-missions-data';
 
 type BulkStatusResult = { updatedCount: number; failedCount: number };
+
+const AVATAR_MAX = 5;
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
 
 export function MissionManagementTable({
   missions,
   missionTypeById,
   typeColorById,
   proposalStatsByMission,
+  retainedVolunteersByMission,
   isAdmin,
   canManageMissionTypeIds: _canManageMissionTypeIds,
   onPublishDraft,
@@ -23,6 +33,7 @@ export function MissionManagementTable({
   missionTypeById: Map<string, MissionType>;
   typeColorById: Map<string, string>;
   proposalStatsByMission: Map<string, ProposalStats>;
+  retainedVolunteersByMission: Map<string, RetainedVolunteer[]>;
   isAdmin: boolean;
   canManageMissionTypeIds: string[];
   onPublishDraft: (missionId: string) => Promise<void>;
@@ -223,86 +234,150 @@ export function MissionManagementTable({
         </div>
       ) : null}
 
-      <table className="min-w-full text-sm">
-        <thead className="text-left">
-          <tr>
-            {canBulkManage ? (
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[900px] text-sm">
+          <thead className="text-left">
+            <tr>
               <th className="w-10 px-4 py-3">
-                <input
-                  type="checkbox"
-                  checked={allSelected}
-                  onChange={toggleSelectAll}
-                  className="h-[15px] w-[15px] rounded border-line-field accent-brand"
-                  aria-label="Tout sélectionner"
-                />
-              </th>
-            ) : null}
-            <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Mission</th>
-            <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Statut</th>
-            <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Effectif</th>
-          </tr>
-        </thead>
-        <tbody>
-          {missions.map((mission) => {
-            const missionType = missionTypeById.get(mission.mission_type_id);
-            const typeColor = typeColorById.get(mission.mission_type_id) ?? '#5B6478';
-            const stats = proposalStatsByMission.get(mission.id);
-            const available = stats?.availableCount ?? 0;
-            const unavailable = stats?.unavailableCount ?? 0;
-            const total = available + unavailable;
-            const availablePct = total > 0 ? (available / total) * 100 : 0;
-            const selected = selectedIds.has(mission.id);
-            const statusColor = MISSION_STATUS_COLOR[mission.status];
-
-            return (
-              <tr
-                key={mission.id}
-                onClick={() => router.push(`/missions/${mission.id}`)}
-                className="cursor-pointer border-t border-line-row hover:bg-surface-sub"
-              >
                 {canBulkManage ? (
-                  <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selected}
-                      onChange={() => toggleRow(mission.id)}
-                      className="h-[15px] w-[15px] rounded border-line-field accent-brand"
-                      aria-label={`Sélectionner ${mission.title}`}
-                    />
-                  </td>
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    onChange={toggleSelectAll}
+                    className="h-[15px] w-[15px] rounded border-line-field accent-brand"
+                    aria-label="Tout sélectionner"
+                  />
                 ) : null}
-                <td className="max-w-[250px] px-4 py-3">
-                  <div className="truncate font-semibold text-ink">{mission.title}</div>
-                  <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-ink-3">
-                    <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: typeColor }} />
-                    <span className="truncate">
-                      {missionType?.name ?? '—'} ·{' '}
-                      {new Date(mission.starts_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
-                    </span>
-                  </div>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold" style={{ color: statusColor }}>
-                    <span className="h-1.5 w-1.5 rounded-full" style={{ background: statusColor }} />
-                    {MISSION_STATUS_LABELS[mission.status]}
-                  </span>
-                </td>
-                <td className="whitespace-nowrap px-4 py-3">
-                  <div className="flex items-center gap-2">
-                    <span className="flex h-1 w-[70px] shrink-0 overflow-hidden rounded-full bg-[#E4E8F0]">
-                      <span className="h-full rounded-full bg-ok-bar" style={{ width: `${availablePct}%` }} />
-                    </span>
-                    <span className="text-[12px]">
-                      <span className="font-bold text-ok-text">{available}</span>
-                      <span className="text-ink-3">/{unavailable}</span>
-                    </span>
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              </th>
+              <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Mission</th>
+              <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Effectif</th>
+              <th className="max-w-[170px] px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Compétences</th>
+              <th className="max-w-[170px] px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Matériel</th>
+              <th className="px-4 py-3 text-[10.5px] font-semibold uppercase tracking-[0.04em] text-ink-3">Bénévoles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {missions.map((mission) => {
+              const missionType = missionTypeById.get(mission.mission_type_id);
+              const typeColor = typeColorById.get(mission.mission_type_id) ?? '#5B6478';
+              const stats = proposalStatsByMission.get(mission.id);
+              const available = stats?.availableCount ?? 0;
+              const unavailable = stats?.unavailableCount ?? 0;
+              const total = available + unavailable;
+              const availablePct = total > 0 ? (available / total) * 100 : 0;
+              const selected = selectedIds.has(mission.id);
+              const statusColor = MISSION_STATUS_COLOR[mission.status];
+
+              const isConfirmedLike = mission.status === 'confirmed' || mission.status === 'closed';
+              const volunteers = isConfirmedLike
+                ? retainedVolunteersByMission.get(mission.id) ?? []
+                : stats?.availableVolunteers ?? [];
+              const volunteerAvatars = volunteers.slice(0, AVATAR_MAX);
+              const volunteerOverflow = Math.max(0, volunteers.length - AVATAR_MAX);
+              const volunteerLabel = isConfirmedLike ? 'retenus' : 'inscrits';
+
+              return (
+                <tr
+                  key={mission.id}
+                  onClick={() => router.push(`/missions/${mission.id}`)}
+                  className="cursor-pointer border-t border-line-row hover:bg-surface-sub"
+                >
+                  <td className="px-4 py-3" onClick={(event) => event.stopPropagation()}>
+                    <div className="flex items-center gap-2">
+                      <span className="h-3.5 w-3.5 shrink-0 rounded-full" style={{ background: statusColor }} aria-hidden />
+                      {canBulkManage ? (
+                        <input
+                          type="checkbox"
+                          checked={selected}
+                          onChange={() => toggleRow(mission.id)}
+                          className="h-[15px] w-[15px] rounded border-line-field accent-brand"
+                          aria-label={`Sélectionner ${mission.title}`}
+                        />
+                      ) : null}
+                    </div>
+                  </td>
+                  <td className="max-w-[250px] px-4 py-3">
+                    <div className="truncate font-semibold text-ink">{mission.title}</div>
+                    <div className="mt-0.5 flex items-center gap-1.5 truncate text-[11px] text-ink-3">
+                      <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: typeColor }} />
+                      <span className="truncate">
+                        {missionType?.name ?? '—'} ·{' '}
+                        {new Date(mission.starts_at).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric' })}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-1 w-[70px] shrink-0 overflow-hidden rounded-full bg-[#E4E8F0]">
+                        <span className="h-full rounded-full bg-ok-bar" style={{ width: `${availablePct}%` }} />
+                      </span>
+                      <span className="text-[12px]">
+                        <span className="font-bold text-ok-text">{available}</span>
+                        <span className="text-ink-3">/{unavailable}</span>
+                      </span>
+                    </div>
+                  </td>
+                  <td className="max-w-[170px] px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(mission.mission_required_skills ?? []).map((requiredSkill) => (
+                        <span
+                          key={requiredSkill.id}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#E3DCF7] bg-[#F4F1FB] px-2 py-[3px] text-[10.5px] font-semibold text-[#5B3FA0]"
+                        >
+                          <span className="h-[5px] w-[5px] rounded-full bg-[#8B6FD9]" />
+                          {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="max-w-[170px] px-4 py-3">
+                    <div className="flex flex-wrap gap-1">
+                      {(mission.mission_required_materiels ?? []).map((requiredMateriel) => (
+                        <span
+                          key={requiredMateriel.id}
+                          className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#DCE7F4] bg-[#F2F6FB] px-2 py-[3px] text-[10.5px] font-semibold text-[#2A5C8A]"
+                        >
+                          <span className="h-[5px] w-[5px] rounded-full bg-[#5B9BD1]" />
+                          {Math.max(1, Math.trunc(requiredMateriel.quantity) || 1)} {requiredMateriel.category?.name ?? 'Matériel'}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="whitespace-nowrap px-4 py-3">
+                    <div className="flex items-center">
+                      <div className="flex items-center">
+                        {volunteerAvatars.map((volunteer, index) => (
+                          <span
+                            key={index}
+                            title={volunteer.name}
+                            style={{
+                              marginLeft: index === 0 ? 0 : -8,
+                              zIndex: AVATAR_MAX - index,
+                              border: isConfirmedLike ? '2px solid #FFFFFF' : '2px dashed #B9C4D6'
+                            }}
+                            className="relative box-border inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#EDF1F8] text-[10px] font-bold text-[#3B4A63]"
+                          >
+                            {initialsOf(volunteer.name)}
+                          </span>
+                        ))}
+                        {volunteerOverflow > 0 ? (
+                          <span
+                            style={{ marginLeft: -8, border: '2px solid #FFFFFF' }}
+                            className="relative box-border inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#DDE3ED] text-[9.5px] font-bold text-[#4A5670]"
+                          >
+                            +{volunteerOverflow}
+                          </span>
+                        ) : null}
+                      </div>
+                      <span className="ml-2 text-[10px] text-ink-3">{volunteerLabel}</span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
