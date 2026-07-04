@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { MISSION_STATUS_COLOR, MISSION_STATUS_LABELS, MISSION_STATUS_ORDER } from '@/lib/missions';
+import { formatMissionRequirementLabel, MISSION_STATUS_COLOR, MISSION_STATUS_LABELS, MISSION_STATUS_ORDER } from '@/lib/missions';
 import { MissionStatus } from '@/lib/types';
 import { MissionType, MissionWithRequiredSkills, ProposalStats, RetainedVolunteer } from '@/components/missions/use-missions-data';
 
@@ -325,7 +325,7 @@ export function MissionManagementTable({
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#E3DCF7] bg-[#F4F1FB] px-2 py-[3px] text-[10.5px] font-semibold text-[#5B3FA0]"
                         >
                           <span className="h-[5px] w-[5px] rounded-full bg-[#8B6FD9]" />
-                          {requiredSkill.skill?.name ?? 'Compétence'}
+                          {formatMissionRequirementLabel(requiredSkill.skill?.name, requiredSkill.quantity)}
                         </span>
                       ))}
                     </div>
@@ -338,7 +338,7 @@ export function MissionManagementTable({
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-full border border-[#DCE7F4] bg-[#F2F6FB] px-2 py-[3px] text-[10.5px] font-semibold text-[#2A5C8A]"
                         >
                           <span className="h-[5px] w-[5px] rounded-full bg-[#5B9BD1]" />
-                          {requiredMateriel.category?.name ?? 'Matériel'}
+                          {Math.max(1, Math.trunc(requiredMateriel.quantity) || 1)} {requiredMateriel.category?.name ?? 'Matériel'}
                         </span>
                       ))}
                     </div>
