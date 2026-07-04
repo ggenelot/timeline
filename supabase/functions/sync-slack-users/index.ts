@@ -14,6 +14,9 @@ Deno.serve(async (req) => {
 
     const slackResp = await fetch('https://slack.com/api/users.list', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     const slackData = await slackResp.json();
+    if (!slackData.ok) {
+      return new Response(JSON.stringify({ error: `Échec de l'appel Slack users.list : ${slackData.error ?? 'erreur inconnue'}` }), { status: 502, headers: corsHeaders });
+    }
     const members = (slackData.members ?? []).filter((m: any) => !m.is_bot && !m.deleted && !m.is_app_user && m.id !== 'USLACKBOT');
 
     const teamId = Deno.env.get('SLACK_TEAM_ID') ?? null;
