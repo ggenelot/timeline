@@ -200,7 +200,9 @@ Deno.serve(async (req) => {
           ? `Bonjour 👋\nTon compte Timeline vient d'être créé.\n\nIdentifiant : ${identifier}\nMot de passe temporaire : ${tempPassword}\n\nConnecte-toi ici : ${loginUrl}\n\nTu recevras ensuite les propositions de mission directement via Slack.`
           : `Bonjour 👋\nTon compte Timeline vient d'être relié à Slack.\n\nConnecte-toi ici : ${magicLink ?? loginUrl}\n\nTu recevras ensuite les propositions de mission directement via Slack.`;
 
-        await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, text }) });
+        const postRes = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, text }) });
+        const postJson = await postRes.json();
+        if (!postJson.ok) throw new Error(`slack_dm_failed:${postJson.error ?? 'unknown'}`);
 
         await supabase.from('slack_invitations').update({ status: 'sent', sent_at: new Date().toISOString(), matched_profile_id: profileId, error_message: null }).eq('id', invitationId);
 

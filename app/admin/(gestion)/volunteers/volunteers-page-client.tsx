@@ -314,14 +314,22 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
 
       for (const [categoryId, selectedSkillId] of Object.entries(selectedSkillByCategory)) {
         if (!selectedSkillId) continue;
-        if (!row.skills.some((s) => s.category_id === categoryId && s.id === selectedSkillId)) return false;
+        const category = categories.find((c) => c.id === categoryId);
+        const selectedSkill = category?.skills.find((s) => s.id === selectedSkillId);
+        if (!selectedSkill) continue;
+        // Les compétences d'une catégorie sont des paliers ordonnés (cf. mission eligibility) :
+        // un niveau supérieur satisfait aussi un filtre sur un niveau inférieur.
+        const passes = row.skills.some(
+          (s) => s.category_id === categoryId && s.display_order >= selectedSkill.display_order
+        );
+        if (!passes) return false;
       }
 
       if (term.length === 0) return true;
       const haystack = [row.pseudo, ...row.skills.map((s) => s.name)].join(' ').toLocaleLowerCase('fr');
       return haystack.includes(term);
     });
-  }, [rows, statusFilter, selectedSkillByCategory, searchQuery]);
+  }, [rows, statusFilter, selectedSkillByCategory, searchQuery, categories]);
 
   const toggleSkillFilter = (categoryId: string, skillId: string | null) => {
     setSelectedSkillByCategory((current) => ({
@@ -332,6 +340,21 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
 
   const handleSync = async () => {
     await runSync();
+  };
+
+  // Met à jour localement l'entrée de l'annuaire Slack déjà chargée (sans relancer un sync live)
+  // pour qu'un membre nouvellement lié ne réapparaisse pas comme "Nouveau" jusqu'au prochain sync.
+  const markSlackDirectoryLinked = (slackUserId: string | null, slackTeamId: string | null, profileId: string) => {
+    if (!slackUserId || !slackTeamId) return;
+    setSlackDirectory((prev) =>
+      prev
+        ? prev.map((entry) =>
+            entry.slack_user_id === slackUserId && entry.slack_team_id === slackTeamId
+              ? { ...entry, timeline_status: 'linked', matched_profile_id: profileId }
+              : entry
+          )
+        : prev
+    );
   };
 
   const rowToTarget = (row: UnifiedRow) => ({
@@ -357,10 +380,14 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         setError(p.error ?? p.message ?? `Échec de l'envoi des identifiants (HTTP ${r.status}).`);
         return;
       }
-      const failures = ((p.results ?? []) as Array<{ slack_user_id?: string; ok?: boolean; error?: string }>).filter((res) => res.ok === false);
+      const results = (p.results ?? []) as Array<{ slack_user_id?: string; ok?: boolean; error?: string; profile_id?: string }>;
+      const failures = results.filter((res) => res.ok === false);
       if (failures.length > 0) {
         setError(`${failures.length} envoi(s) ont échoué : ${failures.map((f) => f.error).join(' · ')}`);
       }
+      results.forEach((res, i) => {
+        if (res.ok && res.profile_id) markSlackDirectoryLinked(targets[i]?.slack_user_id ?? null, targets[i]?.slack_team_id ?? null, res.profile_id);
+      });
       await loadVolunteers();
     } catch {
       setError("Impossible d'envoyer les identifiants pour le moment.");
@@ -400,6 +427,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
     if (!linkResp.ok) {
       return { error: linkPayload.error ?? 'Impossible de créer le profil pour ce bénévole.' };
     }
+    markSlackDirectoryLinked(row.slackUserId, row.slackTeamId, linkPayload.profile_id);
     return { profileId: linkPayload.profile_id };
   };
 
