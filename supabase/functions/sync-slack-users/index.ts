@@ -2,7 +2,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type' };
-const STATUS_TO_INVITE = new Set(['timeline_account_unlinked', 'missing_timeline_account']);
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
@@ -20,42 +19,58 @@ Deno.serve(async (req) => {
     const members = (slackData.members ?? []).filter((m: any) => !m.is_bot && !m.deleted && !m.is_app_user && m.id !== 'USLACKBOT');
 
     const teamId = Deno.env.get('SLACK_TEAM_ID') ?? null;
-    const { data: profiles } = await supabase.from('profiles').select('id,full_name,email,slack_user_id,slack_team_id,avatar_url');
+    const { data: profiles } = await supabase.from('profiles').select('id,full_name,email,slack_user_id,slack_team_id,slack_username,avatar_url');
     const { data: identities } = await supabase.from('slack_identities').select('profile_id,slack_user_id,slack_team_id');
+    const { data: invitations } = await supabase.from('slack_invitations').select('id,slack_team_id,slack_user_id,status');
 
     const bySlack = new Map<string, any>();
     for (const p of profiles ?? []) if (p.slack_user_id && p.slack_team_id) bySlack.set(`${p.slack_team_id}:${p.slack_user_id}`, { profileId: p.id });
     for (const i of identities ?? []) bySlack.set(`${i.slack_team_id}:${i.slack_user_id}`, { profileId: i.profile_id });
     const byEmail = new Map<string, any>();
     for (const p of profiles ?? []) if (p.email) byEmail.set(p.email.toLowerCase(), p);
-    const avatarByProfileId = new Map<string, string>();
-    for (const p of profiles ?? []) if (p.avatar_url) avatarByProfileId.set(p.id, p.avatar_url);
+    const profileById = new Map<string, any>();
+    for (const p of profiles ?? []) profileById.set(p.id, p);
+    const invitationByKey = new Map<string, any>();
+    for (const inv of invitations ?? []) invitationByKey.set(`${inv.slack_team_id}:${inv.slack_user_id}`, inv);
 
     const results: any[] = [];
     for (const m of members) {
       const slackTeamId = teamId ?? m.team_id ?? '';
       const key = `${slackTeamId}:${m.id}`;
       const email = m.profile?.email?.toLowerCase?.() ?? null;
-      const linked = bySlack.get(key);
-      const emailMatch = email ? byEmail.get(email) : null;
-      const timelineStatus = linked ? 'linked' : emailMatch ? 'timeline_account_unlinked' : 'missing_timeline_account';
+      const slackUsername = m.name ?? null;
+      const slackName = m.real_name ?? m.name ?? null;
       const avatarUrl = m.profile?.image_512 ?? m.profile?.image_1024 ?? m.profile?.image_192 ?? m.profile?.image_72 ?? null;
-      const row = { slack_user_id: m.id, slack_team_id: slackTeamId, slack_email: email, slack_name: m.real_name ?? m.name ?? null, matched_profile_id: linked?.profileId ?? emailMatch?.id ?? null, status: timelineStatus === 'timeline_account_unlinked' || timelineStatus === 'missing_timeline_account' ? 'pending' : 'skipped', created_by: me.id };
+      const linked = bySlack.get(key);
+      const emailMatch = !linked && email ? byEmail.get(email) : null;
+      const timelineStatus = linked ? 'linked' : emailMatch ? 'timeline_account_unlinked' : 'missing_timeline_account';
 
-      let invitationId: string | null = null;
-      if (STATUS_TO_INVITE.has(timelineStatus)) {
-        const invite_token = crypto.randomUUID();
-        const { data: upserted } = await supabase.from('slack_invitations').upsert({ ...row, invite_token }, { onConflict: 'slack_team_id,slack_user_id', ignoreDuplicates: false }).neq('status', 'accepted').select('id').maybeSingle();
-        invitationId = upserted?.id ?? null;
-      }
       if (linked?.profileId) {
-        if (avatarUrl && avatarByProfileId.get(linked.profileId) !== avatarUrl) {
-          await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', linked.profileId);
-          avatarByProfileId.set(linked.profileId, avatarUrl);
+        const currentProfile = profileById.get(linked.profileId);
+        const updates: Record<string, unknown> = {};
+        if (slackName && currentProfile?.full_name !== slackName) updates.full_name = slackName;
+        if (slackUsername && currentProfile?.slack_username !== slackUsername) updates.slack_username = slackUsername;
+        if (avatarUrl && currentProfile?.avatar_url !== avatarUrl) updates.avatar_url = avatarUrl;
+        if (Object.keys(updates).length > 0) {
+          await supabase.from('profiles').update(updates).eq('id', linked.profileId);
+          profileById.set(linked.profileId, { ...currentProfile, ...updates });
         }
       }
 
-      results.push({ ...row, timeline_status: timelineStatus, avatar_url: avatarUrl, invitation_id: invitationId });
+      const invitation = invitationByKey.get(key);
+
+      results.push({
+        slack_user_id: m.id,
+        slack_team_id: slackTeamId,
+        slack_email: email,
+        slack_name: slackName,
+        slack_username: slackUsername,
+        matched_profile_id: linked?.profileId ?? emailMatch?.id ?? null,
+        timeline_status: timelineStatus,
+        avatar_url: avatarUrl,
+        invitation_id: invitation && invitation.status !== 'accepted' ? invitation.id : null,
+        invitation_status: invitation?.status ?? null
+      });
     }
 
     const timelineAccounts = (profiles ?? []).map((profile: any) => ({

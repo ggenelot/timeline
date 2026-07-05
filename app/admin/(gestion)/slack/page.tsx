@@ -1,2 +1,5 @@
-import { SlackAdminClient } from './slack-admin-client';
-export default function AdminSlackPage(){ return <SlackAdminClient />; }
+import { redirect } from 'next/navigation';
+
+export default function AdminSlackPage() {
+  redirect('/admin/volunteers');
+}

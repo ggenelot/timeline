@@ -47,7 +47,6 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/missions', label: 'Gestion des missions', domain: 'mission', icon: 'edit_calendar' },
   { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', domain: 'mission', icon: 'dashboard' },
   { href: '/admin/stats', label: 'Statistiques', domain: 'mission', icon: 'bar_chart' },
-  { href: '/admin/slack', label: 'Slack', domain: 'admin-only', icon: 'forum' },
   { href: '/admin/apparence', label: 'Apparence', domain: 'admin-only', icon: 'palette' },
   { href: '/admin/help', label: 'Aide', domain: 'admin-only', icon: 'help' }
 ];
