@@ -53,6 +53,9 @@ type AccountStatus = 'new' | 'created' | 'sent';
 type UnifiedRow = {
   key: string;
   profileId: string | null;
+  // Profil Timeline existant repéré par correspondance d'email (pas encore lié à ce membre Slack) —
+  // à lier plutôt qu'à recréer lors de la création de compte / de l'envoi des identifiants.
+  matchedProfileId: string | null;
   slackUserId: string | null;
   slackTeamId: string | null;
   slackEmail: string | null;
@@ -119,8 +122,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         .order('full_name', { ascending: true }),
       supabase
         .from('slack_invitations')
-        .select('slack_user_id,slack_team_id,slack_email,slack_name,status,matched_profile_id')
-        .neq('status', 'accepted'),
+        .select('slack_user_id,slack_team_id,slack_email,slack_name,status,matched_profile_id'),
       supabase
         .from('skill_categories')
         .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
@@ -182,10 +184,6 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
     void init();
   }, [router, loadVolunteers, runSync]);
 
-  const refreshAll = useCallback(async () => {
-    await Promise.all([loadVolunteers(), runSync()]);
-  }, [loadVolunteers, runSync]);
-
   const volunteersWithSkills = useMemo(() =>
     volunteers.map((volunteer) => {
       const skills = (volunteer.profile_skills ?? [])
@@ -201,7 +199,12 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
   );
 
   const sentProfileIds = useMemo(
-    () => new Set(invitations.filter((i) => i.status === 'sent' && i.matched_profile_id).map((i) => i.matched_profile_id as string)),
+    () =>
+      new Set(
+        invitations
+          .filter((i) => (i.status === 'sent' || i.status === 'accepted') && i.matched_profile_id)
+          .map((i) => i.matched_profile_id as string)
+      ),
     [invitations]
   );
   const unmatchedInvitations = useMemo(() => invitations.filter((i) => !i.matched_profile_id), [invitations]);
@@ -213,6 +216,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
       byProfileId.set(volunteer.id, {
         key: volunteer.id,
         profileId: volunteer.id,
+        matchedProfileId: null,
         slackUserId: volunteer.slack_user_id ?? null,
         slackTeamId: volunteer.slack_team_id ?? null,
         slackEmail: null,
@@ -239,7 +243,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
               row.slackUsername = entry.slack_username ?? row.slackUsername;
               row.slackUserId = entry.slack_user_id;
               row.slackTeamId = entry.slack_team_id;
-              if (entry.invitation_status === 'sent') row.accountStatus = 'sent';
+              if (entry.invitation_status === 'sent' || entry.invitation_status === 'accepted') row.accountStatus = 'sent';
             }
           }
           continue;
@@ -247,9 +251,12 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
 
         // Membre Slack sans profil Timeline lié : jamais de statut 'sent' possible ici
         // puisque l'envoi crée systématiquement le compte (cf. send-slack-invitations).
+        // `matched_profile_id` peut pointer un profil Timeline existant (même email, jamais
+        // lié à Slack) : la création/l'envoi doivent alors le lier plutôt qu'en recréer un.
         extra.push({
           key: `slack:${entry.slack_team_id}:${entry.slack_user_id}`,
           profileId: null,
+          matchedProfileId: entry.timeline_status === 'timeline_account_unlinked' ? entry.matched_profile_id : null,
           slackUserId: entry.slack_user_id,
           slackTeamId: entry.slack_team_id,
           slackEmail: entry.slack_email,
@@ -266,6 +273,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         extra.push({
           key: `slack:${inv.slack_team_id}:${inv.slack_user_id}`,
           profileId: null,
+          matchedProfileId: inv.matched_profile_id,
           slackUserId: inv.slack_user_id,
           slackTeamId: inv.slack_team_id,
           slackEmail: inv.slack_email,
@@ -331,7 +339,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
     slack_team_id: row.slackTeamId,
     slack_name: row.slackName,
     slack_email: row.slackEmail,
-    slack_username: row.slackUsername
+    slack_username: row.slackUsername,
+    matched_profile_id: row.matchedProfileId
   });
 
   const sendInvitations = async (targets: ReturnType<typeof rowToTarget>[]) => {
@@ -348,14 +357,18 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         setError(p.error ?? p.message ?? `Échec de l'envoi des identifiants (HTTP ${r.status}).`);
         return;
       }
-      await refreshAll();
+      const failures = ((p.results ?? []) as Array<{ slack_user_id?: string; ok?: boolean; error?: string }>).filter((res) => res.ok === false);
+      if (failures.length > 0) {
+        setError(`${failures.length} envoi(s) ont échoué : ${failures.map((f) => f.error).join(' · ')}`);
+      }
+      await loadVolunteers();
     } catch {
       setError("Impossible d'envoyer les identifiants pour le moment.");
     }
   };
 
   const inviteAllNew = async () => {
-    const targets = rows.filter((r) => r.accountStatus !== 'sent').map(rowToTarget);
+    const targets = rows.filter((r) => r.accountStatus !== 'sent' && r.slackUserId).map(rowToTarget);
     if (targets.length === 0) return;
     setInviting(true);
     await sendInvitations(targets);
@@ -379,7 +392,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         slack_team_id: row.slackTeamId,
         slack_name: row.slackName,
         slack_email: row.slackEmail,
-        slack_username: row.slackUsername
+        slack_username: row.slackUsername,
+        profile_id: row.matchedProfileId ?? undefined
       })
     });
     const linkPayload = await linkResp.json().catch(() => ({}));
@@ -398,7 +412,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
       if (!token) { setError('Session invalide.'); return; }
       const result = await provisionAccount(row, token);
       if ('error' in result) { setError(result.error); return; }
-      await refreshAll();
+      await loadVolunteers();
     } catch {
       setError('Impossible de créer le compte pour le moment.');
     } finally {
@@ -463,7 +477,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
       }
 
       closeModal();
-      await refreshAll();
+      await loadVolunteers();
     } catch {
       setModalError("Impossible d'enregistrer les compétences pour le moment.");
     } finally {
@@ -621,9 +635,9 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                           disabled={isBusy}
                           className="mt-1.5 block text-xs font-bold text-brand underline disabled:opacity-50"
                         >
-                          {isBusy ? 'Création…' : 'Créer un compte'}
+                          {isBusy ? '…' : row.matchedProfileId ? 'Lier au compte existant' : 'Créer un compte'}
                         </button>
-                      ) : (
+                      ) : row.slackUserId ? (
                         <button
                           type="button"
                           onClick={() => inviteOne(row)}
@@ -632,6 +646,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                         >
                           {isBusy ? 'Envoi…' : row.accountStatus === 'created' ? 'Envoyer les identifiants' : 'Renvoyer les identifiants'}
                         </button>
+                      ) : (
+                        <span className="mt-1.5 block text-xs text-ink-3">Compte non lié à Slack</span>
                       )}
                     </td>
                     <td className="px-4 py-2">

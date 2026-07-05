@@ -94,19 +94,22 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   }
 
   const volunteerId = params.volunteerId;
-  const identityFieldsProvided = payload.full_name !== undefined || payload.identifier !== undefined;
+  const fullNameProvided = payload.full_name !== undefined;
+  const identifierProvided = payload.identifier !== undefined;
+  const sectorProvided = payload.sector !== undefined;
   const fullName = payload.full_name?.trim() ?? '';
   const identifier = payload.identifier?.trim().toLowerCase() ?? '';
   const sector = payload.sector?.trim() ?? '';
   const skillIdsProvided = payload.skill_ids !== undefined;
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
   const password = payload.password?.trim() ?? '';
+  const passwordProvided = password.length > 0;
 
-  if (identityFieldsProvided) {
-    if (!fullName) {
-      return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
-    }
+  if (fullNameProvided && !fullName) {
+    return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
+  }
 
+  if (identifierProvided) {
     if (!identifier) {
       return NextResponse.json({ error: "L'identifiant est obligatoire." }, { status: 400 });
     }
@@ -116,7 +119,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     }
   }
 
-  if (password && password.length < 10) {
+  if (passwordProvided && password.length < 10) {
     return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 10 caractères.' }, { status: 400 });
   }
 
@@ -144,38 +147,31 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     }
   }
 
-  if (identityFieldsProvided) {
-    const authEmail = `${identifier}@timeline.local`;
+  const authEmail = identifierProvided ? `${identifier}@timeline.local` : null;
 
-    const { error: profileUpdateError } = await serviceClient
-      .from('profiles')
-      .update({
-        full_name: fullName,
-        identifier,
-        email: authEmail,
-        sector: sector || null
-      })
-      .eq('id', volunteerId);
+  const profileUpdates: Record<string, unknown> = {};
+  if (fullNameProvided) profileUpdates.full_name = fullName;
+  if (identifierProvided) { profileUpdates.identifier = identifier; profileUpdates.email = authEmail; }
+  if (sectorProvided) profileUpdates.sector = sector || null;
+
+  if (Object.keys(profileUpdates).length > 0) {
+    const { error: profileUpdateError } = await serviceClient.from('profiles').update(profileUpdates).eq('id', volunteerId);
 
     if (profileUpdateError) {
       return NextResponse.json({ error: `Impossible de mettre à jour le profil : ${profileUpdateError.message}` }, { status: 400 });
     }
+  }
 
-    const authUpdatePayload: { email: string; user_metadata: { full_name: string }; password?: string } = {
-      email: authEmail,
-      user_metadata: {
-        full_name: fullName
-      }
-    };
-
-    if (password) {
-      authUpdatePayload.password = password;
-    }
+  if (identifierProvided || fullNameProvided || passwordProvided) {
+    const authUpdatePayload: { email?: string; user_metadata?: { full_name: string }; password?: string } = {};
+    if (authEmail) authUpdatePayload.email = authEmail;
+    if (fullNameProvided) authUpdatePayload.user_metadata = { full_name: fullName };
+    if (passwordProvided) authUpdatePayload.password = password;
 
     const { error: authUpdateError } = await serviceClient.auth.admin.updateUserById(volunteerId, authUpdatePayload);
 
     if (authUpdateError) {
-      return NextResponse.json({ error: `Profil mis à jour, mais email Auth non synchronisé : ${authUpdateError.message}` }, { status: 500 });
+      return NextResponse.json({ error: `Profil mis à jour, mais compte Auth non synchronisé : ${authUpdateError.message}` }, { status: 500 });
     }
   }
 
