@@ -109,6 +109,9 @@ export type MaterielType = {
   created_at: string;
   category?: MaterielCategory | null;
   containers?: string[];
+  // Nombre d'éléments directement contenus — renvoyé uniquement par
+  // GET .../contents pour afficher le compteur des contenants repliés.
+  content_count?: number;
 };
 
 export type MaterielTypeContent = {
@@ -118,7 +121,7 @@ export type MaterielTypeContent = {
   quantity: number;
   position: number;
   created_at: string;
-  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container' | 'category_id' | 'category'> | null;
+  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container' | 'category_id' | 'category' | 'content_count'> | null;
 };
 
 // Affecte un contenant précis du catalogue à un besoin de mission exprimé en
