@@ -129,7 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       quantity: body.quantity && body.quantity >= 1 ? body.quantity : 1,
       position: nextPosition,
     })
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container, category:materiel_categories(id, name, color))')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, is_container, category:materiel_categories(id, name, color))')
     .single();
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });

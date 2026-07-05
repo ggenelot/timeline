@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
 import { KebabMenu } from '@/components/ui/kebab-menu';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
 
 const MAX_CONTAINER_CHIPS = 2;
@@ -43,21 +44,13 @@ function ItemCard({ item, onEdit, onDelete }: {
       <div className="mb-2.5 text-[11.5px] leading-tight text-ink-3">{item.description || '—'}</div>
       <div className="flex flex-wrap gap-1">
         {containers.length === 0 ? (
-          <span className="rounded-full border border-line-row bg-surface-sub px-[7px] py-0.5 text-[10px] font-bold text-ink-3">
-            Non placé
-          </span>
+          <Badge tone="neutral" className="text-[10px]">Non placé</Badge>
         ) : (
           <>
             {shown.map((name) => (
-              <span key={name} className="rounded-full border border-line-row bg-surface-sub px-[7px] py-0.5 text-[10px] font-bold text-ink-2">
-                {name}
-              </span>
+              <Badge key={name} tone="neutral" className="text-[10px]">{name}</Badge>
             ))}
-            {rest > 0 ? (
-              <span className="rounded-full border border-line-row bg-surface-sub px-[7px] py-0.5 text-[10px] font-bold text-ink-3">
-                +{rest}
-              </span>
-            ) : null}
+            {rest > 0 ? <Badge tone="neutral" className="text-[10px]">+{rest}</Badge> : null}
           </>
         )}
       </div>

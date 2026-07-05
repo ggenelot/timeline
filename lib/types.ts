@@ -121,7 +121,7 @@ export type MaterielTypeContent = {
   quantity: number;
   position: number;
   created_at: string;
-  child_type?: Pick<MaterielType, 'id' | 'name' | 'code' | 'is_container' | 'category_id' | 'category' | 'content_count'> | null;
+  child_type?: Pick<MaterielType, 'id' | 'name' | 'is_container' | 'category_id' | 'category' | 'content_count'> | null;
 };
 
 // Affecte un contenant précis du catalogue à un besoin de mission exprimé en

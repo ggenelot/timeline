@@ -87,12 +87,12 @@ type TreeCtxValue = {
   isExpanded: (id: string, depth: number) => boolean;
   toggleExpand: (id: string) => void;
   ensureLoaded: (containerId: string) => void;
-  createSubContainer: (parentId: string, name: string) => Promise<void>;
+  createSubContainer: (parentId: string, name: string) => Promise<boolean>;
   addItem: (containerId: string, itemId: string, quantity: number) => Promise<void>;
   updateQuantity: (containerId: string, contentId: string, quantity: number) => Promise<void>;
   updateCategory: (typeId: string, categoryId: string) => Promise<void>;
   setAvailability: (typeId: string, isAvailable: boolean, reason: string | null) => Promise<void>;
-  unlink: (containerId: string, contentId: string) => Promise<void>;
+  unlink: (containerId: string, contentId: string, isContainer?: boolean) => Promise<void>;
 };
 
 const TreeCtx = createContext<TreeCtxValue | null>(null);
@@ -138,10 +138,13 @@ function ItemRow({ content, containerId }: { content: MaterielTypeContent; conta
 
 // ── Recherche + glisser-déposer d'items de la bibliothèque ────────────
 
-function LibraryResultRow({ item }: { item: MaterielType }) {
+function LibraryResultRow({ item, containerId }: { item: MaterielType; containerId: string }) {
+  // L'id inclut le contenant d'origine : le même item peut apparaître dans plusieurs
+  // zones de recherche ouvertes simultanément, et dnd-kit exige des ids uniques
+  // dans tout le DndContext. L'id réel de l'item voyage dans `data.itemId`.
   const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `lib:${item.id}`,
-    data: { label: item.name, sub: item.containers?.[0] },
+    id: `lib:${containerId}:${item.id}`,
+    data: { itemId: item.id, label: item.name, sub: item.containers?.[0] },
   });
   return (
     <div
@@ -192,7 +195,7 @@ function LibrarySearchBox({ containerId, excludeIds }: { containerId: string; ex
       </div>
       {results.length > 0 ? (
         <div className="flex flex-col gap-1">
-          {results.map((item) => <LibraryResultRow key={item.id} item={item} />)}
+          {results.map((item) => <LibraryResultRow key={item.id} item={item} containerId={containerId} />)}
         </div>
       ) : query.trim() ? (
         <div className="text-[11px] text-ink-3">Aucun item trouvé.</div>
@@ -215,9 +218,11 @@ function CreateSubContainerTile({ parentId }: { parentId: string }) {
     if (!name.trim()) return;
     setSaving(true);
     try {
-      await ctx.createSubContainer(parentId, name.trim());
-      setName('');
-      setAdding(false);
+      const ok = await ctx.createSubContainer(parentId, name.trim());
+      if (ok) {
+        setName('');
+        setAdding(false);
+      }
     } finally {
       setSaving(false);
     }
@@ -319,17 +324,9 @@ function NestedContainerNode({ contentId, parentId, node, depth }: {
 
   if (!expanded) {
     return (
-      <div ref={setNodeRef} style={style} className="w-[150px] shrink-0">
-        <button
-          type="button"
-          onClick={() => ctx.toggleExpand(node.id)}
-          {...(ctx.editMode ? attributes : {})}
-          {...(ctx.editMode ? listeners : {})}
-          className={cn(
-            'flex w-full items-center gap-1.5 rounded-lg border border-line-row bg-surface-card px-2.5 py-2 text-left',
-            ctx.editMode && 'cursor-grab touch-none'
-          )}
-        >
+      <div ref={setNodeRef} style={style} className="flex w-[150px] shrink-0 items-center gap-1 rounded-lg border border-line-row bg-surface-card px-2 py-2">
+        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} size={14} /> : null}
+        <button type="button" onClick={() => ctx.toggleExpand(node.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
           <Icon name="chevron_right" size={16} className="shrink-0 text-ink-3" />
           <span className="min-w-0 flex-1 truncate text-[11.5px] font-bold text-ink-2">{node.name}</span>
           <span className="shrink-0 text-[10px] font-bold text-ink-3">{node.content_count ?? 0} él.</span>
@@ -347,7 +344,7 @@ function NestedContainerNode({ contentId, parentId, node, depth }: {
         </button>
         <span className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink">{node.name}</span>
         {ctx.editMode ? (
-          <button type="button" onClick={() => void ctx.unlink(parentId, contentId)} aria-label="Retirer" className="shrink-0 p-0.5 text-bad">
+          <button type="button" onClick={() => void ctx.unlink(parentId, contentId, true)} aria-label="Retirer" className="shrink-0 p-0.5 text-bad">
             <Icon name="close" size={15} />
           </button>
         ) : null}
@@ -492,7 +489,13 @@ export default function AdminMaterielsPage() {
   const [loading, setLoading] = useState(true);
   const [roots, setRoots] = useState<MaterielType[]>([]);
   const [childrenByContainer, setChildrenByContainer] = useState<Record<string, MaterielTypeContent[]>>({});
-  const [toggled, setToggled] = useState<Set<string>>(new Set());
+  // État de dépli, gardé indépendamment de la profondeur affichée : un contenant peut changer
+  // de profondeur (promu/rétrogradé racine, ou re-parenté) sans que son état de dépli explicite
+  // soit réinterprété. `expandedIdsRef` porte l'état réel ; `initializedIdsRef` mémorise les ids
+  // déjà initialisés avec le défaut (déplié si profondeur < 2) pour ne l'appliquer qu'une fois.
+  const expandedIdsRef = useRef<Set<string>>(new Set());
+  const initializedIdsRef = useRef<Set<string>>(new Set());
+  const [, forceRerender] = useState(0);
   const [loadingContainers, setLoadingContainers] = useState<Set<string>>(new Set());
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -511,14 +514,17 @@ export default function AdminMaterielsPage() {
     }
   }, []);
 
-  const loadContents = useCallback(async (containerId: string, tok: string) => {
+  const loadContents = useCallback(async (containerId: string, tok: string): Promise<MaterielTypeContent[]> => {
     setLoadingContainers((prev) => new Set(prev).add(containerId));
     const res = await fetch(`/api/admin/materiel-types/${containerId}/contents`, { headers: { Authorization: `Bearer ${tok}` } });
+    let contents: MaterielTypeContent[] = [];
     if (res.ok) {
       const json = (await res.json()) as { contents: MaterielTypeContent[] };
-      setChildrenByContainer((prev) => ({ ...prev, [containerId]: json.contents }));
+      contents = json.contents;
+      setChildrenByContainer((prev) => ({ ...prev, [containerId]: contents }));
     }
     setLoadingContainers((prev) => { const next = new Set(prev); next.delete(containerId); return next; });
+    return contents;
   }, []);
 
   const childrenRef = useRef(childrenByContainer);
@@ -567,26 +573,42 @@ export default function AdminMaterielsPage() {
   }, [router, fetchRoots]);
 
   function isExpanded(id: string, depth: number) {
-    return depth < 2 ? !toggled.has(id) : toggled.has(id);
+    if (!initializedIdsRef.current.has(id)) {
+      initializedIdsRef.current.add(id);
+      if (depth < 2) expandedIdsRef.current.add(id);
+    }
+    return expandedIdsRef.current.has(id);
   }
   function toggleExpand(id: string) {
-    setToggled((prev) => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
+    initializedIdsRef.current.add(id);
+    if (expandedIdsRef.current.has(id)) expandedIdsRef.current.delete(id); else expandedIdsRef.current.add(id);
+    forceRerender((n) => n + 1);
   }
 
-  async function createSubContainer(parentId: string, name: string) {
+  async function createSubContainer(parentId: string, name: string): Promise<boolean> {
     const createRes = await fetch('/api/admin/materiel-types', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ name, is_container: true }),
     });
-    if (!createRes.ok) return;
+    if (!createRes.ok) {
+      const json = (await createRes.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? "Erreur lors de la création du sous-contenant.");
+      return false;
+    }
     const { type } = (await createRes.json()) as { type: MaterielType };
     const linkRes = await fetch(`/api/admin/materiel-types/${parentId}/contents`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ child_type_id: type.id, quantity: 1 }),
     });
-    if (linkRes.ok) await loadContents(parentId, token);
+    if (!linkRes.ok) {
+      const json = (await linkRes.json().catch(() => ({}))) as { error?: string };
+      setError(json.error ?? "Erreur lors du rattachement du sous-contenant.");
+      return false;
+    }
+    await loadContents(parentId, token);
+    return true;
   }
 
   async function addItem(containerId: string, itemId: string, quantity: number) {
@@ -626,14 +648,14 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function unlink(containerId: string, contentId: string) {
+  async function unlink(containerId: string, contentId: string, isContainer = false) {
     setChildrenByContainer((prev) => ({ ...prev, [containerId]: (prev[containerId] ?? []).filter((c) => c.id !== contentId) }));
     await fetch(`/api/admin/materiel-types/${containerId}/contents/${contentId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    // Un contenant détaché redevient potentiellement un contenant racine.
-    await fetchRoots(token);
+    // Un contenant détaché redevient potentiellement un contenant racine (un item ne le peut jamais).
+    if (isContainer) await fetchRoots(token);
   }
 
   async function setAvailability(typeId: string, isAvailable: boolean, reason: string | null) {
@@ -797,6 +819,10 @@ export default function AdminMaterielsPage() {
       nextRoots.splice(toLoc.index, 0, draggedType);
       setRoots(nextRoots);
       await persistRootOrder(nextRoots);
+      // Recharge depuis le serveur : l'objet glissé (venant du contenu d'un contenant) n'a
+      // pas is_available/unavailable_reason, absents de cet embed — sans ce recharge, la
+      // carte racine promue afficherait "Indisponible" par défaut jusqu'au prochain rechargement.
+      await fetchRoots(token);
     } else {
       const toContainerId = toLoc.zoneId.slice(ZSUBC.length);
       const res = await fetch(`/api/admin/materiel-types/${toContainerId}/contents`, {
@@ -809,13 +835,19 @@ export default function AdminMaterielsPage() {
         setError(json.error ?? "Ce déplacement n'est pas possible.");
         return;
       }
-      const { content: newContent } = (await res.json()) as { content: MaterielTypeContent };
-      const toList = childrenByContainer[toContainerId] ?? [];
-      const toKind = subsOf(toList);
-      const toOthers = toList.filter((c) => !toKind.includes(c));
-      toKind.splice(toLoc.index, 0, newContent);
-      setChildrenByContainer((prev) => ({ ...prev, [toContainerId]: [...toKind, ...toOthers] }));
-      await persistPositions(toContainerId, toKind.map((c) => c.id));
+      // Recharge plutôt que d'utiliser la réponse du POST : cette dernière n'inclut pas
+      // content_count, calculé uniquement par le GET, et resterait "0 él." affiché à tort
+      // si le contenant déplacé n'était pas vide.
+      const freshList = await loadContents(toContainerId, token);
+      const freshKind = subsOf(freshList);
+      const freshOthers = freshList.filter((c) => !freshKind.includes(c));
+      const movedIdx = freshKind.findIndex((c) => c.child_type_id === draggedType.id);
+      if (movedIdx >= 0) {
+        const [movedEntry] = freshKind.splice(movedIdx, 1);
+        freshKind.splice(toLoc.index, 0, movedEntry);
+        setChildrenByContainer((prev) => ({ ...prev, [toContainerId]: [...freshKind, ...freshOthers] }));
+        await persistPositions(toContainerId, freshKind.map((c) => c.id));
+      }
     }
 
     if (fromLoc.zoneId === 'zroot') {
@@ -851,10 +883,13 @@ export default function AdminMaterielsPage() {
     if (activeId === overId) return;
 
     // Glisser un item de la bibliothèque vers une zone d'items → nouveau lien.
+    // L'id du draggable inclut le contenant d'origine de la recherche (pour rester unique
+    // si le même item apparaît dans plusieurs zones de recherche ouvertes) : l'id réel de
+    // l'item voyage dans `data.itemId`, pas dans l'id du draggable lui-même.
     if (activeId.startsWith('lib:')) {
-      const itemId = activeId.slice(4);
+      const itemId = (active.data.current as { itemId?: string } | undefined)?.itemId;
       const toLoc = findLocation(overId);
-      if (!toLoc || !toLoc.zoneId.startsWith(ZITEMS)) return;
+      if (!itemId || !toLoc || !toLoc.zoneId.startsWith(ZITEMS)) return;
       const containerId = toLoc.zoneId.slice(ZITEMS.length);
       await addItem(containerId, itemId, 1);
       return;
