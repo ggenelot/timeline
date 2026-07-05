@@ -8,17 +8,55 @@ import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
+import { KebabMenu } from '@/components/ui/kebab-menu';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/cn';
+
+const MAX_CONTAINER_CHIPS = 2;
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div className="mb-1.5 text-[12.5px] font-bold text-ink-2">{children}</div>;
 }
 
 const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
-const thClass = 'text-left px-3 py-2 text-[11.5px] font-bold uppercase text-ink-3';
-const tdClass = 'px-3 py-2 align-top';
 
-type ItemModalState = { id?: string; code: string; name: string; description: string };
+type ItemModalState = { id?: string; name: string; description: string };
+
+function ItemCard({ item, onEdit, onDelete }: {
+  item: MaterielType;
+  onEdit: () => void;
+  onDelete: () => void;
+}) {
+  const containers = item.containers ?? [];
+  const shown = containers.slice(0, MAX_CONTAINER_CHIPS);
+  const rest = containers.length - shown.length;
+
+  return (
+    <div className="relative rounded-xl border border-line bg-surface-card p-3">
+      <KebabMenu
+        className="absolute right-2 top-2"
+        items={[
+          { label: 'Modifier', onClick: onEdit },
+          { label: 'Supprimer', onClick: onDelete, danger: true },
+        ]}
+      />
+      <div className="mb-1 pr-6 text-[14px] font-extrabold text-ink">{item.name}</div>
+      <div className="mb-2.5 text-[11.5px] leading-tight text-ink-3">{item.description || '—'}</div>
+      <div className="flex flex-wrap gap-1">
+        {containers.length === 0 ? (
+          <Badge tone="neutral" className="text-[10px]">Non placé</Badge>
+        ) : (
+          <>
+            {shown.map((name) => (
+              <Badge key={name} tone="neutral" className="text-[10px]">{name}</Badge>
+            ))}
+            {rest > 0 ? <Badge tone="neutral" className="text-[10px]">+{rest}</Badge> : null}
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function AdminMaterielItemsPage() {
   const router = useRouter();
@@ -66,15 +104,19 @@ export default function AdminMaterielItemsPage() {
     void init();
   }, [router, fetchItems]);
 
+  const sortedItems = useMemo(
+    () => [...items].sort((a, b) => a.name.localeCompare(b.name, 'fr')),
+    [items]
+  );
+
   const filteredItems = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return items;
-    return items.filter((t) =>
+    if (!q) return sortedItems;
+    return sortedItems.filter((t) =>
       t.name.toLowerCase().includes(q) ||
-      (t.code ?? '').toLowerCase().includes(q) ||
       (t.description ?? '').toLowerCase().includes(q)
     );
-  }, [items, search]);
+  }, [sortedItems, search]);
 
   async function submitItem() {
     if (!itemModal || !itemModal.name.trim()) return;
@@ -87,7 +129,6 @@ export default function AdminMaterielItemsPage() {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: itemModal.name.trim(),
-          code: itemModal.code.trim(),
           description: itemModal.description.trim(),
           ...(isEdit ? {} : { is_container: false }),
         }),
@@ -136,15 +177,16 @@ export default function AdminMaterielItemsPage() {
     <div className="pb-20">
       <PageHeader
         title="Bibliothèque d'items"
-        subtitle="Les items définis ici peuvent être ajoutés dans n'importe quel contenant depuis la page Matériel."
+        subtitle="Chaque carte regroupe nom, description et emplacements en un coup d'œil. L'ajout dans un contenant se fait depuis la page Contenants (glisser-déposer)."
       />
 
-      <div className="mb-[18px] flex flex-wrap items-center gap-2.5">
+      <div className="mb-[18px] flex items-center gap-2 rounded-[10px] border border-line-field bg-surface-card px-3 py-2.5">
+        <Icon name="search" size={18} className="text-ink-3" />
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Rechercher par nom, code ou description…"
-          className={cn(inputClass, 'min-w-[200px] flex-[1_1_240px]')}
+          placeholder="Rechercher par nom ou description…"
+          className="flex-1 bg-transparent text-[13px] text-ink outline-none placeholder:text-ink-3"
         />
       </div>
 
@@ -154,54 +196,36 @@ export default function AdminMaterielItemsPage() {
         </div>
       ) : null}
 
-      {filteredItems.length === 0 ? (
+      {filteredItems.length === 0 && items.length > 0 ? (
         <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
-          <p className="text-[13.5px] text-ink-3">
-            {items.length === 0 ? "Aucun item pour l'instant. Créez-en un ci-dessous." : 'Aucun résultat pour cette recherche.'}
-          </p>
+          <p className="text-[13.5px] text-ink-3">Aucun résultat pour cette recherche.</p>
         </div>
       ) : (
-        <div className="mb-4 overflow-x-auto rounded-2xl border border-line">
-          <table className="w-full border-collapse text-[13px]">
-            <thead>
-              <tr className="bg-surface-sub">
-                <th className={thClass}>Code</th>
-                <th className={thClass}>Nom</th>
-                <th className={thClass}>Description</th>
-                <th className={thClass}>Présent dans</th>
-                <th className={cn(thClass, 'w-px')} />
-              </tr>
-            </thead>
-            <tbody>
-              {filteredItems.map((item) => (
-                <tr key={item.id} className="border-t border-line-row">
-                  <td className={tdClass}>{item.code ? <span className="font-semibold text-ink-2">{item.code}</span> : '—'}</td>
-                  <td className={cn(tdClass, 'whitespace-nowrap font-bold text-ink')}>{item.name}</td>
-                  <td className={cn(tdClass, 'text-ink-2')}>{item.description || '—'}</td>
-                  <td className={cn(tdClass, 'text-ink-2')}>{item.containers && item.containers.length > 0 ? item.containers.join(', ') : '—'}</td>
-                  <td className={cn(tdClass, 'whitespace-nowrap')}>
-                    <span className="inline-flex items-center gap-1">
-                      <Button variant="ghost" onClick={() => setItemModal({ id: item.id, code: item.code ?? '', name: item.name, description: item.description ?? '' })}
-                        className="rounded-[7px] px-2.5 py-[5px] text-xs">
-                        Modifier
-                      </Button>
-                      <button type="button" onClick={() => void handleDeleteItem(item.id, item.name)} aria-label="Supprimer"
-                        className="p-1 text-bad">
-                        <Icon name="delete" size={18} />
-                      </button>
-                    </span>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="mb-2 grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+          {filteredItems.map((item) => (
+            <ItemCard
+              key={item.id}
+              item={item}
+              onEdit={() => setItemModal({ id: item.id, name: item.name, description: item.description ?? '' })}
+              onDelete={() => void handleDeleteItem(item.id, item.name)}
+            />
+          ))}
+          <button
+            type="button"
+            onClick={() => setItemModal({ name: '', description: '' })}
+            className={cn(
+              'flex min-h-[96px] items-center justify-center rounded-xl border-[1.5px] border-dashed border-line-field text-[12.5px] font-bold text-brand',
+              filteredItems.length === 0 && 'sm:col-span-2'
+            )}
+          >
+            + Nouvel item
+          </button>
         </div>
       )}
 
-      <button type="button" onClick={() => setItemModal({ code: '', name: '', description: '' })}
-        className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
-        + Nouvel item
-      </button>
+      <p className="mt-2 text-[11.5px] leading-relaxed text-ink-3">
+        Liste triée par ordre alphabétique — pas de glisser-déposer ici, l&apos;ajout dans un contenant se fait depuis la page Contenants.
+      </p>
 
       {itemModal ? (
         <Modal
@@ -219,16 +243,6 @@ export default function AdminMaterielItemsPage() {
         >
           <div className="flex flex-col gap-4">
             <div>
-              <FieldLabel>Code <span className="font-semibold text-ink-3">(optionnel)</span></FieldLabel>
-              <input
-                value={itemModal.code}
-                onChange={(e) => setItemModal((m) => (m ? { ...m, code: e.target.value } : m))}
-                placeholder="Ex : référence interne"
-                maxLength={24}
-                className={cn(inputClass, 'max-w-[220px] uppercase')}
-              />
-            </div>
-            <div>
               <FieldLabel>Nom</FieldLabel>
               <input
                 value={itemModal.name}
@@ -236,6 +250,7 @@ export default function AdminMaterielItemsPage() {
                 onKeyDown={(e) => { if (e.key === 'Enter') void submitItem(); }}
                 placeholder="Nom de l'item"
                 className={inputClass}
+                autoFocus
               />
             </div>
             <div>

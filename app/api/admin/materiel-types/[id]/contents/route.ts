@@ -38,12 +38,37 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
 
   const { data, error: dbError } = await client!
     .from('materiel_type_contents')
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container, category:materiel_categories(id, name, color))')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, is_container, category_id, category:materiel_categories(id, name, color))')
     .eq('parent_type_id', params.id)
     .order('position', { ascending: true });
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
-  return NextResponse.json({ contents: data });
+
+  // Compteur d'éléments directement contenus, pour afficher les sous-contenants
+  // repliés (au-delà du 2e niveau) sans avoir à charger tout leur contenu.
+  const containerIds = (data ?? [])
+    .map((row) => row.child_type)
+    .filter((child): child is NonNullable<typeof child> => !!child?.is_container)
+    .map((child) => child.id);
+
+  const counts = new Map<string, number>();
+  if (containerIds.length > 0) {
+    const { data: countRows } = await client!
+      .from('materiel_type_contents')
+      .select('parent_type_id')
+      .in('parent_type_id', containerIds);
+    for (const row of countRows ?? []) {
+      counts.set(row.parent_type_id, (counts.get(row.parent_type_id) ?? 0) + 1);
+    }
+  }
+
+  const contents = (data ?? []).map((row) =>
+    row.child_type?.is_container
+      ? { ...row, child_type: { ...row.child_type, content_count: counts.get(row.child_type.id) ?? 0 } }
+      : row
+  );
+
+  return NextResponse.json({ contents });
 }
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
@@ -104,7 +129,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       quantity: body.quantity && body.quantity >= 1 ? body.quantity : 1,
       position: nextPosition,
     })
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container, category:materiel_categories(id, name, color))')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, is_container, category:materiel_categories(id, name, color))')
     .single();
 
   if (dbError) return NextResponse.json({ error: dbError.message }, { status: 500 });
