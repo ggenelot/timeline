@@ -39,19 +39,23 @@ Deno.serve(async (req) => {
       const linked = bySlack.get(key);
       const emailMatch = email ? byEmail.get(email) : null;
       const timelineStatus = linked ? 'linked' : emailMatch ? 'timeline_account_unlinked' : 'missing_timeline_account';
+      const avatarUrl = m.profile?.image_512 ?? m.profile?.image_1024 ?? m.profile?.image_192 ?? m.profile?.image_72 ?? null;
       const row = { slack_user_id: m.id, slack_team_id: slackTeamId, slack_email: email, slack_name: m.real_name ?? m.name ?? null, matched_profile_id: linked?.profileId ?? emailMatch?.id ?? null, status: timelineStatus === 'timeline_account_unlinked' || timelineStatus === 'missing_timeline_account' ? 'pending' : 'skipped', created_by: me.id };
-      results.push({ ...row, timeline_status: timelineStatus });
+
+      let invitationId: string | null = null;
       if (STATUS_TO_INVITE.has(timelineStatus)) {
         const invite_token = crypto.randomUUID();
-        await supabase.from('slack_invitations').upsert({ ...row, invite_token }, { onConflict: 'slack_team_id,slack_user_id', ignoreDuplicates: false }).neq('status', 'accepted');
+        const { data: upserted } = await supabase.from('slack_invitations').upsert({ ...row, invite_token }, { onConflict: 'slack_team_id,slack_user_id', ignoreDuplicates: false }).neq('status', 'accepted').select('id').maybeSingle();
+        invitationId = upserted?.id ?? null;
       }
       if (linked?.profileId) {
-        const avatarUrl = m.profile?.image_512 ?? m.profile?.image_1024 ?? m.profile?.image_192 ?? m.profile?.image_72 ?? null;
         if (avatarUrl && avatarByProfileId.get(linked.profileId) !== avatarUrl) {
           await supabase.from('profiles').update({ avatar_url: avatarUrl }).eq('id', linked.profileId);
           avatarByProfileId.set(linked.profileId, avatarUrl);
         }
       }
+
+      results.push({ ...row, timeline_status: timelineStatus, avatar_url: avatarUrl, invitation_id: invitationId });
     }
 
     const timelineAccounts = (profiles ?? []).map((profile: any) => ({
