@@ -119,12 +119,17 @@ L'admin dispose d'un accès global : tous les bénévoles, toutes les missions, 
 
 ### Gestion des bénévoles
 
-Pages :
-- **/admin/volunteers** : liste complète des bénévoles
-- **/admin/volunteers/create** : créer un profil
-- **/admin/volunteers/[id]/edit** : modifier un profil
-
-Actions disponibles : créer, modifier, assigner des compétences, rattacher à des missions.
+Page : **/admin/volunteers** — écran unique fusionnant la liste des bénévoles et l'admin Slack.
+Slack est la seule source d'identité : un bénévole n'existe que s'il existe côté Slack, il n'y a plus
+de création manuelle de compte. Actions disponibles :
+- **Synchroniser Slack** : rafraîchit la liste des membres du workspace et met à jour nom/pseudo/photo
+  des comptes déjà liés.
+- **Créer un compte** (par ligne, membres « Nouveau ») : crée le profil Timeline lié à ce membre Slack,
+  sans envoyer aucun message.
+- **Envoyer / renvoyer les identifiants** (par ligne ou en groupe) : envoie (ou régénère et renvoie) un
+  mot de passe temporaire par message Slack, en créant le compte au passage si besoin.
+- **+ Ajouter** (compétences) : assigne des compétences, disponible même avant que le compte soit créé.
+- **/admin/volunteers/[id]/edit** : modifier un profil existant (nom, identifiant, mot de passe).
 
 ### Gestion des types de missions
 

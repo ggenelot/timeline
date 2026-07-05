@@ -2,7 +2,6 @@ import { Suspense } from 'react';
 import { VolunteersPageClient } from './volunteers-page-client';
 
 type SearchParams = {
-  created?: string;
   edited?: string;
 };
 
@@ -11,12 +10,11 @@ type AdminVolunteersPageProps = {
 };
 
 export default function AdminVolunteersPage({ searchParams }: AdminVolunteersPageProps) {
-  const created = searchParams?.created === '1';
   const edited = searchParams?.edited === '1';
 
   return (
     <Suspense fallback={<p className="text-sm text-ink-2">Chargement des bénévoles...</p>}>
-      <VolunteersPageClient created={created} edited={edited} />
+      <VolunteersPageClient edited={edited} />
     </Suspense>
   );
 }

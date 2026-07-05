@@ -7,12 +7,46 @@ type LinkAccountPayload = {
   slack_team_id?: string;
   slack_name?: string;
   slack_email?: string | null;
+  slack_username?: string | null;
   profile_id?: string;
-  identifier?: string;
 };
 
 function randomPassword(): string {
   return crypto.randomUUID().replace(/-/g, '');
+}
+
+const DIACRITICS_RE = /[̀-ͯ]/g;
+
+function slugify(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(DIACRITICS_RE, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/^\.+|\.+$/g, '');
+}
+
+async function deriveUniqueIdentifier(
+  service: ReturnType<typeof createServerSupabaseServiceClient>,
+  slackUsername: string | null | undefined,
+  slackName: string | null | undefined,
+  fallback: string
+): Promise<string> {
+  const base = slugify(slackUsername || slackName || '') || slugify(fallback) || 'benevole';
+
+  let candidate = base;
+  let attempt = 1;
+  // Dérive un identifiant unique à partir du pseudo/nom Slack, en dédoublonnant si collision.
+  for (;;) {
+    const { data: existing } = await service
+      .from('profiles')
+      .select('id')
+      .eq('identifier', candidate)
+      .maybeSingle();
+    if (!existing) return candidate;
+    attempt += 1;
+    candidate = `${base}-${attempt}`;
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -65,17 +99,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: `Impossible de lier le profil : ${updateError.message}` }, { status: 500 });
     }
   } else {
-    const identifier = body.identifier?.trim().toLowerCase() ?? '';
-    const fullName = body.slack_name?.trim() ?? '';
-    if (!identifier) {
-      return NextResponse.json({ error: 'Un identifiant est obligatoire pour créer le compte.' }, { status: 400 });
-    }
-    if (!/^[a-z0-9._-]+$/.test(identifier)) {
-      return NextResponse.json({ error: "L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores." }, { status: 400 });
-    }
+    const fullName = body.slack_name?.trim() || body.slack_username?.trim() || '';
     if (!fullName) {
       return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
     }
+
+    const identifier = await deriveUniqueIdentifier(service, body.slack_username, body.slack_name, slackUserId);
 
     email = body.slack_email?.trim().toLowerCase() || `${identifier}@timeline.local`;
 
@@ -100,6 +129,7 @@ export async function POST(request: NextRequest) {
         role: 'benevole',
         slack_user_id: slackUserId,
         slack_team_id: slackTeamId,
+        slack_username: body.slack_username?.trim() || null,
         slack_connected_at: new Date().toISOString()
       },
       { onConflict: 'id' }
