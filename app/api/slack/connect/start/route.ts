@@ -4,7 +4,7 @@ import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { getSlackConfig } from '@/lib/slack/config';
 
-const SCOPES = ['chat:write', 'channels:manage', 'groups:write', 'groups:read', 'im:write'];
+const SCOPES = ['chat:write', 'channels:manage', 'groups:write', 'groups:read', 'im:write', 'users:read'];
 const USER_SCOPES = ['users:read'];
 const AUTHORIZE_ENDPOINT = 'https://slack.com/oauth/v2/authorize';
 
