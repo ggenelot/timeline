@@ -6,6 +6,7 @@ export type QuickPickOption = { id: string; label: string };
 type ImportQuickPickerProps = {
   title: string;
   helperText?: string;
+  rawSourceValue?: string | null;
   options: QuickPickOption[];
   selected: Record<string, number>;
   onAdd: (id: string) => void;
@@ -25,6 +26,7 @@ const neutralPillClass =
 export function ImportQuickPicker({
   title,
   helperText,
+  rawSourceValue,
   options,
   selected,
   onAdd,
@@ -41,6 +43,9 @@ export function ImportQuickPicker({
       <div>
         <AdminSectionLabel>{title}</AdminSectionLabel>
         {helperText ? <p className="mt-1 text-xs text-ink-3">{helperText}</p> : null}
+        <p className="mt-1 text-xs italic text-ink-3">
+          Ligne source : {rawSourceValue ? <span className="font-mono not-italic text-ink-2">&quot;{rawSourceValue}&quot;</span> : '—'}
+        </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">

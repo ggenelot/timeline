@@ -597,6 +597,7 @@ const MissionImportRow = memo(function MissionImportRow({
           <div className="grid gap-5 pt-1 md:grid-cols-2">
             <ImportQuickPicker
               title="Besoins en bénévoles"
+              rawSourceValue={row.requirements_notes}
               options={skillOptions}
               selected={row.needs}
               onAdd={(skillId) => onAddNeed(row.rowId, skillId)}
@@ -607,6 +608,7 @@ const MissionImportRow = memo(function MissionImportRow({
             />
             <ImportQuickPicker
               title="Matériel requis"
+              rawSourceValue={row.equipment_notes}
               options={materielOptions}
               selected={row.materiel}
               onAdd={(categoryId) => onAddMateriel(row.rowId, categoryId)}
