@@ -42,11 +42,17 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
     const body = await req.json().catch(() => ({}));
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
-    const { data: { user } } = await supabase.auth.getUser();
+    // Client "authentifié" — sert uniquement à identifier l'appelant via son propre jeton.
+    const authedClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
+    const { data: { user } } = await authedClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
-    const { data: me } = await supabase.from('profiles').select('id,role').eq('id', user.id).single();
+    const { data: me } = await authedClient.from('profiles').select('id,role').eq('id', user.id).single();
     if (me?.role !== 'admin') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+
+    // Client service-role "propre" (sans le jeton de l'appelant en Authorization) — obligatoire pour
+    // les appels auth.admin.* (createUser/updateUserById/generateLink), qui exigent un JWT service_role
+    // et rejettent sinon avec 403 "not_admin" même si l'apikey est correcte.
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const targets: Target[] = Array.isArray(body.targets) ? body.targets : [];
     if (targets.length === 0) {

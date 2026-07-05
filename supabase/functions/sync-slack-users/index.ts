@@ -5,11 +5,15 @@ const corsHeaders = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   try {
-    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
-    const { data: { user } } = await supabase.auth.getUser();
+    // Client "authentifié" — sert uniquement à identifier l'appelant via son propre jeton.
+    const authedClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
+    const { data: { user } } = await authedClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
-    const { data: me } = await supabase.from('profiles').select('id,role').eq('id', user.id).single();
+    const { data: me } = await authedClient.from('profiles').select('id,role').eq('id', user.id).single();
     if (me?.role !== 'admin') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+
+    // Client service-role "propre" pour toutes les opérations privilégiées (cf. send-slack-invitations).
+    const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
 
     const slackResp = await fetch('https://slack.com/api/users.list', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({}) });
     const slackData = await slackResp.json();
