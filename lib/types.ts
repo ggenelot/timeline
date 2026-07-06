@@ -559,6 +559,7 @@ export type OpeSkill = {
 export type OpeTeamMember = {
   volunteer_id: string;
   full_name: string | null;
+  avatar_url: string | null;
   assignment_status: string;
   // Rôle tenu sur ce dispositif (compétence du mission_required_skill affecté).
   assignedSkill: OpeSkill | null;
@@ -614,10 +615,11 @@ export type OpeAvailabilityEntry = {
   mission_id: string;
   volunteer_id: string;
   full_name: string | null;
+  avatar_url: string | null;
   validatedSkills: OpeSkill[];
 };
 
-export type OpeVolunteerRef = { id: string; full_name: string | null };
+export type OpeVolunteerRef = { id: string; full_name: string | null; avatar_url: string | null };
 
 export type OpeDashboardData = {
   from: string;

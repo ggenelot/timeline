@@ -123,7 +123,7 @@ export function EventDetailModal({
             <ul className="flex flex-col gap-[11px]">
               {mission.team.map((member) => (
                 <li key={member.volunteer_id} className="flex items-start gap-2.5">
-                  <Avatar name={member.full_name} />
+                  <Avatar name={member.full_name} avatarUrl={member.avatar_url} />
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[14px] font-semibold text-ink-2">{member.full_name ?? 'Bénévole'}</span>
@@ -171,7 +171,7 @@ export function EventDetailModal({
                   key={entry.volunteer_id}
                   className="inline-flex items-center gap-1.5 rounded-full bg-surface-sub py-0.5 pl-0.5 pr-2.5"
                 >
-                  <Avatar name={entry.full_name} />
+                  <Avatar name={entry.full_name} avatarUrl={entry.avatar_url} />
                   <span className="text-[12px] text-ink-2">{entry.full_name ?? 'Bénévole'}</span>
                 </li>
               ))}

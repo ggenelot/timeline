@@ -13,9 +13,9 @@ export type MissionWithRequiredSkills = Mission & {
   mission_required_materiels: MissionRequiredMateriel[] | null;
 };
 
-export type VolunteerWithSkills = { name: string; skills: Array<{ name: string; color?: string | null }> };
+export type VolunteerWithSkills = { name: string; avatarUrl: string | null; skills: Array<{ name: string; color?: string | null }> };
 
-export type RetainedVolunteer = { name: string };
+export type RetainedVolunteer = { name: string; avatarUrl: string | null };
 
 const RETAINED_ASSIGNMENT_STATUSES = ['selected', 'confirmed'];
 
@@ -127,7 +127,7 @@ export function useMissionsData() {
       fetch('/api/roles/mine', { headers: authHeaders }),
       supabase
         .from('mission_assignments')
-        .select('mission_id,assignment_status,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name)')
+        .select('mission_id,assignment_status,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,avatar_url)')
         .in('mission_id', mappedMissions.map((mission) => mission.id))
         .in('assignment_status', RETAINED_ASSIGNMENT_STATUSES)
     ]);
@@ -137,7 +137,7 @@ export function useMissionsData() {
       (retainedAssignmentsRes.data ?? []).forEach((row) => {
         const volunteer = Array.isArray(row.volunteer) ? row.volunteer[0] : row.volunteer;
         const list = nextRetainedVolunteersByMission.get(row.mission_id) ?? [];
-        list.push({ name: volunteer?.full_name?.trim() || 'Sans nom' });
+        list.push({ name: volunteer?.full_name?.trim() || 'Sans nom', avatarUrl: volunteer?.avatar_url ?? null });
         nextRetainedVolunteersByMission.set(row.mission_id, list);
       });
     }
@@ -171,7 +171,7 @@ export function useMissionsData() {
     const { data: availableProfiles } = availableVolunteerIds.length
       ? await supabase
         .from('profiles')
-        .select('id,full_name,profile_skills(skill:skills(name,skill_categories(color)))')
+        .select('id,full_name,avatar_url,profile_skills(skill:skills(name,skill_categories(color)))')
         .in('id', availableVolunteerIds)
       : { data: [] };
 
@@ -180,6 +180,7 @@ export function useMissionsData() {
         profile.id,
         {
           name: profile.full_name?.trim() || 'Sans nom',
+          avatarUrl: profile.avatar_url ?? null,
           skills: (
             (profile.profile_skills ?? []) as Array<{
               skill?: { name?: string; skill_categories?: { color?: string } | null } | Array<{ name?: string; skill_categories?: { color?: string } | null }> | null;
@@ -199,7 +200,7 @@ export function useMissionsData() {
 
       if (proposal.response === 'available') {
         current.availableCount += 1;
-        current.availableVolunteers.push(volunteersById.get(proposal.volunteer_id) ?? { name: 'Sans nom', skills: [] });
+        current.availableVolunteers.push(volunteersById.get(proposal.volunteer_id) ?? { name: 'Sans nom', avatarUrl: null, skills: [] });
       }
 
       if (proposal.response === 'unavailable') {

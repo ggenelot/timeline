@@ -32,15 +32,15 @@ import { getCandidateActivity } from '@/lib/queries/activity';
 import { MissionActivityPanel } from '@/components/activity/MissionActivityPanel';
 
 type ProposalWithVolunteer = MissionProposal & {
-  volunteer: (Pick<Profile, 'id' | 'full_name' | 'email'> & {
+  volunteer: (Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'> & {
     profile_skills?: ProfileSkill[] | null;
   }) | null;
 };
 
-type VolunteerOption = Pick<Profile, 'id' | 'full_name' | 'email'>;
+type VolunteerOption = Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'>;
 
 type AssignmentWithVolunteer = MissionAssignment & {
-  volunteer: Pick<Profile, 'id' | 'full_name' | 'email'> | null;
+  volunteer: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'> | null;
 };
 
 type MissionWithSkills = Mission & {
@@ -211,6 +211,7 @@ export default function MissionDetailPage() {
         volunteerId: volunteer.id,
         volunteerLabel,
         initials: computeInitials(volunteerLabel),
+        avatarUrl: volunteer.avatar_url ?? null,
         volunteerSkills,
         matchingRequiredSkills,
         response,
@@ -276,9 +277,9 @@ export default function MissionDetailPage() {
       .map((proposal) => {
         if (!proposal.volunteer) return null;
         const fullName = proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole';
-        return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName) };
+        return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName), avatarUrl: proposal.volunteer.avatar_url ?? null };
       })
-      .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
+      .filter((volunteer): volunteer is { id: string; fullName: string; initials: string; avatarUrl: string | null } => Boolean(volunteer));
 
     const skillGroups = requiredSkillsWithQty.map((requiredSkill) => {
       const volunteers = eligibleProposals
@@ -297,9 +298,9 @@ export default function MissionDetailPage() {
           }
 
           const fullName = proposal.volunteer.full_name ?? proposal.volunteer.email ?? 'Bénévole';
-          return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName) };
+          return { id: proposal.volunteer.id, fullName, initials: computeInitials(fullName), avatarUrl: proposal.volunteer.avatar_url ?? null };
         })
-        .filter((volunteer): volunteer is { id: string; fullName: string; initials: string } => Boolean(volunteer));
+        .filter((volunteer): volunteer is { id: string; fullName: string; initials: string; avatarUrl: string | null } => Boolean(volunteer));
 
       const uniqueVolunteers = volunteers.filter((volunteer, index, list) => list.findIndex((entry) => entry.id === volunteer.id) === index);
 
@@ -415,7 +416,9 @@ export default function MissionDetailPage() {
     }
 
     const payload = (await response.json()) as { volunteers: Array<VolunteerOption & { role: string }> };
-    setAllVolunteers((payload.volunteers ?? []).map(({ id: volunteerId, full_name, email }) => ({ id: volunteerId, full_name, email })));
+    setAllVolunteers(
+      (payload.volunteers ?? []).map(({ id: volunteerId, full_name, email, avatar_url }) => ({ id: volunteerId, full_name, email, avatar_url }))
+    );
   }
 
   async function loadMaterielAssignments(id: string) {
@@ -550,7 +553,7 @@ export default function MissionDetailPage() {
     const { data: proposalData, error: proposalsError } = await supabase
       .from('mission_proposals')
       .select(
-        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,profile_skills(profile_id,skill_id,status,created_at,skill:skills(id,name,category_id,display_order)))'
+        'id,mission_id,volunteer_id,proposed_by,response,status,decided_at,decided_by,updated_by_admin,updated_by,responded_at,updated_at,source,created_at,volunteer:profiles!mission_proposals_volunteer_id_fkey(id,full_name,email,avatar_url,profile_skills(profile_id,skill_id,status,created_at,skill:skills(id,name,category_id,display_order)))'
       )
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
@@ -561,13 +564,13 @@ export default function MissionDetailPage() {
       return;
     }
 
-    let assignmentData: Array<MissionAssignment & { volunteer: Pick<Profile, 'id' | 'full_name' | 'email'>[] | Pick<Profile, 'id' | 'full_name' | 'email'> | null }> | null = null;
+    let assignmentData: Array<MissionAssignment & { volunteer: Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'>[] | Pick<Profile, 'id' | 'full_name' | 'email' | 'avatar_url'> | null }> | null = null;
     let assignmentsError: { message: string } | null = null;
     let assignmentQuerySupportsSkillReference = true;
 
     const assignmentsWithRequiredSkill = await supabase
       .from('mission_assignments')
-      .select('id,mission_id,volunteer_id,mission_required_skill_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
+      .select('id,mission_id,volunteer_id,mission_required_skill_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email,avatar_url)')
       .eq('mission_id', missionId)
       .order('created_at', { ascending: true });
 
@@ -575,7 +578,7 @@ export default function MissionDetailPage() {
       assignmentQuerySupportsSkillReference = false;
       const assignmentsWithoutRequiredSkill = await supabase
         .from('mission_assignments')
-        .select('id,mission_id,volunteer_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email)')
+        .select('id,mission_id,volunteer_id,assignment_status,created_at,volunteer:profiles!mission_assignments_volunteer_id_fkey(id,full_name,email,avatar_url)')
         .eq('mission_id', missionId)
         .order('created_at', { ascending: true });
 
@@ -1251,7 +1254,11 @@ export default function MissionDetailPage() {
                       }`}
                     >
                       <div className="flex h-[38px] w-[38px] flex-shrink-0 items-center justify-center rounded-full bg-surface-sub text-[12.5px] font-extrabold text-ink-2">
-                        {row.initials}
+                        {row.avatarUrl ? (
+                          <img src={row.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                        ) : (
+                          row.initials
+                        )}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="text-[13.5px] font-bold text-ink">{row.volunteerLabel}</div>
@@ -1370,7 +1377,11 @@ export default function MissionDetailPage() {
                                       borderColor: isSelectedOnThisSkill ? '#BDE7CE' : 'transparent'
                                     }}
                                   >
-                                    {volunteer.initials}
+                                    {volunteer.avatarUrl ? (
+                                      <img src={volunteer.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                                    ) : (
+                                      volunteer.initials
+                                    )}
                                   </div>
                                   <div className="mt-1.5 text-[11.5px] font-semibold leading-[1.25] text-ink-2">{volunteer.fullName}</div>
                                 </button>
@@ -1452,7 +1463,11 @@ export default function MissionDetailPage() {
                       {members.map((volunteer) => (
                         <div key={volunteer.id} className="w-[76px] text-center">
                           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full border-2 border-ok-line bg-ok-soft text-[13px] font-extrabold text-ok-text">
-                            {volunteer.initials}
+                            {volunteer.avatarUrl ? (
+                              <img src={volunteer.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                            ) : (
+                              volunteer.initials
+                            )}
                           </div>
                           <div className="mt-1.5 text-[11.5px] font-semibold leading-[1.25] text-ink-2">{volunteer.fullName}</div>
                         </div>

@@ -32,6 +32,7 @@ type ApiProfile = {
   email: string;
   sector: string | null;
   role: string;
+  avatar_url: string | null;
 };
 
 type ApiProfileSkill = {
@@ -384,6 +385,7 @@ export default function CompetencesDashboardPage() {
             name: p?.full_name ?? p?.email ?? '—',
             sector: p?.sector ?? '',
             initials: initials(p?.full_name ?? p?.email ?? '?'),
+            avatarUrl: p?.avatar_url ?? null,
             statusLabel: ss?.label ?? st,
             ring: ss?.ring ?? '#DCE2EC',
             avatarBg: ss?.soft ?? '#F7F9FC',
@@ -439,6 +441,7 @@ export default function CompetencesDashboardPage() {
         name: p.full_name ?? p.email,
         sector: p.sector ?? '',
         initials: initials(p.full_name ?? p.email),
+        avatarUrl: p.avatar_url ?? null,
         bg: idx % 2 === 0 ? '#FFFFFF' : '#F7F9FC',
       }));
   }, [cat, data, matchPerson]);
@@ -533,6 +536,7 @@ export default function CompetencesDashboardPage() {
           ...g,
           profileName: p?.full_name ?? p?.email ?? '—',
           profileInitials: initials(p?.full_name ?? p?.email ?? '?'),
+          profileAvatarUrl: p?.avatar_url ?? null,
           cursusName: c?.name ?? '—',
           cursusCode: c?.code ?? '—',
         };
@@ -866,7 +870,7 @@ export default function CompetencesDashboardPage() {
                           className="inline-flex h-8 w-8 flex-none items-center justify-center rounded-full text-xs font-extrabold"
                           style={{ background: h.avatarBg, color: h.avatarColor }}
                         >
-                          {h.initials}
+                          {h.avatarUrl ? <img src={h.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" /> : h.initials}
                         </span>
                         <div className="min-w-0">
                           <div className="text-[13.5px] font-bold leading-tight text-ink">
@@ -971,7 +975,7 @@ export default function CompetencesDashboardPage() {
                     style={{ background: row.bg }}
                   >
                     <span className="inline-flex h-[30px] w-[30px] flex-none items-center justify-center rounded-full bg-surface-sub text-[11px] font-extrabold text-ink-2">
-                      {row.initials}
+                      {row.avatarUrl ? <img src={row.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" /> : row.initials}
                     </span>
                     <div className="min-w-0">
                       <div className="text-[13px] font-bold leading-tight text-ink">

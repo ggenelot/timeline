@@ -241,7 +241,11 @@ function SidebarProfile({ profile, tabIndex }: { profile: Profile | null; tabInd
               'linear-gradient(to bottom right, color-mix(in srgb, white 20%, var(--color-accent, #FF7F30)), var(--color-accent, #FF7F30))'
           }}
         >
-          {getInitials(profile)}
+          {profile?.avatar_url ? (
+            <img src={profile.avatar_url} alt="" className="h-full w-full rounded-full object-cover" />
+          ) : (
+            getInitials(profile)
+          )}
         </span>
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="truncate text-sm font-semibold text-ink">{profile?.full_name ?? '—'}</span>
