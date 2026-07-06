@@ -99,7 +99,7 @@ export function HelpButton() {
         type="button"
         onClick={openHelp}
         aria-label="Aide"
-        className="fixed bottom-24 right-6 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-md transition-colors hover:bg-slate-50 hover:text-slate-800 lg:bottom-6"
+        className="fixed bottom-[calc(96px+env(safe-area-inset-bottom))] right-6 z-40 flex h-10 w-10 items-center justify-center rounded-full border border-white/75 bg-white/60 text-ink-3 shadow-[0_10px_24px_-12px_rgba(12,19,38,.4)] backdrop-blur-xl transition-colors hover:bg-white/80 hover:text-ink lg:bottom-6"
       >
         <span className="text-base font-semibold leading-none">?</span>
       </button>

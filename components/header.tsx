@@ -43,7 +43,7 @@ export function Header({
       className={cn(
         'glass-tabbar sticky top-0 z-30 transition-[background-color,box-shadow,border-color] duration-200 lg:hidden',
         scrolled
-          ? 'border-b border-white/75 bg-white/55 shadow-[0_10px_30px_-18px_rgba(12,19,38,.35)] backdrop-blur-2xl backdrop-saturate-[1.8]'
+          ? 'border-b border-white/75 bg-white/45 shadow-[0_10px_30px_-18px_rgba(12,19,38,.35)] backdrop-blur-md backdrop-saturate-[2]'
           : 'border-b border-transparent bg-surface'
       )}
     >

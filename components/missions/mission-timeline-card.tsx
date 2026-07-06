@@ -242,7 +242,7 @@ export function MissionTimelineCard({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-start justify-between gap-3 px-[18px] pb-3 pt-4 text-left"
+        className="flex w-full items-start justify-between gap-3 px-4 sm:px-[18px] pb-3 pt-4 text-left"
       >
         <div className="min-w-0">
           <div className="text-[11px] font-bold uppercase tracking-[0.08em]" style={{ color: typeColor }}>
@@ -254,12 +254,12 @@ export function MissionTimelineCard({
           </div>
         </div>
         <div className="shrink-0 text-right">
-          <div className="text-[13px] font-bold tabular-nums text-ink-2">{timeRange}</div>
+          <div className="text-[12.5px] font-bold tabular-nums text-ink-2">{timeRange}</div>
           <div className="text-[12px] text-ink-3">{duration}</div>
         </div>
       </button>
 
-      <div className="flex flex-wrap items-center justify-between gap-3 px-[18px] pb-[14px]">
+      <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-[18px] pb-[14px]">
         <div className="inline-flex items-center gap-[7px] text-[13px] font-bold">
           {requiredSkills.length === 0 ? (
             <>
@@ -281,7 +281,7 @@ export function MissionTimelineCard({
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2">
+        <div className="flex items-center justify-end gap-2">
           {isBenevole ? (
             !canPropose ? null : relation === 'retenu' ? (
               <span className="inline-flex items-center gap-1 text-[13px] font-bold text-ok-text">
@@ -289,18 +289,21 @@ export function MissionTimelineCard({
               </span>
             ) : relation === 'engaged' ? (
               <>
-                <span className="inline-flex animate-pop items-center gap-1.5 rounded-full border border-ok-line bg-ok-soft px-3 py-1 text-[12.5px] font-semibold text-ok-text motion-reduce:animate-none">
-                  <Icon name="check_circle" size={15} />
-                  Engagé · en attente de sélection
+                <span
+                  className="inline-flex animate-pop items-center gap-1.5 whitespace-nowrap rounded-full border border-ok-line bg-ok-soft px-2.5 py-1 text-[12px] font-semibold text-ok-text motion-reduce:animate-none"
+                  title="Engagé · en attente de sélection"
+                >
+                  <Icon name="check_circle" size={14} />
+                  Engagé · en attente
                 </span>
-                <Button variant="ghost" loading={pendingAction === 'unavailable'} disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
+                <Button variant="ghost" size="sm" loading={pendingAction === 'unavailable'} disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
                   {pendingAction === 'unavailable' ? 'Envoi…' : 'Se désengager'}
                 </Button>
               </>
             ) : relation === 'declined' ? (
               <>
                 <span className="text-[13px] text-ink-3">Indisponible</span>
-                <Button variant="ghost" className="text-ok-text" loading={pendingAction === 'available'} disabled={pendingAction !== null} onClick={() => respond('available')}>
+                <Button variant="ghost" size="sm" className="text-ok-text" loading={pendingAction === 'available'} disabled={pendingAction !== null} onClick={() => respond('available')}>
                   {pendingAction === 'available' ? 'Envoi…' : 'Me rendre disponible'}
                 </Button>
               </>
@@ -348,10 +351,10 @@ export function MissionTimelineCard({
         </div>
       </div>
 
-      {error ? <div className="px-[18px] pb-3 text-[12px] text-bad">{error}</div> : null}
+      {error ? <div className="px-4 sm:px-[18px] pb-3 text-[12px] text-bad">{error}</div> : null}
 
       {expanded ? (
-        <div className="border-t border-line-row bg-surface-sub px-[18px] py-[15px]">
+        <div className="border-t border-line-row bg-surface-sub px-4 sm:px-[18px] py-[15px]">
           {mission.description?.trim() ? (
             <p className="text-[13px] leading-[1.55] text-ink-2">{mission.description}</p>
           ) : null}

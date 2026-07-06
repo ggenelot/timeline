@@ -3,6 +3,13 @@ import { Icon } from './icon';
 
 export type ButtonVariant = 'primary' | 'engage' | 'ghost' | 'danger' | 'subtle';
 
+export type ButtonSize = 'md' | 'sm';
+
+const SIZE_CLASS: Record<ButtonSize, string> = {
+  md: 'px-4 py-2 text-sm',
+  sm: 'min-h-[40px] px-3 py-1.5 text-[13px]'
+};
+
 const VARIANT_CLASS: Record<ButtonVariant, string> = {
   primary: 'bg-brand text-white shadow-[0_8px_18px_-6px_var(--color-brand-shadow,rgba(0,45,116,.5))] hover:bg-brand-for',
   engage: 'bg-engage text-white shadow-[0_4px_10px_-2px_rgba(21,147,93,.4)] hover:bg-engage-hover',
@@ -13,6 +20,7 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
 
 export function Button({
   variant = 'primary',
+  size = 'md',
   icon,
   iconRight,
   loading = false,
@@ -22,6 +30,7 @@ export function Button({
   ...props
 }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: ButtonVariant;
+  size?: ButtonSize;
   icon?: string;
   iconRight?: string;
   loading?: boolean;
@@ -30,7 +39,8 @@ export function Button({
     <button
       type={type}
       className={cn(
-        'inline-flex items-center justify-center gap-1.5 rounded-[11px] px-4 py-2 text-sm font-bold transition disabled:cursor-not-allowed disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 rounded-[11px] font-bold transition disabled:cursor-not-allowed disabled:opacity-50',
+        SIZE_CLASS[size],
         VARIANT_CLASS[variant],
         className
       )}

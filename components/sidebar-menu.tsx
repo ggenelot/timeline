@@ -299,7 +299,7 @@ export function BottomTabs({ session }: { session: Session | null }) {
 
   return (
     <nav
-      className="glass-tabbar fixed inset-x-3.5 z-30 flex h-[66px] items-center justify-between rounded-full border border-white/75 bg-white/50 px-1.5 shadow-[0_18px_40px_-16px_rgba(12,19,38,.45),inset_0_1px_0_rgba(255,255,255,.9)] backdrop-blur-2xl backdrop-saturate-[1.9] lg:hidden"
+      className="glass-tabbar fixed inset-x-3.5 z-30 flex h-[66px] items-center justify-between rounded-full border border-white/75 bg-white/35 px-1.5 shadow-[0_18px_40px_-16px_rgba(12,19,38,.45),inset_0_1px_0_rgba(255,255,255,.9)] backdrop-blur-md backdrop-saturate-[2] lg:hidden"
       style={{ bottom: 'calc(14px + env(safe-area-inset-bottom))' }}
     >
       {/* reflet — purement décoratif */}

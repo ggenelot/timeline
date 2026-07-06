@@ -7,6 +7,7 @@ import { MissionType, MissionWithRequiredSkills, ProposalStats } from '@/compone
 import { cn } from '@/lib/cn';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Button } from '@/components/ui/button';
+import { Icon } from '@/components/ui/icon';
 
 type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
 
@@ -16,8 +17,8 @@ function capitalize(value: string): string {
 
 function TimelineNode({ relation, typeColor }: { relation: MissionRelation; typeColor: string }) {
   const shadow = '0 0 0 4px #F2F5FA';
-  const base = 'absolute -translate-x-1/2 -translate-y-1/2';
-  const position = { left: 24, top: 28 } as const;
+  const base = 'absolute left-4 -translate-x-1/2 -translate-y-1/2 sm:left-6';
+  const position = { top: 28 } as const;
 
   if (relation === 'retenu') {
     return (
@@ -201,20 +202,20 @@ export function VolunteerTimelineView({
 
       {monthGroups.length > 0 ? (
         <p className="mt-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3">
-          <span aria-hidden="true">👆</span>
+          <Icon name="swipe" size={16} className="text-ink-3" />
           Glissez une carte à droite pour vous engager, à gauche pour vous rendre indisponible
         </p>
       ) : null}
 
       {/* Frise */}
       <div className="relative mt-6">
-        <div className="pointer-events-none absolute bottom-0 left-[23px] top-0 w-[2px] bg-line" />
+        <div className="pointer-events-none absolute bottom-0 left-[15px] top-0 w-[2px] bg-line sm:left-[23px]" />
 
         {/* Repère Aujourd'hui */}
-        <div className="relative pb-6 pl-14">
+        <div className="relative pb-6 pl-9 sm:pl-14">
           <span
-            className="absolute -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface"
-            style={{ left: 24, top: 11, width: 12, height: 12, border: '2px solid #8A93A6' }}
+            className="absolute left-4 -translate-x-1/2 -translate-y-1/2 rounded-full bg-surface sm:left-6"
+            style={{ top: 11, width: 12, height: 12, border: '2px solid #8A93A6' }}
           />
           <div className="flex flex-wrap items-baseline gap-2">
             <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-ink-3">Aujourd&apos;hui</span>
@@ -223,7 +224,7 @@ export function VolunteerTimelineView({
         </div>
 
         {monthGroups.length === 0 ? (
-          <div className="ml-14 rounded-2xl border border-line bg-surface-card">
+          <div className="ml-9 rounded-2xl border border-line bg-surface-card sm:ml-14">
             <EmptyState
               tone="accent"
               icon="event_upcoming"
@@ -245,7 +246,7 @@ export function VolunteerTimelineView({
         ) : (
           monthGroups.map((group) => (
             <div key={group.key}>
-              <div className="relative py-2 pl-14 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-3">
+              <div className="relative py-2 pl-9 text-[11px] font-bold uppercase tracking-[0.14em] text-ink-3 sm:pl-14">
                 {capitalize(group.label)}
               </div>
               <div className="space-y-4">
@@ -253,7 +254,7 @@ export function VolunteerTimelineView({
                   const relation = relationByMission.get(mission.id) ?? 'pending';
                   const typeColor = typeColorById.get(mission.mission_type_id) ?? '#5B6478';
                   return (
-                    <div key={mission.id} className="relative pl-14">
+                    <div key={mission.id} className="relative pl-9 sm:pl-14">
                       <TimelineNode relation={relation} typeColor={typeColor} />
                       <MissionTimelineCard
                         mission={mission}
