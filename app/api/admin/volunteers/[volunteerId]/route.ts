@@ -19,7 +19,7 @@ async function assertAdmin(token: string) {
   const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
 
   if (userError || !userData.user) {
-    return { error: NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 }) };
+    return { error: NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 }), userId: null };
   }
 
   const { data: requesterProfile, error: requesterProfileError } = await requesterClient
@@ -30,11 +30,12 @@ async function assertAdmin(token: string) {
 
   if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
     return {
-      error: NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent modifier un bénévole.' }, { status: 403 })
+      error: NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent modifier un bénévole.' }, { status: 403 }),
+      userId: null
     };
   }
 
-  return { error: null };
+  return { error: null, userId: userData.user.id };
 }
 
 export async function GET(request: NextRequest, { params }: { params: { volunteerId: string } }) {
@@ -197,4 +198,67 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   }
 
   return NextResponse.json({ message: 'Bénévole modifié avec succès.' });
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { volunteerId: string } }) {
+  const token = getBearerToken(request);
+
+  if (!token) {
+    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
+  }
+
+  const guard = await assertAdmin(token);
+  if (guard.error) {
+    return guard.error;
+  }
+
+  const volunteerId = params.volunteerId;
+
+  if (volunteerId === guard.userId) {
+    return NextResponse.json({ error: 'Vous ne pouvez pas supprimer votre propre compte.' }, { status: 400 });
+  }
+
+  const serviceClient = createServerSupabaseServiceClient();
+
+  const { data: existingVolunteer, error: existingVolunteerError } = await serviceClient
+    .from('profiles')
+    .select('id,role')
+    .eq('id', volunteerId)
+    .single();
+
+  if (existingVolunteerError || !existingVolunteer) {
+    return NextResponse.json({ error: 'Bénévole introuvable.' }, { status: 404 });
+  }
+
+  if (existingVolunteer.role !== 'benevole') {
+    return NextResponse.json({ error: 'Seuls les comptes bénévoles peuvent être supprimés depuis cet écran.' }, { status: 403 });
+  }
+
+  // doublures.declared_by / competence_validations.declared_by n'ont pas d'action ON DELETE :
+  // la suppression du compte auth échouerait sur une contrainte de clé étrangère si on les laisse pointer dessus.
+  const { error: reassignDoubluresError } = await serviceClient
+    .from('doublures')
+    .update({ declared_by: guard.userId })
+    .eq('declared_by', volunteerId);
+
+  if (reassignDoubluresError) {
+    return NextResponse.json({ error: `Impossible de réattribuer les doublures déclarées : ${reassignDoubluresError.message}` }, { status: 500 });
+  }
+
+  const { error: reassignValidationsError } = await serviceClient
+    .from('competence_validations')
+    .update({ declared_by: guard.userId })
+    .eq('declared_by', volunteerId);
+
+  if (reassignValidationsError) {
+    return NextResponse.json({ error: `Impossible de réattribuer les validations déclarées : ${reassignValidationsError.message}` }, { status: 500 });
+  }
+
+  const { error: deleteError } = await serviceClient.auth.admin.deleteUser(volunteerId);
+
+  if (deleteError) {
+    return NextResponse.json({ error: `Impossible de supprimer le compte : ${deleteError.message}` }, { status: 500 });
+  }
+
+  return NextResponse.json({ message: 'Bénévole supprimé avec succès.' });
 }
