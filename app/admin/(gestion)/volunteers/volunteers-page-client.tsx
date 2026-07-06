@@ -62,6 +62,9 @@ type UnifiedRow = {
   slackName: string | null;
   slackUsername: string | null;
   pseudo: string;
+  // Identifiant de connexion (profiles.identifier) — distinct du pseudo Slack affiché,
+  // modifiable par l'admin car les pseudos Slack dérivés sont parfois peu lisibles.
+  identifier: string | null;
   avatarUrl: string | null;
   accountStatus: AccountStatus;
   skills: SkillRef[];
@@ -108,6 +111,16 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
   const [draftSkillIds, setDraftSkillIds] = useState<string[]>([]);
   const [modalSaving, setModalSaving] = useState(false);
   const [modalError, setModalError] = useState<string | null>(null);
+
+  const [linkingRow, setLinkingRow] = useState<UnifiedRow | null>(null);
+  const [linkQuery, setLinkQuery] = useState('');
+  const [linkBusyKey, setLinkBusyKey] = useState<string | null>(null);
+  const [linkError, setLinkError] = useState<string | null>(null);
+
+  const [identifierRow, setIdentifierRow] = useState<UnifiedRow | null>(null);
+  const [draftIdentifier, setDraftIdentifier] = useState('');
+  const [identifierSaving, setIdentifierSaving] = useState(false);
+  const [identifierError, setIdentifierError] = useState<string | null>(null);
 
   const router = useRouter();
 
@@ -223,6 +236,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
         slackName: volunteer.full_name ?? null,
         slackUsername: volunteer.slack_username ?? null,
         pseudo: volunteer.slack_username || volunteer.identifier || volunteer.full_name || volunteer.id,
+        identifier: volunteer.identifier ?? null,
         avatarUrl: volunteer.avatar_url ?? null,
         accountStatus: sentProfileIds.has(volunteer.id) ? 'sent' : 'created',
         skills
@@ -263,6 +277,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
           slackName: entry.slack_name,
           slackUsername: entry.slack_username,
           pseudo: entry.slack_username || entry.slack_name || entry.slack_user_id,
+          identifier: null,
           avatarUrl: entry.avatar_url,
           accountStatus: 'new',
           skills: []
@@ -280,6 +295,7 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
           slackName: inv.slack_name,
           slackUsername: null,
           pseudo: inv.slack_name || inv.slack_user_id,
+          identifier: null,
           avatarUrl: null,
           accountStatus: 'new',
           skills: []
@@ -473,6 +489,111 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
       setError('Impossible de supprimer ce bénévole pour le moment.');
     } finally {
       setBusyRowKey(null);
+    }
+  };
+
+  // Membres Slack pas encore rattachés à un profil Timeline — candidats pour la liaison manuelle.
+  const unassignedSlackRows = useMemo(() => rows.filter((r) => r.accountStatus === 'new'), [rows]);
+
+  const filteredUnassignedSlackRows = useMemo(() => {
+    const term = linkQuery.trim().toLocaleLowerCase('fr').replace(/^@/, '');
+    if (term.length === 0) return unassignedSlackRows;
+    return unassignedSlackRows.filter((r) => r.pseudo.toLocaleLowerCase('fr').includes(term));
+  }, [unassignedSlackRows, linkQuery]);
+
+  const openLinkPicker = (row: UnifiedRow) => {
+    setLinkingRow(row);
+    setLinkQuery('');
+    setLinkError(null);
+  };
+
+  const closeLinkPicker = () => {
+    setLinkingRow(null);
+    setLinkQuery('');
+    setLinkError(null);
+  };
+
+  const confirmLink = async (candidate: UnifiedRow) => {
+    if (!linkingRow?.profileId) return;
+    setLinkBusyKey(candidate.key);
+    setLinkError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setLinkError('Session invalide.'); return; }
+
+      const resp = await fetch('/api/admin/slack/link-account', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          slack_user_id: candidate.slackUserId,
+          slack_team_id: candidate.slackTeamId,
+          slack_name: candidate.slackName,
+          slack_email: candidate.slackEmail,
+          slack_username: candidate.slackUsername,
+          profile_id: linkingRow.profileId
+        })
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setLinkError(payload.error ?? 'Impossible de lier ce compte Slack.');
+        return;
+      }
+      markSlackDirectoryLinked(candidate.slackUserId, candidate.slackTeamId, linkingRow.profileId);
+      closeLinkPicker();
+      await loadVolunteers();
+    } catch {
+      setLinkError('Impossible de lier ce compte Slack pour le moment.');
+    } finally {
+      setLinkBusyKey(null);
+    }
+  };
+
+  const openIdentifierEditor = (row: UnifiedRow) => {
+    setIdentifierRow(row);
+    setDraftIdentifier(row.identifier ?? '');
+    setIdentifierError(null);
+  };
+
+  const closeIdentifierEditor = () => {
+    setIdentifierRow(null);
+    setDraftIdentifier('');
+    setIdentifierError(null);
+  };
+
+  const saveIdentifier = async () => {
+    if (!identifierRow?.profileId) return;
+    const value = draftIdentifier.trim().toLowerCase();
+    if (!value) { setIdentifierError("L'identifiant est obligatoire."); return; }
+    if (!/^[a-z0-9._-]+$/.test(value)) {
+      setIdentifierError("L'identifiant ne peut contenir que des lettres minuscules, chiffres, points, tirets et underscores.");
+      return;
+    }
+
+    setIdentifierSaving(true);
+    setIdentifierError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setIdentifierError('Session invalide.'); setIdentifierSaving(false); return; }
+
+      const resp = await fetch(`/api/admin/volunteers/${identifierRow.profileId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ identifier: value })
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        const message = payload.error ?? "Impossible de modifier l'identifiant.";
+        setIdentifierError(/duplicate|unique/i.test(message) ? 'Cet identifiant est déjà utilisé.' : message);
+        return;
+      }
+      closeIdentifierEditor();
+      await loadVolunteers();
+    } catch {
+      setIdentifierError("Impossible de modifier l'identifiant pour le moment.");
+    } finally {
+      setIdentifierSaving(false);
     }
   };
 
@@ -679,7 +800,19 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                             {rowInitials(row.pseudo)}
                           </span>
                         )}
-                        <span className="font-mono text-[15px] font-bold text-ink">@{row.pseudo}</span>
+                        <div>
+                          <span className="font-mono text-[15px] font-bold text-ink">@{row.pseudo}</span>
+                          {row.profileId ? (
+                            <button
+                              type="button"
+                              onClick={() => openIdentifierEditor(row)}
+                              className="ml-2 text-xs font-medium text-ink-3 underline hover:text-ink-2"
+                              title="Modifier l'identifiant de connexion"
+                            >
+                              {row.identifier ?? '—'} ✎
+                            </button>
+                          ) : null}
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-2">
@@ -703,7 +836,16 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                           {isBusy ? 'Envoi…' : row.accountStatus === 'created' ? 'Envoyer les identifiants' : 'Renvoyer les identifiants'}
                         </button>
                       ) : (
-                        <span className="mt-1.5 block text-xs text-ink-3">Compte non lié à Slack</span>
+                        <>
+                          <span className="mt-1.5 block text-xs text-ink-3">Compte non lié à Slack</span>
+                          <button
+                            type="button"
+                            onClick={() => openLinkPicker(row)}
+                            className="mt-1 block text-xs font-bold text-brand underline"
+                          >
+                            Lier un compte Slack
+                          </button>
+                        </>
                       )}
                       {row.profileId ? (
                         <button
@@ -800,6 +942,82 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                 );
               })
             )}
+          </div>
+        </Modal>
+      ) : null}
+
+      {linkingRow ? (
+        <Modal title={`Lier @${linkingRow.pseudo} à un compte Slack`} onClose={closeLinkPicker}>
+          <div className="space-y-3">
+            <p className="text-sm text-ink-2">
+              Choisissez le membre Slack correspondant parmi ceux qui ne sont pas encore rattachés à un profil Timeline.
+            </p>
+            {linkError ? <div className="rounded-md border border-bad/30 bg-bad-soft p-2 text-xs text-bad">{linkError}</div> : null}
+            <input
+              type="search"
+              value={linkQuery}
+              onChange={(event) => setLinkQuery(event.target.value)}
+              placeholder="Rechercher un pseudo Slack"
+              autoFocus
+              className="w-full rounded-full border border-line-field bg-surface-sub px-4 py-2 text-sm text-ink placeholder:text-ink-3 focus:border-accent-ring focus:bg-surface-card focus:outline-none"
+            />
+            <div className="max-h-72 divide-y divide-line-row overflow-y-auto rounded-[11px] border border-line">
+              {filteredUnassignedSlackRows.length === 0 ? (
+                <p className="p-3 text-sm text-ink-3">Aucun membre Slack non attribué ne correspond.</p>
+              ) : (
+                filteredUnassignedSlackRows.map((candidate) => (
+                  <button
+                    key={candidate.key}
+                    type="button"
+                    onClick={() => confirmLink(candidate)}
+                    disabled={linkBusyKey !== null}
+                    className="flex w-full items-center gap-2.5 px-3 py-2 text-left hover:bg-surface-sub disabled:opacity-50"
+                  >
+                    {candidate.avatarUrl ? (
+                      <img src={candidate.avatarUrl} alt="" className="h-7 w-7 shrink-0 rounded-full object-cover" />
+                    ) : (
+                      <span className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#E4E8F0] text-[11px] font-semibold text-ink-2">
+                        {rowInitials(candidate.pseudo)}
+                      </span>
+                    )}
+                    <span className="font-mono text-sm font-bold text-ink">@{candidate.pseudo}</span>
+                    {linkBusyKey === candidate.key ? <span className="ml-auto text-xs text-ink-3">Liaison…</span> : null}
+                  </button>
+                ))
+              )}
+            </div>
+          </div>
+        </Modal>
+      ) : null}
+
+      {identifierRow ? (
+        <Modal
+          title={`Identifiant — @${identifierRow.pseudo}`}
+          onClose={closeIdentifierEditor}
+          footer={
+            <>
+              <Button variant="ghost" onClick={closeIdentifierEditor} disabled={identifierSaving}>Annuler</Button>
+              <Button onClick={saveIdentifier} disabled={identifierSaving}>{identifierSaving ? 'Enregistrement...' : 'Enregistrer'}</Button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <p className="text-sm text-ink-2">
+              Identifiant de connexion utilisé pour se connecter à Timeline — distinct du pseudo Slack affiché ci-dessus.
+            </p>
+            {identifierError ? <div className="rounded-md border border-bad/30 bg-bad-soft p-2 text-xs text-bad">{identifierError}</div> : null}
+            <input
+              type="text"
+              value={draftIdentifier}
+              onChange={(event) => setDraftIdentifier(event.target.value)}
+              placeholder="prenom.nom"
+              autoFocus
+              autoCapitalize="none"
+              autoComplete="off"
+              spellCheck={false}
+              disabled={identifierSaving}
+              className="w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink focus:border-accent-ring focus:outline-none"
+            />
           </div>
         </Modal>
       ) : null}
