@@ -101,6 +101,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
   const [selectedSkillByCategory, setSelectedSkillByCategory] = useState<Record<string, string | null>>({});
   const [statusFilter, setStatusFilter] = useState<'all' | AccountStatus>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  // Filtres par compétence repliés par défaut : ils prennent beaucoup de place sous la barre de recherche.
+  const [filtersExpanded, setFiltersExpanded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [inviting, setInviting] = useState(false);
@@ -666,6 +668,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
   if (!profile) return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
 
   const hasPendingMembers = statusCounts.new + statusCounts.created > 0;
+  const activeSkillFilterCount = Object.values(selectedSkillByCategory).filter(Boolean).length;
+  const hasSkillCategories = categories.some((category) => category.skills.length > 0);
 
   return (
     <div className="space-y-6">
@@ -727,47 +731,73 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
             />
           </label>
 
-          {categories.length > 0 && (
-            <div className="space-y-3">
-              {categories.map((category) => {
-                if (category.skills.length === 0) return null;
-                const selectedSkillId = selectedSkillByCategory[category.id] ?? null;
+          {hasSkillCategories && (
+            <div className="border-t border-line-row pt-3">
+              <button
+                type="button"
+                onClick={() => setFiltersExpanded((current) => !current)}
+                className="flex w-full items-center justify-between gap-3 text-left"
+                aria-expanded={filtersExpanded}
+              >
+                <span className="flex items-center gap-2">
+                  <Icon name="tune" size={18} className="text-ink-2" />
+                  <span className="text-sm font-bold text-ink">Filtres par compétence</span>
+                  {activeSkillFilterCount > 0 ? (
+                    <span className="inline-flex items-center rounded-full bg-brand/10 px-2 py-0.5 text-[11px] font-bold text-brand">
+                      {activeSkillFilterCount}
+                    </span>
+                  ) : null}
+                </span>
+                <Icon
+                  name="expand_more"
+                  size={18}
+                  className={cn('shrink-0 text-ink-3 transition-transform', filtersExpanded && 'rotate-180')}
+                />
+              </button>
 
-                return (
-                  <div key={category.id} className="space-y-1">
-                    <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">{category.name}</p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => toggleSkillFilter(category.id, null)}
-                        className={cn(
-                          'inline-flex rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80',
-                          !selectedSkillId ? getSkillColorClass(category.color) : 'border-line bg-surface-sub text-ink-2'
-                        )}
-                      >
-                        Toutes
-                      </button>
-                      {category.skills.map((skill) => {
-                        const isSelected = selectedSkillId === skill.id;
-                        const count = skillCounts.get(skill.id) ?? 0;
-                        return (
+              {filtersExpanded ? (
+                <div className="mt-3 space-y-3">
+                  {categories.map((category) => {
+                    if (category.skills.length === 0) return null;
+                    const selectedSkillId = selectedSkillByCategory[category.id] ?? null;
+
+                    return (
+                      <div key={category.id} className="space-y-1">
+                        <p className="text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3">{category.name}</p>
+                        <div className="flex flex-wrap gap-2">
                           <button
-                            key={skill.id}
                             type="button"
-                            onClick={() => toggleSkillFilter(category.id, skill.id)}
+                            onClick={() => toggleSkillFilter(category.id, null)}
                             className={cn(
-                              'inline-flex rounded-full border px-2 py-0.5 text-xs font-medium transition hover:opacity-80',
-                              isSelected ? getSkillColorClass(category.color) : 'border-line bg-surface-sub text-ink-2'
+                              'inline-flex rounded-full border px-2.5 py-1 text-xs font-medium transition hover:opacity-80',
+                              !selectedSkillId ? getSkillColorClass(category.color) : 'border-line bg-surface-sub text-ink-2'
                             )}
                           >
-                            {skill.name} {count}
+                            Toutes
                           </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
+                          {category.skills.map((skill) => {
+                            const isSelected = selectedSkillId === skill.id;
+                            const count = skillCounts.get(skill.id) ?? 0;
+                            return (
+                              <button
+                                key={skill.id}
+                                type="button"
+                                onClick={() => toggleSkillFilter(category.id, skill.id)}
+                                className={cn(
+                                  'inline-flex rounded-full border px-2 py-0.5 text-xs font-medium transition hover:opacity-80',
+                                  isSelected ? getSkillColorClass(category.color) : 'border-line bg-surface-sub text-ink-2'
+                                )}
+                              >
+                                {skill.name} {count}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : null}
             </div>
           )}
         </div>

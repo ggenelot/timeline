@@ -17,6 +17,7 @@ type SettingsForm = {
   orgName: string;
   orgTagline: string;
   loginGreeting: string;
+  baseUrl: string;
 };
 
 type SettingsRow = {
@@ -29,6 +30,7 @@ type SettingsRow = {
   org_name: string;
   org_tagline: string;
   login_greeting: string;
+  base_url: string | null;
 };
 
 const EMPTY_FORM: SettingsForm = {
@@ -40,7 +42,8 @@ const EMPTY_FORM: SettingsForm = {
   fontHand: '',
   orgName: 'Protec du 8 & du 9',
   orgTagline: 'Protection Civile Paris Seine',
-  loginGreeting: 'contente de te revoir'
+  loginGreeting: 'contente de te revoir',
+  baseUrl: ''
 };
 
 function toForm(row: SettingsRow): SettingsForm {
@@ -53,7 +56,8 @@ function toForm(row: SettingsRow): SettingsForm {
     fontHand: row.font_hand ?? '',
     orgName: row.org_name,
     orgTagline: row.org_tagline,
-    loginGreeting: row.login_greeting
+    loginGreeting: row.login_greeting,
+    baseUrl: row.base_url ?? ''
   };
 }
 
@@ -204,7 +208,8 @@ export default function AdminApparencePage() {
         fontHand: form.fontHand || null,
         orgName: form.orgName,
         orgTagline: form.orgTagline,
-        loginGreeting: form.loginGreeting
+        loginGreeting: form.loginGreeting,
+        baseUrl: form.baseUrl || null
       })
     });
 
@@ -284,6 +289,24 @@ export default function AdminApparencePage() {
           <TextField label="Slogan" value={form.orgTagline} onChange={(v) => setForm((f) => ({ ...f, orgTagline: v }))} help="Affiché sous le nom de l'association." />
           <TextField label="Message d'accueil" value={form.loginGreeting} onChange={(v) => setForm((f) => ({ ...f, loginGreeting: v }))} help="Affiché sous « Connexion »." />
         </div>
+      </Card>
+
+      <Card className="p-5 md:p-6">
+        <h2 className="mb-4 text-lg font-semibold text-ink">Adresse de l&apos;application</h2>
+        <label className="mb-1 block text-xs font-medium text-ink-2">URL de base</label>
+        <input
+          type="url"
+          inputMode="url"
+          value={form.baseUrl}
+          onChange={(e) => setForm((f) => ({ ...f, baseUrl: e.target.value }))}
+          placeholder="https://timeline.mon-asso.fr"
+          className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink placeholder:text-ink-3 focus:outline-none focus:ring-2 focus:ring-brand/30"
+        />
+        <p className="mt-1 text-xs text-ink-3">
+          Adresse publique de Timeline, utilisée pour construire les liens des messages Slack (par ex. le lien de connexion
+          envoyé lors de la création d&apos;un compte). Sans base configurée, ces liens sont incomplets. Ne pas mettre de
+          slash final.
+        </p>
       </Card>
 
       <div className="flex justify-end">
