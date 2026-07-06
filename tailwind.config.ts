@@ -45,6 +45,15 @@ const config: Config = {
       boxShadow: {
         card: '0 6px 18px -12px rgba(20,32,58,.2)',
         lift: '0 8px 22px -12px rgba(20,32,58,.3)'
+      },
+      keyframes: {
+        pop: {
+          '0%': { transform: 'scale(.85)', opacity: '0' },
+          '100%': { transform: 'scale(1)', opacity: '1' }
+        }
+      },
+      animation: {
+        pop: 'pop .22s ease-out'
       }
     }
   },

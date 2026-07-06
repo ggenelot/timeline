@@ -9,6 +9,7 @@ import { MissionVerificationSummary } from '@/lib/types';
 import { Card, PageHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Icon } from '@/components/ui/icon';
+import { EmptyState } from '@/components/ui/empty-state';
 import { cn } from '@/lib/cn';
 
 function formatTimeRange(startsAt: string, endsAt: string) {
@@ -87,7 +88,14 @@ export default function VerificationListPage() {
       <PageHeader title="Mes missions" subtitle="Dépliez une mission pour voir son matériel et lancer une vérification." />
 
       {missions.length === 0 ? (
-        <p className="text-sm text-ink-2">Aucune mission confirmée avec du matériel à vérifier pour le moment.</p>
+        <Card>
+          <EmptyState
+            tone="ok"
+            icon="fact_check"
+            title="Rien à vérifier pour le moment"
+            text="Les missions confirmées avec du matériel à contrôler apparaîtront ici."
+          />
+        </Card>
       ) : (
         <ul className="flex flex-col gap-3">
           {missions.map((mission) => {

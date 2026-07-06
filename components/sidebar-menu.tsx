@@ -298,7 +298,15 @@ export function BottomTabs({ session }: { session: Session | null }) {
   if (!session) return null;
 
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-30 flex h-[78px] items-stretch border-t border-line bg-[rgba(255,255,255,.92)] backdrop-blur lg:hidden">
+    <nav
+      className="glass-tabbar fixed inset-x-3.5 z-30 flex h-[66px] items-center justify-between rounded-full border border-white/75 bg-white/50 px-1.5 shadow-[0_18px_40px_-16px_rgba(12,19,38,.45),inset_0_1px_0_rgba(255,255,255,.9)] backdrop-blur-2xl backdrop-saturate-[1.9] lg:hidden"
+      style={{ bottom: 'calc(14px + env(safe-area-inset-bottom))' }}
+    >
+      {/* reflet — purement décoratif */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 rounded-full bg-[linear-gradient(115deg,rgba(255,255,255,.4)_0%,transparent_40%,transparent_65%,rgba(255,255,255,.25)_100%)]"
+      />
       {TAB_ITEMS.map((item) => {
         const active = isActive(item.href);
         return (
@@ -307,8 +315,10 @@ export function BottomTabs({ session }: { session: Session | null }) {
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'flex flex-1 flex-col items-center justify-center gap-1 text-[11px] transition-colors',
-              active ? 'font-bold text-brand' : 'font-medium text-ink-3'
+              'relative flex h-[52px] w-20 flex-col items-center justify-center gap-0.5 rounded-full text-[10.5px] transition-colors',
+              active
+                ? 'bg-brand/10 font-bold text-brand shadow-[inset_0_1px_0_rgba(255,255,255,.65),inset_0_0_0_1px_rgba(0,45,116,.1)]'
+                : 'font-semibold text-ink-2'
             )}
           >
             <Icon name={item.icon} size={24} />

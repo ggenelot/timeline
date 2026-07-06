@@ -23,6 +23,7 @@ import {
   declareCompetenceValidation,
   deleteCompetenceValidation,
 } from '@/lib/queries/cursus';
+import { EmptyState } from '@/components/ui/empty-state';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -936,12 +937,17 @@ export default function CompetencesPage() {
         </div>
 
         {volunteerCursus.length === 0 ? (
-          <div style={{ textAlign: 'center', background: '#fff', border: '1.5px dashed #E6EAF2', borderRadius: 18, padding: '60px 24px' }}>
-            <p style={{ color: '#8A93A6', fontSize: 15 }}>
-              {readOnly
-                ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
-                : "Vous n'êtes inscrit dans aucun cursus de doublure. Un administrateur peut vous y inscrire."}
-            </p>
+          <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 18 }}>
+            <EmptyState
+              tone="brand"
+              icon="workspace_premium"
+              title="Aucun cursus de doublure"
+              text={
+                readOnly
+                  ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
+                  : "Vous n'êtes inscrit dans aucun cursus de doublure. Un administrateur peut vous y inscrire."
+              }
+            />
           </div>
         ) : cursusDetail ? (
           <>
@@ -976,9 +982,9 @@ export default function CompetencesPage() {
                   </div>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                  <div style={{ fontSize: 30, fontWeight: 800, color: '#16203A', lineHeight: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display-active)', fontSize: 32, color: '#16203A', lineHeight: 1 }}>
                     {validatedIds.size}
-                    <span style={{ fontSize: 17, fontWeight: 700, color: '#8A93A6' }}>/{allComps.length}</span>
+                    <span style={{ fontSize: 19, color: '#8A93A6' }}>/{allComps.length}</span>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#5B6478', marginTop: 4 }}>compétences validées</div>
                 </div>

@@ -15,6 +15,7 @@ export function Button({
   variant = 'primary',
   icon,
   iconRight,
+  loading = false,
   className,
   children,
   type = 'button',
@@ -23,6 +24,7 @@ export function Button({
   variant?: ButtonVariant;
   icon?: string;
   iconRight?: string;
+  loading?: boolean;
 }) {
   return (
     <button
@@ -34,7 +36,14 @@ export function Button({
       )}
       {...props}
     >
-      {icon ? <Icon name={icon} size={18} /> : null}
+      {loading ? (
+        <span
+          aria-hidden="true"
+          className="inline-block h-[15px] w-[15px] animate-spin rounded-full border-2 border-current border-t-transparent opacity-80 motion-reduce:animate-none"
+        />
+      ) : icon ? (
+        <Icon name={icon} size={18} />
+      ) : null}
       {children}
       {iconRight ? <Icon name={iconRight} size={18} /> : null}
     </button>
