@@ -34,6 +34,24 @@ function formatDateTimeRange(startsAt: string, endsAt: string) {
   return `${start.toLocaleString('fr-FR')} - ${end.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })}`;
 }
 
+// URL de base publique de l'app pour les liens des messages Slack :
+// priorité au réglage éditable en admin (app_settings.base_url, page /admin/apparence),
+// puis repli sur les variables d'environnement. Le slash final est retiré pour
+// éviter les `//missions` lors de la concaténation. Renvoie null si rien n'est configuré,
+// auquel cas applyTemplate retire simplement la ligne contenant le lien.
+async function getAppBaseUrl(): Promise<string | null> {
+  const envFallback = (process.env.APP_BASE_URL || process.env.PUBLIC_SITE_URL || '').trim();
+  try {
+    const serviceClient = createServerSupabaseServiceClient();
+    const { data } = await serviceClient.from('app_settings').select('base_url').eq('id', 1).maybeSingle<{ base_url: string | null }>();
+    const base = (data?.base_url?.trim() || envFallback).replace(/\/+$/, '');
+    return base || null;
+  } catch {
+    const base = envFallback.replace(/\/+$/, '');
+    return base || null;
+  }
+}
+
 export function normalizeSlackChannelName(mission: Pick<MissionSlackData, 'title' | 'starts_at'>) {
   const slug = mission.title
     .toLowerCase()
@@ -391,6 +409,7 @@ export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
     throw new Error('Mission introuvable pour notification de disponibilité.');
   }
 
+  const appBaseUrl = await getAppBaseUrl();
   const templateText = await getTemplateText('admin_availability_updated_dm');
   const dmText = applyTemplate(templateText, {
     volunteer_name: profile.full_name ?? 'bénévole',
@@ -398,7 +417,7 @@ export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
     previous_availability: formatAvailabilityLabel(previousResponse),
     next_availability: formatAvailabilityLabel(nextResponse),
     datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
-    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+    mission_url: appBaseUrl ? `${appBaseUrl}/missions/${mission.id}` : null
   });
 
   try {
@@ -442,12 +461,13 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
     throw new Error('Mission introuvable pour notification de refus.');
   }
 
+  const appBaseUrl = await getAppBaseUrl();
   const templateText = await getTemplateText('volunteer_rejected_dm');
   const dmText = applyTemplate(templateText, {
     volunteer_name: profile.full_name ?? 'bénévole',
     mission_title: mission.title,
     datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
-    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+    mission_url: appBaseUrl ? `${appBaseUrl}/missions/${mission.id}` : null
   });
 
   try {
@@ -522,12 +542,13 @@ export async function notifyMissionProposerOnStatusChange(missionId: string, new
     return;
   }
 
+  const appBaseUrl = await getAppBaseUrl();
   const templateText = await getTemplateText(notifType);
   const dmText = applyTemplate(templateText, {
     volunteer_name: profile.full_name ?? 'bénévole',
     mission_title: mission.title,
     datetime_range: formatDateTimeRange(mission.starts_at, mission.ends_at),
-    mission_url: process.env.APP_BASE_URL ? `${process.env.APP_BASE_URL}/missions/${mission.id}` : null
+    mission_url: appBaseUrl ? `${appBaseUrl}/missions/${mission.id}` : null
   });
 
   try {
