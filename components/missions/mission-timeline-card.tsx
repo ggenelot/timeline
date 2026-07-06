@@ -289,29 +289,34 @@ export function MissionTimelineCard({
               </span>
             ) : relation === 'engaged' ? (
               <>
-                <span className="text-[13px]">
-                  <span className="inline-flex items-center gap-1 font-bold text-ok-text">
-                    <Icon name="check" size={15} />Engagé
-                  </span>
-                  <span className="text-ink-2"> · en attente de sélection</span>
+                <span className="inline-flex animate-pop items-center gap-1.5 rounded-full border border-ok-line bg-ok-soft px-3 py-1 text-[12.5px] font-semibold text-ok-text motion-reduce:animate-none">
+                  <Icon name="check_circle" size={15} />
+                  Engagé · en attente de sélection
                 </span>
-                <Button variant="ghost" disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
+                <Button variant="ghost" loading={pendingAction === 'unavailable'} disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
                   {pendingAction === 'unavailable' ? 'Envoi…' : 'Se désengager'}
                 </Button>
               </>
             ) : relation === 'declined' ? (
               <>
                 <span className="text-[13px] text-ink-3">Indisponible</span>
-                <Button variant="ghost" className="text-ok-text" disabled={pendingAction !== null} onClick={() => respond('available')}>
+                <Button variant="ghost" className="text-ok-text" loading={pendingAction === 'available'} disabled={pendingAction !== null} onClick={() => respond('available')}>
                   {pendingAction === 'available' ? 'Envoi…' : 'Me rendre disponible'}
                 </Button>
               </>
             ) : (
               <>
-                <Button variant="ghost" disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
+                <Button variant="ghost" loading={pendingAction === 'unavailable'} disabled={pendingAction !== null} onClick={() => respond('unavailable')}>
                   {pendingAction === 'unavailable' ? 'Envoi…' : 'Non disponible'}
                 </Button>
-                <Button variant="engage" icon="add_task" disabled={pendingAction !== null} onClick={() => respond('available')}>
+                <Button
+                  variant="engage"
+                  icon="add_task"
+                  loading={pendingAction === 'available'}
+                  disabled={pendingAction !== null}
+                  onClick={() => respond('available')}
+                  className="transition-transform duration-150 active:scale-[.97] motion-reduce:transition-none"
+                >
                   {pendingAction === 'available' ? 'Envoi…' : "S'engager"}
                 </Button>
               </>
