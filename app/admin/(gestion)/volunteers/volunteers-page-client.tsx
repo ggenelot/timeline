@@ -448,6 +448,34 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
     }
   };
 
+  const deleteAccount = async (row: UnifiedRow) => {
+    if (!row.profileId) return;
+    if (!window.confirm(`Supprimer le compte @${row.pseudo} ? Cette action est irréversible.`)) return;
+
+    setBusyRowKey(row.key);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+      if (!token) { setError('Session invalide.'); return; }
+
+      const resp = await fetch(`/api/admin/volunteers/${row.profileId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const payload = await resp.json().catch(() => ({}));
+      if (!resp.ok) {
+        setError(payload.error ?? 'Impossible de supprimer ce bénévole.');
+        return;
+      }
+      await loadVolunteers();
+    } catch {
+      setError('Impossible de supprimer ce bénévole pour le moment.');
+    } finally {
+      setBusyRowKey(null);
+    }
+  };
+
   const openEditor = (row: UnifiedRow) => {
     setEditingRow(row);
     setDraftSkillIds(row.skills.map((s) => s.id));
@@ -677,6 +705,16 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
                       ) : (
                         <span className="mt-1.5 block text-xs text-ink-3">Compte non lié à Slack</span>
                       )}
+                      {row.profileId ? (
+                        <button
+                          type="button"
+                          onClick={() => deleteAccount(row)}
+                          disabled={isBusy}
+                          className="mt-1.5 block text-xs font-bold text-bad underline disabled:opacity-50"
+                        >
+                          Supprimer
+                        </button>
+                      ) : null}
                     </td>
                     <td className="px-4 py-2">
                       <div className="flex flex-wrap items-center gap-1.5">
