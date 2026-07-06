@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
       .order('display_order', { referencedTable: 'skills', ascending: true }),
     client!
       .from('profiles')
-      .select('id,full_name,email,sector,role')
+      .select('id,full_name,email,sector,role,avatar_url')
       .order('full_name', { ascending: true }),
     client!.from('profile_skills').select('profile_id,skill_id,status'),
     client!.from('cursus').select('id,code,name,category,level,skill_id').order('level', { ascending: true }),

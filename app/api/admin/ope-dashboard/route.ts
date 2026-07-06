@@ -16,7 +16,7 @@ const ENGAGED_STATUSES = ['selected', 'confirmed'];
 // ── Formes brutes des résultats Supabase (client non typé) ────────
 type SkillEmbed = { id: string; name: string; category_id: string | null };
 type SkillRel = SkillEmbed | SkillEmbed[] | null;
-type VolunteerEmbed = { id: string; full_name: string | null; profile_skills: Array<{ status: string | null; skill: SkillRel }> | null };
+type VolunteerEmbed = { id: string; full_name: string | null; avatar_url: string | null; profile_skills: Array<{ status: string | null; skill: SkillRel }> | null };
 type VolunteerRel = VolunteerEmbed | VolunteerEmbed[] | null;
 
 type MissionRow = {
@@ -111,7 +111,7 @@ export async function GET(req: NextRequest) {
     client!.from('mission_types').select('id,name,color'),
     client!.from('skill_categories').select('id,color'),
     client!.from('skill_statuses').select('key').eq('is_validating', true),
-    client!.from('profiles').select('id,full_name').order('full_name', { ascending: true }),
+    client!.from('profiles').select('id,full_name,avatar_url').order('full_name', { ascending: true }),
   ]);
   if (typesRes.error) return NextResponse.json({ error: typesRes.error.message }, { status: 500 });
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
@@ -154,7 +154,7 @@ export async function GET(req: NextRequest) {
   if (missionIds.length > 0) {
     // Embed volontaire (identique pour assignments & proposals).
     const volunteerEmbed =
-      'volunteer:profiles!%FK%(id,full_name,profile_skills(status,skill:skills(id,name,category_id)))';
+      'volunteer:profiles!%FK%(id,full_name,avatar_url,profile_skills(status,skill:skills(id,name,category_id)))';
     const assignmentEmbed = volunteerEmbed.replace('%FK%', 'mission_assignments_volunteer_id_fkey');
 
     const assignmentsQuery = (withSkillRef: boolean) =>
@@ -207,6 +207,7 @@ export async function GET(req: NextRequest) {
       const member: OpeTeamMember = {
         volunteer_id: row.volunteer_id,
         full_name: volunteer?.full_name ?? null,
+        avatar_url: volunteer?.avatar_url ?? null,
         assignment_status: row.assignment_status,
         assignedSkill,
         validatedSkills: validatedSkillsOf(volunteer),
@@ -222,6 +223,7 @@ export async function GET(req: NextRequest) {
         mission_id: row.mission_id,
         volunteer_id: row.volunteer_id,
         full_name: volunteer?.full_name ?? null,
+        avatar_url: volunteer?.avatar_url ?? null,
         validatedSkills: validatedSkillsOf(volunteer),
       });
     }
@@ -292,7 +294,7 @@ export async function GET(req: NextRequest) {
     materiel: materielByMission.get(m.id) ?? [],
   }));
 
-  const volunteers = (volunteersRes.data ?? []).map((v) => ({ id: v.id, full_name: v.full_name }));
+  const volunteers = (volunteersRes.data ?? []).map((v) => ({ id: v.id, full_name: v.full_name, avatar_url: v.avatar_url }));
 
   return NextResponse.json({ from: from.toISOString(), days, missions, availability, volunteers, containers });
 }

@@ -74,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
 
   const { data: volunteers, error: volunteersError } = await guard.client
     .from('profiles')
-    .select('id,full_name,email,role')
+    .select('id,full_name,email,role,avatar_url')
     .eq('role', 'benevole')
     .order('full_name', { ascending: true });
 

@@ -19,11 +19,11 @@ export function formatTimeRange(startISO: string, endISO: string): string {
   return `${new Date(startISO).toLocaleTimeString('fr-FR', opts)} – ${new Date(endISO).toLocaleTimeString('fr-FR', opts)}`;
 }
 
-// Pastille d'initiales d'un secouriste.
-export function Avatar({ name }: { name: string | null }) {
+// Pastille d'un secouriste : photo de profil Slack si disponible, sinon initiales.
+export function Avatar({ name, avatarUrl }: { name: string | null; avatarUrl?: string | null }) {
   return (
     <span className="inline-flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#E4E8F0] text-[10px] font-semibold text-ink-2">
-      {initials(name)}
+      {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full rounded-full object-cover" /> : initials(name)}
     </span>
   );
 }

@@ -79,7 +79,7 @@ export function EventCard({
               const conflict = conflicts.get(member.volunteer_id);
               return (
                 <li key={member.volunteer_id} className="flex items-center gap-[7px]">
-                  <Avatar name={member.full_name} />
+                  <Avatar name={member.full_name} avatarUrl={member.avatar_url} />
                   <span className="min-w-0 flex-1 truncate text-[12.5px] font-semibold text-ink-2">
                     {member.full_name ?? 'Bénévole'}
                   </span>

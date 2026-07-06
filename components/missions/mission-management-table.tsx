@@ -357,7 +357,11 @@ export function MissionManagementTable({
                             }}
                             className="relative box-border inline-flex h-6 w-6 items-center justify-center rounded-full bg-[#EDF1F8] text-[10px] font-bold text-[#3B4A63]"
                           >
-                            {initialsOf(volunteer.name)}
+                            {volunteer.avatarUrl ? (
+                              <img src={volunteer.avatarUrl} alt="" className="h-full w-full rounded-full object-cover" />
+                            ) : (
+                              initialsOf(volunteer.name)
+                            )}
                           </span>
                         ))}
                         {volunteerOverflow > 0 ? (

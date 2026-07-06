@@ -74,7 +74,7 @@ export function DayColumn({
                   className="inline-flex items-center gap-1 rounded-full bg-surface-card py-0.5 pl-0.5 pr-2"
                   title={entry.full_name ?? 'Bénévole'}
                 >
-                  <Avatar name={entry.full_name} />
+                  <Avatar name={entry.full_name} avatarUrl={entry.avatar_url} />
                   <span className="max-w-[8rem] truncate text-[11px] text-ink-2">
                     {entry.full_name ?? 'Bénévole'}
                   </span>
