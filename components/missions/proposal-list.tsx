@@ -7,6 +7,7 @@ import { MissionProposalStatus, MissionStatus } from '@/lib/types';
 import { MissionStatusBadge } from '@/components/missions/mission-status-badge';
 import { StatusBadge } from '@/components/missions/status-badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 
 export type ProposalListItem = {
   id: string;
@@ -129,8 +130,13 @@ export function ProposalList({ proposals, managerId }: ProposalListProps) {
       })}
 
       {proposals.length === 0 ? (
-        <div className="rounded-2xl border border-dashed border-line-field bg-surface-card p-6 text-sm text-ink-2">
-          Aucune proposition à traiter pour le moment.
+        <div className="rounded-2xl border border-line bg-surface-card">
+          <EmptyState
+            tone="ok"
+            icon="task_alt"
+            title="Aucune proposition à traiter"
+            text="Les nouvelles propositions à valider apparaîtront ici."
+          />
         </div>
       ) : null}
     </div>

@@ -5,6 +5,8 @@ import { MissionTimelineCard } from '@/components/missions/mission-timeline-card
 import { groupMissionsByMonth, MissionRelation } from '@/lib/mission-timeline';
 import { MissionType, MissionWithRequiredSkills, ProposalStats } from '@/components/missions/use-missions-data';
 import { cn } from '@/lib/cn';
+import { EmptyState } from '@/components/ui/empty-state';
+import { Button } from '@/components/ui/button';
 
 type BenevoleStatusFilter = 'all' | 'pending' | 'engaged' | 'retenu';
 
@@ -221,8 +223,24 @@ export function VolunteerTimelineView({
         </div>
 
         {monthGroups.length === 0 ? (
-          <div className="ml-14 rounded-2xl border border-dashed border-line-field bg-surface-card p-7 text-center text-sm text-ink-3">
-            Aucune mission dans cette catégorie.
+          <div className="ml-14 rounded-2xl border border-line bg-surface-card">
+            <EmptyState
+              tone="accent"
+              icon="event_upcoming"
+              title="Aucune mission dans cette catégorie"
+              text={
+                benevoleStatusFilter === 'all'
+                  ? 'Aucune mission proposée pour le moment.'
+                  : 'Rien à afficher pour ce filtre pour le moment.'
+              }
+              action={
+                benevoleStatusFilter === 'engaged' ? (
+                  <Button variant="ghost" className="text-brand" onClick={() => setBenevoleStatusFilter('all')}>
+                    Voir les missions à venir
+                  </Button>
+                ) : undefined
+              }
+            />
           </div>
         ) : (
           monthGroups.map((group) => (
