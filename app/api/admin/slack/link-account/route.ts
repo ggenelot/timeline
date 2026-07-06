@@ -93,7 +93,12 @@ export async function POST(request: NextRequest) {
 
     const { error: updateError } = await service
       .from('profiles')
-      .update({ slack_user_id: slackUserId, slack_team_id: slackTeamId, slack_connected_at: new Date().toISOString() })
+      .update({
+        slack_user_id: slackUserId,
+        slack_team_id: slackTeamId,
+        slack_username: body.slack_username?.trim() || null,
+        slack_connected_at: new Date().toISOString()
+      })
       .eq('id', profileId);
     if (updateError) {
       return NextResponse.json({ error: `Impossible de lier le profil : ${updateError.message}` }, { status: 500 });
