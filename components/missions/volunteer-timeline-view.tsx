@@ -122,6 +122,12 @@ export function VolunteerTimelineView({
 
   const monthGroups = useMemo(() => groupMissionsByMonth(benevoleVisibleMissions), [benevoleVisibleMissions]);
 
+  // Le swipe n'est actif que sur les missions non répondues ; on n'affiche la consigne que dans ce cas.
+  const hasSwipeableMission = useMemo(
+    () => benevoleVisibleMissions.some((mission) => (relationByMission.get(mission.id) ?? 'pending') === 'pending'),
+    [benevoleVisibleMissions, relationByMission]
+  );
+
   const filterCards: Array<{ key: BenevoleStatusFilter; label: string; count: number; color: string }> = [
     { key: 'all', label: 'Toutes', count: benevoleCounts.total, color: '#16203A' },
     { key: 'pending', label: 'Je me positionne', count: benevoleCounts.pending, color: '#B45309' },
@@ -200,7 +206,7 @@ export function VolunteerTimelineView({
         })}
       </div>
 
-      {monthGroups.length > 0 ? (
+      {hasSwipeableMission ? (
         <p className="mt-4 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3">
           <Icon name="swipe" size={16} className="text-ink-3" />
           Glissez une carte à droite pour vous engager, à gauche pour vous rendre indisponible

@@ -67,8 +67,9 @@ export function MissionTimelineCard({
   const isBenevole = variant === 'benevole';
   const isUnavailable = isBenevole && relation === 'declined';
 
-  // Une mission retenue n'a plus d'action bénévole possible ; on ne branche donc pas le geste dessus.
-  const swipeCapable = isBenevole && canPropose && relation !== 'retenu';
+  // Le geste "tinder" ne sert qu'à la première prise de position : dès que le bénévole a répondu
+  // (engaged/declined) ou qu'il est retenu, on repasse aux boutons explicites de la carte.
+  const swipeCapable = isBenevole && canPropose && relation === 'pending';
   const swipeInteractive = swipeCapable && pendingAction === null;
 
   const skillCoverage = useMemo(
