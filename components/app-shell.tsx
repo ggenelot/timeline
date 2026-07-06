@@ -58,7 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onToggleMenu={() => setMenuOpen((o) => !o)}
       />
       <div className={cn('flex min-h-screen flex-col', session && 'lg:pl-[250px]')}>
-        <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-28 lg:pb-8">{children}</main>
+        <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-[calc(112px+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
       </div>
       <BottomTabs session={session} />
       <SidebarMenu
