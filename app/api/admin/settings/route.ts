@@ -12,9 +12,28 @@ type AppSettingsRow = {
   org_name: string;
   org_tagline: string;
   login_greeting: string;
+  base_url: string | null;
 };
 
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+const SETTINGS_COLUMNS =
+  'logo_url,brand_color,accent_color,font_sans,font_display,font_hand,org_name,org_tagline,login_greeting,base_url';
+
+// Normalise une URL de base saisie librement : exige http(s), retire le slash final
+// pour éviter les `//login` lors de la concaténation `${baseUrl}/login`.
+// Renvoie `null` si la chaîne est vide, ou `false` si l'URL est invalide.
+function normalizeBaseUrl(value: string): string | null | false {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    return `${url.origin}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return false;
+  }
+}
 
 export async function GET(request: NextRequest) {
   const token = getBearerToken(request);
@@ -27,7 +46,7 @@ export async function GET(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('app_settings')
-    .select('logo_url,brand_color,accent_color,font_sans,font_display,font_hand,org_name,org_tagline,login_greeting')
+    .select(SETTINGS_COLUMNS)
     .eq('id', 1)
     .single<AppSettingsRow>();
 
@@ -49,7 +68,7 @@ export async function PATCH(request: NextRequest) {
   // Le body vient d'un client non fiable : on ne fait confiance qu'aux clés
   // dont la valeur a le type attendu avant tout .trim(), sans quoi
   // `{ orgName: null }` ferait planter la route avant la validation métier.
-  const nullableFields = ['logoUrl', 'fontSans', 'fontDisplay', 'fontHand'] as const;
+  const nullableFields = ['logoUrl', 'fontSans', 'fontDisplay', 'fontHand', 'baseUrl'] as const;
   const requiredFields = ['brandColor', 'accentColor', 'orgName', 'orgTagline', 'loginGreeting'] as const;
 
   for (const field of nullableFields) {
@@ -82,6 +101,18 @@ export async function PATCH(request: NextRequest) {
     return NextResponse.json({ error: "Le message d'accueil ne peut pas être vide." }, { status: 400 });
   }
 
+  let normalizedBaseUrl: string | null = null;
+  if (body.baseUrl !== undefined) {
+    const result = normalizeBaseUrl(body.baseUrl ?? '');
+    if (result === false) {
+      return NextResponse.json(
+        { error: "L'URL de l'application est invalide (ex. https://timeline.mon-asso.fr)." },
+        { status: 400 }
+      );
+    }
+    normalizedBaseUrl = result;
+  }
+
   const update: Partial<AppSettingsRow> & { updated_at: string; updated_by: string } = {
     updated_at: new Date().toISOString(),
     updated_by: auth.profile.id
@@ -96,13 +127,14 @@ export async function PATCH(request: NextRequest) {
   if (body.orgName !== undefined) update.org_name = body.orgName.trim();
   if (body.orgTagline !== undefined) update.org_tagline = body.orgTagline.trim();
   if (body.loginGreeting !== undefined) update.login_greeting = body.loginGreeting.trim();
+  if (body.baseUrl !== undefined) update.base_url = normalizedBaseUrl;
 
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('app_settings')
     .update(update)
     .eq('id', 1)
-    .select('logo_url,brand_color,accent_color,font_sans,font_display,font_hand,org_name,org_tagline,login_greeting')
+    .select(SETTINGS_COLUMNS)
     .single<AppSettingsRow>();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

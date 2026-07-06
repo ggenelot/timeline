@@ -59,7 +59,13 @@ Deno.serve(async (req) => {
       return new Response(JSON.stringify({ error: 'Aucun membre Slack à inviter.' }), { status: 400, headers: corsHeaders });
     }
 
-    const siteUrl = Deno.env.get('PUBLIC_SITE_URL') ?? Deno.env.get('APP_BASE_URL');
+    // URL de base des liens (message de création de compte, magic link…) :
+    // priorité au réglage éditable en admin (app_settings.base_url, page /admin/apparence),
+    // puis repli sur les variables d'environnement de la fonction. On retire un éventuel
+    // slash final pour éviter les `//login` lors de la concaténation.
+    const { data: appSettings } = await supabase.from('app_settings').select('base_url').eq('id', 1).maybeSingle();
+    const rawSiteUrl = appSettings?.base_url?.trim() || Deno.env.get('PUBLIC_SITE_URL') || Deno.env.get('APP_BASE_URL') || '';
+    const siteUrl = rawSiteUrl.replace(/\/+$/, '');
     const results: any[] = [];
 
     for (const target of targets) {
