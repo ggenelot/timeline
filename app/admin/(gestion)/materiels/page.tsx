@@ -1,26 +1,21 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   DndContext,
-  DragOverlay,
   closestCenter,
-  useDraggable,
-  useDroppable,
   PointerSensor,
+  useDroppable,
   useSensor,
   useSensors,
-  type DragCancelEvent,
   type DragEndEvent,
-  type DragStartEvent,
   type DraggableAttributes,
   type DraggableSyntheticListeners,
 } from '@dnd-kit/core';
 import {
   SortableContext,
   arrayMove,
-  horizontalListSortingStrategy,
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
@@ -30,48 +25,157 @@ import { Profile, MaterielType, MaterielTypeContent, MaterielCategory } from '@/
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { Toggle } from '@/components/ui/toggle';
-import { materielPalette } from '@/lib/materiel-palette';
 import { cn } from '@/lib/cn';
 
-const ZITEMS = 'zitems:';
-const ZSUBC = 'zsubc:';
+const CATEGORY_PALETTE: Record<string, string> = {
+  slate: '#5B6478', amber: '#B4590F', sky: '#1E3C87', violet: '#7A2E86', emerald: '#0B6E63',
+  pink: '#8E1279', rose: '#D14343', orange: '#B4590F', cyan: '#0B6E63', indigo: '#1E3C87',
+};
 
-const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
-
-function itemsOf(list: MaterielTypeContent[]) {
-  return list.filter((c) => c.child_type && !c.child_type.is_container);
-}
-function subsOf(list: MaterielTypeContent[]) {
-  return list.filter((c) => c.child_type?.is_container);
+function categoryDot(color: string) {
+  return CATEGORY_PALETTE[color] ?? CATEGORY_PALETTE.slate;
 }
 
 // ── Poignée de glisser-déposer ───────────────────────────────────
 
-function DragHandle({ attributes, listeners, style, size = 18 }: {
+function DragHandle({ attributes, listeners, style }: {
   attributes: DraggableAttributes;
   listeners: DraggableSyntheticListeners;
   style?: React.CSSProperties;
-  size?: number;
 }) {
   return (
-    <span {...attributes} {...listeners} title="Glisser pour réordonner ou déplacer" className="shrink-0 cursor-grab touch-none text-ink-3" style={style}>
-      <Icon name="drag_indicator" size={size} />
+    <span
+      {...attributes}
+      {...listeners}
+      title="Glisser pour réordonner ou déplacer"
+      className="shrink-0 cursor-grab touch-none"
+      style={style}
+    >
+      <Icon name="drag_indicator" className="text-ink-3" />
     </span>
   );
 }
 
-// ── Zone de dépôt (droppable pour une liste d'items ou de sous-contenants) ──
+const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
 
-function DropZone({ id, children, empty, className }: { id: string; children: React.ReactNode; empty?: boolean; className?: string }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
+// ── Formulaire « + Ajouter un contenant » ───────────────────────────
+
+function AddContainerForm({ categories, onSubmit, onCancel }: {
+  categories: MaterielCategory[];
+  onSubmit: (name: string, code: string, categoryId: string) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [code, setCode] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  async function submit() {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await onSubmit(name.trim(), code.trim(), categoryId);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
-    <div
-      ref={setNodeRef}
-      className={cn('rounded-[10px] transition-colors', isOver && 'bg-accent-soft/60 outline outline-2 outline-offset-2 outline-dashed outline-accent-ring', className)}
-      style={{ minHeight: empty ? 36 : undefined }}
-    >
-      {children}
+    <div className="flex flex-wrap items-center gap-2 rounded-[10px] border border-dashed border-line-field px-[11px] py-[9px]">
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du contenant" autoFocus
+        onKeyDown={(e) => { if (e.key === 'Enter') void submit(); if (e.key === 'Escape') onCancel(); }}
+        className={cn(inputClass, 'min-w-[120px] flex-1')} />
+      <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Code (optionnel)" maxLength={24}
+        className={cn(inputClass, 'w-[140px] uppercase')} />
+      <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cn(inputClass, 'w-[160px]')}>
+        <option value="">Type…</option>
+        {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+      </select>
+      <Button variant="engage" onClick={submit} disabled={saving || !name.trim()}
+        className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px]">
+        Ajouter
+      </Button>
+      <button type="button" onClick={onCancel} aria-label="Annuler"
+        className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
+    </div>
+  );
+}
+
+// ── Formulaire « + Ajouter un item » ─────────────────────────────────
+
+function AddItemForm({ token, excludeIds, onSubmit, onCancel }: {
+  token: string;
+  excludeIds: Set<string>;
+  onSubmit: (itemId: string, quantity: number) => Promise<void>;
+  onCancel: () => void;
+}) {
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<MaterielType[]>([]);
+  const [selected, setSelected] = useState<MaterielType | null>(null);
+  const [quantity, setQuantity] = useState(1);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    const timer = setTimeout(async () => {
+      const res = await fetch(`/api/admin/materiel-types?kind=items&q=${encodeURIComponent(query)}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!active || !res.ok) return;
+      const json = (await res.json()) as { types: MaterielType[] };
+      setResults(json.types.filter((t) => !excludeIds.has(t.id)));
+    }, 200);
+    return () => { active = false; clearTimeout(timer); };
+  }, [query, token, excludeIds]);
+
+  async function submit() {
+    if (!selected) return;
+    setSaving(true);
+    try {
+      await onSubmit(selected.id, quantity);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-[10px] border border-dashed border-line-field px-[11px] py-2.5">
+      {selected ? (
+        <div className="flex items-center gap-2">
+          <span className="min-w-0 flex-1 text-[13.5px] font-bold text-ink">{selected.name}</span>
+          <input type="number" min={1} value={quantity} onChange={(e) => setQuantity(Number(e.target.value) || 1)}
+            className={cn(inputClass, 'w-16 text-center')} />
+          <Button variant="engage" onClick={submit} disabled={saving}
+            className="shrink-0 rounded-lg px-3.5 py-2 text-[12.5px]">
+            Ajouter
+          </Button>
+          <button type="button" onClick={() => setSelected(null)} aria-label="Changer"
+            className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2">
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Rechercher un item de la bibliothèque…" autoFocus
+              className={cn(inputClass, 'flex-1')} />
+            <button type="button" onClick={onCancel} aria-label="Annuler"
+              className="shrink-0 p-1 text-ink-3"><Icon name="close" size={18} /></button>
+          </div>
+          {results.length > 0 ? (
+            <div className="flex max-h-[180px] flex-col gap-1 overflow-y-auto">
+              {results.map((t) => (
+                <button key={t.id} type="button" onClick={() => setSelected(t)}
+                  className="rounded-lg border border-line-row bg-surface-card px-2.5 py-[7px] text-left text-[13px] text-ink">
+                  {t.name}{t.code ? <span className="text-ink-3"> · {t.code}</span> : null}
+                </button>
+              ))}
+            </div>
+          ) : query.trim() ? (
+            <div className="text-xs text-ink-3">Aucun item trouvé.</div>
+          ) : null}
+        </>
+      )}
     </div>
   );
 }
@@ -81,18 +185,17 @@ function DropZone({ id, children, empty, className }: { id: string; children: Re
 type TreeCtxValue = {
   token: string;
   editMode: boolean;
-  categories: MaterielCategory[];
+  expanded: Set<string>;
   childrenByContainer: Record<string, MaterielTypeContent[]>;
   loadingContainers: Set<string>;
-  isExpanded: (id: string, depth: number) => boolean;
-  toggleExpand: (id: string) => void;
-  ensureLoaded: (containerId: string) => void;
-  createSubContainer: (parentId: string, name: string) => Promise<boolean>;
+  categories: MaterielCategory[];
+  toggleExpand: (containerId: string) => void;
+  addContainer: (containerId: string, name: string, code: string, categoryId: string) => Promise<void>;
   addItem: (containerId: string, itemId: string, quantity: number) => Promise<void>;
   updateQuantity: (containerId: string, contentId: string, quantity: number) => Promise<void>;
-  updateCategory: (typeId: string, categoryId: string) => Promise<void>;
+  updateCategory: (typeId: string, containerId: string | null, categoryId: string) => Promise<void>;
   setAvailability: (typeId: string, isAvailable: boolean, reason: string | null) => Promise<void>;
-  unlink: (containerId: string, contentId: string, isContainer?: boolean) => Promise<void>;
+  unlink: (containerId: string, contentId: string) => Promise<void>;
 };
 
 const TreeCtx = createContext<TreeCtxValue | null>(null);
@@ -103,385 +206,203 @@ function useTreeCtx(): TreeCtxValue {
   return ctx;
 }
 
-// ── Ligne d'item placé dans un contenant ──────────────────────────────
+// ── Zone de dépôt (conteneur droppable pour une liste d'enfants) ─────
 
-function ItemRow({ content, containerId }: { content: MaterielTypeContent; containerId: string }) {
-  const ctx = useTreeCtx();
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `it:${content.id}`,
-    data: { label: content.child_type?.name },
-  });
-  const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-  if (!content.child_type) return null;
-
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-center gap-2 border-b border-line-row py-[7px] last:border-b-0">
-      {ctx.editMode ? (
-        <DragHandle attributes={attributes} listeners={listeners} size={16} />
-      ) : (
-        <span className="w-[26px] shrink-0 text-[12px] font-bold text-ink-3">{content.quantity}x</span>
-      )}
-      {ctx.editMode ? (
-        <input type="number" min={1} value={content.quantity}
-          onChange={(e) => void ctx.updateQuantity(containerId, content.id, Number(e.target.value) || 1)}
-          className={cn(inputClass, 'w-[46px] shrink-0 px-1.5 py-1 text-center text-[12px]')} />
-      ) : null}
-      <span className="min-w-0 flex-1 truncate text-[13px] text-ink-2">{content.child_type.name}</span>
-      {ctx.editMode ? (
-        <button type="button" onClick={() => void ctx.unlink(containerId, content.id)} aria-label="Retirer" className="shrink-0 p-1 text-bad">
-          <Icon name="close" size={16} />
-        </button>
-      ) : null}
-    </div>
-  );
-}
-
-// ── Recherche + glisser-déposer d'items de la bibliothèque ────────────
-
-function LibraryResultRow({ item, containerId }: { item: MaterielType; containerId: string }) {
-  // L'id inclut le contenant d'origine : le même item peut apparaître dans plusieurs
-  // zones de recherche ouvertes simultanément, et dnd-kit exige des ids uniques
-  // dans tout le DndContext. L'id réel de l'item voyage dans `data.itemId`.
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
-    id: `lib:${containerId}:${item.id}`,
-    data: { itemId: item.id, label: item.name, sub: item.containers?.[0] },
-  });
+function DropZone({ id, children, empty }: { id: string; children: React.ReactNode; empty?: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id });
   return (
     <div
       ref={setNodeRef}
-      {...attributes}
-      {...listeners}
-      className={cn('flex cursor-grab touch-none items-center gap-2 rounded-lg border border-line-row bg-surface-card px-2.5 py-[7px]', isDragging && 'opacity-40')}
-    >
-      <Icon name="drag_indicator" size={15} className="shrink-0 text-ink-3" />
-      <span className="min-w-0 flex-1 truncate text-[12.5px] font-bold text-ink">{item.name}</span>
-      {item.containers && item.containers.length > 0 ? (
-        <span className="shrink-0 rounded-md bg-surface-sub px-1.5 py-0.5 text-[10px] font-bold text-ink-3">{item.containers[0]}</span>
-      ) : null}
-    </div>
-  );
-}
-
-function LibrarySearchBox({ containerId, excludeIds }: { containerId: string; excludeIds: Set<string> }) {
-  const ctx = useTreeCtx();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<MaterielType[]>([]);
-
-  useEffect(() => {
-    let active = true;
-    const timer = setTimeout(async () => {
-      const res = await fetch(`/api/admin/materiel-types?kind=items&q=${encodeURIComponent(query)}`, {
-        headers: { Authorization: `Bearer ${ctx.token}` },
-      });
-      if (!active || !res.ok) return;
-      const json = (await res.json()) as { types: MaterielType[] };
-      setResults(json.types.filter((t) => !excludeIds.has(t.id)).slice(0, 8));
-    }, 200);
-    return () => { active = false; clearTimeout(timer); };
-    // excludeIds est recréé à chaque rendu (Set) : on ne le suit pas comme dépendance pour éviter une boucle de requêtes.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, ctx.token]);
-
-  return (
-    <div className="rounded-[10px] border border-line bg-surface-sub px-[11px] py-2.5">
-      <div className="mb-2 flex items-center gap-2 rounded-lg border border-line-field bg-surface-card px-2.5 py-1.5">
-        <Icon name="search" size={16} className="text-ink-3" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Rechercher un item dans la bibliothèque…"
-          className="flex-1 bg-transparent text-[12px] text-ink outline-none placeholder:text-ink-3"
-        />
-      </div>
-      {results.length > 0 ? (
-        <div className="flex flex-col gap-1">
-          {results.map((item) => <LibraryResultRow key={item.id} item={item} containerId={containerId} />)}
-        </div>
-      ) : query.trim() ? (
-        <div className="text-[11px] text-ink-3">Aucun item trouvé.</div>
-      ) : (
-        <p className="text-[11px] leading-snug text-ink-3">Glissez un item de la bibliothèque vers un contenant pour l&apos;y ajouter.</p>
+      className={cn(
+        'rounded-[10px] transition-colors',
+        isOver && 'bg-accent-soft outline outline-2 outline-offset-2 outline-dashed outline-accent-ring'
       )}
+      style={{ minHeight: empty ? 40 : undefined }}
+    >
+      {children}
     </div>
   );
 }
 
-// ── Tuile « + Sous-contenant » ────────────────────────────────────────
+// ── Nœud de l'arbre (contenant ou item) ──────────────────────────────
 
-function CreateSubContainerTile({ parentId }: { parentId: string }) {
-  const ctx = useTreeCtx();
-  const [adding, setAdding] = useState(false);
-  const [name, setName] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submit() {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      const ok = await ctx.createSubContainer(parentId, name.trim());
-      if (ok) {
-        setName('');
-        setAdding(false);
-      }
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  if (!adding) {
-    return (
-      <button type="button" onClick={() => setAdding(true)}
-        className="flex w-[130px] shrink-0 items-center justify-center rounded-[10px] border-[1.5px] border-dashed border-line-field p-3 text-center text-[11px] font-bold text-brand">
-        + Sous-contenant
-      </button>
-    );
-  }
-
-  return (
-    <div className="flex w-[200px] shrink-0 flex-col gap-1.5 rounded-[10px] border border-dashed border-line-field bg-surface-card p-2.5">
-      <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du sous-contenant" autoFocus
-        onKeyDown={(e) => { if (e.key === 'Enter') void submit(); if (e.key === 'Escape') setAdding(false); }}
-        className={cn(inputClass, 'px-2 py-1.5 text-[12px]')} />
-      <div className="flex gap-1.5">
-        <Button variant="engage" onClick={submit} disabled={saving || !name.trim()} className="flex-1 rounded-lg px-2 py-1.5 text-[11.5px]">
-          Créer
-        </Button>
-        <button type="button" onClick={() => setAdding(false)} aria-label="Annuler" className="p-1 text-ink-3">
-          <Icon name="close" size={16} />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Corps d'un contenant (items + sous-contenants + recherche) ───────
-
-function ContainerBody({ container, depth }: { container: MaterielType; depth: number }) {
-  const ctx = useTreeCtx();
-  const contents = ctx.childrenByContainer[container.id];
-  const isLoading = ctx.loadingContainers.has(container.id);
-  const items = itemsOf(contents ?? []);
-  const subs = subsOf(contents ?? []);
-  const existingChildIds = new Set((contents ?? []).map((c) => c.child_type_id));
-
-  if (isLoading) {
-    return <div className="py-2 text-[12.5px] text-ink-3">Chargement…</div>;
-  }
-
-  return (
-    <div className="flex flex-col gap-3">
-      <DropZone id={`${ZITEMS}${container.id}`} empty={items.length === 0}>
-        <SortableContext items={items.map((c) => `it:${c.id}`)} strategy={verticalListSortingStrategy}>
-          <div className="flex flex-col">
-            {items.length === 0 ? (
-              <div className="py-1 text-[12px] text-ink-3">
-                {ctx.editMode ? 'Glissez un item de la bibliothèque ici.' : 'Aucun item.'}
-              </div>
-            ) : items.map((c) => <ItemRow key={c.id} content={c} containerId={container.id} />)}
-          </div>
-        </SortableContext>
-      </DropZone>
-
-      {subs.length > 0 || ctx.editMode ? (
-        <div>
-          <div className="mb-2 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">Sous-contenants</div>
-          <DropZone id={`${ZSUBC}${container.id}`} empty={subs.length === 0} className="flex gap-2.5 overflow-x-auto pb-1">
-            <SortableContext items={subs.map((c) => `sc:${c.id}`)} strategy={horizontalListSortingStrategy}>
-              {subs.map((c) => (c.child_type ? (
-                <NestedContainerNode key={c.id} contentId={c.id} parentId={container.id} node={c.child_type as MaterielType} depth={depth + 1} />
-              ) : null))}
-              {ctx.editMode ? <CreateSubContainerTile parentId={container.id} /> : null}
-            </SortableContext>
-          </DropZone>
-        </div>
-      ) : null}
-
-      {ctx.editMode ? <LibrarySearchBox containerId={container.id} excludeIds={existingChildIds} /> : null}
-    </div>
-  );
-}
-
-// ── Sous-contenant (nœud récursif, replié au-delà du niveau 2) ───────
-
-function NestedContainerNode({ contentId, parentId, node, depth }: {
+type LinkMeta = {
   contentId: string;
-  parentId: string;
+  quantity: number;
+  parentContainerId: string;
+};
+
+function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
   node: MaterielType;
   depth: number;
+  meta?: LinkMeta;
+  onFullDelete?: () => void;
+  sortableId: string;
 }) {
   const ctx = useTreeCtx();
-  const expanded = ctx.isExpanded(node.id, depth);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `sc:${contentId}`,
-    data: { label: node.name },
-  });
-  const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
-
-  useEffect(() => {
-    if (expanded) ctx.ensureLoaded(node.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, node.id]);
-
-  if (!expanded) {
-    return (
-      <div ref={setNodeRef} style={style} className="flex w-[150px] shrink-0 items-center gap-1 rounded-lg border border-line-row bg-surface-card px-2 py-2">
-        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} size={14} /> : null}
-        <button type="button" onClick={() => ctx.toggleExpand(node.id)} className="flex min-w-0 flex-1 items-center gap-1.5 text-left">
-          <Icon name="chevron_right" size={16} className="shrink-0 text-ink-3" />
-          <span className="min-w-0 flex-1 truncate text-[11.5px] font-bold text-ink-2">{node.name}</span>
-          <span className="shrink-0 text-[10px] font-bold text-ink-3">{node.content_count ?? 0} él.</span>
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={setNodeRef} style={style} className="w-[210px] shrink-0 rounded-[10px] border border-line-row bg-surface-sub p-[9px]">
-      <div className="mb-2 flex items-center gap-1.5">
-        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} size={15} /> : null}
-        <button type="button" onClick={() => ctx.toggleExpand(node.id)} className="shrink-0 text-ink-3">
-          <Icon name="expand_more" size={16} />
-        </button>
-        <span className="min-w-0 flex-1 truncate text-[13px] font-extrabold text-ink">{node.name}</span>
-        {ctx.editMode ? (
-          <button type="button" onClick={() => void ctx.unlink(parentId, contentId, true)} aria-label="Retirer" className="shrink-0 p-0.5 text-bad">
-            <Icon name="close" size={15} />
-          </button>
-        ) : null}
-      </div>
-      <ContainerBody container={node} depth={depth} />
-    </div>
-  );
-}
-
-// ── Carte d'un contenant racine (bandeau coloré + disponibilité) ─────
-
-function RootContainerCard({ node, onFullDelete }: { node: MaterielType; onFullDelete: () => void }) {
-  const ctx = useTreeCtx();
-  const expanded = ctx.isExpanded(node.id, 0);
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: `root:${node.id}`,
-    data: { label: node.name },
-  });
-  const style: React.CSSProperties = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const [addMode, setAddMode] = useState<'container' | 'item' | null>(null);
   const [reasonDraft, setReasonDraft] = useState(node.unavailable_reason ?? '');
-  const p = materielPalette(node.category?.color);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: sortableId });
 
-  useEffect(() => {
-    if (expanded) ctx.ensureLoaded(node.id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [expanded, node.id]);
+  const isExpanded = ctx.expanded.has(node.id);
+  const isLoading = ctx.loadingContainers.has(node.id);
+  const contents = ctx.childrenByContainer[node.id];
+  const existingChildIds = new Set((contents ?? []).map((c) => c.child_type_id));
+  // La disponibilité ne s'édite que sur les contenants racines (unités engageables) :
+  // ce sont eux qui portent is_available (chargés via ?kind=roots, donc `!meta`).
+  const isRootContainer = node.is_container && !meta;
 
   return (
-    <div ref={setNodeRef} style={style} className="mb-2.5 overflow-hidden rounded-xl border border-line bg-surface-card">
-      <div className="flex items-center gap-2.5 px-3.5 py-3" style={{ background: p.accent }}>
-        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} style={{ color: 'rgba(255,255,255,.65)' }} /> : null}
-        <button type="button" onClick={() => ctx.toggleExpand(node.id)} className="shrink-0 text-white">
-          <Icon name={expanded ? 'expand_more' : 'chevron_right'} size={20} />
-        </button>
-        <span className="min-w-0 flex-1 truncate text-[15px] font-black tracking-tight text-white">{node.name}</span>
-        {!ctx.editMode && !node.is_available ? (
-          <span className="shrink-0 rounded-full border border-white/30 bg-white/20 px-2.5 py-1 text-[11px] font-bold text-white">Indisponible</span>
+    <div ref={setNodeRef} style={{ transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 }}>
+      <div className={cn(
+        'flex items-center gap-[9px]',
+        node.is_container
+          ? 'rounded-xl border border-line-row bg-surface-sub px-3 py-2.5'
+          : 'border-b border-line-row px-1 py-[7px]'
+      )}>
+        {ctx.editMode ? <DragHandle attributes={attributes} listeners={listeners} /> : null}
+        {meta && !ctx.editMode ? (
+          <span className="min-w-[22px] shrink-0 text-[12.5px] font-bold text-ink-3">{meta.quantity}x</span>
         ) : null}
-        {ctx.editMode ? (
+        <span
+          className={cn(
+            'min-w-0 flex-1 text-sm',
+            node.is_container ? 'cursor-pointer font-bold text-ink' : 'font-medium text-ink-2'
+          )}
+          onClick={node.is_container ? () => ctx.toggleExpand(node.id) : undefined}
+        >
+          {node.name}
+          {node.code ? <span className="ml-[7px] text-xs font-semibold text-ink-3">{node.code}</span> : null}
+        </span>
+        {node.is_container && !ctx.editMode && node.category ? (
+          <span title={node.category.name} className="inline-flex shrink-0 items-center gap-[5px] text-[11.5px] font-bold text-ink-2">
+            <span className="h-2 w-2 rounded-full" style={{ background: categoryDot(node.category.color) }} />
+            {node.category.name}
+          </span>
+        ) : null}
+        {isRootContainer && !ctx.editMode && !node.is_available ? (
+          <span title={node.unavailable_reason || 'Indisponible'} className="inline-flex shrink-0">
+            <Badge tone="bad">Indisponible</Badge>
+          </span>
+        ) : null}
+        {node.is_container && ctx.editMode ? (
           <select
             value={node.category_id ?? ''}
-            onChange={(e) => void ctx.updateCategory(node.id, e.target.value)}
-            className="shrink-0 rounded-lg border border-white/35 bg-white/10 px-2 py-1.5 text-xs font-bold text-white"
+            onChange={(e) => void ctx.updateCategory(node.id, meta?.parentContainerId ?? null, e.target.value)}
+            className={cn(inputClass, 'w-[140px] shrink-0')}
           >
-            <option value="" className="text-ink">Type…</option>
-            {ctx.categories.map((c) => <option key={c.id} value={c.id} className="text-ink">{c.name}</option>)}
+            <option value="">Type…</option>
+            {ctx.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-        ) : node.category ? (
-          <span className="shrink-0 text-xs font-bold text-white/80">{node.category.name}</span>
         ) : null}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2.5 border-b border-line-row bg-surface-sub/60 px-3.5 py-2.5">
-        <Toggle
-          value={node.is_available}
-          disabled={!ctx.editMode}
-          onChange={(v) => { if (v) setReasonDraft(''); void ctx.setAvailability(node.id, v, v ? null : reasonDraft || null); }}
-        />
-        <span className={cn('text-[12.5px] font-bold', node.is_available ? 'text-engage' : 'text-bad')}>
-          {node.is_available ? 'Disponible' : 'Indisponible'}
-        </span>
-        {ctx.editMode && !node.is_available ? (
-          <input
-            value={reasonDraft}
-            onChange={(e) => setReasonDraft(e.target.value)}
-            onBlur={() => void ctx.setAvailability(node.id, false, reasonDraft || null)}
-            placeholder="Motif (optionnel) : panne, maintenance…"
-            className={cn(inputClass, 'min-w-[160px] flex-1 px-2.5 py-[6px] text-[12px]')}
-          />
-        ) : !node.is_available && node.unavailable_reason ? (
-          <span className="text-[11.5px] text-ink-3">— {node.unavailable_reason}</span>
-        ) : node.is_available ? (
-          <span className="text-[11.5px] text-ink-3">— une mission peut réclamer ce type en quantité.</span>
-        ) : null}
-        {ctx.editMode ? (
-          <button type="button" onClick={onFullDelete} className="ml-auto shrink-0 text-xs font-bold text-bad">
+        {meta ? (
+          <>
+            {ctx.editMode ? (
+              <input type="number" min={1} value={meta.quantity}
+                onChange={(e) => void ctx.updateQuantity(meta.parentContainerId, meta.contentId, Number(e.target.value) || 1)}
+                className={cn(inputClass, 'w-[58px] shrink-0 text-center')} />
+            ) : null}
+            {ctx.editMode ? (
+              <button type="button" onClick={() => void ctx.unlink(meta.parentContainerId, meta.contentId)} aria-label="Retirer"
+                className="shrink-0 p-1 text-bad"><Icon name="close" size={18} /></button>
+            ) : null}
+          </>
+        ) : onFullDelete && ctx.editMode ? (
+          <Button variant="ghost" onClick={onFullDelete}
+            className="shrink-0 rounded-[7px] border-bad/30 px-2.5 py-[5px] text-xs text-bad">
             Supprimer
-          </button>
+          </Button>
         ) : null}
       </div>
 
-      {expanded ? (
-        <div className="p-3.5">
-          <ContainerBody container={node} depth={0} />
+      {isRootContainer && ctx.editMode ? (
+        <div className="mt-2 flex flex-wrap items-center gap-2.5 rounded-[10px] border border-dashed border-line bg-surface-card px-3 py-2">
+          <Toggle
+            value={node.is_available}
+            onChange={(v) => {
+              if (v) setReasonDraft('');
+              void ctx.setAvailability(node.id, v, v ? null : reasonDraft || null);
+            }}
+          />
+          <span className={cn('text-[12.5px] font-bold', node.is_available ? 'text-engage' : 'text-bad')}>
+            {node.is_available ? 'Disponible' : 'Indisponible'}
+          </span>
+          {!node.is_available ? (
+            <input
+              value={reasonDraft}
+              onChange={(e) => setReasonDraft(e.target.value)}
+              onBlur={() => void ctx.setAvailability(node.id, false, reasonDraft || null)}
+              placeholder="Motif (optionnel) : panne, maintenance…"
+              className={cn(inputClass, 'min-w-[160px] flex-1 px-2.5 py-[7px] text-[12.5px]')}
+            />
+          ) : null}
         </div>
       ) : null}
-    </div>
-  );
-}
 
-// ── Formulaire « Créer un contenant » (racine, en bas de page) ───────
+      {isExpanded && node.is_container ? (
+        <div className="ml-[30px] mt-2 flex flex-col gap-2">
+          {isLoading ? (
+            <div className="text-[12.5px] text-ink-3">Chargement…</div>
+          ) : (
+            <DropZone id={`zone:${node.id}`} empty={(contents ?? []).length === 0}>
+              <SortableContext items={(contents ?? []).map((c) => `node:${c.id}`)} strategy={verticalListSortingStrategy}>
+                <div className="flex flex-col gap-2">
+                  {(contents ?? []).length === 0 ? (
+                    <div className="p-0.5 text-[12.5px] text-ink-3">
+                      {ctx.editMode ? 'Ce contenant est vide. Glissez un élément ici, ou ajoutez-en un ci-dessous.' : 'Ce contenant est vide.'}
+                    </div>
+                  ) : (contents ?? []).map((c) => (
+                    c.child_type ? (
+                      <TreeNode
+                        key={c.id}
+                        sortableId={`node:${c.id}`}
+                        node={c.child_type as MaterielType}
+                        depth={depth + 1}
+                        meta={{ contentId: c.id, quantity: c.quantity, parentContainerId: node.id }}
+                      />
+                    ) : null
+                  ))}
+                </div>
+              </SortableContext>
+            </DropZone>
+          )}
 
-function CreateRootContainerForm({ categories, onSubmit }: {
-  categories: MaterielCategory[];
-  onSubmit: (name: string, categoryId: string) => Promise<void>;
-}) {
-  const [name, setName] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [saving, setSaving] = useState(false);
-
-  async function submit() {
-    if (!name.trim()) return;
-    setSaving(true);
-    try {
-      await onSubmit(name.trim(), categoryId);
-      setName('');
-      setCategoryId('');
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <div className="rounded-[10px] border-[1.5px] border-dashed border-line-field bg-surface-sub px-3.5 py-3">
-      <div className="mb-2.5 text-[11px] font-extrabold uppercase tracking-wide text-ink-3">Créer un contenant</div>
-      <div className="flex flex-wrap items-center gap-2">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nom du contenant"
-          onKeyDown={(e) => { if (e.key === 'Enter') void submit(); }}
-          className={cn(inputClass, 'min-w-[160px] flex-1')} />
-        <select value={categoryId} onChange={(e) => setCategoryId(e.target.value)} className={cn(inputClass, 'w-[190px]')}>
-          <option value="">Type (si autonome)…</option>
-          {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        <Button variant="engage" onClick={submit} disabled={saving || !name.trim()} className="shrink-0 rounded-lg px-4 py-2 text-[12.5px]">
-          Créer
-        </Button>
-      </div>
-      <p className="mt-2 text-[11px] leading-relaxed text-ink-3">
-        Le type n&apos;est utile que si ce contenant reste autonome (non placé dans un autre) — sinon laissez-le vide, il pourra être glissé dans un contenant existant.
-      </p>
+          {ctx.editMode ? (
+            <div className="flex flex-col gap-2">
+              {addMode === 'container' ? (
+                <AddContainerForm
+                  categories={ctx.categories}
+                  onSubmit={async (name, code, categoryId) => { await ctx.addContainer(node.id, name, code, categoryId); setAddMode(null); }}
+                  onCancel={() => setAddMode(null)}
+                />
+              ) : addMode === 'item' ? (
+                <AddItemForm
+                  token={ctx.token}
+                  excludeIds={existingChildIds}
+                  onSubmit={async (itemId, quantity) => { await ctx.addItem(node.id, itemId, quantity); setAddMode(null); }}
+                  onCancel={() => setAddMode(null)}
+                />
+              ) : (
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setAddMode('container')}
+                    className="flex-1 rounded-[9px] border border-dashed border-line-field bg-surface-card px-3 py-2 text-[12.5px] font-bold text-brand">
+                    + Ajouter un contenant
+                  </button>
+                  <button type="button" onClick={() => setAddMode('item')}
+                    className="flex-1 rounded-[9px] border border-dashed border-line-field bg-surface-card px-3 py-2 text-[12.5px] font-bold text-brand">
+                    + Ajouter un item
+                  </button>
+                </div>
+              )}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
 
 // ── Page principale ───────────────────────────────────────────────────
-
-type Location = { zoneId: string; index: number };
 
 export default function AdminMaterielsPage() {
   const router = useRouter();
@@ -489,20 +410,13 @@ export default function AdminMaterielsPage() {
   const [loading, setLoading] = useState(true);
   const [roots, setRoots] = useState<MaterielType[]>([]);
   const [childrenByContainer, setChildrenByContainer] = useState<Record<string, MaterielTypeContent[]>>({});
-  // État de dépli, gardé indépendamment de la profondeur affichée : un contenant peut changer
-  // de profondeur (promu/rétrogradé racine, ou re-parenté) sans que son état de dépli explicite
-  // soit réinterprété. `expandedIdsRef` porte l'état réel ; `initializedIdsRef` mémorise les ids
-  // déjà initialisés avec le défaut (déplié si profondeur < 2) pour ne l'appliquer qu'une fois.
-  const expandedIdsRef = useRef<Set<string>>(new Set());
-  const initializedIdsRef = useRef<Set<string>>(new Set());
-  const [, forceRerender] = useState(0);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loadingContainers, setLoadingContainers] = useState<Set<string>>(new Set());
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [addingRoot, setAddingRoot] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [categories, setCategories] = useState<MaterielCategory[]>([]);
-  const [activeDragLabel, setActiveDragLabel] = useState<string | null>(null);
-  const [activeDragSub, setActiveDragSub] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -514,31 +428,15 @@ export default function AdminMaterielsPage() {
     }
   }, []);
 
-  const loadContents = useCallback(async (containerId: string, tok: string): Promise<MaterielTypeContent[]> => {
+  const loadContents = useCallback(async (containerId: string, tok: string) => {
     setLoadingContainers((prev) => new Set(prev).add(containerId));
     const res = await fetch(`/api/admin/materiel-types/${containerId}/contents`, { headers: { Authorization: `Bearer ${tok}` } });
-    let contents: MaterielTypeContent[] = [];
     if (res.ok) {
       const json = (await res.json()) as { contents: MaterielTypeContent[] };
-      contents = json.contents;
-      setChildrenByContainer((prev) => ({ ...prev, [containerId]: contents }));
+      setChildrenByContainer((prev) => ({ ...prev, [containerId]: json.contents }));
     }
     setLoadingContainers((prev) => { const next = new Set(prev); next.delete(containerId); return next; });
-    return contents;
   }, []);
-
-  const childrenRef = useRef(childrenByContainer);
-  childrenRef.current = childrenByContainer;
-  const loadingRef = useRef(loadingContainers);
-  loadingRef.current = loadingContainers;
-  const tokenRef = useRef(token);
-  tokenRef.current = token;
-
-  const ensureLoaded = useCallback((containerId: string) => {
-    if (childrenRef.current[containerId] === undefined && !loadingRef.current.has(containerId)) {
-      void loadContents(containerId, tokenRef.current);
-    }
-  }, [loadContents]);
 
   useEffect(() => {
     async function init() {
@@ -572,57 +470,42 @@ export default function AdminMaterielsPage() {
     void init();
   }, [router, fetchRoots]);
 
-  function isExpanded(id: string, depth: number) {
-    if (!initializedIdsRef.current.has(id)) {
-      initializedIdsRef.current.add(id);
-      if (depth < 2) expandedIdsRef.current.add(id);
-    }
-    return expandedIdsRef.current.has(id);
-  }
-  function toggleExpand(id: string) {
-    initializedIdsRef.current.add(id);
-    if (expandedIdsRef.current.has(id)) expandedIdsRef.current.delete(id); else expandedIdsRef.current.add(id);
-    forceRerender((n) => n + 1);
+  function toggleExpand(containerId: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(containerId)) {
+        next.delete(containerId);
+      } else {
+        next.add(containerId);
+        if (!childrenByContainer[containerId]) void loadContents(containerId, token);
+      }
+      return next;
+    });
   }
 
-  async function createSubContainer(parentId: string, name: string): Promise<boolean> {
+  async function addContainer(containerId: string, name: string, code: string, categoryId: string) {
     const createRes = await fetch('/api/admin/materiel-types', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, is_container: true }),
+      body: JSON.stringify({ name, code, is_container: true, category_id: categoryId || null }),
     });
-    if (!createRes.ok) {
-      const json = (await createRes.json().catch(() => ({}))) as { error?: string };
-      setError(json.error ?? "Erreur lors de la création du sous-contenant.");
-      return false;
-    }
+    if (!createRes.ok) return;
     const { type } = (await createRes.json()) as { type: MaterielType };
-    const linkRes = await fetch(`/api/admin/materiel-types/${parentId}/contents`, {
+    await fetch(`/api/admin/materiel-types/${containerId}/contents`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ child_type_id: type.id, quantity: 1 }),
     });
-    if (!linkRes.ok) {
-      const json = (await linkRes.json().catch(() => ({}))) as { error?: string };
-      setError(json.error ?? "Erreur lors du rattachement du sous-contenant.");
-      return false;
-    }
-    await loadContents(parentId, token);
-    return true;
+    await loadContents(containerId, token);
   }
 
   async function addItem(containerId: string, itemId: string, quantity: number) {
-    const res = await fetch(`/api/admin/materiel-types/${containerId}/contents`, {
+    await fetch(`/api/admin/materiel-types/${containerId}/contents`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ child_type_id: itemId, quantity }),
     });
-    if (res.ok) {
-      await loadContents(containerId, token);
-    } else {
-      const json = (await res.json().catch(() => ({}))) as { error?: string };
-      setError(json.error ?? "Cet ajout n'est pas possible.");
-    }
+    await loadContents(containerId, token);
   }
 
   async function updateQuantity(containerId: string, contentId: string, quantity: number) {
@@ -638,9 +521,18 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function updateCategory(typeId: string, categoryId: string) {
+  async function updateCategory(typeId: string, containerId: string | null, categoryId: string) {
     const category = categories.find((c) => c.id === categoryId) ?? null;
-    setRoots((prev) => prev.map((r) => (r.id === typeId ? { ...r, category_id: categoryId || null, category } : r)));
+    if (containerId === null) {
+      setRoots((prev) => prev.map((r) => (r.id === typeId ? { ...r, category_id: categoryId || null, category } : r)));
+    } else {
+      setChildrenByContainer((prev) => ({
+        ...prev,
+        [containerId]: (prev[containerId] ?? []).map((c) =>
+          c.child_type?.id === typeId ? { ...c, child_type: { ...c.child_type, category_id: categoryId || null, category } } : c
+        ),
+      }));
+    }
     await fetch(`/api/admin/materiel-types/${typeId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
@@ -648,14 +540,12 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function unlink(containerId: string, contentId: string, isContainer = false) {
+  async function unlink(containerId: string, contentId: string) {
     setChildrenByContainer((prev) => ({ ...prev, [containerId]: (prev[containerId] ?? []).filter((c) => c.id !== contentId) }));
     await fetch(`/api/admin/materiel-types/${containerId}/contents/${contentId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` },
     });
-    // Un contenant détaché redevient potentiellement un contenant racine (un item ne le peut jamais).
-    if (isContainer) await fetchRoots(token);
   }
 
   async function setAvailability(typeId: string, isAvailable: boolean, reason: string | null) {
@@ -668,13 +558,14 @@ export default function AdminMaterielsPage() {
     });
   }
 
-  async function createRootContainer(name: string, categoryId: string) {
+  async function handleAddRoot(name: string, code: string, categoryId: string) {
     const res = await fetch('/api/admin/materiel-types', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, is_container: true, category_id: categoryId || null }),
+      body: JSON.stringify({ name, code, is_container: true, category_id: categoryId || null }),
     });
     if (res.ok) {
+      setAddingRoot(false);
       await fetchRoots(token);
     } else {
       const json = (await res.json()) as { error?: string };
@@ -696,45 +587,27 @@ export default function AdminMaterielsPage() {
 
   // ── Localisation d'un id glissable dans l'arbre courant ──────────────
 
+  type Location = { zoneId: string; index: number };
+
   function findLocation(id: string): Location | null {
-    if (id === 'zroot') return { zoneId: 'zroot', index: roots.length };
+    if (id === 'zone:root') return { zoneId: 'root', index: roots.length };
+    if (id.startsWith('zone:')) {
+      const containerId = id.slice(5);
+      return { zoneId: containerId, index: (childrenByContainer[containerId] ?? []).length };
+    }
     if (id.startsWith('root:')) {
-      const idx = roots.findIndex((r) => r.id === id.slice(5));
-      return idx >= 0 ? { zoneId: 'zroot', index: idx } : null;
+      const typeId = id.slice(5);
+      const idx = roots.findIndex((r) => r.id === typeId);
+      return idx >= 0 ? { zoneId: 'root', index: idx } : null;
     }
-    if (id.startsWith(ZITEMS)) {
-      const containerId = id.slice(ZITEMS.length);
-      return { zoneId: id, index: itemsOf(childrenByContainer[containerId] ?? []).length };
-    }
-    if (id.startsWith(ZSUBC)) {
-      const containerId = id.slice(ZSUBC.length);
-      return { zoneId: id, index: subsOf(childrenByContainer[containerId] ?? []).length };
-    }
-    if (id.startsWith('it:')) {
-      const contentId = id.slice(3);
+    if (id.startsWith('node:')) {
+      const contentId = id.slice(5);
       for (const [containerId, list] of Object.entries(childrenByContainer)) {
-        const idx = itemsOf(list).findIndex((c) => c.id === contentId);
-        if (idx >= 0) return { zoneId: `${ZITEMS}${containerId}`, index: idx };
-      }
-    }
-    if (id.startsWith('sc:')) {
-      const contentId = id.slice(3);
-      for (const [containerId, list] of Object.entries(childrenByContainer)) {
-        const idx = subsOf(list).findIndex((c) => c.id === contentId);
-        if (idx >= 0) return { zoneId: `${ZSUBC}${containerId}`, index: idx };
+        const idx = list.findIndex((c) => c.id === contentId);
+        if (idx >= 0) return { zoneId: containerId, index: idx };
       }
     }
     return null;
-  }
-
-  async function persistPositions(containerId: string, orderedContentIds: string[]) {
-    await Promise.all(
-      orderedContentIds.map((id, i) => fetch(`/api/admin/materiel-types/${containerId}/contents/${id}`, {
-        method: 'PATCH',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ position: i }),
-      }))
-    );
   }
 
   async function persistRootOrder(next: MaterielType[]) {
@@ -747,29 +620,88 @@ export default function AdminMaterielsPage() {
     );
   }
 
-  async function moveItem(fromLoc: Location, toLoc: Location, contentId: string) {
-    const fromContainerId = fromLoc.zoneId.slice(ZITEMS.length);
-    const toContainerId = toLoc.zoneId.slice(ZITEMS.length);
+  async function persistContainerOrder(containerId: string, next: MaterielTypeContent[]) {
+    await Promise.all(
+      next.map((c, i) => fetch(`/api/admin/materiel-types/${containerId}/contents/${c.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ position: i }),
+      }))
+    );
+  }
 
-    if (fromContainerId === toContainerId) {
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+    if (activeId === overId) return;
+
+    const fromLoc = findLocation(activeId);
+    const toLoc = findLocation(overId);
+    if (!fromLoc || !toLoc) return;
+
+    let draggedType: MaterielType | undefined;
+    let draggedContentId: string | null = null;
+    let draggedQuantity = 1;
+
+    if (activeId.startsWith('root:')) {
+      draggedType = roots.find((r) => r.id === activeId.slice(5));
+    } else if (activeId.startsWith('node:')) {
+      const contentId = activeId.slice(5);
+      const list = childrenByContainer[fromLoc.zoneId] ?? [];
+      const entry = list.find((c) => c.id === contentId);
+      if (entry?.child_type) {
+        draggedType = entry.child_type as MaterielType;
+        draggedContentId = entry.id;
+        draggedQuantity = entry.quantity;
+      }
+    }
+    if (!draggedType) return;
+
+    // Un item (non-contenant) ne peut pas devenir un contenant racine.
+    if (toLoc.zoneId === 'root' && !draggedType.is_container) return;
+    // Un contenant ne peut pas se contenir lui-même.
+    if (toLoc.zoneId === draggedType.id) return;
+
+    if (fromLoc.zoneId === toLoc.zoneId) {
       if (fromLoc.index === toLoc.index) return;
-      const list = childrenByContainer[fromContainerId] ?? [];
-      const kindList = itemsOf(list);
-      const others = list.filter((c) => !kindList.includes(c));
-      const reordered = arrayMove(kindList, fromLoc.index, toLoc.index);
-      setChildrenByContainer((prev) => ({ ...prev, [fromContainerId]: [...reordered, ...others] }));
-      await persistPositions(fromContainerId, reordered.map((c) => c.id));
+      if (fromLoc.zoneId === 'root') {
+        const next = arrayMove(roots, fromLoc.index, toLoc.index);
+        setRoots(next);
+        await persistRootOrder(next);
+      } else {
+        const list = childrenByContainer[fromLoc.zoneId] ?? [];
+        const next = arrayMove(list, fromLoc.index, toLoc.index);
+        setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: next }));
+        await persistContainerOrder(fromLoc.zoneId, next);
+      }
       return;
     }
 
-    const fromList = childrenByContainer[fromContainerId] ?? [];
-    const entry = itemsOf(fromList)[fromLoc.index];
-    if (!entry || !entry.child_type) return;
+    // Déplacement entre deux emplacements différents (racine <-> contenant, ou contenant <-> contenant).
+    // On crée d'abord l'entrée à destination, et on ne retire l'ancienne qu'une fois ce déplacement confirmé,
+    // pour éviter de perdre l'item si la destination refuse l'insertion (doublon, cycle...).
+    if (toLoc.zoneId === 'root') {
+      const nextRoots = roots.filter((r) => r.id !== draggedType!.id);
+      nextRoots.splice(toLoc.index, 0, draggedType);
+      setRoots(nextRoots);
+      await persistRootOrder(nextRoots);
 
-    const res = await fetch(`/api/admin/materiel-types/${toContainerId}/contents`, {
+      if (draggedContentId) {
+        await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        await loadContents(fromLoc.zoneId, token);
+      }
+      return;
+    }
+
+    const res = await fetch(`/api/admin/materiel-types/${toLoc.zoneId}/contents`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ child_type_id: entry.child_type.id, quantity: entry.quantity }),
+      body: JSON.stringify({ child_type_id: draggedType.id, quantity: draggedQuantity }),
     });
     if (!res.ok) {
       const json = (await res.json().catch(() => ({}))) as { error?: string };
@@ -777,145 +709,19 @@ export default function AdminMaterielsPage() {
       return;
     }
     const { content: newContent } = (await res.json()) as { content: MaterielTypeContent };
+    const destList = [...(childrenByContainer[toLoc.zoneId] ?? [])];
+    destList.splice(toLoc.index, 0, newContent);
+    setChildrenByContainer((prev) => ({ ...prev, [toLoc.zoneId]: destList }));
+    await persistContainerOrder(toLoc.zoneId, destList);
 
-    const toList = childrenByContainer[toContainerId] ?? [];
-    const toKind = itemsOf(toList);
-    const toOthers = toList.filter((c) => !toKind.includes(c));
-    toKind.splice(toLoc.index, 0, newContent);
-    setChildrenByContainer((prev) => ({
-      ...prev,
-      [fromContainerId]: fromList.filter((c) => c.id !== contentId),
-      [toContainerId]: [...toKind, ...toOthers],
-    }));
-    await persistPositions(toContainerId, toKind.map((c) => c.id));
-    await fetch(`/api/admin/materiel-types/${fromContainerId}/contents/${contentId}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  }
-
-  async function moveContainer(fromLoc: Location, toLoc: Location, draggedType: MaterielType, contentId: string | null) {
-    if (fromLoc.zoneId === toLoc.zoneId) {
-      if (fromLoc.index === toLoc.index) return;
-      if (fromLoc.zoneId === 'zroot') {
-        const next = arrayMove(roots, fromLoc.index, toLoc.index);
-        setRoots(next);
-        await persistRootOrder(next);
-      } else {
-        const containerId = fromLoc.zoneId.slice(ZSUBC.length);
-        const list = childrenByContainer[containerId] ?? [];
-        const kindList = subsOf(list);
-        const others = list.filter((c) => !kindList.includes(c));
-        const reordered = arrayMove(kindList, fromLoc.index, toLoc.index);
-        setChildrenByContainer((prev) => ({ ...prev, [containerId]: [...reordered, ...others] }));
-        await persistPositions(containerId, reordered.map((c) => c.id));
-      }
-      return;
-    }
-
-    // Déplacement entre deux emplacements différents (racine <-> contenant, ou contenant <-> contenant).
-    if (toLoc.zoneId === 'zroot') {
-      const nextRoots = [...roots];
-      nextRoots.splice(toLoc.index, 0, draggedType);
-      setRoots(nextRoots);
-      await persistRootOrder(nextRoots);
-      // Recharge depuis le serveur : l'objet glissé (venant du contenu d'un contenant) n'a
-      // pas is_available/unavailable_reason, absents de cet embed — sans ce recharge, la
-      // carte racine promue afficherait "Indisponible" par défaut jusqu'au prochain rechargement.
-      await fetchRoots(token);
-    } else {
-      const toContainerId = toLoc.zoneId.slice(ZSUBC.length);
-      const res = await fetch(`/api/admin/materiel-types/${toContainerId}/contents`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ child_type_id: draggedType.id, quantity: 1 }),
-      });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(json.error ?? "Ce déplacement n'est pas possible.");
-        return;
-      }
-      // Recharge plutôt que d'utiliser la réponse du POST : cette dernière n'inclut pas
-      // content_count, calculé uniquement par le GET, et resterait "0 él." affiché à tort
-      // si le contenant déplacé n'était pas vide.
-      const freshList = await loadContents(toContainerId, token);
-      const freshKind = subsOf(freshList);
-      const freshOthers = freshList.filter((c) => !freshKind.includes(c));
-      const movedIdx = freshKind.findIndex((c) => c.child_type_id === draggedType.id);
-      if (movedIdx >= 0) {
-        const [movedEntry] = freshKind.splice(movedIdx, 1);
-        freshKind.splice(toLoc.index, 0, movedEntry);
-        setChildrenByContainer((prev) => ({ ...prev, [toContainerId]: [...freshKind, ...freshOthers] }));
-        await persistPositions(toContainerId, freshKind.map((c) => c.id));
-      }
-    }
-
-    if (fromLoc.zoneId === 'zroot') {
-      setRoots((prev) => prev.filter((r) => r.id !== draggedType.id));
-    } else if (contentId) {
-      const fromContainerId = fromLoc.zoneId.slice(ZSUBC.length);
-      setChildrenByContainer((prev) => ({ ...prev, [fromContainerId]: (prev[fromContainerId] ?? []).filter((c) => c.id !== contentId) }));
-      await fetch(`/api/admin/materiel-types/${fromContainerId}/contents/${contentId}`, {
+    if (fromLoc.zoneId === 'root') {
+      setRoots((prev) => prev.filter((r) => r.id !== draggedType!.id));
+    } else if (draggedContentId) {
+      await fetch(`/api/admin/materiel-types/${fromLoc.zoneId}/contents/${draggedContentId}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` },
       });
-    }
-  }
-
-  function handleDragStart(event: DragStartEvent) {
-    const data = event.active.data.current as { label?: string; sub?: string } | undefined;
-    setActiveDragLabel(data?.label ?? null);
-    setActiveDragSub(data?.sub ?? null);
-  }
-
-  function handleDragCancel(_event: DragCancelEvent) {
-    setActiveDragLabel(null);
-    setActiveDragSub(null);
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveDragLabel(null);
-    setActiveDragSub(null);
-    const { active, over } = event;
-    if (!over) return;
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    if (activeId === overId) return;
-
-    // Glisser un item de la bibliothèque vers une zone d'items → nouveau lien.
-    // L'id du draggable inclut le contenant d'origine de la recherche (pour rester unique
-    // si le même item apparaît dans plusieurs zones de recherche ouvertes) : l'id réel de
-    // l'item voyage dans `data.itemId`, pas dans l'id du draggable lui-même.
-    if (activeId.startsWith('lib:')) {
-      const itemId = (active.data.current as { itemId?: string } | undefined)?.itemId;
-      const toLoc = findLocation(overId);
-      if (!itemId || !toLoc || !toLoc.zoneId.startsWith(ZITEMS)) return;
-      const containerId = toLoc.zoneId.slice(ZITEMS.length);
-      await addItem(containerId, itemId, 1);
-      return;
-    }
-
-    const fromLoc = findLocation(activeId);
-    const toLoc = findLocation(overId);
-    if (!fromLoc || !toLoc) return;
-    if (fromLoc.zoneId === toLoc.zoneId && fromLoc.index === toLoc.index) return;
-
-    if (activeId.startsWith('it:')) {
-      if (!toLoc.zoneId.startsWith(ZITEMS)) return;
-      await moveItem(fromLoc, toLoc, activeId.slice(3));
-      return;
-    }
-
-    if (activeId.startsWith('root:') || activeId.startsWith('sc:')) {
-      if (!(toLoc.zoneId === 'zroot' || toLoc.zoneId.startsWith(ZSUBC))) return;
-      const isRoot = activeId.startsWith('root:');
-      const contentId = isRoot ? null : activeId.slice(3);
-      const draggedType = isRoot
-        ? roots.find((r) => r.id === activeId.slice(5))
-        : (subsOf(childrenByContainer[fromLoc.zoneId.slice(ZSUBC.length)] ?? []).find((c) => c.id === contentId)?.child_type as MaterielType | undefined);
-      if (!draggedType) return;
-      if (toLoc.zoneId === `${ZSUBC}${draggedType.id}`) return; // un contenant ne peut pas se contenir lui-même
-      await moveContainer(fromLoc, toLoc, draggedType, contentId);
+      setChildrenByContainer((prev) => ({ ...prev, [fromLoc.zoneId]: (prev[fromLoc.zoneId] ?? []).filter((c) => c.id !== draggedContentId) }));
     }
   }
 
@@ -938,13 +744,12 @@ export default function AdminMaterielsPage() {
   const ctxValue: TreeCtxValue = {
     token,
     editMode,
-    categories,
+    expanded,
     childrenByContainer,
     loadingContainers,
-    isExpanded,
+    categories,
     toggleExpand,
-    ensureLoaded,
-    createSubContainer,
+    addContainer,
     addItem,
     updateQuantity,
     updateCategory,
@@ -956,21 +761,16 @@ export default function AdminMaterielsPage() {
     <div className="pb-20">
       <PageHeader
         title="Matériel"
-        subtitle="Plan de rangement : dépliez un contenant pour ajouter d'autres contenants ou des items de la bibliothèque. Glissez pour réorganiser, y compris entre contenants."
+        subtitle="Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d'autres contenants ou des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants."
         actions={
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold text-ink-2">Édition</span>
-            <Toggle value={editMode} onChange={setEditMode} label="Mode édition" />
-          </div>
+          <Button
+            variant={editMode ? 'engage' : 'ghost'}
+            onClick={() => setEditMode((v) => !v)}
+          >
+            {editMode ? 'Valider' : 'Modifier'}
+          </Button>
         }
       />
-
-      {editMode ? (
-        <div className="mb-4 flex items-center gap-2 rounded-[10px] border border-[#FBD9BE] bg-[#FFF3E9] px-3 py-2.5 text-xs font-bold text-[#B4590F]">
-          <Icon name="drag_indicator" size={17} />
-          Mode édition actif — glissez pour réorganiser, y compris entre niveaux. Validez pour repasser en lecture.
-        </div>
-      ) : null}
 
       {error ? (
         <div className="mb-4 rounded-[10px] border border-bad/30 bg-bad-soft px-4 py-3 text-[13px] text-bad">
@@ -979,49 +779,43 @@ export default function AdminMaterielsPage() {
       ) : null}
 
       <TreeCtx.Provider value={ctxValue}>
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={(e) => void handleDragEnd(e)}
-          onDragCancel={handleDragCancel}
-        >
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
           {roots.length === 0 ? (
-            <DropZone id="zroot" empty>
+            <DropZone id="zone:root" empty>
               <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
                 <p className="text-[13.5px] text-ink-3">Aucun contenant pour l&apos;instant. Créez-en un ci-dessous.</p>
               </div>
             </DropZone>
           ) : (
-            <DropZone id="zroot">
+            <DropZone id="zone:root">
               <SortableContext items={roots.map((r) => `root:${r.id}`)} strategy={verticalListSortingStrategy}>
-                <div className="mb-4 flex flex-col">
+                <div className="mb-4 flex flex-col gap-2">
                   {roots.map((r) => (
-                    <RootContainerCard key={r.id} node={r} onFullDelete={() => void handleDeleteRoot(r.id, r.name)} />
+                    <TreeNode
+                      key={r.id}
+                      sortableId={`root:${r.id}`}
+                      node={r}
+                      depth={0}
+                      onFullDelete={() => void handleDeleteRoot(r.id, r.name)}
+                    />
                   ))}
                 </div>
               </SortableContext>
             </DropZone>
           )}
-
-          <DragOverlay>
-            {activeDragLabel ? (
-              <div className="flex items-center gap-2 rounded-lg border border-line-field bg-surface-card px-2.5 py-2 shadow-lift" style={{ transform: 'rotate(-2deg)' }}>
-                <Icon name="drag_indicator" size={16} className="text-ink-3" />
-                <span className="text-[12.5px] font-bold text-ink">{activeDragLabel}</span>
-                {activeDragSub ? <span className="rounded-md bg-surface-sub px-1.5 py-0.5 text-[10px] font-bold text-ink-3">{activeDragSub}</span> : null}
-              </div>
-            ) : null}
-          </DragOverlay>
         </DndContext>
       </TreeCtx.Provider>
 
-      {editMode ? <CreateRootContainerForm categories={categories} onSubmit={createRootContainer} /> : null}
-
-      <p className="mt-4 text-[11.5px] leading-relaxed text-ink-3">
-        Un « contenant racine » n&apos;est pas un type à part : c&apos;est simplement un contenant qui n&apos;est placé dans aucun autre — d&apos;où le type et la disponibilité en tête de carte, propres à ce cas.
-        Au-delà du niveau 2, un contenant s&apos;affiche replié avec son compteur. En édition, tout est glisser-déposer : items de la bibliothèque, items déjà placés, sous-contenants — aucun bouton « Ajouter ».
-      </p>
+      {editMode ? (
+        addingRoot ? (
+          <AddContainerForm categories={categories} onSubmit={handleAddRoot} onCancel={() => setAddingRoot(false)} />
+        ) : (
+          <button type="button" onClick={() => setAddingRoot(true)}
+            className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
+            + Nouveau contenant
+          </button>
+        )
+      ) : null}
     </div>
   );
 }

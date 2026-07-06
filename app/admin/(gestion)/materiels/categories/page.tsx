@@ -1,25 +1,90 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DraggableAttributes,
+  type DraggableSyntheticListeners,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  arrayMove,
+  useSortable,
+  verticalListSortingStrategy,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, MaterielCategory } from '@/lib/types';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Modal } from '@/components/ui/modal';
-import { KebabMenu } from '@/components/ui/kebab-menu';
-import { materielPalette, MATERIEL_COLOR_OPTIONS } from '@/lib/materiel-palette';
 import { cn } from '@/lib/cn';
+
+// ── Palette des catégories (même palette que les compétences) ────────
+
+const CATEGORY_PALETTE: Record<string, { accent: string; soft: string; softBorder: string }> = {
+  slate: { accent: '#5B6478', soft: '#F4F6FA', softBorder: '#E5E9F0' },
+  amber: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  sky: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+  violet: { accent: '#7A2E86', soft: '#F5EDFA', softBorder: '#E3D6EF' },
+  emerald: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  pink: { accent: '#8E1279', soft: '#F8E6F4', softBorder: '#E9C9E4' },
+  rose: { accent: '#D14343', soft: '#FDEAEA', softBorder: '#F5C6C6' },
+  orange: { accent: '#B4590F', soft: '#FFF3E9', softBorder: '#FBD9BE' },
+  cyan: { accent: '#0B6E63', soft: '#E9F7F4', softBorder: '#C7E9E3' },
+  indigo: { accent: '#1E3C87', soft: '#EEF4FE', softBorder: '#CFDDF6' },
+};
+
+function palette(color: string) {
+  return CATEGORY_PALETTE[color] ?? CATEGORY_PALETTE.slate;
+}
+
+const AVAILABLE_COLORS = [
+  { value: 'slate', label: 'Gris' },
+  { value: 'amber', label: 'Ambre' },
+  { value: 'sky', label: 'Ciel' },
+  { value: 'violet', label: 'Violet' },
+  { value: 'emerald', label: 'Vert' },
+  { value: 'pink', label: 'Rose' },
+  { value: 'rose', label: 'Rouge' },
+  { value: 'orange', label: 'Orange' },
+  { value: 'cyan', label: 'Cyan' },
+  { value: 'indigo', label: 'Indigo' },
+];
 
 type CategoryWithTypes = MaterielCategory & { materiel_types: Array<{ id: string }> };
 
 type CategoryModalState = { id?: string; name: string; color: string };
 
+function DragHandle({ attributes, listeners, style }: {
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <span
+      {...attributes}
+      {...listeners}
+      title="Glisser pour réordonner"
+      className="shrink-0 cursor-grab touch-none"
+      style={style}
+    >
+      <Icon name="drag_indicator" className="text-ink-3" />
+    </span>
+  );
+}
+
 function ColorSwatches({ value, onChange }: { value: string; onChange: (color: string) => void }) {
   return (
     <div className="flex flex-wrap gap-[9px]">
-      {MATERIEL_COLOR_OPTIONS.map((c) => {
+      {AVAILABLE_COLORS.map((c) => {
         const active = value === c.value;
         return (
           <button
@@ -32,7 +97,7 @@ function ColorSwatches({ value, onChange }: { value: string; onChange: (color: s
               'inline-flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs text-white',
               active ? 'border-ink shadow-[0_0_0_2px_#fff_inset]' : 'border-transparent'
             )}
-            style={{ background: materielPalette(c.value).accent }}
+            style={{ background: palette(c.value).accent }}
           >
             {active ? <Icon name="check" size={14} /> : ''}
           </button>
@@ -48,15 +113,25 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
 
-function CategoryRow({ category, onEdit, onDelete }: {
+function SortableCategoryRow({ category, onEdit, onDelete }: {
   category: CategoryWithTypes;
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const p = materielPalette(category.color);
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: category.id });
+  const p = palette(category.color);
   const count = category.materiel_types?.length ?? 0;
   return (
-    <div className="mb-2 flex items-center gap-[11px] rounded-2xl border border-line bg-surface-card px-[14px] py-3 shadow-card">
+    <div
+      ref={setNodeRef}
+      className="mb-2 flex items-center gap-[11px] rounded-2xl border border-line bg-surface-card px-[14px] py-3 shadow-card"
+      style={{
+        transform: CSS.Transform.toString(transform), transition,
+        opacity: isDragging ? 0.6 : 1, boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : undefined, zIndex: isDragging ? 1 : 'auto',
+      }}
+    >
+      <DragHandle attributes={attributes} listeners={listeners} />
+      <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.accent }} />
       <span className="min-w-0 flex-1 text-[14.5px] font-bold text-ink">{category.name}</span>
       <span
         className="shrink-0 rounded-full border px-[9px] py-0.5 text-[11.5px] font-bold"
@@ -64,10 +139,15 @@ function CategoryRow({ category, onEdit, onDelete }: {
       >
         {count} contenant{count !== 1 ? 's' : ''}
       </span>
-      <KebabMenu items={[
-        { label: 'Modifier', onClick: onEdit },
-        { label: 'Supprimer', onClick: onDelete, danger: true },
-      ]} />
+      <span className="inline-flex shrink-0 items-center gap-1">
+        <Button variant="ghost" onClick={onEdit} className="rounded-[7px] px-2.5 py-[5px] text-xs">
+          Modifier
+        </Button>
+        <button type="button" onClick={onDelete} aria-label="Supprimer"
+          className="p-1 text-bad">
+          <Icon name="delete" size={18} />
+        </button>
+      </span>
     </div>
   );
 }
@@ -80,6 +160,8 @@ export default function AdminMaterielCategoriesPage() {
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   const [categoryModal, setCategoryModal] = useState<CategoryModalState | null>(null);
   const [savingCategory, setSavingCategory] = useState(false);
@@ -126,11 +208,6 @@ export default function AdminMaterielCategoriesPage() {
     void init();
   }, [router, fetchCategories]);
 
-  const sortedCategories = useMemo(
-    () => [...categories].sort((a, b) => a.name.localeCompare(b.name, 'fr')),
-    [categories]
-  );
-
   async function submitCategory() {
     if (!categoryModal || !categoryModal.name.trim()) return;
     setSavingCategory(true);
@@ -171,6 +248,28 @@ export default function AdminMaterielCategoriesPage() {
     }
   }
 
+  async function handleCategoryDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    const oldIndex = categories.findIndex((c) => c.id === active.id);
+    const newIndex = categories.findIndex((c) => c.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const next = arrayMove(categories, oldIndex, newIndex);
+    setCategories(next);
+    setError(null);
+    try {
+      await Promise.all(
+        next.map((cat, i) => fetch(`/api/admin/materiel-categories/${cat.id}`, {
+          method: 'PATCH',
+          headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ display_order: i }),
+        }))
+      );
+    } catch {
+      setError('Erreur lors de la réorganisation des types.');
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
@@ -191,7 +290,7 @@ export default function AdminMaterielCategoriesPage() {
     <div className="pb-20">
       <PageHeader
         title="Types de matériel"
-        subtitle="Un contenant racine porte un type ; une mission réclame un type en quantité, sans préciser lequel."
+        subtitle="Définissez les types de matériel (ex. Ambulance, Lot A, Véhicule de transport). Un contenant porte un type ; une mission réclame un type en quantité, sans préciser lequel."
       />
 
       {error ? (
@@ -205,31 +304,31 @@ export default function AdminMaterielCategoriesPage() {
         </div>
       ) : null}
 
-      {sortedCategories.length === 0 ? (
+      {categories.length === 0 ? (
         <div className="mb-4 rounded-2xl border-[1.5px] border-dashed border-line bg-surface-card px-6 py-9 text-center">
           <p className="text-[13.5px] text-ink-3">Aucun type pour l&apos;instant. Créez-en un ci-dessous.</p>
         </div>
       ) : (
-        <div className="flex flex-col gap-0">
-          {sortedCategories.map((cat) => (
-            <CategoryRow
-              key={cat.id}
-              category={cat}
-              onEdit={() => setCategoryModal({ id: cat.id, name: cat.name, color: cat.color })}
-              onDelete={() => handleDeleteCategory(cat.id, cat.name)}
-            />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleCategoryDragEnd}>
+          <SortableContext items={categories.map((c) => c.id)} strategy={verticalListSortingStrategy}>
+            {categories.map((cat) => (
+              <SortableCategoryRow
+                key={cat.id}
+                category={cat}
+                onEdit={() => setCategoryModal({ id: cat.id, name: cat.name, color: cat.color })}
+                onDelete={() => handleDeleteCategory(cat.id, cat.name)}
+              />
+            ))}
+          </SortableContext>
+        </DndContext>
       )}
 
-      <p className="mb-4 text-[11.5px] leading-relaxed text-ink-3">
-        Liste triée par ordre alphabétique. « 0 contenant » signale un type orphelin, candidat à suppression.
-      </p>
-
-      <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
-        className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
-        + Nouveau type
-      </button>
+      <div className="mt-2">
+        <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
+          className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
+          + Nouveau type
+        </button>
+      </div>
 
       {categoryModal ? (
         <Modal

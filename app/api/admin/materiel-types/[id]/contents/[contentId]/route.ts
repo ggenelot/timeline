@@ -36,7 +36,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     .update(patch)
     .eq('id', params.contentId)
     .eq('parent_type_id', params.id)
-    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, is_container)')
+    .select('*, child_type:materiel_types!materiel_type_contents_child_type_id_fkey(id, name, code, is_container)')
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
