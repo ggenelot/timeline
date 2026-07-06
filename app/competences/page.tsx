@@ -982,9 +982,9 @@ export default function CompetencesPage() {
                   </div>
                 </div>
                 <div style={{ flexShrink: 0, textAlign: 'right' }}>
-                  <div style={{ fontSize: 30, fontWeight: 800, color: '#16203A', lineHeight: 1 }}>
+                  <div style={{ fontFamily: 'var(--font-display-active)', fontSize: 32, color: '#16203A', lineHeight: 1 }}>
                     {validatedIds.size}
-                    <span style={{ fontSize: 17, fontWeight: 700, color: '#8A93A6' }}>/{allComps.length}</span>
+                    <span style={{ fontSize: 19, color: '#8A93A6' }}>/{allComps.length}</span>
                   </div>
                   <div style={{ fontSize: 12, fontWeight: 600, color: '#5B6478', marginTop: 4 }}>compétences validées</div>
                 </div>
