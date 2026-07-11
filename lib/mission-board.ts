@@ -31,6 +31,23 @@ export type PendingMarkAvailable = {
   fromAssignmentId?: string;
 };
 
+// Cible « chercher parmi tous les bénévoles » — ouverte depuis un créneau de
+// rôle du picker quand les groupes usuels (dispo ce jour / engagés ailleurs)
+// ne suffisent pas à trouver quelqu'un.
+export type BoardVolunteerSearchTarget = Extract<BoardPickerTarget, { kind: 'volunteer' }>;
+
+// Un bénévole du répertoire complet (pas seulement ceux dispo ce jour-là),
+// avec sa réponse actuelle sur LA mission ciblée — pour /api/admin/missions/
+// [missionId]/volunteers, réutilisé par la recherche "tous les bénévoles" du
+// board.
+export type MissionVolunteerCandidate = {
+  id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  response: 'available' | 'unavailable' | 'no_response';
+  validatedSkillIds: string[];
+};
+
 // ── Bénévoles disponibles par jour (pool du board) ─────────────────
 // Comme lib/ope-dashboard.ts::availableNotRetainedByDay : bénévoles ayant
 // déclaré une disponibilité (mission_proposals.response='available') sur au
