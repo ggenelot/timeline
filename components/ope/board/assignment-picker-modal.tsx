@@ -22,17 +22,21 @@ export function AssignmentPickerModal({
   missions,
   volunteerPool,
   materielPool,
+  canBrowseAllVolunteers,
   onClose,
   onPickVolunteer,
   onPickContainer,
+  onBrowseAllVolunteers,
 }: {
   target: BoardPickerTarget;
   missions: OpeMission[];
   volunteerPool: Map<string, BoardVolunteerCandidate[]>;
   materielPool: Map<string, { available: OpeContainer[]; unavailable: OpeContainer[] }>;
+  canBrowseAllVolunteers: boolean;
   onClose: () => void;
   onPickVolunteer: (volunteerId: string, label: string, fromAssignmentId?: string) => void;
   onPickContainer: (containerId: string, fromAssignmentId?: string) => void;
+  onBrowseAllVolunteers: () => void;
 }) {
   const mission = missions.find((m) => m.id === target.missionId);
   const day = mission ? missionDayKey(mission.starts_at) : null;
@@ -112,9 +116,8 @@ export function AssignmentPickerModal({
 
   return (
     <Modal onClose={onClose} title={title} maxWidth={420}>
-      {groups.length === 0 ? (
-        <p className="py-3 text-[13px] text-ink-3">Aucun profil correspondant trouvé.</p>
-      ) : (
+      {groups.length === 0 ? <p className="py-1 text-[13px] text-ink-3">Aucun profil correspondant trouvé.</p> : null}
+      {groups.length > 0 ? (
         <div className="flex flex-col gap-4 py-1">
           {groups.map((g) => (
             <div key={g.label}>
@@ -136,7 +139,17 @@ export function AssignmentPickerModal({
             </div>
           ))}
         </div>
-      )}
+      ) : null}
+
+      {target.kind === 'volunteer' && canBrowseAllVolunteers ? (
+        <button
+          type="button"
+          onClick={onBrowseAllVolunteers}
+          className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line-field bg-surface-sub px-3 py-2.5 text-[13px] font-bold text-ink-2 transition hover:bg-line-row"
+        >
+          Chercher parmi tous les bénévoles
+        </button>
+      ) : null}
     </Modal>
   );
 }

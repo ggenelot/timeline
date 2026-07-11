@@ -1,4 +1,5 @@
 import { supabase } from '@/lib/supabase/client';
+import type { MissionVolunteerCandidate } from '@/lib/mission-board';
 
 export type MissionBoardActionResult = { ok: true } | { ok: false; error: string };
 
@@ -76,4 +77,34 @@ export async function markVolunteerAvailableForMission(
     return { ok: false, error: json.error ?? "Impossible de rendre ce bénévole disponible pour cette mission." };
   }
   return { ok: true };
+}
+
+export type MissionVolunteerCandidatesResult = { ok: true; candidates: MissionVolunteerCandidate[] } | { ok: false; error: string };
+
+// Répertoire complet des bénévoles + leur réponse sur CETTE mission (dispo /
+// indispo / sans réponse), pour la recherche "chercher parmi tous les
+// bénévoles" du board — au-delà des seuls dispo/engagés ce jour-là. Route
+// admin-only (assertAdmin), cohérent avec markVolunteerAvailableForMission
+// qui est le seul débouché utile pour un candidat sans disponibilité ici.
+export async function fetchMissionVolunteerCandidates(token: string, missionId: string): Promise<MissionVolunteerCandidatesResult> {
+  const res = await fetch(`/api/admin/missions/${missionId}/volunteers`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: json.error ?? 'Impossible de charger la liste des bénévoles.' };
+  }
+  const json = (await res.json()) as {
+    proposals: Array<{ volunteer_id: string; response: 'available' | 'unavailable' | 'no_response' }>;
+    volunteers: Array<{ id: string; full_name: string | null; avatar_url: string | null; validatedSkillIds: string[] }>;
+  };
+  const responseByVolunteerId = new Map(json.proposals.map((p) => [p.volunteer_id, p.response]));
+  const candidates: MissionVolunteerCandidate[] = json.volunteers.map((v) => ({
+    id: v.id,
+    full_name: v.full_name,
+    avatar_url: v.avatar_url,
+    response: responseByVolunteerId.get(v.id) ?? 'no_response',
+    validatedSkillIds: v.validatedSkillIds,
+  }));
+  return { ok: true, candidates };
 }

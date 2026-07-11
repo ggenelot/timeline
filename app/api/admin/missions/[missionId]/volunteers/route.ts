@@ -72,9 +72,12 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: `Impossible de charger les statuts de mission : ${proposalsError.message}` }, { status: 500 });
   }
 
+  type VolunteerRow = { id: string; full_name: string | null; email: string; role: string; avatar_url: string | null };
+  type VolunteerWithSkillsRow = VolunteerRow & { profile_skills: Array<{ status: string | null; skill_id: string }> | null };
+
   const { data: volunteers, error: volunteersError } = await guard.client
     .from('profiles')
-    .select('id,full_name,email,role,avatar_url')
+    .select('id,full_name,email,role,avatar_url,profile_skills(status,skill_id)')
     .eq('role', 'benevole')
     .order('full_name', { ascending: true });
 
@@ -82,7 +85,24 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
     return NextResponse.json({ error: `Impossible de charger la liste des bénévoles : ${volunteersError.message}` }, { status: 500 });
   }
 
-  return NextResponse.json({ proposals: proposals ?? [], volunteers: volunteers ?? [] });
+  // Compétences validées par bénévole (pour le filtre "chercher parmi tous
+  // les bénévoles" du board de missions, restreint à la compétence requise).
+  const { data: validatingStatuses, error: statusesError } = await guard.client
+    .from('skill_statuses')
+    .select('key')
+    .eq('is_validating', true);
+
+  if (statusesError) {
+    return NextResponse.json({ error: `Impossible de charger les statuts de compétence : ${statusesError.message}` }, { status: 500 });
+  }
+
+  const validatingKeys = new Set((validatingStatuses ?? []).map((s) => s.key));
+  const volunteersWithSkills = ((volunteers ?? []) as unknown as VolunteerWithSkillsRow[]).map(({ profile_skills, ...volunteer }) => ({
+    ...volunteer,
+    validatedSkillIds: (profile_skills ?? []).filter((ps) => ps.status && validatingKeys.has(ps.status)).map((ps) => ps.skill_id),
+  }));
+
+  return NextResponse.json({ proposals: proposals ?? [], volunteers: volunteersWithSkills });
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { missionId: string } }) {

@@ -14,13 +14,16 @@ import {
   type BoardPickerTarget,
   type BoardSelection,
   type BoardVolunteerCandidate,
+  type BoardVolunteerSearchTarget,
   type ContainerDragPayload,
+  type MissionVolunteerCandidate,
   type PendingMarkAvailable,
   type VolunteerDragPayload,
 } from '@/lib/mission-board';
 import {
   assignMaterielToMission,
   assignVolunteerToMission,
+  fetchMissionVolunteerCandidates,
   markVolunteerAvailableForMission,
   unassignMaterielFromMission,
   unassignVolunteerFromMission,
@@ -32,6 +35,7 @@ import { BoardMissionCard } from '@/components/ope/board/board-mission-card';
 import { SelectionBanner } from '@/components/ope/board/selection-banner';
 import { AssignmentPickerModal } from '@/components/ope/board/assignment-picker-modal';
 import { MarkAvailableConfirmModal } from '@/components/ope/board/mark-available-confirm-modal';
+import { AllVolunteersSearchModal } from '@/components/ope/board/all-volunteers-search-modal';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 
@@ -66,10 +70,18 @@ export default function MissionBoardPage() {
   const [picker, setPicker] = useState<BoardPickerTarget | null>(null);
   const [confirmMarkAvailable, setConfirmMarkAvailable] = useState<PendingMarkAvailable | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
+  const [browseAllTarget, setBrowseAllTarget] = useState<BoardVolunteerSearchTarget | null>(null);
+  const [browseAllCandidates, setBrowseAllCandidates] = useState<MissionVolunteerCandidate[]>([]);
+  const [browseAllLoading, setBrowseAllLoading] = useState(false);
+  const [browseAllError, setBrowseAllError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const fromISO = useMemo(() => startOfTodayMinus(3).toISOString(), []);
   const canEditMateriel = role === 'admin';
+  // "Rendre disponible" est admin-only côté API (assertAdmin) : la recherche
+  // plein répertoire n'a d'intérêt que pour ce profil, seul à pouvoir en
+  // exploiter le débouché (cf. placeVolunteer).
+  const canBrowseAllVolunteers = role === 'admin';
 
   // Accès (une fois).
   useEffect(() => {
@@ -292,6 +304,33 @@ export default function MissionBoardPage() {
     const { missionId, requiredSkillId, roleName } = picker;
     setPicker(null);
     placeVolunteer(missionId, requiredSkillId, volunteerId, label, roleName, fromAssignmentId);
+  }
+
+  function handleBrowseAllVolunteers() {
+    if (!picker || picker.kind !== 'volunteer') return;
+    const target = picker;
+    setPicker(null);
+    setBrowseAllTarget(target);
+    setBrowseAllCandidates([]);
+    setBrowseAllError(null);
+    setBrowseAllLoading(true);
+    const alreadyOnMission = new Set(allMissions.find((m) => m.id === target.missionId)?.team.map((m) => m.volunteer_id) ?? []);
+    void fetchMissionVolunteerCandidates(token, target.missionId).then((result) => {
+      if (!result.ok) {
+        setBrowseAllError(result.error);
+        setBrowseAllLoading(false);
+        return;
+      }
+      setBrowseAllCandidates(result.candidates.filter((c) => !alreadyOnMission.has(c.id)));
+      setBrowseAllLoading(false);
+    });
+  }
+
+  function handlePickFromBrowseAll(volunteerId: string, label: string) {
+    if (!browseAllTarget) return;
+    const { missionId, requiredSkillId, roleName } = browseAllTarget;
+    setBrowseAllTarget(null);
+    placeVolunteer(missionId, requiredSkillId, volunteerId, label, roleName);
   }
 
   // ── Matériel ───────────────────────────────────────────────────────
@@ -524,9 +563,23 @@ export default function MissionBoardPage() {
           missions={allMissions}
           volunteerPool={volunteerPool}
           materielPool={materielPool}
+          canBrowseAllVolunteers={canBrowseAllVolunteers}
           onClose={() => setPicker(null)}
           onPickVolunteer={handlePickVolunteer}
           onPickContainer={handlePickContainer}
+          onBrowseAllVolunteers={handleBrowseAllVolunteers}
+        />
+      ) : null}
+
+      {browseAllTarget ? (
+        <AllVolunteersSearchModal
+          roleName={browseAllTarget.roleName}
+          skillId={browseAllTarget.skillId}
+          candidates={browseAllCandidates}
+          loading={browseAllLoading}
+          error={browseAllError}
+          onClose={() => setBrowseAllTarget(null)}
+          onPick={handlePickFromBrowseAll}
         />
       ) : null}
 
