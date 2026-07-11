@@ -1,4 +1,4 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { Source_Sans_3, Anton, Beth_Ellen } from 'next/font/google';
 import './globals.css';
 import { AppShell } from '@/components/app-shell';
@@ -28,7 +28,18 @@ const bethEllen = Beth_Ellen({
 
 export const metadata: Metadata = {
   title: 'Timeline',
-  description: 'Gestion simple des missions de bénévoles'
+  description: 'Gestion simple des missions de bénévoles',
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'default',
+    title: 'Timeline'
+  }
+};
+
+export const viewport: Viewport = {
+  themeColor: '#002D74',
+  width: 'device-width',
+  initialScale: 1
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -46,6 +57,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20,400,0,0&display=block"
           rel="stylesheet"
         />
+        <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
       </head>
       <body>
         {/* Logo/couleurs/polices personnalisables — voir lib/branding/. Appliquées côté client (CSS custom properties) une fois lues depuis `app_settings`. */}
