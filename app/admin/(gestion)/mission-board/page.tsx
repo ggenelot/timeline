@@ -15,11 +15,13 @@ import {
   type BoardSelection,
   type BoardVolunteerCandidate,
   type ContainerDragPayload,
+  type PendingMarkAvailable,
   type VolunteerDragPayload,
 } from '@/lib/mission-board';
 import {
   assignMaterielToMission,
   assignVolunteerToMission,
+  markVolunteerAvailableForMission,
   unassignMaterielFromMission,
   unassignVolunteerFromMission,
   type MissionBoardActionResult,
@@ -29,6 +31,7 @@ import { VolunteerPoolColumn, MaterielPoolColumn } from '@/components/ope/board/
 import { BoardMissionCard } from '@/components/ope/board/board-mission-card';
 import { SelectionBanner } from '@/components/ope/board/selection-banner';
 import { AssignmentPickerModal } from '@/components/ope/board/assignment-picker-modal';
+import { MarkAvailableConfirmModal } from '@/components/ope/board/mark-available-confirm-modal';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 
@@ -61,6 +64,8 @@ export default function MissionBoardPage() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<BoardSelection | null>(null);
   const [picker, setPicker] = useState<BoardPickerTarget | null>(null);
+  const [confirmMarkAvailable, setConfirmMarkAvailable] = useState<PendingMarkAvailable | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const fromISO = useMemo(() => startOfTodayMinus(3).toISOString(), []);
@@ -209,25 +214,68 @@ export default function MissionBoardPage() {
     );
   }
 
-  function placeVolunteer(missionId: string, requiredSkillId: string, volunteerId: string, fromAssignmentId?: string) {
-    if (!isVolunteerEligibleForMission(volunteerId, missionId, availability)) {
-      setActionError("Ce bénévole n'a pas de disponibilité déclarée pour cette mission.");
+  // Si le bénévole n'a pas de disponibilité déclarée sur CETTE mission
+  // précise (mais peut très bien s'être mis dispo le même jour sur une autre
+  // mission, ou venir directement du pool du jour), l'affectation directe
+  // échouerait côté RLS (can_select_volunteer_for_mission). Plutôt que de
+  // bloquer, on propose — comme le fait déjà la fiche mission côté admin —
+  // de le rendre disponible sur cette mission avant de l'affecter.
+  function placeVolunteer(
+    missionId: string,
+    requiredSkillId: string,
+    volunteerId: string,
+    volunteerLabel: string,
+    roleName: string,
+    fromAssignmentId?: string
+  ) {
+    if (isVolunteerEligibleForMission(volunteerId, missionId, availability)) {
+      void runAction(() => assignVolunteerToMission({ missionId, volunteerId, requiredSkillId, fromAssignmentId }));
       return;
     }
-    void runAction(() => assignVolunteerToMission({ missionId, volunteerId, requiredSkillId, fromAssignmentId }));
+    if (role === 'admin') {
+      setConfirmMarkAvailable({ missionId, requiredSkillId, volunteerId, volunteerLabel, roleName, fromAssignmentId });
+      return;
+    }
+    setActionError(
+      `${volunteerLabel} n'a pas de disponibilité déclarée pour cette mission. Seul un administrateur peut l'y rendre disponible.`
+    );
+  }
+
+  async function confirmMarkAvailableAndPlace() {
+    if (!confirmMarkAvailable) return;
+    const { missionId, requiredSkillId, volunteerId, fromAssignmentId } = confirmMarkAvailable;
+    setConfirmBusy(true);
+    setActionError(null);
+    const markResult = await markVolunteerAvailableForMission(token, missionId, volunteerId);
+    if (!markResult.ok) {
+      setActionError(markResult.error);
+      setConfirmBusy(false);
+      setConfirmMarkAvailable(null);
+      return;
+    }
+    const assignResult = await assignVolunteerToMission({ missionId, volunteerId, requiredSkillId, fromAssignmentId });
+    if (!assignResult.ok) {
+      setActionError(assignResult.error);
+      setConfirmBusy(false);
+      setConfirmMarkAvailable(null);
+      return;
+    }
+    await load();
+    setConfirmBusy(false);
+    setConfirmMarkAvailable(null);
   }
 
   function handleClickEmptyVolunteerSlot(missionId: string, requiredSkillId: string, skillId: string | null, roleName: string) {
     if (selected?.kind === 'volunteer') {
-      placeVolunteer(missionId, requiredSkillId, selected.volunteerId, selected.fromAssignmentId);
+      placeVolunteer(missionId, requiredSkillId, selected.volunteerId, selected.label, roleName, selected.fromAssignmentId);
       setSelected(null);
       return;
     }
     setPicker({ kind: 'volunteer', missionId, requiredSkillId, skillId, roleName });
   }
 
-  function handleDropVolunteerSlot(missionId: string, requiredSkillId: string, payload: VolunteerDragPayload) {
-    placeVolunteer(missionId, requiredSkillId, payload.volunteerId, payload.fromAssignmentId);
+  function handleDropVolunteerSlot(missionId: string, requiredSkillId: string, roleName: string, payload: VolunteerDragPayload) {
+    placeVolunteer(missionId, requiredSkillId, payload.volunteerId, payload.label, roleName, payload.fromAssignmentId);
   }
 
   function handleVolunteerPoolDrop(payload: VolunteerDragPayload | ContainerDragPayload) {
@@ -239,11 +287,11 @@ export default function MissionBoardPage() {
     void runAction(() => unassignVolunteerFromMission(assignmentId));
   }
 
-  function handlePickVolunteer(volunteerId: string, fromAssignmentId?: string) {
+  function handlePickVolunteer(volunteerId: string, label: string, fromAssignmentId?: string) {
     if (!picker || picker.kind !== 'volunteer') return;
-    const { missionId, requiredSkillId } = picker;
+    const { missionId, requiredSkillId, roleName } = picker;
     setPicker(null);
-    placeVolunteer(missionId, requiredSkillId, volunteerId, fromAssignmentId);
+    placeVolunteer(missionId, requiredSkillId, volunteerId, label, roleName, fromAssignmentId);
   }
 
   // ── Matériel ───────────────────────────────────────────────────────
@@ -445,7 +493,9 @@ export default function MissionBoardPage() {
                           canEditMateriel={canEditMateriel}
                           onSelectVolunteer={selectVolunteerSlot}
                           onSelectContainer={selectContainerSlot}
-                          onDropVolunteerSlot={(requiredSkillId, payload) => handleDropVolunteerSlot(mission.id, requiredSkillId, payload)}
+                          onDropVolunteerSlot={(requiredSkillId, roleName, payload) =>
+                            handleDropVolunteerSlot(mission.id, requiredSkillId, roleName, payload)
+                          }
                           onDropContainerSlot={handleDropContainerSlot}
                           onClickEmptyVolunteerSlot={(requiredSkillId, skillId, roleName) =>
                             handleClickEmptyVolunteerSlot(mission.id, requiredSkillId, skillId, roleName)
@@ -472,12 +522,21 @@ export default function MissionBoardPage() {
         <AssignmentPickerModal
           target={picker}
           missions={allMissions}
-          availability={availability}
           volunteerPool={volunteerPool}
           materielPool={materielPool}
           onClose={() => setPicker(null)}
           onPickVolunteer={handlePickVolunteer}
           onPickContainer={handlePickContainer}
+        />
+      ) : null}
+
+      {confirmMarkAvailable ? (
+        <MarkAvailableConfirmModal
+          volunteerLabel={confirmMarkAvailable.volunteerLabel}
+          roleName={confirmMarkAvailable.roleName}
+          loading={confirmBusy}
+          onCancel={() => setConfirmMarkAvailable(null)}
+          onConfirm={() => void confirmMarkAvailableAndPlace()}
         />
       ) : null}
     </div>

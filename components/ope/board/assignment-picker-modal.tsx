@@ -1,8 +1,7 @@
 'use client';
 
-import type { OpeAvailabilityEntry, OpeContainer, OpeMission } from '@/lib/types';
+import type { OpeContainer, OpeMission } from '@/lib/types';
 import type { BoardPickerTarget, BoardVolunteerCandidate } from '@/lib/mission-board';
-import { isVolunteerEligibleForMission } from '@/lib/mission-board';
 import { missionDayKey } from '@/lib/mission-timeline';
 import { Avatar } from '@/components/ope/atoms';
 import { Modal } from '@/components/ui/modal';
@@ -12,13 +11,15 @@ type PickerRow = { id: string; name: string; avatarUrl?: string | null; sub: str
 // Modale « touche un emplacement vide » : liste les candidats pour un
 // créneau donné, groupés comme sur la maquette — dispo non affectés d'abord,
 // puis ceux déjà engagés ce jour-là sur une autre mission (proposition de
-// déplacement). Un candidat n'apparaît que s'il peut réellement être déposé
-// sur CETTE mission (mission_proposals.response='available' pour elle —
-// contrainte RLS can_select_volunteer_for_mission), pas seulement ce jour-là.
+// déplacement). Le groupe n'est filtré que sur le JOUR et la compétence : un
+// candidat peut ne pas avoir de disponibilité déclarée sur CETTE mission
+// précise (mission_proposals absent ou non 'available' pour elle) — dans ce
+// cas le clic déclenche, côté page, une confirmation pour l'y rendre
+// disponible (admin uniquement) avant affectation, plutôt qu'un filtrage
+// silencieux qui le rendrait introuvable ici.
 export function AssignmentPickerModal({
   target,
   missions,
-  availability,
   volunteerPool,
   materielPool,
   onClose,
@@ -27,11 +28,10 @@ export function AssignmentPickerModal({
 }: {
   target: BoardPickerTarget;
   missions: OpeMission[];
-  availability: OpeAvailabilityEntry[];
   volunteerPool: Map<string, BoardVolunteerCandidate[]>;
   materielPool: Map<string, { available: OpeContainer[]; unavailable: OpeContainer[] }>;
   onClose: () => void;
-  onPickVolunteer: (volunteerId: string, fromAssignmentId?: string) => void;
+  onPickVolunteer: (volunteerId: string, label: string, fromAssignmentId?: string) => void;
   onPickContainer: (containerId: string, fromAssignmentId?: string) => void;
 }) {
   const mission = missions.find((m) => m.id === target.missionId);
@@ -46,13 +46,13 @@ export function AssignmentPickerModal({
 
     const dayPool = day ? volunteerPool.get(day) ?? [] : [];
     const group1: PickerRow[] = dayPool
-      .filter((c) => c.eligibleMissionIds.has(target.missionId) && matchesSkill(c))
+      .filter((c) => matchesSkill(c))
       .map((c) => ({
         id: c.volunteer_id,
         name: c.full_name ?? 'Bénévole',
         avatarUrl: c.avatar_url,
         sub: 'Disponible',
-        onClick: () => onPickVolunteer(c.volunteer_id),
+        onClick: () => onPickVolunteer(c.volunteer_id, c.full_name ?? 'Bénévole'),
       }));
 
     const seen = new Set<string>();
@@ -61,7 +61,6 @@ export function AssignmentPickerModal({
       if (m.id === target.missionId || missionDayKey(m.starts_at) !== day) continue;
       for (const member of m.team) {
         if (seen.has(member.volunteer_id)) continue;
-        if (!isVolunteerEligibleForMission(member.volunteer_id, target.missionId, availability)) continue;
         if (relevantSkillId && !member.validatedSkills.some((s) => s.id === relevantSkillId)) continue;
         seen.add(member.volunteer_id);
         group2.push({
@@ -69,7 +68,7 @@ export function AssignmentPickerModal({
           name: member.full_name ?? 'Bénévole',
           avatarUrl: member.avatar_url,
           sub: `${m.type.name ?? 'Mission'}${m.location ? ' (' + m.location + ')' : ''}`,
-          onClick: () => onPickVolunteer(member.volunteer_id, member.assignment_id),
+          onClick: () => onPickVolunteer(member.volunteer_id, member.full_name ?? 'Bénévole', member.assignment_id),
         });
       }
     }

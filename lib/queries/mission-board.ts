@@ -54,3 +54,26 @@ export async function unassignMaterielFromMission(assignmentId: string): Promise
   if (error) return { ok: false, error: error.message };
   return { ok: true };
 }
+
+// Rend un bénévole disponible sur une mission précise (upsert mission_proposals
+// + notification Slack), exactement comme le bouton admin de la fiche mission —
+// réutilisé ici pour débloquer une affectation depuis le board quand le
+// bénévole n'a pas encore de disponibilité déclarée sur cette mission. Route
+// réservée aux admins (assertAdmin côté serveur) : mêmes garde-fous que
+// l'écriture directe RLS sur mission_proposals pour un rôle admin.
+export async function markVolunteerAvailableForMission(
+  token: string,
+  missionId: string,
+  volunteerId: string
+): Promise<MissionBoardActionResult> {
+  const res = await fetch(`/api/admin/missions/${missionId}/volunteers`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ volunteer_id: volunteerId, response: 'available' }),
+  });
+  if (!res.ok) {
+    const json = (await res.json().catch(() => ({}))) as { error?: string };
+    return { ok: false, error: json.error ?? "Impossible de rendre ce bénévole disponible pour cette mission." };
+  }
+  return { ok: true };
+}
