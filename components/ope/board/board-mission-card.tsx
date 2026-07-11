@@ -47,6 +47,7 @@ function RoleSlotChip({
         onDragStart={dragStartHandler({
           kind: 'volunteer',
           volunteerId: slot.volunteer_id,
+          label: slot.full_name ?? 'Bénévole',
           fromAssignmentId: slot.assignment_id,
           fromMissionId: missionId,
         })}
@@ -210,7 +211,7 @@ export function BoardMissionCard({
   canEditMateriel: boolean;
   onSelectVolunteer: (payload: { volunteerId: string; fromAssignmentId?: string; label: string }) => void;
   onSelectContainer: (payload: { containerId: string; fromAssignmentId?: string; label: string }) => void;
-  onDropVolunteerSlot: (requiredSkillId: string, payload: VolunteerDragPayload) => void;
+  onDropVolunteerSlot: (requiredSkillId: string, roleName: string, payload: VolunteerDragPayload) => void;
   onDropContainerSlot: (requirementId: string, payload: ContainerDragPayload) => void;
   onClickEmptyVolunteerSlot: (requiredSkillId: string, skillId: string | null, roleName: string) => void;
   onClickEmptyContainerSlot: (requirementId: string, categoryId: string | null, categoryName: string) => void;
@@ -280,7 +281,7 @@ export function BoardMissionCard({
                     selected={selected}
                     onSelectFilled={(assignmentId, volunteerId, label) => onSelectVolunteer({ volunteerId, fromAssignmentId: assignmentId, label })}
                     onClickEmpty={() => onClickEmptyVolunteerSlot(role.requiredSkillId, role.skillId, role.name)}
-                    onDrop={(payload) => onDropVolunteerSlot(role.requiredSkillId, payload)}
+                    onDrop={(payload) => onDropVolunteerSlot(role.requiredSkillId, role.name, payload)}
                     onRemove={onRemoveVolunteer}
                   />
                 ))}

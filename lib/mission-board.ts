@@ -7,7 +7,7 @@ export type BoardSelection =
   | { kind: 'volunteer'; volunteerId: string; fromAssignmentId?: string; fromMissionId?: string; label: string }
   | { kind: 'container'; containerId: string; fromAssignmentId?: string; fromMissionId?: string; label: string };
 
-export type VolunteerDragPayload = { kind: 'volunteer'; volunteerId: string; fromAssignmentId?: string; fromMissionId?: string };
+export type VolunteerDragPayload = { kind: 'volunteer'; volunteerId: string; label: string; fromAssignmentId?: string; fromMissionId?: string };
 export type ContainerDragPayload = { kind: 'container'; containerId: string; fromAssignmentId?: string; fromMissionId?: string };
 export type BoardDragPayload = VolunteerDragPayload | ContainerDragPayload;
 
@@ -17,18 +17,34 @@ export type BoardPickerTarget =
   | { kind: 'volunteer'; missionId: string; requiredSkillId: string; skillId: string | null; roleName: string }
   | { kind: 'container'; missionId: string; requirementId: string; categoryId: string | null; categoryName: string };
 
+// Placement en attente de confirmation : le bénévole visé n'a pas de
+// disponibilité déclarée sur CETTE mission précise (mission_proposals absent
+// ou non 'available'), donc l'affecter directement échouerait côté RLS
+// (can_select_volunteer_for_mission). Réservé aux admins, qui peuvent — comme
+// dans la fiche mission — rendre le bénévole disponible avant affectation.
+export type PendingMarkAvailable = {
+  missionId: string;
+  requiredSkillId: string;
+  volunteerId: string;
+  volunteerLabel: string;
+  roleName: string;
+  fromAssignmentId?: string;
+};
+
 // ── Bénévoles disponibles par jour (pool du board) ─────────────────
-// Comme lib/ope-dashboard.ts::availableNotRetainedByDay, mais chaque entrée
-// conserve l'ensemble des missions du jour pour lesquelles le bénévole a une
-// disponibilité déclarée (mission_proposals.response='available') : c'est ce
-// qui détermine, côté RLS (can_select_volunteer_for_mission), sur quel
-// créneau de mission il peut réellement être déposé.
+// Comme lib/ope-dashboard.ts::availableNotRetainedByDay : bénévoles ayant
+// déclaré une disponibilité (mission_proposals.response='available') sur au
+// moins une mission de ce jour, non engagés ce jour-là. Un candidat du pool
+// n'a pas forcément de disponibilité déclarée sur LA mission précise où on
+// l'affecte ensuite (cf. isVolunteerEligibleForMission, vérifiée au moment
+// du dépôt) — c'est volontaire : composer une équipe avec quelqu'un dispo le
+// même jour sur une autre mission doit rester possible, quitte à le rendre
+// disponible sur cette mission avant affectation (cf. placeVolunteer côté page).
 export type BoardVolunteerCandidate = {
   volunteer_id: string;
   full_name: string | null;
   avatar_url: string | null;
   validatedSkills: OpeSkill[];
-  eligibleMissionIds: Set<string>;
 };
 
 export function engagedVolunteerIdsByDay(missions: OpeMission[]): Map<string, Set<string>> {
@@ -65,17 +81,12 @@ export function volunteerPoolByDay(
       byVolunteer = new Map();
       byDayAndVolunteer.set(day, byVolunteer);
     }
-    const existing = byVolunteer.get(entry.volunteer_id);
-    if (existing) {
-      existing.eligibleMissionIds.add(entry.mission_id);
-      continue;
-    }
+    if (byVolunteer.has(entry.volunteer_id)) continue;
     byVolunteer.set(entry.volunteer_id, {
       volunteer_id: entry.volunteer_id,
       full_name: entry.full_name,
       avatar_url: entry.avatar_url,
       validatedSkills: entry.validatedSkills,
-      eligibleMissionIds: new Set([entry.mission_id]),
     });
   }
 

@@ -35,7 +35,7 @@ export function VolunteerPoolColumn({
             <div
               key={c.volunteer_id}
               draggable
-              onDragStart={dragStartHandler({ kind: 'volunteer', volunteerId: c.volunteer_id })}
+              onDragStart={dragStartHandler({ kind: 'volunteer', volunteerId: c.volunteer_id, label: c.full_name ?? 'Bénévole' })}
               onClick={() => onSelect(c)}
               title={c.full_name ?? 'Bénévole'}
               className={cn(
