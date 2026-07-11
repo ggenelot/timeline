@@ -558,9 +558,14 @@ export type OpeSkill = {
 
 export type OpeTeamMember = {
   volunteer_id: string;
+  // Id de la ligne mission_assignments — nécessaire pour désaffecter/repositionner
+  // ce membre depuis le board (drag & drop / bouton ✕).
+  assignment_id: string;
   full_name: string | null;
   avatar_url: string | null;
   assignment_status: string;
+  // Id du mission_required_skills tenu (null = créneau générique, sans compétence pointée).
+  required_skill_id: string | null;
   // Rôle tenu sur ce dispositif (compétence du mission_required_skill affecté).
   assignedSkill: OpeSkill | null;
   validatedSkills: OpeSkill[];
@@ -595,6 +600,16 @@ export type OpeContainer = {
   category: OpeMaterielCategoryRef | null;
 };
 
+// Un besoin en matériel d'une mission (catégorie + quantité), avec les
+// contenants précis déjà affectés — pendant matériel de OpeRequiredSkill,
+// pour construire les créneaux du board (rempli/vide) par catégorie.
+export type OpeMaterielRequirement = {
+  id: string;
+  quantity: number;
+  category: OpeMaterielCategoryRef | null;
+  assignments: Array<{ id: string; materiel_type_id: string; name: string; code: string | null }>;
+};
+
 export type OpeMission = {
   id: string;
   title: string;
@@ -608,6 +623,7 @@ export type OpeMission = {
   requiredSkills: OpeRequiredSkill[];
   team: OpeTeamMember[];
   materiel: OpeEngagedMateriel[];
+  requiredMateriels: OpeMaterielRequirement[];
 };
 
 // Secouriste disponible (response='available') sur une mission de la fenêtre.

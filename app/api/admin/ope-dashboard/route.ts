@@ -5,6 +5,7 @@ import type {
   OpeAvailabilityEntry,
   OpeContainer,
   OpeEngagedMateriel,
+  OpeMaterielRequirement,
   OpeMission,
   OpeSkill,
   OpeTeamMember,
@@ -33,6 +34,7 @@ type MissionRow = {
 };
 
 type AssignmentRow = {
+  id: string;
   mission_id: string;
   volunteer_id: string;
   assignment_status: string;
@@ -52,8 +54,11 @@ type MaterielCategoryRel = MaterielCategoryEmbed | MaterielCategoryEmbed[] | nul
 type MaterielTypeEmbed = { id: string; name: string; code: string | null; category: MaterielCategoryRel };
 type MaterielTypeRel = MaterielTypeEmbed | MaterielTypeEmbed[] | null;
 type RequiredMaterielRow = {
+  id: string;
   mission_id: string;
-  assignments: Array<{ materiel_type: MaterielTypeRel }> | null;
+  quantity: number;
+  category: MaterielCategoryRel;
+  assignments: Array<{ id: string; materiel_type_id: string; materiel_type: MaterielTypeRel }> | null;
 };
 type ContainerRow = {
   id: string;
@@ -81,7 +86,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(req.url);
   const fromParam = url.searchParams.get('from');
   const daysParam = Number.parseInt(url.searchParams.get('days') ?? '', 10);
-  const days = Number.isFinite(daysParam) && daysParam > 0 && daysParam <= 31 ? daysParam : 7;
+  const days = Number.isFinite(daysParam) && daysParam > 0 && daysParam <= 60 ? daysParam : 7;
 
   // Fenêtre [from 00:00, from+days 00:00[
   const from = fromParam ? new Date(fromParam) : new Date();
@@ -150,6 +155,7 @@ export async function GET(req: NextRequest) {
   const missionIds = missionRows.map((m) => m.id);
   const teamByMission = new Map<string, OpeTeamMember[]>();
   const materielByMission = new Map<string, OpeEngagedMateriel[]>();
+  const requiredMaterielsByMission = new Map<string, OpeMaterielRequirement[]>();
   const availability: OpeAvailabilityEntry[] = [];
   if (missionIds.length > 0) {
     // Embed volontaire (identique pour assignments & proposals).
@@ -161,7 +167,7 @@ export async function GET(req: NextRequest) {
       client!
         .from('mission_assignments')
         .select(
-          `mission_id,volunteer_id,assignment_status,${withSkillRef ? 'mission_required_skill_id,' : ''}${assignmentEmbed}`
+          `id,mission_id,volunteer_id,assignment_status,${withSkillRef ? 'mission_required_skill_id,' : ''}${assignmentEmbed}`
         )
         .in('mission_id', missionIds)
         .in('assignment_status', ENGAGED_STATUSES);
@@ -175,12 +181,15 @@ export async function GET(req: NextRequest) {
         )
         .in('mission_id', missionIds)
         .eq('response', 'available'),
-      // Matériel engagé : on passe par mission_required_materiels (qui porte
-      // mission_id) car mission_materiel_assignments ne référence que le besoin.
+      // Besoins matériel (par catégorie + quantité) et leurs affectations précises —
+      // porte mission_id, contrairement à mission_materiel_assignments qui ne
+      // référence que le besoin. Sert à la fois au board (créneaux par besoin) et
+      // à la liste "matériel engagé" à plat (dédupliquée ci-dessous).
       client!
         .from('mission_required_materiels')
         .select(
-          'mission_id,assignments:mission_materiel_assignments(materiel_type:materiel_types(id,name,code,category:materiel_categories(id,name,color)))'
+          'id,mission_id,quantity,category:materiel_categories(id,name,color),' +
+            'assignments:mission_materiel_assignments(id,materiel_type_id,materiel_type:materiel_types(id,name,code))'
         )
         .in('mission_id', missionIds),
     ]);
@@ -206,9 +215,11 @@ export async function GET(req: NextRequest) {
 
       const member: OpeTeamMember = {
         volunteer_id: row.volunteer_id,
+        assignment_id: row.id,
         full_name: volunteer?.full_name ?? null,
         avatar_url: volunteer?.avatar_url ?? null,
         assignment_status: row.assignment_status,
+        required_skill_id: supportsRequiredSkill ? row.mission_required_skill_id ?? null : null,
         assignedSkill,
         validatedSkills: validatedSkillsOf(volunteer),
       };
@@ -228,21 +239,25 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // Matériel engagé par mission (dédupliqué par contenant : un même contenant
-    // ne peut servir qu'une catégorie, donc apparaît au plus une fois par mission).
+    // Besoins matériel par mission (créneaux du board) + matériel engagé à plat
+    // (dédupliqué par contenant : un même contenant ne peut servir qu'une
+    // catégorie, donc apparaît au plus une fois par mission).
     for (const row of (requiredMaterielsRes.data ?? []) as unknown as RequiredMaterielRow[]) {
-      const list = materielByMission.get(row.mission_id) ?? [];
-      for (const assignment of row.assignments ?? []) {
-        const mt = firstOf(assignment.materiel_type);
-        if (!mt || list.some((x) => x.container_type_id === mt.id)) continue;
-        list.push({
-          container_type_id: mt.id,
-          name: mt.name,
-          code: mt.code ?? null,
-          category: toCategoryRef(mt.category),
-        });
+      const category = toCategoryRef(row.category);
+      const assignments = (row.assignments ?? []).map((a) => {
+        const mt = firstOf(a.materiel_type);
+        return { id: a.id, materiel_type_id: a.materiel_type_id, name: mt?.name ?? 'Contenant', code: mt?.code ?? null };
+      });
+      const requirementList = requiredMaterielsByMission.get(row.mission_id) ?? [];
+      requirementList.push({ id: row.id, quantity: row.quantity, category, assignments });
+      requiredMaterielsByMission.set(row.mission_id, requirementList);
+
+      const engagedList = materielByMission.get(row.mission_id) ?? [];
+      for (const a of assignments) {
+        if (engagedList.some((x) => x.container_type_id === a.materiel_type_id)) continue;
+        engagedList.push({ container_type_id: a.materiel_type_id, name: a.name, code: a.code, category });
       }
-      if (list.length > 0) materielByMission.set(row.mission_id, list);
+      if (engagedList.length > 0) materielByMission.set(row.mission_id, engagedList);
     }
   }
 
@@ -292,6 +307,7 @@ export async function GET(req: NextRequest) {
     })),
     team: teamByMission.get(m.id) ?? [],
     materiel: materielByMission.get(m.id) ?? [],
+    requiredMateriels: requiredMaterielsByMission.get(m.id) ?? [],
   }));
 
   const volunteers = (volunteersRes.data ?? []).map((v) => ({ id: v.id, full_name: v.full_name, avatar_url: v.avatar_url }));
