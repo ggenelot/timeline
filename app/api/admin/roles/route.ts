@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
   const { data: roles, error: rolesError } = await serviceClient
     .from('roles')
-    .select('id,name,description,is_default,created_at')
+    .select('id,name,description,is_default,is_system,created_at')
     .order('name', { ascending: true });
 
   if (rolesError) return NextResponse.json({ error: rolesError.message }, { status: 500 });

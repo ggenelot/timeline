@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { dbErrorResponse } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
 // PUT: assign a volunteer to this role
@@ -43,7 +44,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     .eq('role_id', params.id)
     .eq('profile_id', body.profile_id);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  // « Impossible de retirer le dernier administrateur. » (trigger) → 409.
+  if (error) return dbErrorResponse(error);
 
   return NextResponse.json({ success: true });
 }

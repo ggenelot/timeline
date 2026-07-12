@@ -2,13 +2,14 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { Session } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, RoleBehavior, RoleBehaviorResourceType } from '@/lib/types';
+import { PermissionAction, PermissionResource, Profile } from '@/lib/types';
 import { Icon } from '@/components/ui/icon';
 import { cn } from '@/lib/cn';
 import { useBranding } from '@/lib/branding/branding-context';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 
 type NavItem = {
   href: string;
@@ -17,7 +18,10 @@ type NavItem = {
 };
 
 type GestionItem = NavItem & {
-  domain: RoleBehaviorResourceType | 'admin-only';
+  // Permission requise pour voir l'entrée (gating UX — les vraies gardes
+  // sont la RLS et les routes API) + section d'affichage.
+  required: { resource: PermissionResource; action: PermissionAction };
+  section: 'pilotage' | 'gestion';
 };
 
 // Éléments personnels — section « Moi » de la sidebar.
@@ -37,67 +41,34 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 const GESTION_ITEMS: GestionItem[] = [
-  { href: '/admin/volunteers', label: 'Bénévoles', domain: 'admin-only', icon: 'groups' },
-  { href: '/admin/roles', label: 'Rôles', domain: 'admin-only', icon: 'badge' },
-  { href: '/admin/skills', label: 'Compétences', domain: 'admin-only', icon: 'workspace_premium' },
-  { href: '/admin/materiels', label: 'Matériel', domain: 'admin-only', icon: 'inventory_2' },
-  { href: '/admin/cursus', label: 'Cursus', domain: 'cursus', icon: 'school' },
-  { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', domain: 'cursus', icon: 'insights' },
-  { href: '/admin/mission-types', label: 'Missions', domain: 'admin-only', icon: 'category' },
-  { href: '/admin/missions', label: 'Gestion des missions', domain: 'mission', icon: 'edit_calendar' },
-  { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', domain: 'mission', icon: 'dashboard' },
-  { href: '/admin/mission-board', label: 'Tableau de gestion des missions', domain: 'mission', icon: 'assignment_turned_in' },
-  { href: '/admin/stats', label: 'Statistiques', domain: 'mission', icon: 'bar_chart' },
-  { href: '/admin/apparence', label: 'Apparence', domain: 'admin-only', icon: 'palette' },
-  { href: '/admin/help', label: 'Aide', domain: 'admin-only', icon: 'help' }
+  { href: '/admin/volunteers', label: 'Bénévoles', required: { resource: 'volunteer', action: 'can_see' }, section: 'gestion', icon: 'groups' },
+  { href: '/admin/roles', label: 'Rôles', required: { resource: 'administration', action: 'can_manage' }, section: 'gestion', icon: 'badge' },
+  { href: '/admin/skills', label: 'Compétences', required: { resource: 'skill', action: 'can_manage' }, section: 'gestion', icon: 'workspace_premium' },
+  { href: '/admin/materiels', label: 'Matériel', required: { resource: 'materiel', action: 'can_see' }, section: 'gestion', icon: 'inventory_2' },
+  { href: '/admin/cursus', label: 'Cursus', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'school' },
+  { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'insights' },
+  { href: '/admin/mission-types', label: 'Missions', required: { resource: 'mission_type', action: 'can_manage' }, section: 'gestion', icon: 'category' },
+  { href: '/admin/missions', label: 'Gestion des missions', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'edit_calendar' },
+  { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'dashboard' },
+  { href: '/admin/mission-board', label: 'Tableau de gestion des missions', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'assignment_turned_in' },
+  // ⚠ Pas `mission/can_see` : ce comportement sert déjà à la visibilité
+  // timeline des bénévoles de base — il ne doit pas ouvrir les stats.
+  { href: '/admin/stats', label: 'Statistiques', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'bar_chart' },
+  { href: '/admin/apparence', label: 'Apparence', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'palette' },
+  { href: '/admin/help', label: 'Aide', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'help' }
 ];
 
-const ROLE_LABELS: Record<string, string> = {
-  admin: 'Administrateur',
-  responsable: 'Responsable',
-  benevole: 'Bénévole'
-};
-
 /**
- * Charge les comportements de rôle et filtre GESTION_ITEMS selon le rôle.
- * (Logique de visibilité inchangée — seul le déclencheur du fetch est `profile`,
- * car la sidebar est désormais toujours visible et non plus un tiroir à ouvrir.)
+ * Filtre GESTION_ITEMS selon les permissions de l'utilisateur (contexte
+ * PermissionsProvider, un seul fetch de /api/roles/mine pour toute l'app).
  */
-export function useVisibleGestionItems(profile: Profile | null): GestionItem[] {
-  const [behaviors, setBehaviors] = useState<RoleBehavior[]>([]);
+export function useVisibleGestionItems(): GestionItem[] {
+  const { can } = usePermissions();
 
-  useEffect(() => {
-    if (!profile) return;
-    let cancelled = false;
-
-    async function loadBehaviors() {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token ?? '';
-      const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok && !cancelled) {
-        const { behaviors: data } = (await res.json()) as { behaviors: RoleBehavior[] };
-        setBehaviors(data);
-      }
-    }
-
-    void loadBehaviors();
-    return () => {
-      cancelled = true;
-    };
-  }, [profile]);
-
-  const isAdmin = profile?.role === 'admin';
-  const isResponsable = profile?.role === 'responsable';
-
-  return useMemo(() => {
-    return GESTION_ITEMS.filter((item) => {
-      if (isAdmin) return true;
-      if (item.domain === 'admin-only') return false;
-      // Les responsables ont accès au pilotage des missions (OPE, stats…).
-      if (isResponsable && item.domain === 'mission') return true;
-      return behaviors.some((b) => b.resource_type === item.domain && b.behavior_type === 'can_manage');
-    });
-  }, [isAdmin, isResponsable, behaviors]);
+  return useMemo(
+    () => GESTION_ITEMS.filter((item) => can(item.required.resource, item.required.action)),
+    [can]
+  );
 }
 
 async function signOut() {
@@ -194,8 +165,8 @@ function SidebarNav({
   firstLinkRef?: React.Ref<HTMLAnchorElement>;
 }) {
   const isActive = useIsActive();
-  const pilotage = gestionItems.filter((item) => item.domain !== 'admin-only');
-  const administration = gestionItems.filter((item) => item.domain === 'admin-only');
+  const pilotage = gestionItems.filter((item) => item.section === 'pilotage');
+  const administration = gestionItems.filter((item) => item.section === 'gestion');
 
   return (
     <nav className="flex flex-col p-3">
@@ -232,6 +203,9 @@ function SidebarNav({
 }
 
 function SidebarProfile({ profile, tabIndex }: { profile: Profile | null; tabIndex?: number }) {
+  const { roles } = usePermissions();
+  const roleNames = roles.map((role) => role.name).join(', ');
+
   return (
     <div className="mt-auto border-t border-line p-3">
       <div className="flex items-center gap-2.5">
@@ -251,7 +225,7 @@ function SidebarProfile({ profile, tabIndex }: { profile: Profile | null; tabInd
         <span className="flex min-w-0 flex-col leading-tight">
           <span className="truncate text-sm font-semibold text-ink">{profile?.full_name ?? '—'}</span>
           <span className="truncate text-[11.5px] text-ink-3">
-            {ROLE_LABELS[profile?.role ?? ''] ?? profile?.email}
+            {roleNames || profile?.email}
           </span>
         </span>
         <button

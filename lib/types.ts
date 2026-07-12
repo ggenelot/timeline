@@ -1,3 +1,10 @@
+/**
+ * @deprecated Trichotomie globale obsolète, en cours de retrait progressif au
+ * profit du système de rôles dynamique (roles / profile_roles /
+ * role_behaviors + has_permission). Ne plus s'appuyer dessus dans du nouveau
+ * code — utiliser lib/api/permissions.ts côté serveur et usePermissions()
+ * côté client.
+ */
 export type AppRole = 'admin' | 'responsable' | 'benevole';
 
 export type Profile = {
@@ -418,13 +425,42 @@ export type MissionType = {
 };
 
 export type RoleBehaviorType = 'can_create' | 'can_manage' | 'required_for_visibility' | 'auto_slack' | 'can_see';
-export type RoleBehaviorResourceType = 'mission' | 'cursus';
+export type RoleBehaviorResourceType =
+  | 'mission'
+  | 'cursus'
+  | 'materiel'
+  | 'volunteer'
+  | 'skill'
+  | 'mission_type'
+  | 'settings'
+  | 'administration';
+
+export type PermissionResource = RoleBehaviorResourceType;
+// Actions génériques d'une permission. required_for_visibility / auto_slack
+// restent des comportements spécifiques aux missions, pas des permissions.
+export type PermissionAction = 'can_see' | 'can_create' | 'can_manage';
+
+// Permission aplatie côté serveur (/api/roles/mine) : l'implication
+// can_manage ⇒ can_see est déjà résolue ; les scopes ne concernent que
+// resource = 'mission' (vides = tous types / tous statuts).
+export type PermissionEntry = {
+  resource: PermissionResource;
+  action: PermissionAction;
+  mission_type_ids: string[];
+  mission_statuses: string[];
+};
+
+export type MyPermissions = {
+  isAdmin: boolean;
+  entries: PermissionEntry[];
+};
 
 export type Role = {
   id: string;
   name: string;
   description: string | null;
   is_default: boolean;
+  is_system: boolean;
   created_at: string;
 };
 
