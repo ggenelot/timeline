@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requirePermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
 type AppSettingsRow = {
@@ -36,12 +36,8 @@ function normalizeBaseUrl(value: string): string | null | false {
 }
 
 export async function GET(request: NextRequest) {
-  const token = getBearerToken(request);
-  if (!token) return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  const auth = await requirePermission(request, 'settings', 'can_see');
+  if (auth.errorResponse) return auth.errorResponse;
 
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
@@ -56,12 +52,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const token = getBearerToken(request);
-  if (!token) return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  const auth = await requirePermission(request, 'settings', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
 
   const rawBody = (await request.json().catch(() => ({}))) as Record<string, unknown>;
 
@@ -115,7 +107,7 @@ export async function PATCH(request: NextRequest) {
 
   const update: Partial<AppSettingsRow> & { updated_at: string; updated_by: string } = {
     updated_at: new Date().toISOString(),
-    updated_by: auth.profile.id
+    updated_by: auth.user.id
   };
 
   if (body.logoUrl !== undefined) update.logo_url = body.logoUrl?.trim() || null;

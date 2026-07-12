@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
-import type { RoleBehavior } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 
 // ── Données renvoyées par l'API ───────────────────────────────
 
@@ -139,7 +139,9 @@ type EditorState = {
 
 export default function CompetencesDashboardPage() {
   const router = useRouter();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canSee = can('cursus', 'can_see');
+  const canManage = can('cursus', 'can_manage');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -175,6 +177,8 @@ export default function CompetencesDashboardPage() {
   // ── Accès + chargement ──────────────────────────────────────
 
   useEffect(() => {
+    if (permissionsLoading) return;
+
     async function init() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
@@ -186,23 +190,7 @@ export default function CompetencesDashboardPage() {
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
-
-      let ok = profileData?.role === 'admin';
-      if (!ok) {
-        const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-        if (res.ok) {
-          const { behaviors } = (await res.json()) as { behaviors: RoleBehavior[] };
-          ok = behaviors.some((b) => b.resource_type === 'cursus' && b.behavior_type === 'can_manage');
-        }
-      }
-      setAllowed(ok);
-
-      if (!ok) {
+      if (!canSee) {
         setLoading(false);
         return;
       }
@@ -225,7 +213,7 @@ export default function CompetencesDashboardPage() {
       setLoading(false);
     }
     void init();
-  }, [router]);
+  }, [router, permissionsLoading, canSee]);
 
   // ── Mutation d'une cellule ──────────────────────────────────
 
@@ -595,6 +583,9 @@ export default function CompetencesDashboardPage() {
     profileId: string,
     sk: { id: string; code: string; name: string }
   ) {
+    // Lecture seule (can_see sans can_manage) : la cellule reste consultable
+    // mais l'éditeur de statut ne s'ouvre pas.
+    if (!canManage) return;
     const r = e.currentTarget.getBoundingClientRect();
     setEditor({
       profileId,
@@ -611,6 +602,7 @@ export default function CompetencesDashboardPage() {
   // ── Création d'un cahier de doublure depuis la flèche d'un badge ─────
 
   function openCreateCursus(e: React.MouseEvent<HTMLElement>, pid: string, name: string, cursus: CursusRef) {
+    if (!canManage) return;
     const r = e.currentTarget.getBoundingClientRect();
     setCreateCursusError(null);
     setCreateCursusTarget({ pid, name, cursus, x: r.left + r.width / 2, y: r.bottom });
@@ -648,15 +640,15 @@ export default function CompetencesDashboardPage() {
 
   // ── Rendu ───────────────────────────────────────────────────
 
-  if (allowed === false) {
+  if (!permissionsLoading && !canSee) {
     return (
       <div className="rounded-xl border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs de cursus.
+        Accès refusé : vous n&apos;avez pas la permission de voir le suivi des compétences.
       </div>
     );
   }
 
-  if (loading || !data || !cat) {
+  if (permissionsLoading || loading || !data || !cat) {
     return <p className="text-sm text-ink-2">Chargement…</p>;
   }
 

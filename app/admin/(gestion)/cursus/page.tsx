@@ -31,8 +31,8 @@ import type {
   CursusRule,
   CursusPhase,
   CursusCompetence,
-  RoleBehavior,
 } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import {
   getAllCursus,
   getCursusWithDetails,
@@ -452,7 +452,8 @@ function SortablePhaseCard({
 
 export default function AdminCursusPage() {
   const router = useRouter();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const allowed = can('cursus', 'can_manage');
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<CursusDetail | null>(null);
@@ -476,33 +477,11 @@ export default function AdminCursusPage() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
   useEffect(() => {
-    async function checkAccess() {
+    async function checkAuth() {
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        router.replace('/login');
-        return;
-      }
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
-      if (profileData?.role === 'admin') {
-        setAllowed(true);
-        return;
-      }
-
-      const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
-      const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-      if (res.ok) {
-        const { behaviors } = (await res.json()) as { behaviors: RoleBehavior[] };
-        setAllowed(behaviors.some((b) => b.resource_type === 'cursus' && b.behavior_type === 'can_manage'));
-      } else {
-        setAllowed(false);
-      }
+      if (!authData.user) router.replace('/login');
     }
-    void checkAccess();
+    void checkAuth();
   }, [router]);
 
   useEffect(() => {
@@ -779,7 +758,7 @@ export default function AdminCursusPage() {
     setDetail((d) => d ? { ...d, phases: d.phases.map((p) => p.id !== phaseId ? p : { ...p, competences: (p.competences ?? []).filter((c) => c.id !== compId) }) } : d);
   }
 
-  if (allowed === null) {
+  if (permissionsLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-ink-3">Chargement…</p>

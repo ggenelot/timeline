@@ -44,20 +44,29 @@ gating UX client.
 |---|---|---|---|---|---|
 | 0 | Fondation (rôle système, fonctions, garde-fous, sidebar, UI rôles) | — | — | ✔ | **Fait** |
 | 1 | Matériel | ✔ `has_permission('materiel',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
-| 2 | Compétences (catalogue) | legacy | legacy | legacy | À faire |
-| 3 | Cursus | mixte (`admin` OR `has_role_behavior`) | legacy | legacy | À faire |
-| 4 | Bénévoles / profils | legacy | legacy | legacy | À faire |
+| 2 | Compétences (catalogue) | ✔ `has_permission('skill',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
+| 3 | Cursus | ✔ `has_permission('cursus',…)` (+ can_see en lecture) | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
+| 4 | Bénévoles / profils | ✔ `has_permission('volunteer',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
 | 5 | Missions + types de mission | mixte | legacy | legacy | À faire |
-| 6 | Réglages / aide / Slack / administration | legacy | legacy | legacy | À faire |
+| 6 | Réglages / aide / Slack / administration | ✔ `has_permission('settings'/'administration',…)` | ✔ `requirePermission` + edge functions | ✔ `usePermissions` | **Fait** |
 | 7 | Suppression de `profiles.role` | — | — | — | À faire |
 
 Tant qu'un domaine n'est pas migré, ses gardes restent le rôle global legacy
 (`profiles.role='admin'`) ; l'équivalence est garantie par le backfill de la
 phase 0 (membre du rôle système ≡ `role='admin'`).
 
+> **Rôle « voit tout, ne gère rien »** : purement composé — `can_see` sur les
+> 8 ressources (bouton preset « Lecture sur tout »). Aucune logique dédiée. Ce
+> rôle voit : catalogues (lecture publique), suivi compétences/cursus (tableau
+> de bord), profils et compétences des bénévoles (RLS + page de détail),
+> matériel, réglages. Les **éditeurs** (référentiel cursus, console bénévoles
+> avec sync Slack, catalogue compétences) restent gardés par `can_manage` : la
+> donnée reste visible ailleurs en lecture, mais ces consoles de gestion ne
+> s'ouvrent pas en lecture seule.
+
 ## Matrice cible (personas de référence)
 
-| Ressource × action | Admin (rôle système) | Présidente (`can_see` × 8) | Respo maraude (`can_see`+`can_create`+`can_manage` mission, scope maraude) | Respo matériel (`can_manage` materiel) | Bénévole (rôle par défaut) |
+| Ressource × action | Admin (rôle système) | Superviseur lecture (`can_see` × 8) | Respo maraude (`can_see`+`can_create`+`can_manage` mission, scope maraude) | Respo matériel (`can_manage` materiel) | Bénévole (rôle par défaut) |
 |---|---|---|---|---|---|
 | mission — voir | ✔ toutes | ✔ toutes | ✔ (maraudes) | timeline seule | timeline seule |
 | mission — créer | ✔ | ✖ | ✔ (maraudes) | ✖ | brouillons si `can_create` |

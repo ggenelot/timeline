@@ -41,11 +41,16 @@ const TAB_ITEMS: NavItem[] = [
 ];
 
 const GESTION_ITEMS: GestionItem[] = [
-  { href: '/admin/volunteers', label: 'Bénévoles', required: { resource: 'volunteer', action: 'can_see' }, section: 'gestion', icon: 'groups' },
+  // Console d'admin bénévoles (création de comptes, sync Slack) : can_manage.
+  // La visibilité lecture seule des bénévoles passe par la RLS + le tableau
+  // de bord compétences.
+  { href: '/admin/volunteers', label: 'Bénévoles', required: { resource: 'volunteer', action: 'can_manage' }, section: 'gestion', icon: 'groups' },
   { href: '/admin/roles', label: 'Rôles', required: { resource: 'administration', action: 'can_manage' }, section: 'gestion', icon: 'badge' },
   { href: '/admin/skills', label: 'Compétences', required: { resource: 'skill', action: 'can_manage' }, section: 'gestion', icon: 'workspace_premium' },
   { href: '/admin/materiels', label: 'Matériel', required: { resource: 'materiel', action: 'can_see' }, section: 'gestion', icon: 'inventory_2' },
-  { href: '/admin/cursus', label: 'Cursus', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'school' },
+  // Éditeur du référentiel cursus : réservé à can_manage. La supervision
+  // lecture seule (présidente) passe par le tableau de bord compétences.
+  { href: '/admin/cursus', label: 'Cursus', required: { resource: 'cursus', action: 'can_manage' }, section: 'pilotage', icon: 'school' },
   { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'insights' },
   { href: '/admin/mission-types', label: 'Missions', required: { resource: 'mission_type', action: 'can_manage' }, section: 'gestion', icon: 'category' },
   { href: '/admin/missions', label: 'Gestion des missions', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'edit_calendar' },

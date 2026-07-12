@@ -1,19 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requirePermission } from '@/lib/api/permissions';
 import { SlackApiClientError, SlackService } from '@/lib/slack/service';
 
 const REQUIRED_SCOPES = ['chat:write', 'groups:write', 'groups:read', 'im:write'];
 
 export async function GET(request: NextRequest) {
-  const token = getBearerToken(request);
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile || auth.profile.role !== 'admin') {
-    return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  }
+  const auth = await requirePermission(request, 'settings', 'can_see');
+  if (auth.errorResponse) return auth.errorResponse;
 
   try {
     const slack = new SlackService();

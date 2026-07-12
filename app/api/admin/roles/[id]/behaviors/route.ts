@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
-import { dbErrorResponse } from '@/lib/api/permissions';
+import { dbErrorResponse, requirePermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { RoleBehaviorResourceType, RoleBehaviorType } from '@/lib/types';
 
@@ -23,12 +22,8 @@ const VALID_BEHAVIORS_BY_RESOURCE: Record<RoleBehaviorResourceType, RoleBehavior
 
 // POST: add a behavior to this role
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const token = getBearerToken(request);
-  if (!token) return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  const auth = await requirePermission(request, 'administration', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
 
   const body = (await request.json().catch(() => ({}))) as {
     behavior_type?: RoleBehaviorType;

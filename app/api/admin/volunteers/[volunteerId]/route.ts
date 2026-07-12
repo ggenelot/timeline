@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
+import type { PermissionAction } from '@/lib/types';
 
 type UpdateVolunteerPayload = {
   full_name?: string;
@@ -9,43 +11,16 @@ type UpdateVolunteerPayload = {
   password?: string;
 };
 
-function getBearerToken(request: NextRequest): string {
-  const authorization = request.headers.get('authorization');
-  return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
-}
-
-async function assertAdmin(token: string) {
-  const requesterClient = createServerSupabaseAnonClient(token);
-  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return { error: NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 }), userId: null };
-  }
-
-  const { data: requesterProfile, error: requesterProfileError } = await requesterClient
-    .from('profiles')
-    .select('role')
-    .eq('id', userData.user.id)
-    .single();
-
-  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
-    return {
-      error: NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent modifier un bénévole.' }, { status: 403 }),
-      userId: null
-    };
-  }
-
-  return { error: null, userId: userData.user.id };
+// Autorisation du domaine bénévoles : lecture avec can_see, écriture avec
+// can_manage. L'admin passe implicitement via has_permission.
+async function authorizeVolunteer(request: NextRequest, action: PermissionAction) {
+  const auth = await requirePermission(request, 'volunteer', action);
+  if (auth.errorResponse) return { error: auth.errorResponse, userId: null as string | null };
+  return { error: null, userId: auth.user.id };
 }
 
 export async function GET(request: NextRequest, { params }: { params: { volunteerId: string } }) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const guard = await assertAdmin(token);
+  const guard = await authorizeVolunteer(request, 'can_see');
   if (guard.error) {
     return guard.error;
   }
@@ -76,13 +51,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 }
 
 export async function PATCH(request: NextRequest, { params }: { params: { volunteerId: string } }) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const guard = await assertAdmin(token);
+  const guard = await authorizeVolunteer(request, 'can_manage');
   if (guard.error) {
     return guard.error;
   }
@@ -201,13 +170,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { volunteerId: string } }) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const guard = await assertAdmin(token);
+  const guard = await authorizeVolunteer(request, 'can_manage');
   if (guard.error) {
     return guard.error;
   }

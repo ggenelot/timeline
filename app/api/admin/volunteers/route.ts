@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
 
 type CreateVolunteerPayload = {
   firstName?: string;
@@ -11,12 +11,9 @@ type CreateVolunteerPayload = {
 };
 
 export async function POST(request: NextRequest) {
-  const authorization = request.headers.get('authorization');
-  const token = authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
+  const auth = await requirePermission(request, 'volunteer', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const serviceClient = auth.serviceClient;
 
   let payload: CreateVolunteerPayload;
 
@@ -58,28 +55,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 10 caractères.' }, { status: 400 });
   }
 
-  const requesterClient = createServerSupabaseAnonClient(token);
-  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const { data: requesterProfile, error: requesterProfileError } = await requesterClient
-    .from('profiles')
-    .select('role')
-    .eq('id', userData.user.id)
-    .single();
-
-  if (requesterProfileError || !requesterProfile) {
-    return NextResponse.json({ error: 'Impossible de vérifier vos droits.' }, { status: 403 });
-  }
-
-  if (requesterProfile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent créer un bénévole.' }, { status: 403 });
-  }
-
-  const serviceClient = createServerSupabaseServiceClient();
   const fullName = `${firstName} ${lastName}`.trim();
   const authEmail = `${identifier}@timeline.local`;
 
