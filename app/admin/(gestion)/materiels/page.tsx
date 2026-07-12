@@ -21,7 +21,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, MaterielType, MaterielTypeContent, MaterielCategory } from '@/lib/types';
+import { MaterielType, MaterielTypeContent, MaterielCategory } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
@@ -406,7 +407,9 @@ function TreeNode({ node, depth, meta, onFullDelete, sortableId }: {
 
 export default function AdminMaterielsPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canSee = can('materiel', 'can_see');
+  const canManage = can('materiel', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [roots, setRoots] = useState<MaterielType[]>([]);
   const [childrenByContainer, setChildrenByContainer] = useState<Record<string, MaterielTypeContent[]>>({});
@@ -443,19 +446,6 @@ export default function AdminMaterielsPage() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData || profileData.role !== 'admin') {
-        setLoading(false);
-        setProfile(profileData ?? null);
-        return;
-      }
-
-      setProfile(profileData);
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
@@ -725,7 +715,7 @@ export default function AdminMaterielsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-ink-3">Chargement…</p>
@@ -733,10 +723,12 @@ export default function AdminMaterielsPage() {
     );
   }
 
-  if (!profile || profile.role !== 'admin') {
+  // Gating UX seulement — les vraies gardes sont la RLS et les routes API.
+  // Sans can_manage, le mode édition n'est pas proposé : lecture seule.
+  if (!canSee) {
     return (
       <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs.
+        Accès refusé : vous n&apos;avez pas la permission de voir le matériel.
       </div>
     );
   }
@@ -763,12 +755,14 @@ export default function AdminMaterielsPage() {
         title="Matériel"
         subtitle="Plan de rangement du matériel : créez des contenants, dépliez-les pour ajouter d'autres contenants ou des items de la bibliothèque, et glissez-déposez pour réorganiser leur contenu, y compris entre contenants."
         actions={
-          <Button
-            variant={editMode ? 'engage' : 'ghost'}
-            onClick={() => setEditMode((v) => !v)}
-          >
-            {editMode ? 'Valider' : 'Modifier'}
-          </Button>
+          canManage ? (
+            <Button
+              variant={editMode ? 'engage' : 'ghost'}
+              onClick={() => setEditMode((v) => !v)}
+            >
+              {editMode ? 'Valider' : 'Modifier'}
+            </Button>
+          ) : undefined
         }
       />
 

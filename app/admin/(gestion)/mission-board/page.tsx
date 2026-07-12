@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import type { OpeDashboardData, OpeMission, RoleBehavior } from '@/lib/types';
 import { buildDayAxis, missionDayKey } from '@/lib/mission-timeline';
 import {
@@ -55,6 +56,7 @@ const TODAY_KEY = missionDayKey(new Date().toISOString());
 
 export default function MissionBoardPage() {
   const router = useRouter();
+  const { can } = usePermissions();
   const [allowed, setAllowed] = useState<boolean | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [token, setToken] = useState('');
@@ -77,7 +79,7 @@ export default function MissionBoardPage() {
   const [busy, setBusy] = useState(false);
 
   const fromISO = useMemo(() => startOfTodayMinus(3).toISOString(), []);
-  const canEditMateriel = role === 'admin';
+  const canEditMateriel = can('materiel', 'can_manage');
   // "Rendre disponible" est admin-only côté API (assertAdmin) : la recherche
   // plein répertoire n'a d'intérêt que pour ce profil, seul à pouvoir en
   // exploiter le débouché (cf. placeVolunteer).

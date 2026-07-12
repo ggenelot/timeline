@@ -20,7 +20,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, MaterielCategory } from '@/lib/types';
+import { MaterielCategory } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
@@ -113,8 +114,9 @@ function FieldLabel({ children }: { children: React.ReactNode }) {
 
 const inputClass = 'w-full rounded-[10px] border border-line-field px-3 py-2 text-sm text-ink outline-none';
 
-function SortableCategoryRow({ category, onEdit, onDelete }: {
+function SortableCategoryRow({ category, canManage, onEdit, onDelete }: {
   category: CategoryWithTypes;
+  canManage: boolean;
   onEdit: () => void;
   onDelete: () => void;
 }) {
@@ -130,7 +132,7 @@ function SortableCategoryRow({ category, onEdit, onDelete }: {
         opacity: isDragging ? 0.6 : 1, boxShadow: isDragging ? '0 6px 18px rgba(15,23,42,.12)' : undefined, zIndex: isDragging ? 1 : 'auto',
       }}
     >
-      <DragHandle attributes={attributes} listeners={listeners} />
+      {canManage ? <DragHandle attributes={attributes} listeners={listeners} /> : null}
       <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: p.accent }} />
       <span className="min-w-0 flex-1 text-[14.5px] font-bold text-ink">{category.name}</span>
       <span
@@ -139,22 +141,26 @@ function SortableCategoryRow({ category, onEdit, onDelete }: {
       >
         {count} contenant{count !== 1 ? 's' : ''}
       </span>
-      <span className="inline-flex shrink-0 items-center gap-1">
-        <Button variant="ghost" onClick={onEdit} className="rounded-[7px] px-2.5 py-[5px] text-xs">
-          Modifier
-        </Button>
-        <button type="button" onClick={onDelete} aria-label="Supprimer"
-          className="p-1 text-bad">
-          <Icon name="delete" size={18} />
-        </button>
-      </span>
+      {canManage ? (
+        <span className="inline-flex shrink-0 items-center gap-1">
+          <Button variant="ghost" onClick={onEdit} className="rounded-[7px] px-2.5 py-[5px] text-xs">
+            Modifier
+          </Button>
+          <button type="button" onClick={onDelete} aria-label="Supprimer"
+            className="p-1 text-bad">
+            <Icon name="delete" size={18} />
+          </button>
+        </span>
+      ) : null}
     </div>
   );
 }
 
 export default function AdminMaterielCategoriesPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canSee = can('materiel', 'can_see');
+  const canManage = can('materiel', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryWithTypes[]>([]);
   const [token, setToken] = useState('');
@@ -186,19 +192,6 @@ export default function AdminMaterielCategoriesPage() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData || profileData.role !== 'admin') {
-        setLoading(false);
-        setProfile(profileData ?? null);
-        return;
-      }
-
-      setProfile(profileData);
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
@@ -270,7 +263,7 @@ export default function AdminMaterielCategoriesPage() {
     }
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-ink-3">Chargement…</p>
@@ -278,10 +271,11 @@ export default function AdminMaterielCategoriesPage() {
     );
   }
 
-  if (!profile || profile.role !== 'admin') {
+  // Gating UX seulement — les vraies gardes sont la RLS et les routes API.
+  if (!canSee) {
     return (
       <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs.
+        Accès refusé : vous n&apos;avez pas la permission de voir le matériel.
       </div>
     );
   }
@@ -315,6 +309,7 @@ export default function AdminMaterielCategoriesPage() {
               <SortableCategoryRow
                 key={cat.id}
                 category={cat}
+                canManage={canManage}
                 onEdit={() => setCategoryModal({ id: cat.id, name: cat.name, color: cat.color })}
                 onDelete={() => handleDeleteCategory(cat.id, cat.name)}
               />
@@ -323,12 +318,14 @@ export default function AdminMaterielCategoriesPage() {
         </DndContext>
       )}
 
-      <div className="mt-2">
-        <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
-          className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
-          + Nouveau type
-        </button>
-      </div>
+      {canManage ? (
+        <div className="mt-2">
+          <button type="button" onClick={() => setCategoryModal({ name: '', color: 'slate' })}
+            className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
+            + Nouveau type
+          </button>
+        </div>
+      ) : null}
 
       {categoryModal ? (
         <Modal

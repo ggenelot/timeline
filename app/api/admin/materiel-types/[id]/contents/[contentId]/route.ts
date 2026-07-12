@@ -1,24 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
-
-async function getAdminClient(req: NextRequest) {
-  const auth = req.headers.get('authorization') ?? '';
-  const token = auth.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: { user }, error } = await serviceClient.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') return null;
-
-  return serviceClient;
-}
+import { requirePermission } from '@/lib/api/permissions';
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string; contentId: string } }) {
-  const client = await getAdminClient(req);
-  if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
+  const auth = await requirePermission(req, 'materiel', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const body = (await req.json()) as { quantity?: number; position?: number };
   const patch: Record<string, number> = {};
@@ -44,8 +30,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string; contentId: string } }) {
-  const client = await getAdminClient(req);
-  if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
+  const auth = await requirePermission(req, 'materiel', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const { error } = await client
     .from('materiel_type_contents')

@@ -43,7 +43,7 @@ gating UX client.
 | Phase | Domaine | Policies RLS | Routes API | UI | État |
 |---|---|---|---|---|---|
 | 0 | Fondation (rôle système, fonctions, garde-fous, sidebar, UI rôles) | — | — | ✔ | **Fait** |
-| 1 | Matériel | legacy `role='admin'` | legacy | legacy | À faire |
+| 1 | Matériel | ✔ `has_permission('materiel',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
 | 2 | Compétences (catalogue) | legacy | legacy | legacy | À faire |
 | 3 | Cursus | mixte (`admin` OR `has_role_behavior`) | legacy | legacy | À faire |
 | 4 | Bénévoles / profils | legacy | legacy | legacy | À faire |
@@ -66,6 +66,14 @@ phase 0 (membre du rôle système ≡ `role='admin'`).
 | cursus — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
 | materiel — voir | ✔ | ✔ | ✖ | ✔ (implicite) | catalogue public |
 | materiel — gérer | ✔ | ✖ | ✖ | ✔ | ✖ |
+
+Détail phase 1 (fait) : `materiel/can_manage` gouverne le catalogue
+(`materiel_categories`, `materiel_types`, `materiel_type_contents`) **et** les
+listes matériel des missions (`mission_required_materiels`,
+`mission_materiel_assignments`, board OPE). `mission_type_required_materiels`
+reste admin-only jusqu'à la phase 5 (ressource `mission_type`). La
+vérification matériel reste ouverte aux bénévoles confirmés sur la mission
+(`can_verify_mission_materiel`, branche admin passée sur `is_admin()`).
 | volunteer — voir | ✔ | ✔ | (phase 4/5 : profils bénévoles pour staffer) | ✖ | ✖ |
 | volunteer — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
 | skill — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
