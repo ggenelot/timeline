@@ -46,7 +46,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const gestionItems = useVisibleGestionItems(profile);
+  const gestionItems = useVisibleGestionItems();
 
   return (
     <div className="min-h-screen">

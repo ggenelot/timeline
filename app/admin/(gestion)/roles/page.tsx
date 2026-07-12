@@ -14,6 +14,7 @@ type Role = {
   name: string;
   description: string | null;
   is_default: boolean;
+  is_system: boolean;
   created_at: string;
 };
 
@@ -53,18 +54,18 @@ function resolveProfile(profile: VolunteerProfile | VolunteerProfile[] | null): 
 }
 
 const BEHAVIOR_LABELS: Record<RoleBehaviorType, string> = {
-  can_see: 'Peut voir des événements',
-  can_create: 'Peut créer des événements',
-  can_manage: 'Peut gérer des événements',
+  can_see: 'Peut voir',
+  can_create: 'Peut créer',
+  can_manage: 'Peut gérer',
   required_for_visibility: 'Est référent pour la visibilité',
   auto_slack: 'Est ajouté automatiquement sur Slack',
 };
 
 const BEHAVIOR_DESCRIPTIONS: Record<RoleBehaviorType, string> = {
-  can_see: 'Les membres voient les événements des types et statuts sélectionnés. Si un comportement "référent" couvre ce type, un référent disponible est requis.',
-  can_create: 'Les membres peuvent créer des brouillons pour les types sélectionnés',
-  can_manage: 'Les membres ont des droits d\'administration sur les événements sélectionnés. Sans restriction de type = droits admin complets.',
-  required_for_visibility: 'Les membres rendent visibles les événements de leurs types (pour les rôles avec can_see). Ils voient toujours ces missions eux-mêmes.',
+  can_see: 'Lecture : les membres voient les éléments de la ressource. Pour les missions : types et statuts sélectionnés ; si un comportement "référent" couvre un type, un référent disponible est requis.',
+  can_create: 'Création : les membres peuvent créer des éléments de la ressource (missions : des brouillons des types sélectionnés).',
+  can_manage: 'Gestion : édition, suppression, validation. Inclut la lecture ("Peut voir").',
+  required_for_visibility: 'Les membres rendent visibles les événements de leurs types (pour les rôles avec "Peut voir"). Ils voient toujours ces missions eux-mêmes.',
   auto_slack: 'Les membres sont invités automatiquement sur les canaux Slack des missions sélectionnées',
 };
 
@@ -76,12 +77,32 @@ const ALL_MISSION_STATUSES: { value: MissionStatus; label: string }[] = [
   { value: 'cancelled', label: 'Annulé' },
 ];
 
-const ALL_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_see', 'can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
-const CURSUS_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_manage'];
+// Missions : les 5 comportements (dont les 2 spécifiques référent/Slack).
+// Autres ressources : les 3 actions génériques — même règle que la contrainte
+// SQL role_behaviors_action_per_resource_check.
+const MISSION_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_see', 'can_create', 'can_manage', 'required_for_visibility', 'auto_slack'];
+const GENERIC_BEHAVIOR_TYPES: RoleBehaviorType[] = ['can_see', 'can_create', 'can_manage'];
+
+const ALL_RESOURCE_TYPES: RoleBehaviorResourceType[] = [
+  'mission',
+  'cursus',
+  'materiel',
+  'volunteer',
+  'skill',
+  'mission_type',
+  'settings',
+  'administration',
+];
 
 const RESOURCE_TYPE_LABELS: Record<RoleBehaviorResourceType, string> = {
-  mission: 'Mission',
+  mission: 'Missions',
   cursus: 'Cursus',
+  materiel: 'Matériel',
+  volunteer: 'Bénévoles',
+  skill: 'Compétences',
+  mission_type: 'Types de mission',
+  settings: 'Réglages',
+  administration: 'Administration (rôles)',
 };
 
 export default function AdminRolesPage() {
@@ -308,8 +329,8 @@ export default function AdminRolesPage() {
       body: JSON.stringify({
         behavior_type: form.type,
         resource_type: form.resourceType,
-        mission_type_ids: form.resourceType === 'cursus' ? [] : form.missionTypeIds,
-        mission_statuses: form.resourceType === 'cursus' || form.type !== 'can_see' ? [] : form.missionStatuses,
+        mission_type_ids: form.resourceType === 'mission' ? form.missionTypeIds : [],
+        mission_statuses: form.resourceType === 'mission' && form.type === 'can_see' ? form.missionStatuses : [],
       }),
     });
     if (res.ok) {
@@ -320,6 +341,32 @@ export default function AdminRolesPage() {
       const json = (await res.json()) as { error?: string };
       setError(json.error ?? "Erreur lors de l'ajout du comportement.");
     }
+    setAddingBehavior((prev) => ({ ...prev, [roleId]: false }));
+  }
+
+  // Preset « présidente » : accorde la lecture (can_see) sur chaque ressource
+  // pas encore couverte par un can_see ou un can_manage.
+  async function handlePresetReadAll(roleId: string) {
+    setAddingBehavior((prev) => ({ ...prev, [roleId]: true }));
+    setError(null);
+    const existing = data.roleBehaviors.filter((b) => b.role_id === roleId);
+    const missing = ALL_RESOURCE_TYPES.filter(
+      (rt) => !existing.some((b) => b.resource_type === rt && (b.behavior_type === 'can_see' || b.behavior_type === 'can_manage'))
+    );
+    for (const resource of missing) {
+      const res = await fetch(`/api/admin/roles/${roleId}/behaviors`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ behavior_type: 'can_see', resource_type: resource, mission_type_ids: [], mission_statuses: [] }),
+      });
+      if (!res.ok) {
+        const json = (await res.json()) as { error?: string };
+        setError(json.error ?? "Erreur lors de l'ajout du comportement.");
+        break;
+      }
+    }
+    await fetchData(token);
+    if (missing.length > 0) flash('Lecture accordée sur toutes les ressources.');
     setAddingBehavior((prev) => ({ ...prev, [roleId]: false }));
   }
 
@@ -433,7 +480,9 @@ export default function AdminRolesPage() {
                         type="text"
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
-                        className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
+                        disabled={role.is_system}
+                        title={role.is_system ? 'Le nom du rôle système ne peut pas être modifié.' : undefined}
+                        className="flex-1 rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30 disabled:cursor-not-allowed disabled:opacity-60"
                       />
                       <input
                         type="text"
@@ -467,6 +516,11 @@ export default function AdminRolesPage() {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <p className="font-semibold text-ink">{role.name}</p>
+                        {role.is_system && (
+                          <span className="rounded-full border border-brand/30 bg-brand/10 px-2 py-0.5 text-xs font-medium text-brand">
+                            Système
+                          </span>
+                        )}
                         {role.is_default && (
                           <span className="rounded-full border border-warn-line bg-warn-soft px-2 py-0.5 text-xs font-medium text-warn-text">
                             Rôle par défaut
@@ -476,22 +530,24 @@ export default function AdminRolesPage() {
                       {role.description ? <p className="text-sm text-ink-2">{role.description}</p> : null}
                     </div>
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => handleSetDefault(role.id, role)}
-                        disabled={settingDefault[role.id]}
-                        className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
-                          role.is_default
-                            ? 'border-warn-line text-warn-text hover:bg-warn-soft'
-                            : 'border-line text-ink-2 hover:bg-surface-sub'
-                        }`}
-                      >
-                        {settingDefault[role.id]
-                          ? '...'
-                          : role.is_default
-                            ? 'Retirer défaut'
-                            : 'Définir par défaut'}
-                      </button>
+                      {!role.is_system && (
+                        <button
+                          type="button"
+                          onClick={() => handleSetDefault(role.id, role)}
+                          disabled={settingDefault[role.id]}
+                          className={`rounded-md border px-2.5 py-1 text-xs transition-colors ${
+                            role.is_default
+                              ? 'border-warn-line text-warn-text hover:bg-warn-soft'
+                              : 'border-line text-ink-2 hover:bg-surface-sub'
+                          }`}
+                        >
+                          {settingDefault[role.id]
+                            ? '...'
+                            : role.is_default
+                              ? 'Retirer défaut'
+                              : 'Définir par défaut'}
+                        </button>
+                      )}
                       <button
                         type="button"
                         onClick={() => {
@@ -503,7 +559,7 @@ export default function AdminRolesPage() {
                       >
                         Modifier
                       </button>
-                      {!role.is_default && (
+                      {!role.is_default && !role.is_system && (
                         <button
                           type="button"
                           onClick={() => handleDelete(role.id, role.name)}
@@ -562,8 +618,24 @@ export default function AdminRolesPage() {
                 </div>
 
                 {/* Behaviors section */}
+                {role.is_system ? (
+                  <div className="rounded-xl border border-brand/20 bg-brand/5 px-3 py-2.5 text-sm text-ink-2">
+                    Ce rôle a tous les droits sur toutes les ressources — aucun comportement à configurer.
+                  </div>
+                ) : (
                 <div>
-                  <p className="mb-2 text-sm font-medium text-ink-2">Comportements</p>
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-sm font-medium text-ink-2">Comportements</p>
+                    <button
+                      type="button"
+                      onClick={() => handlePresetReadAll(role.id)}
+                      disabled={addingBehavior[role.id]}
+                      title="Accorde la lecture (Peut voir) sur toutes les ressources — ex. rôle de supervision type présidence."
+                      className="rounded-md border border-line px-2.5 py-1 text-xs text-ink-2 hover:bg-surface-sub"
+                    >
+                      {addingBehavior[role.id] ? '...' : 'Lecture sur tout'}
+                    </button>
+                  </div>
                   {behaviors.length > 0 ? (
                     <div className="mb-3 space-y-2">
                       {behaviors.map((b) => (
@@ -632,7 +704,7 @@ export default function AdminRolesPage() {
                         })}
                         className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
-                        {(['mission', 'cursus'] as RoleBehaviorResourceType[]).map((rt) => (
+                        {ALL_RESOURCE_TYPES.map((rt) => (
                           <option key={rt} value={rt}>{RESOURCE_TYPE_LABELS[rt]}</option>
                         ))}
                       </select>
@@ -644,7 +716,7 @@ export default function AdminRolesPage() {
                         className="w-full rounded-lg border border-line-field bg-surface-sub px-3 py-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-brand/30"
                       >
                         <option value="">— Choisir un type de comportement —</option>
-                        {(behaviorForm.resourceType === 'cursus' ? CURSUS_BEHAVIOR_TYPES : ALL_BEHAVIOR_TYPES).map((bt) => (
+                        {(behaviorForm.resourceType === 'mission' ? MISSION_BEHAVIOR_TYPES : GENERIC_BEHAVIOR_TYPES).map((bt) => (
                           <option key={bt} value={bt}>{BEHAVIOR_LABELS[bt]}</option>
                         ))}
                       </select>
@@ -738,6 +810,7 @@ export default function AdminRolesPage() {
                     </div>
                   </div>
                 </div>
+                )}
               </div>
             );
           })}

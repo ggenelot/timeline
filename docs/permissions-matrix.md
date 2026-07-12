@@ -1,0 +1,101 @@
+# Matrice des permissions
+
+Document de référence de la refonte des rôles (permissions modulaires par
+ressource). Mis à jour à chaque phase de migration ; sert aussi de checklist
+de test manuel.
+
+## Modèle
+
+- **Rôles cumulables** : chaque bénévole garde son activité de base et peut
+  cumuler des rôles complémentaires (`roles` / `profile_roles`).
+- **Comportements** = permission (`role_behaviors`) : une ligne
+  `(rôle, ressource, action)`.
+- **Ressources** (`role_behavior_resource_type`) : `mission`, `cursus`,
+  `materiel`, `volunteer`, `skill`, `mission_type`, `settings`,
+  `administration`.
+- **Actions** : `can_see` (lecture), `can_create` (création), `can_manage`
+  (édition + suppression + validation). **`can_manage` implique `can_see`**
+  (résolu dans `has_permission()` et dans l'aplatissement de
+  `/api/roles/mine`).
+- **Spécifique missions** : scoping par `mission_type_ids` / `mission_statuses`
+  (vide = tous) + comportements `required_for_visibility` et `auto_slack`.
+  ⚠ `mission/can_see` sert à la visibilité *timeline* des bénévoles de base :
+  il n'ouvre aucune page de gestion.
+- **Rôle système « Administrateur »** (`roles.is_system`) : tous les droits,
+  implicites — pas de lignes de comportements (interdit par trigger). Unique,
+  non supprimable, nom figé, jamais 0 membre.
+
+## Fonctions de vérification (source de vérité unique)
+
+| Fonction SQL | Usage |
+|---|---|
+| `is_admin(_user_id)` | membre du rôle système |
+| `has_permission(_user_id, _resource, _action)` | permission générique (admin implicite, manage ⇒ see) |
+| `can_read_mission` / `can_manage_mission` | décisions par mission (scoping type/statut) |
+
+Côté code : `requirePermission()` / `requireMissionPermission()`
+(`lib/api/permissions.ts`) pour les routes API service-role ;
+`usePermissions().can()` (`lib/permissions/permissions-context.tsx`) pour le
+gating UX client.
+
+## État de la migration par domaine
+
+| Phase | Domaine | Policies RLS | Routes API | UI | État |
+|---|---|---|---|---|---|
+| 0 | Fondation (rôle système, fonctions, garde-fous, sidebar, UI rôles) | — | — | ✔ | **Fait** |
+| 1 | Matériel | legacy `role='admin'` | legacy | legacy | À faire |
+| 2 | Compétences (catalogue) | legacy | legacy | legacy | À faire |
+| 3 | Cursus | mixte (`admin` OR `has_role_behavior`) | legacy | legacy | À faire |
+| 4 | Bénévoles / profils | legacy | legacy | legacy | À faire |
+| 5 | Missions + types de mission | mixte | legacy | legacy | À faire |
+| 6 | Réglages / aide / Slack / administration | legacy | legacy | legacy | À faire |
+| 7 | Suppression de `profiles.role` | — | — | — | À faire |
+
+Tant qu'un domaine n'est pas migré, ses gardes restent le rôle global legacy
+(`profiles.role='admin'`) ; l'équivalence est garantie par le backfill de la
+phase 0 (membre du rôle système ≡ `role='admin'`).
+
+## Matrice cible (personas de référence)
+
+| Ressource × action | Admin (rôle système) | Présidente (`can_see` × 8) | Respo maraude (`can_see`+`can_create`+`can_manage` mission, scope maraude) | Respo matériel (`can_manage` materiel) | Bénévole (rôle par défaut) |
+|---|---|---|---|---|---|
+| mission — voir | ✔ toutes | ✔ toutes | ✔ (maraudes) | timeline seule | timeline seule |
+| mission — créer | ✔ | ✖ | ✔ (maraudes) | ✖ | brouillons si `can_create` |
+| mission — gérer | ✔ | ✖ | ✔ (maraudes) | ✖ | ✖ |
+| cursus — voir | ✔ | ✔ | ✖ | ✖ | le sien |
+| cursus — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+| materiel — voir | ✔ | ✔ | ✖ | ✔ (implicite) | catalogue public |
+| materiel — gérer | ✔ | ✖ | ✖ | ✔ | ✖ |
+| volunteer — voir | ✔ | ✔ | (phase 4/5 : profils bénévoles pour staffer) | ✖ | ✖ |
+| volunteer — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+| skill — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+| mission_type — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+| settings — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+| administration — gérer | ✔ | ✖ | ✖ | ✖ | ✖ |
+
+Exceptions « lecture publique » déjà en place (RLS `authenticated using(true)`) :
+catalogue skills, catalogue matériel, types de mission, pages d'aide,
+`app_settings`.
+
+## Points d'application
+
+| Surface | Garde effective |
+|---|---|
+| Écritures directes client (missions, propositions) | **RLS** (⚠ 0 ligne modifiée sans erreur si refusé — assertions de row-count à ajouter en phase 5) |
+| Routes `app/api/admin/*` (client service-role) | **Code uniquement** (`requirePermission` — la RLS est bypassée) |
+| Sidebar / pages | UX seulement, jamais une garde de sécurité |
+
+## Runbook break-glass
+
+Si tous les administrateurs sont perdus (le trigger empêche normalement de
+retirer le dernier membre) : SQL direct en tant que `postgres` —
+
+```sql
+insert into public.profile_roles (profile_id, role_id)
+select '<profile_id>', r.id from public.roles r where r.is_system;
+```
+
+Les triggers de protection (`roles_guard_system`,
+`profile_roles_guard_system`, `role_behaviors_guard_system`) peuvent être
+suspendus par un superuser via `alter table … disable trigger …` le temps
+d'une réparation, jamais depuis l'application.
