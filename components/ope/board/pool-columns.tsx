@@ -54,9 +54,9 @@ export function VolunteerPoolColumn({
 }
 
 // Colonne « Matériel disponible » d'un jour : dispo (sélectionnable si
-// `canEdit`) + indispo (toujours inerte). Écriture matériel réservée aux
-// admins (RLS mission_materiel_assignments_write_admin) : en lecture seule
-// pour les autres profils autorisés à gérer les missions.
+// `canEdit`) + indispo (toujours inerte). Écriture matériel réservée à la
+// permission materiel/can_manage (RLS mission_materiel_assignments_write_admin) :
+// en lecture seule pour les autres profils autorisés à gérer les missions.
 export function MaterielPoolColumn({
   available,
   unavailable,

@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { Profile, MaterielType } from '@/lib/types';
+import { MaterielType } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { Icon } from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
@@ -22,7 +23,9 @@ type ItemModalState = { id?: string; code: string; name: string; description: st
 
 export default function AdminMaterielItemsPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canSee = can('materiel', 'can_see');
+  const canManage = can('materiel', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<MaterielType[]>([]);
   const [token, setToken] = useState('');
@@ -44,19 +47,6 @@ export default function AdminMaterielItemsPage() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData || profileData.role !== 'admin') {
-        setLoading(false);
-        setProfile(profileData ?? null);
-        return;
-      }
-
-      setProfile(profileData);
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
@@ -116,7 +106,7 @@ export default function AdminMaterielItemsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-ink-3">Chargement…</p>
@@ -124,10 +114,11 @@ export default function AdminMaterielItemsPage() {
     );
   }
 
-  if (!profile || profile.role !== 'admin') {
+  // Gating UX seulement — les vraies gardes sont la RLS et les routes API.
+  if (!canSee) {
     return (
       <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs.
+        Accès refusé : vous n&apos;avez pas la permission de voir le matériel.
       </div>
     );
   }
@@ -180,16 +171,18 @@ export default function AdminMaterielItemsPage() {
                   <td className={cn(tdClass, 'text-ink-2')}>{item.description || '—'}</td>
                   <td className={cn(tdClass, 'text-ink-2')}>{item.containers && item.containers.length > 0 ? item.containers.join(', ') : '—'}</td>
                   <td className={cn(tdClass, 'whitespace-nowrap')}>
-                    <span className="inline-flex items-center gap-1">
-                      <Button variant="ghost" onClick={() => setItemModal({ id: item.id, code: item.code ?? '', name: item.name, description: item.description ?? '' })}
-                        className="rounded-[7px] px-2.5 py-[5px] text-xs">
-                        Modifier
-                      </Button>
-                      <button type="button" onClick={() => void handleDeleteItem(item.id, item.name)} aria-label="Supprimer"
-                        className="p-1 text-bad">
-                        <Icon name="delete" size={18} />
-                      </button>
-                    </span>
+                    {canManage ? (
+                      <span className="inline-flex items-center gap-1">
+                        <Button variant="ghost" onClick={() => setItemModal({ id: item.id, code: item.code ?? '', name: item.name, description: item.description ?? '' })}
+                          className="rounded-[7px] px-2.5 py-[5px] text-xs">
+                          Modifier
+                        </Button>
+                        <button type="button" onClick={() => void handleDeleteItem(item.id, item.name)} aria-label="Supprimer"
+                          className="p-1 text-bad">
+                          <Icon name="delete" size={18} />
+                        </button>
+                      </span>
+                    ) : null}
                   </td>
                 </tr>
               ))}
@@ -198,10 +191,12 @@ export default function AdminMaterielItemsPage() {
         </div>
       )}
 
-      <button type="button" onClick={() => setItemModal({ code: '', name: '', description: '' })}
-        className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
-        + Nouvel item
-      </button>
+      {canManage ? (
+        <button type="button" onClick={() => setItemModal({ code: '', name: '', description: '' })}
+          className="w-full rounded-[10px] border border-dashed border-line-field bg-surface-card px-4 py-[11px] text-[13.5px] font-bold text-brand">
+          + Nouvel item
+        </button>
+      ) : null}
 
       {itemModal ? (
         <Modal

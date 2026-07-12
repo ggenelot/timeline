@@ -1,23 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
 
 async function getToken(req: NextRequest): Promise<string> {
   const auth = req.headers.get('authorization') ?? '';
   return auth.replace(/^Bearer\s+/i, '').trim();
-}
-
-async function getAdminClient(req: NextRequest) {
-  const token = await getToken(req);
-  if (!token) return null;
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: { user }, error } = await serviceClient.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') return null;
-
-  return serviceClient;
 }
 
 async function assertAuthenticated(req: NextRequest) {
@@ -82,8 +69,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const client = await getAdminClient(req);
-  if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
+  const auth = await requirePermission(req, 'materiel', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const body = (await req.json()) as { name?: string; code?: string; description?: string; category_id?: string; is_container?: boolean };
   const name = body.name?.trim();
