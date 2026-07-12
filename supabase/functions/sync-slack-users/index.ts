@@ -9,8 +9,9 @@ Deno.serve(async (req) => {
     const authedClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { global: { headers: { Authorization: req.headers.get('Authorization')! } } });
     const { data: { user } } = await authedClient.auth.getUser();
     if (!user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
-    const { data: me } = await authedClient.from('profiles').select('id,role').eq('id', user.id).single();
-    if (me?.role !== 'admin') return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
+    // Autorisation : permission settings/can_manage (admin implicite via has_permission).
+    const { data: allowed } = await authedClient.rpc('has_permission', { _user_id: user.id, _resource: 'settings', _action: 'can_manage' });
+    if (!allowed) return new Response(JSON.stringify({ error: 'Forbidden' }), { status: 403, headers: corsHeaders });
 
     // Client service-role "propre" pour toutes les opérations privilégiées (cf. send-slack-invitations).
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);

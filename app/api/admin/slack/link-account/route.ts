@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requirePermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
 type LinkAccountPayload = {
@@ -50,12 +50,8 @@ async function deriveUniqueIdentifier(
 }
 
 export async function POST(request: NextRequest) {
-  const token = getBearerToken(request);
-  const auth = await requireAuthenticatedUser(token);
+  const auth = await requirePermission(request, 'settings', 'can_manage');
   if (auth.errorResponse) return auth.errorResponse;
-  if (auth.profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès réservé aux administrateurs.' }, { status: 403 });
-  }
 
   const body = (await request.json().catch(() => ({}))) as LinkAccountPayload;
   const slackUserId = body.slack_user_id?.trim();

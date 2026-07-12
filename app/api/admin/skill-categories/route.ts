@@ -1,24 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
 
 async function getToken(req: NextRequest): Promise<string> {
   const auth = req.headers.get('authorization') ?? '';
   return auth.replace(/^Bearer\s+/i, '').trim();
-}
-
-async function assertAdmin(req: NextRequest) {
-  const token = await getToken(req);
-  if (!token) return { client: null, error: NextResponse.json({ error: 'Non authentifié.' }, { status: 401 }) };
-
-  const anonClient = createServerSupabaseAnonClient(token);
-  const { data: { user }, error: userError } = await anonClient.auth.getUser(token);
-  if (userError || !user) return { client: null, error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
-
-  return { client: serviceClient, error: null };
 }
 
 async function assertAuthenticated(req: NextRequest) {
@@ -47,8 +33,9 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { client, error } = await assertAdmin(req);
-  if (error) return error;
+  const auth = await requirePermission(req, 'skill', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const body = (await req.json()) as { name?: string; color?: string };
   const name = body.name?.trim();

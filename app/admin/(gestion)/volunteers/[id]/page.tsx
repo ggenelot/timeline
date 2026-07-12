@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Skill, SkillCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, getMissionCategory, MissionStatus } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { SkillBadge, getSkillColorClass } from '@/components/skills/skill-badge';
 import { Button } from '@/components/ui/button';
 import { initials } from '@/components/ope/atoms';
@@ -84,7 +85,11 @@ export default function VolunteerProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
+  const { loading: permissionsLoading, can } = usePermissions();
+  // Visible pour la supervision (volunteer/can_see) et les gestionnaires de
+  // mission (staffing) ; édition réservée à volunteer/can_manage.
+  const canViewVolunteer = can('volunteer', 'can_see') || can('mission', 'can_manage');
+  const canManageVolunteer = can('volunteer', 'can_manage');
 
   const [volunteer, setVolunteer] = useState<VolunteerProfile | null>(null);
   const [categories, setCategories] = useState<CategoryWithSkills[]>([]);
@@ -101,36 +106,17 @@ export default function VolunteerProfilePage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string | null>(null);
 
   useEffect(() => {
+    if (permissionsLoading) return;
+
     async function loadData() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData) {
-        setError('Accès réservé aux administrateurs et responsables.');
+      if (!canViewVolunteer) {
+        setError('Accès refusé : vous n’avez pas la permission de voir les bénévoles.');
         setLoading(false);
         return;
       }
-
-      if (profileData.role !== 'admin') {
-        const { data: canManage } = await supabase.rpc('has_role_behavior', {
-          _user_id: authData.user.id,
-          _resource_type: 'mission',
-          _behavior: 'can_manage',
-        });
-        if (!canManage) {
-          setError('Accès réservé aux administrateurs et responsables.');
-          setLoading(false);
-          return;
-        }
-      }
-
-      setIsAdmin(profileData.role === 'admin');
 
       const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes, availableProposalsRes] = await Promise.all([
         supabase
@@ -193,7 +179,7 @@ export default function VolunteerProfilePage() {
     }
 
     if (volunteerId) void loadData();
-  }, [router, volunteerId]);
+  }, [router, volunteerId, permissionsLoading, canViewVolunteer]);
 
   async function saveSkills() {
     setSaving(true);
@@ -270,7 +256,7 @@ export default function VolunteerProfilePage() {
     });
   }, [availableMissions, selectedTypeId, searchQuery]);
 
-  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
+  if (loading || permissionsLoading) return <p className="text-sm text-ink-2">Chargement...</p>;
   if (error) return <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div>;
   if (!volunteer) return null;
 
@@ -304,7 +290,7 @@ export default function VolunteerProfilePage() {
               )}
             </div>
           </div>
-          {isAdmin && (
+          {canManageVolunteer && (
             <Link
               href={`/admin/volunteers/${volunteerId}/edit`}
               className="inline-flex items-center justify-center gap-1.5 rounded-[11px] border-[1.5px] border-line-field bg-surface-card px-4 py-2 text-sm font-bold text-ink-2 transition hover:bg-[#F4F6FB]"
@@ -393,7 +379,7 @@ export default function VolunteerProfilePage() {
       <div className="rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold text-ink">Compétences</h2>
-          {isAdmin && !editingSkills && (
+          {canManageVolunteer && !editingSkills && (
             <Button
               variant="ghost"
               onClick={() => setEditingSkills(true)}
@@ -401,7 +387,7 @@ export default function VolunteerProfilePage() {
               Modifier
             </Button>
           )}
-          {isAdmin && editingSkills && (
+          {canManageVolunteer && editingSkills && (
             <div className="flex gap-2">
               <Button
                 variant="ghost"

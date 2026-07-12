@@ -4,7 +4,8 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import { AppRole, Profile, Skill, SkillCategory } from '@/lib/types';
+import { AppRole, Skill, SkillCategory } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { getSkillColorClass } from '@/components/skills/skill-badge';
 import { Button } from '@/components/ui/button';
 
@@ -39,7 +40,8 @@ export default function EditVolunteerPage() {
   const volunteerId = params.id;
   const router = useRouter();
 
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('volunteer', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<EditVolunteerForm>(INITIAL_FORM);
@@ -47,31 +49,19 @@ export default function EditVolunteerPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (permissionsLoading) return;
+
     async function loadData() {
       setError(null);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (profileError || !profileData) {
-        setError('Impossible de charger votre profil.');
+      if (!canManage) {
+        setError('Accès refusé : vous n’avez pas la permission de gérer les bénévoles.');
         setLoading(false);
         return;
       }
-
-      if (profileData.role !== 'admin') {
-        setError('Accès refusé : cette page est réservée aux administrateurs.');
-        setLoading(false);
-        return;
-      }
-
-      setProfile(profileData);
 
       const { data: sessionData } = await supabase.auth.getSession();
       const accessToken = sessionData.session?.access_token;
@@ -130,13 +120,13 @@ export default function EditVolunteerPage() {
     }
 
     if (volunteerId) void loadData();
-  }, [router, volunteerId]);
+  }, [router, volunteerId, permissionsLoading, canManage]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
 
-    if (!profile || profile.role !== 'admin') {
+    if (!canManage) {
       setError('Accès refusé.');
       return;
     }
@@ -183,12 +173,11 @@ export default function EditVolunteerPage() {
     router.push('/admin/volunteers?edited=1');
   }
 
-  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
-  if (!profile) return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
-  if (profile.role !== 'admin') {
+  if (loading || permissionsLoading) return <p className="text-sm text-ink-2">Chargement...</p>;
+  if (!canManage) {
     return (
       <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : cette page est réservée aux administrateurs.
+        {error ?? 'Accès refusé : vous n’avez pas la permission de gérer les bénévoles.'}
       </div>
     );
   }

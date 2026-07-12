@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Profile, Skill, SkillCategory } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { getSkillColorClass } from '@/components/skills/skill-badge';
 import { Button } from '@/components/ui/button';
 import { Card, PageHeader } from '@/components/ui/card';
@@ -93,7 +94,8 @@ function rowInitials(value: string): string {
 }
 
 export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('volunteer', 'can_manage');
   const [volunteers, setVolunteers] = useState<VolunteerProfile[]>([]);
   const [invitations, setInvitations] = useState<InvitationRow[]>([]);
   const [slackDirectory, setSlackDirectory] = useState<SlackDirectoryEntry[] | null>(null);
@@ -175,29 +177,23 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
   }, []);
 
   useEffect(() => {
+    if (permissionsLoading) return;
+
     async function init() {
       setError(null);
 
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
+      if (!canManage) { setLoading(false); return; }
 
-      if (!profileData) { setError('Profil introuvable.'); setLoading(false); return; }
-      if (profileData.role !== 'admin') { setError('Accès réservé aux administrateurs.'); setLoading(false); return; }
-
-      setProfile(profileData);
       await loadVolunteers();
       setLoading(false);
       void runSync();
     }
 
     void init();
-  }, [router, loadVolunteers, runSync]);
+  }, [router, loadVolunteers, runSync, permissionsLoading, canManage]);
 
   const volunteersWithSkills = useMemo(() =>
     volunteers.map((volunteer) => {
@@ -664,8 +660,8 @@ export function VolunteersPageClient({ edited }: VolunteersPageClientProps) {
     }
   };
 
-  if (loading) return <p className="text-sm text-ink-2">Chargement des bénévoles...</p>;
-  if (!profile) return <p className="text-sm text-bad">{error ?? 'Accès refusé.'}</p>;
+  if (loading || permissionsLoading) return <p className="text-sm text-ink-2">Chargement des bénévoles...</p>;
+  if (!canManage) return <p className="text-sm text-bad">{error ?? 'Accès refusé : vous n’avez pas la permission de gérer les bénévoles.'}</p>;
 
   const hasPendingMembers = statusCounts.new + statusCounts.created > 0;
   const activeSkillFilterCount = Object.values(selectedSkillByCategory).filter(Boolean).length;

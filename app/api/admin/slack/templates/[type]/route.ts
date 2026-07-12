@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requirePermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { DEFAULT_TEMPLATES } from '@/lib/slack/templates';
 
@@ -9,10 +9,8 @@ async function requireTemplateRow(serviceClient: ReturnType<typeof createServerS
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { type: string } }) {
-  const token = getBearerToken(request);
-  const auth = await requireAuthenticatedUser(token);
+  const auth = await requirePermission(request, 'settings', 'can_manage');
   if (auth.errorResponse) return auth.errorResponse;
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès réservé aux administrateurs.' }, { status: 403 });
 
   const { type } = params;
   if (!(type in DEFAULT_TEMPLATES)) {
@@ -34,7 +32,7 @@ export async function PUT(request: NextRequest, { params }: { params: { type: st
 
   const { error } = await serviceClient
     .from('slack_message_templates')
-    .update({ template: template.trim(), updated_by: auth.profile.id, updated_at: new Date().toISOString() })
+    .update({ template: template.trim(), updated_by: auth.user.id, updated_at: new Date().toISOString() })
     .eq('type', type);
 
   if (error) {
@@ -45,10 +43,8 @@ export async function PUT(request: NextRequest, { params }: { params: { type: st
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { type: string } }) {
-  const token = getBearerToken(request);
-  const auth = await requireAuthenticatedUser(token);
+  const auth = await requirePermission(request, 'settings', 'can_manage');
   if (auth.errorResponse) return auth.errorResponse;
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès réservé aux administrateurs.' }, { status: 403 });
 
   const { type } = params;
   if (!(type in DEFAULT_TEMPLATES)) {
@@ -65,7 +61,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { type:
   const defaultTemplate = DEFAULT_TEMPLATES[type];
   const { error } = await serviceClient
     .from('slack_message_templates')
-    .update({ template: defaultTemplate, updated_by: auth.profile.id, updated_at: new Date().toISOString() })
+    .update({ template: defaultTemplate, updated_by: auth.user.id, updated_at: new Date().toISOString() })
     .eq('type', type);
 
   if (error) {

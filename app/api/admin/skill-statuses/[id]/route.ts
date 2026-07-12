@@ -1,29 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
 
 function toBoolean(value: unknown): boolean {
   if (typeof value === 'string') return !['false', '0', ''].includes(value.toLowerCase());
   return Boolean(value);
 }
 
-async function getAdminClient(req: NextRequest) {
-  const auth = req.headers.get('authorization') ?? '';
-  const token = auth.replace(/^Bearer\s+/i, '');
-  if (!token) return null;
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: { user }, error } = await serviceClient.auth.getUser(token);
-  if (error || !user) return null;
-
-  const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile || profile.role !== 'admin') return null;
-
-  return serviceClient;
-}
-
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const client = await getAdminClient(req);
-  if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
+  const auth = await requirePermission(req, 'skill', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const body = (await req.json()) as {
     label?: string;
@@ -65,8 +51,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 }
 
 export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
-  const client = await getAdminClient(req);
-  if (!client) return NextResponse.json({ error: 'Non autorisé.' }, { status: 403 });
+  const auth = await requirePermission(req, 'skill', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
 
   const { data: target } = await client.from('skill_statuses').select('protected').eq('id', params.id).single();
   if (target?.protected) {

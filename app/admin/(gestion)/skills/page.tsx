@@ -25,7 +25,8 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Toggle } from '@/components/ui/toggle';
 import { cn } from '@/lib/cn';
-import { Profile, Skill, SkillCategory, SkillStatus } from '@/lib/types';
+import { Skill, SkillCategory, SkillStatus } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
 // Même palette que les pages « Cursus » et « Suivi des compétences », pour
@@ -286,7 +287,8 @@ function SortableCategoryCard({ category, sensors, onSkillDragEnd, onEditCategor
 
 export default function AdminSkillsPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('skill', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [categories, setCategories] = useState<CategoryWithSkills[]>([]);
   const [token, setToken] = useState('');
@@ -335,19 +337,6 @@ export default function AdminSkillsPage() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData || profileData.role !== 'admin') {
-        setLoading(false);
-        setProfile(profileData ?? null);
-        return;
-      }
-
-      setProfile(profileData);
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
@@ -564,7 +553,7 @@ export default function AdminSkillsPage() {
     await swapStatusOrder(statuses[index], statuses[index + 1]);
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
         <p className="text-ink-3">Chargement…</p>
@@ -572,10 +561,11 @@ export default function AdminSkillsPage() {
     );
   }
 
-  if (!profile || profile.role !== 'admin') {
+  // Gating UX seulement — la RLS et les routes API restent les vraies gardes.
+  if (!canManage) {
     return (
       <div className="rounded-lg border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs.
+        Accès refusé : vous n&apos;avez pas la permission de gérer les compétences.
       </div>
     );
   }

@@ -1,57 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  createServerSupabaseAnonClient,
-  createServerSupabaseServiceClient,
-} from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
+import type { PermissionAction } from '@/lib/types';
 
-function getToken(req: NextRequest): string {
-  const auth = req.headers.get('authorization') ?? '';
-  return auth.replace(/^Bearer\s+/i, '').trim();
-}
-
-// Accès réservé aux administrateurs de cursus : rôle global `admin` OU
-// comportement `can_manage` sur la ressource `cursus` (système de rôles fin).
-async function authorize(req: NextRequest) {
-  const token = getToken(req);
-  if (!token) {
-    return { client: null, error: NextResponse.json({ error: 'Non authentifié.' }, { status: 401 }) };
-  }
-
-  const anonClient = createServerSupabaseAnonClient(token);
-  const {
-    data: { user },
-    error: userError,
-  } = await anonClient.auth.getUser(token);
-  if (userError || !user) {
-    return { client: null, error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
-  }
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: profile } = await serviceClient
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .single();
-
-  if (profile?.role === 'admin') {
-    return { client: serviceClient, error: null };
-  }
-
-  const { data: canManage } = await serviceClient.rpc('has_role_behavior', {
-    _user_id: user.id,
-    _resource_type: 'cursus',
-    _behavior: 'can_manage',
-  });
-
-  if (!canManage) {
-    return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
-  }
-
-  return { client: serviceClient, error: null };
+// Le tableau de bord compétences suit la ressource `cursus` : lecture avec
+// can_see (supervision), écriture avec can_manage. L'admin passe implicitement
+// via has_permission.
+async function authorize(req: NextRequest, action: PermissionAction) {
+  const auth = await requirePermission(req, 'cursus', action);
+  if (auth.errorResponse) return { client: null, error: auth.errorResponse };
+  return { client: auth.serviceClient, error: null };
 }
 
 export async function GET(req: NextRequest) {
-  const { client, error } = await authorize(req);
+  const { client, error } = await authorize(req, 'can_see');
   if (error) return error;
 
   const [
@@ -177,7 +138,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const { client, error } = await authorize(req);
+  const { client, error } = await authorize(req, 'can_manage');
   if (error) return error;
 
   const body = (await req.json()) as {
