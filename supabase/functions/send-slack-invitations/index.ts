@@ -83,7 +83,22 @@ Deno.serve(async (req) => {
         .eq('slack_team_id', slackTeamId)
         .eq('slack_user_id', slackUserId)
         .maybeSingle();
-      const linkedProfileId: string | null = existingIdentity?.profile_id ?? null;
+      let linkedProfileId: string | null = existingIdentity?.profile_id ?? null;
+
+      // Repli sur profiles : un bénévole qui a associé lui-même son compte via le flux OAuth
+      // self-service (app/api/slack/connect/callback) porte bien slack_user_id/slack_team_id sur
+      // son profil, mais pas toujours de ligne slack_identities. Sans ce repli, le renvoi
+      // retomberait dans la branche « création de compte » et violerait la contrainte d'unicité
+      // idx_profiles_slack_team_user_unique en insérant un second profil sur le même couple Slack.
+      if (!linkedProfileId) {
+        const { data: linkedProfile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('slack_team_id', slackTeamId)
+          .eq('slack_user_id', slackUserId)
+          .maybeSingle();
+        linkedProfileId = linkedProfile?.id ?? null;
+      }
 
       // Le renvoi est toujours possible (mot de passe temporaire régénéré à chaque envoi),
       // que le compte existe déjà ou non — pas de blocage sur un précédent envoi réussi.

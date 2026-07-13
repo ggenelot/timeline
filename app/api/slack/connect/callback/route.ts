@@ -75,6 +75,21 @@ export async function GET(request: NextRequest) {
       throw new Error(profileError.message);
     }
 
+    // Miroir dans slack_identities : c'est la source de vérité utilisée par le renvoi des
+    // identifiants (send-slack-invitations) et la connexion via Slack. Sans cette ligne, un
+    // compte associé en self-service serait vu comme « non lié » et un renvoi tenterait de
+    // recréer un profil, violant idx_profiles_slack_team_user_unique.
+    await serviceClient.from('slack_identities').upsert(
+      {
+        profile_id: stateRow.profile_id,
+        slack_team_id: slackTeamId,
+        slack_user_id: slackUserId,
+        is_primary: true,
+        last_login_at: new Date().toISOString()
+      },
+      { onConflict: 'slack_team_id,slack_user_id' }
+    );
+
     await serviceClient.from('slack_oauth_states').update({ consumed_at: new Date().toISOString() }).eq('id', stateRow.id);
 
     redirectTarget.searchParams.set('slack', 'connected');
