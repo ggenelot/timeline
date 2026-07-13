@@ -24,9 +24,9 @@ import {
   MissionRequiredMateriel,
   MissionRequiredSkill,
   Profile,
-  ProfileSkill,
-  RoleBehavior
+  ProfileSkill
 } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { formatMissionRequirementLabel, getProposalResponseLabel } from '@/lib/missions';
 import { getCandidateActivity } from '@/lib/queries/activity';
 import { MissionActivityPanel } from '@/components/activity/MissionActivityPanel';
@@ -112,6 +112,7 @@ export default function MissionDetailPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
   const router = useRouter();
+  const { loading: permissionsLoading, isAdmin, can } = usePermissions();
 
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -152,8 +153,6 @@ export default function MissionDetailPage() {
   const myProposal = useMemo(() => proposals.find((proposal) => proposal.volunteer_id === profile?.id) ?? null, [profile?.id, proposals]);
 
   const eligibleProposals = useMemo(() => proposals.filter((proposal) => proposal.response === 'available'), [proposals]);
-
-  const isAdmin = profile?.role === 'admin';
 
   const proposalsByStatus = useMemo(() => {
     const available = proposals.filter((proposal) => proposal.response === 'available').length;
@@ -660,22 +659,14 @@ export default function MissionDetailPage() {
 
     setVolunteerActivityStats(nextVolunteerActivityStats);
 
-    let canManage = false;
-    if (profileData.role !== 'admin' && mappedMission) {
-      const tok = await getAccessToken();
-      const rolesRes = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-      if (rolesRes.ok) {
-        const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
-        const canManageBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
-        const hasManageAll = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0);
-        canManage = hasManageAll || canManageBehaviors.some((b) =>
-          (b.mission_type_ids ?? []).includes(mappedMission.mission_type_id)
-        );
-        setCanManageByRole(canManage);
-      }
-    }
+    // Gestion de CETTE mission : admin, créateur, ou can_manage couvrant son
+    // type (via usePermissions — même logique que can_manage_mission côté RLS).
+    const canManage = mappedMission
+      ? can('mission', 'can_manage', { missionTypeId: mappedMission.mission_type_id })
+      : false;
+    setCanManageByRole(canManage);
 
-    if (profileData.role === 'admin' || canManage) {
+    if (canManage) {
       try {
         const acts = await getCandidateActivity(missionId);
         setActivityActs(acts);
@@ -686,13 +677,8 @@ export default function MissionDetailPage() {
         setActivityActs([]);
         setActivityError((err as Error).message || 'Erreur inconnue');
       }
-    }
 
-    if (profileData.role === 'admin' || canManage) {
       await loadAdminVolunteerDirectory(missionId);
-    }
-
-    if (profileData.role === 'admin') {
       await loadMaterielAssignments(missionId);
     }
 
@@ -700,9 +686,10 @@ export default function MissionDetailPage() {
   }
 
   useEffect(() => {
+    if (permissionsLoading) return;
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missionId, router]);
+  }, [missionId, router, permissionsLoading]);
 
   useEffect(() => {
     if (!mission) return;
@@ -729,7 +716,9 @@ export default function MissionDetailPage() {
     );
   }
 
-  const canManageMission = profile?.role === 'admin' || (canManageByRole && mission.created_by === user?.id);
+  // Gestion de la mission = admin, créateur, ou can_manage couvrant son type
+  // (canManageByRole calculé via usePermissions au chargement).
+  const canManageMission = canManageByRole;
   const missionBlocksSelection = mission.status === 'cancelled';
   const isSlackChannelCreated = Boolean(mission.slack_channel_id) || slackCreationState === 'created';
   const showSelection = mission.status !== 'confirmed' || recapEditing;
@@ -1423,7 +1412,7 @@ export default function MissionDetailPage() {
         </section>
       ) : null}
 
-      {canManageMission && showSelection ? (
+      {canManageMission && can('materiel', 'can_manage') && showSelection ? (
         <MissionMaterielAssignmentPicker
           requirements={requiredMateriels}
           candidateContainers={candidateContainers}

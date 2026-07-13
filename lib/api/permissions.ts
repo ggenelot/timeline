@@ -82,6 +82,21 @@ export async function requireMissionPermission(
   return auth;
 }
 
+/**
+ * Autorise la requête uniquement pour un administrateur système. Réservé aux
+ * opérations « super-pouvoir » qui bypassent la RLS de façon transverse (ex.
+ * import bulk de missions tous types confondus) et ne doivent donc pas
+ * s'appuyer sur une permission de domaine scopée.
+ */
+export async function requireAdmin(request: NextRequest): Promise<AuthorizeResult> {
+  const auth = await authenticate(request);
+  if (auth.errorResponse) return auth;
+
+  const { data: admin, error } = await auth.serviceClient.rpc('is_admin', { _user_id: auth.user.id });
+  if (error || !admin) return unauthorized('Réservé aux administrateurs.', 403);
+  return auth;
+}
+
 /** Vérifie une permission pour un utilisateur déjà authentifié. */
 export async function checkPermission(
   serviceClient: SupabaseClient,

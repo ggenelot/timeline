@@ -7,8 +7,11 @@ import { ProposalList, ProposalListItem } from '@/components/missions/proposal-l
 import { AdminBanner, AdminCard, AdminFieldLabel, AdminPageHeader, AdminSectionLabel, adminInputStyle, ghostButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 
 export default function AdminProposalsPage() {
+  const { loading: permissionsLoading, isAdmin, can } = usePermissions();
+  const allowed = can('mission', 'can_manage');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [proposals, setProposals] = useState<ProposalListItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -27,6 +30,12 @@ export default function AdminProposalsPage() {
         return;
       }
 
+      if (!allowed) {
+        setError('Accès refusé : page réservée aux gestionnaires de missions.');
+        setLoading(false);
+        return;
+      }
+
       const { data: profileData } = await supabase
         .from('profiles')
         .select('id,full_name,email,role,sector,created_at')
@@ -37,19 +46,6 @@ export default function AdminProposalsPage() {
         setError('Profil introuvable.');
         setLoading(false);
         return;
-      }
-
-      if (profileData.role !== 'admin') {
-        const { data: canManage } = await supabase.rpc('has_role_behavior', {
-          _user_id: authData.user.id,
-          _resource_type: 'mission',
-          _behavior: 'can_manage',
-        });
-        if (!canManage) {
-          setError('Accès réservé aux responsables.');
-          setLoading(false);
-          return;
-        }
       }
 
       setProfile(profileData);
@@ -82,8 +78,9 @@ export default function AdminProposalsPage() {
       setLoading(false);
     }
 
+    if (permissionsLoading) return;
     void loadData();
-  }, [router]);
+  }, [router, permissionsLoading, allowed]);
 
   const filteredProposals = useMemo(
     () =>
@@ -107,7 +104,7 @@ export default function AdminProposalsPage() {
     [proposals, dateFrom, dateTo]
   );
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement des propositions…</p>;
   }
 
@@ -121,7 +118,7 @@ export default function AdminProposalsPage() {
         title="Validation des propositions"
         subtitle="Acceptez ou refusez les bénévoles qui se proposent sur vos missions."
         actions={
-          profile.role === 'admin' ? (
+          isAdmin ? (
             <>
               <Link href="/admin/volunteers" style={ghostButtonStyle}>Ajouter un bénévole</Link>
               <Link href="/admin/events/create" style={ghostButtonStyle}>Créer un événement</Link>

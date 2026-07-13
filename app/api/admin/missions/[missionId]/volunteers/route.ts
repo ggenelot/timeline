@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { MissionProposalResponse } from '@/lib/types';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requireMissionPermission } from '@/lib/api/permissions';
 import { notifyVolunteerAvailabilityUpdatedByAdmin, notifyVolunteerRejected } from '@/lib/slack/workflows';
 
 type AdminAssignableResponse = 'available' | 'unavailable';
@@ -16,22 +16,14 @@ function isAdminAssignableResponse(response: MissionProposalResponse): response 
   return response === 'available' || response === 'unavailable';
 }
 
-async function assertAdmin(token: string) {
-  const auth = await requireAuthenticatedUser(token);
-
-  if (auth.errorResponse || !auth.client || !auth.user || !auth.profile) {
+// Gestion des statuts bénévoles d'une mission : réservée à qui peut gérer
+// CETTE mission (admin, créateur, ou can_manage couvrant son type).
+async function authorizeMission(request: NextRequest, missionId: string) {
+  const auth = await requireMissionPermission(request, missionId);
+  if (auth.errorResponse) {
     return { client: null, userId: null, errorResponse: auth.errorResponse };
   }
-
-  if (auth.profile.role !== 'admin') {
-    return {
-      client: null,
-      userId: null,
-      errorResponse: NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent gérer les statuts bénévoles.' }, { status: 403 })
-    };
-  }
-
-  return { client: auth.client, userId: auth.user.id, errorResponse: null };
+  return { client: auth.serviceClient, userId: auth.user.id, errorResponse: null };
 }
 
 function parsePayload(payload: AdminMissionVolunteerPayload) {
@@ -49,18 +41,11 @@ function parsePayload(payload: AdminMissionVolunteerPayload) {
 }
 
 export async function GET(request: NextRequest, { params }: { params: { missionId: string } }) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const guard = await assertAdmin(token);
+  const missionId = params.missionId;
+  const guard = await authorizeMission(request, missionId);
   if (guard.errorResponse || !guard.client) {
     return guard.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
-
-  const missionId = params.missionId;
 
   const { data: proposals, error: proposalsError } = await guard.client
     .from('mission_proposals')
@@ -106,13 +91,8 @@ export async function GET(request: NextRequest, { params }: { params: { missionI
 }
 
 export async function PUT(request: NextRequest, { params }: { params: { missionId: string } }) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const guard = await assertAdmin(token);
+  const missionId = params.missionId;
+  const guard = await authorizeMission(request, missionId);
   if (guard.errorResponse || !guard.client || !guard.userId) {
     return guard.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
@@ -128,8 +108,6 @@ export async function PUT(request: NextRequest, { params }: { params: { missionI
   if (parsed.error || !parsed.volunteerId || !parsed.response) {
     return NextResponse.json({ error: parsed.error }, { status: 400 });
   }
-
-  const missionId = params.missionId;
 
   const { data: volunteerProfile, error: volunteerError } = await guard.client
     .from('profiles')

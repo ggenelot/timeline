@@ -47,7 +47,7 @@ gating UX client.
 | 2 | Compétences (catalogue) | ✔ `has_permission('skill',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
 | 3 | Cursus | ✔ `has_permission('cursus',…)` (+ can_see en lecture) | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
 | 4 | Bénévoles / profils | ✔ `has_permission('volunteer',…)` | ✔ `requirePermission` | ✔ `usePermissions` | **Fait** |
-| 5 | Missions + types de mission | mixte | legacy | legacy | À faire |
+| 5 | Missions + types de mission | ✔ `is_admin`/`can_manage_mission`/`has_permission('mission_type',…)` | ✔ `requirePermission`/`requireMissionPermission`/`requireAdmin` | ✔ `usePermissions` | **Fait (PR B1)** |
 | 6 | Réglages / aide / Slack / administration | ✔ `has_permission('settings'/'administration',…)` | ✔ `requirePermission` + edge functions | ✔ `usePermissions` | **Fait** |
 | 7 | Suppression de `profiles.role` | — | — | — | À faire |
 

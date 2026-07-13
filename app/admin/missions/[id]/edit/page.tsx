@@ -7,6 +7,7 @@ import { MissionForm, MissionFormState, MissionTypeOption, MissionRequirementFor
 import { AdminBanner, AdminCard, AdminPageHeader, ghostButtonStyle, dangerButtonStyle } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Mission, Profile } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { AdminDeleteMissionButton } from '@/components/missions/admin-delete-mission-button';
 
 function isPositiveInteger(value: string) {
@@ -144,6 +145,8 @@ export default function AdminEditMissionPage() {
   const params = useParams<{ id: string }>();
   const missionId = params.id;
   const router = useRouter();
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('mission', 'can_manage');
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [mission, setMission] = useState<Mission | null>(null);
@@ -162,6 +165,7 @@ export default function AdminEditMissionPage() {
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
+    if (permissionsLoading) return;
     async function loadData() {
       setError(null);
       setRequirementsError(null);
@@ -184,7 +188,7 @@ export default function AdminEditMissionPage() {
         return;
       }
 
-      if (profileData.role !== 'admin') {
+      if (!canManage) {
         setProfile(profileData);
         setLoading(false);
         return;
@@ -289,7 +293,7 @@ export default function AdminEditMissionPage() {
 
     void loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [missionId, router]);
+  }, [missionId, router, permissionsLoading]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -298,8 +302,8 @@ export default function AdminEditMissionPage() {
     setMaterielRequirementsError(null);
     setSuccess(null);
 
-    if (!profile || profile.role !== 'admin') {
-      setError('Accès refusé : seuls les administrateurs peuvent modifier une mission.');
+    if (!canManage) {
+      setError('Accès refusé : vous n’avez pas la permission de modifier cette mission.');
       return;
     }
 
@@ -499,7 +503,7 @@ export default function AdminEditMissionPage() {
     router.push(`/missions/${mission.id}`);
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement…</p>;
   }
 
@@ -507,9 +511,9 @@ export default function AdminEditMissionPage() {
     return <p style={{ fontSize: 14, color: '#D14343' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
-  if (profile.role !== 'admin') {
+  if (!canManage) {
     return (
-      <AdminBanner tone="error">Accès refusé : cette page est réservée aux administrateurs.</AdminBanner>
+      <AdminBanner tone="error">Accès refusé : vous n’avez pas la permission de modifier cette mission.</AdminBanner>
     );
   }
 

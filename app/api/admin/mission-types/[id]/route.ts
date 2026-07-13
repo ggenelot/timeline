@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requirePermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 
 const MISSION_TYPES_SELECT = `
@@ -8,12 +8,8 @@ const MISSION_TYPES_SELECT = `
 `;
 
 export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
-  const token = getBearerToken(request);
-  if (!token) return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  const auth = await requirePermission(request, 'mission_type', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
 
   const body = (await request.json().catch(() => ({}))) as {
     name?: string;
@@ -80,12 +76,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { id: st
 }
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
-  const token = getBearerToken(request);
-  if (!token) return NextResponse.json({ error: 'Session invalide.' }, { status: 401 });
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.profile) return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  if (auth.profile.role !== 'admin') return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
+  const auth = await requirePermission(request, 'mission_type', 'can_manage');
+  if (auth.errorResponse) return auth.errorResponse;
 
   const serviceClient = createServerSupabaseServiceClient();
   const { error } = await serviceClient.from('mission_types').delete().eq('id', params.id);

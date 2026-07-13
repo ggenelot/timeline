@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requirePermission } from '@/lib/api/permissions';
 
 type Period = '7d' | '30d' | '90d' | 'all';
 
@@ -11,37 +11,10 @@ function getPeriodCutoff(period: Period): Date | null {
   return date;
 }
 
-async function getToken(req: NextRequest): Promise<string> {
-  const auth = req.headers.get('authorization') ?? '';
-  return auth.replace(/^Bearer\s+/i, '').trim();
-}
-
 async function assertAdminOrResponsable(req: NextRequest) {
-  const token = await getToken(req);
-  if (!token) return { client: null, error: NextResponse.json({ error: 'Non authentifié.' }, { status: 401 }) };
-
-  const anonClient = createServerSupabaseAnonClient(token);
-  const { data: { user }, error: userError } = await anonClient.auth.getUser(token);
-  if (userError || !user) return { client: null, error: NextResponse.json({ error: 'Session invalide.' }, { status: 401 }) };
-
-  const serviceClient = createServerSupabaseServiceClient();
-  const { data: profile } = await serviceClient.from('profiles').select('role').eq('id', user.id).single();
-  if (!profile) {
-    return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
-  }
-
-  if (profile.role !== 'admin') {
-    const { data: canManage } = await serviceClient.rpc('has_role_behavior', {
-      _user_id: user.id,
-      _resource_type: 'mission',
-      _behavior: 'can_manage'
-    });
-    if (!canManage) {
-      return { client: null, error: NextResponse.json({ error: 'Non autorisé.' }, { status: 403 }) };
-    }
-  }
-
-  return { client: serviceClient, error: null };
+  const auth = await requirePermission(req, 'mission', 'can_manage');
+  if (auth.errorResponse) return { client: null, error: auth.errorResponse };
+  return { client: auth.serviceClient, error: null };
 }
 
 type MissionRef = { starts_at: string | null } | null;

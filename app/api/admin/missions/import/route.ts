@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createServerSupabaseAnonClient, createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
+import { requireAdmin } from '@/lib/api/permissions';
 import { MISSION_TYPE_SLUG_TO_ID } from '@/lib/types';
 import { buildMissionDedupKey, getMissionDateForDedupFromStartsAt } from '@/lib/import-missions';
 
@@ -49,10 +50,6 @@ function buildPublicGoogleSheetCsvUrl(url: string): string | null {
   }
 }
 
-function getBearerToken(request: NextRequest): string {
-  const authorization = request.headers.get('authorization');
-  return authorization?.startsWith('Bearer ') ? authorization.replace('Bearer ', '').trim() : '';
-}
 
 function normalizeMissionTypeId(value: string | null | undefined): string {
   if (!value) return MISSION_TYPE_SLUG_TO_ID['poste_de_secours'];
@@ -138,28 +135,8 @@ function getMissingColumnFromError(message: string) {
 }
 
 export async function POST(request: NextRequest) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const requesterClient = createServerSupabaseAnonClient(token);
-  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const { data: requesterProfile, error: requesterProfileError } = await requesterClient
-    .from('profiles')
-    .select('role')
-    .eq('id', userData.user.id)
-    .single();
-
-  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé : seuls les admins peuvent importer des missions.' }, { status: 403 });
-  }
+  const auth = await requireAdmin(request);
+  if (auth.errorResponse) return auth.errorResponse;
 
   let body: ImportRequestBody;
 
@@ -269,7 +246,7 @@ export async function POST(request: NextRequest) {
     required_volunteers: mission.required_volunteers,
     mission_type_id: normalizeMissionTypeId(mission.mission_type_id),
     status: importStatus,
-    created_by: userData.user.id,
+    created_by: auth.user.id,
     do_status: mission.do_status,
     retained_status: mission.retained_status,
     requirements_notes: mission.requirements_notes,
@@ -392,28 +369,8 @@ type UpdateRequestBody = {
 };
 
 export async function PATCH(request: NextRequest) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const requesterClient = createServerSupabaseAnonClient(token);
-  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const { data: requesterProfile, error: requesterProfileError } = await requesterClient
-    .from('profiles')
-    .select('role')
-    .eq('id', userData.user.id)
-    .single();
-
-  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé : seuls les admins peuvent modifier des missions.' }, { status: 403 });
-  }
+  const auth = await requireAdmin(request);
+  if (auth.errorResponse) return auth.errorResponse;
 
   let body: UpdateRequestBody;
 
@@ -553,24 +510,8 @@ export async function PATCH(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
-  const token = getBearerToken(request);
-
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const requesterClient = createServerSupabaseAnonClient(token);
-  const { data: userData, error: userError } = await requesterClient.auth.getUser(token);
-
-  if (userError || !userData.user) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const { data: requesterProfile, error: requesterProfileError } = await requesterClient.from('profiles').select('role').eq('id', userData.user.id).single();
-
-  if (requesterProfileError || !requesterProfile || requesterProfile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé : seuls les admins peuvent importer des missions.' }, { status: 403 });
-  }
+  const auth = await requireAdmin(request);
+  if (auth.errorResponse) return auth.errorResponse;
 
   const sourceUrl = process.env.GOOGLE_MISSIONS_SHEET_PUBLIC_URL;
   if (!sourceUrl) {

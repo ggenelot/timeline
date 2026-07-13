@@ -1,24 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requireMissionPermission } from '@/lib/api/permissions';
 import { notifyMissionProposerOnStatusChange } from '@/lib/slack/workflows';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
-  const token = getBearerToken(request);
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.client || !auth.profile || !auth.user) {
-    return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  }
-
-  if (auth.profile.role !== 'admin') {
-    return NextResponse.json({ error: 'Accès refusé : seuls les administrateurs peuvent annuler une mission.' }, { status: 403 });
-  }
-
   const missionId = params.missionId;
-  const { data: mission, error: missionError } = await auth.client
+  const auth = await requireMissionPermission(request, missionId);
+  if (auth.errorResponse) return auth.errorResponse;
+  const client = auth.serviceClient;
+
+  const { data: mission, error: missionError } = await client
     .from('missions')
     .select('id,status')
     .eq('id', missionId)
@@ -36,7 +26,7 @@ export async function POST(request: NextRequest, { params }: { params: { mission
     return NextResponse.json({ error: 'Une mission confirmée ne peut pas être annulée.' }, { status: 400 });
   }
 
-  const { data: updated, error: updateError } = await auth.client
+  const { data: updated, error: updateError } = await client
     .from('missions')
     .update({ status: 'cancelled' })
     .eq('id', missionId)

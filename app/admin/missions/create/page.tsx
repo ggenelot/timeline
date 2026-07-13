@@ -6,6 +6,7 @@ import { MissionForm, MissionFormState, MissionTypeOption, INITIAL_MISSION_FORM,
 import { AdminBanner, AdminCard, AdminPageHeader } from '@/components/admin/ui';
 import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { getEventTemplateById } from '@/lib/event-templates';
 
 type MissionSkillOption = {
@@ -148,6 +149,8 @@ function parseMissionMaterielRequirements(requirements: MissionMaterielRequireme
 }
 
 export default function AdminCreateMissionPage() {
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('mission', 'can_manage');
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -310,8 +313,8 @@ export default function AdminCreateMissionPage() {
       return;
     }
 
-    if (profile.role !== 'admin') {
-      setError('Accès refusé : seuls les administrateurs peuvent créer une mission.');
+    if (!canManage) {
+      setError('Accès refusé : vous n’avez pas la permission de créer une mission.');
       return;
     }
 
@@ -487,7 +490,7 @@ export default function AdminCreateMissionPage() {
     }, 600);
   }
 
-  if (loading) {
+  if (loading || permissionsLoading) {
     return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement…</p>;
   }
 
@@ -495,9 +498,9 @@ export default function AdminCreateMissionPage() {
     return <p style={{ fontSize: 14, color: '#D14343' }}>{error ?? 'Accès refusé.'}</p>;
   }
 
-  if (profile.role !== 'admin') {
+  if (!canManage) {
     return (
-      <AdminBanner tone="error">Accès refusé : cette page est réservée aux administrateurs.</AdminBanner>
+      <AdminBanner tone="error">Accès refusé : vous n’avez pas la permission de créer une mission.</AdminBanner>
     );
   }
 
