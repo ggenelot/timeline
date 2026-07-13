@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { cn } from '@/lib/cn';
 
 type Period = '7d' | '30d' | '90d' | 'all';
@@ -45,6 +46,8 @@ function formatRate(rate: number | null): string {
 }
 
 export function StatsPageClient() {
+  const { loading: permissionsLoading, can } = usePermissions();
+  const allowed = can('mission', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<Period>('all');
@@ -56,35 +59,17 @@ export function StatsPageClient() {
     async function checkAuth() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (!profileData) {
-        setError('Accès réservé aux administrateurs et responsables.');
-        setLoading(false);
-        return;
-      }
-
-      if (profileData.role !== 'admin') {
-        const { data: canManage } = await supabase.rpc('has_role_behavior', {
-          _user_id: authData.user.id,
-          _resource_type: 'mission',
-          _behavior: 'can_manage',
-        });
-        if (!canManage) {
-          setError('Accès réservé aux administrateurs et responsables.');
-          setLoading(false);
-        }
-      }
     }
     void checkAuth();
   }, [router]);
 
   useEffect(() => {
+    if (permissionsLoading) return;
+    if (!allowed) {
+      setError('Accès refusé : page réservée aux gestionnaires de missions.');
+      setLoading(false);
+      return;
+    }
     async function fetchStats() {
       setLoading(true);
       setError(null);
@@ -111,7 +96,7 @@ export function StatsPageClient() {
     }
 
     void fetchStats();
-  }, [period]);
+  }, [period, permissionsLoading, allowed]);
 
   return (
     <div className="space-y-6">

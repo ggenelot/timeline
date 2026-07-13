@@ -62,9 +62,11 @@ export async function requirePermission(
 }
 
 /**
- * Autorise la requête si l'utilisateur peut gérer CETTE mission (admin,
- * créateur, ou can_manage couvrant son type) — via can_manage_mission, la
- * même fonction que la RLS du domaine mission.
+ * Autorise la requête si l'utilisateur peut gérer le cycle de vie de CETTE
+ * mission — confirmer / annuler / éditer / staffer. Décision = admin ou
+ * can_manage couvrant son type (can_manage_mission_by_role, même prédicat que
+ * la RLS d'écriture missions). La simple qualité de créateur ne suffit pas :
+ * un auteur de brouillon (can_create) ne doit pas pouvoir valider sa mission.
  */
 export async function requireMissionPermission(
   request: NextRequest,
@@ -73,12 +75,27 @@ export async function requireMissionPermission(
   const auth = await authenticate(request);
   if (auth.errorResponse) return auth;
 
-  const { data: allowed, error } = await auth.serviceClient.rpc('can_manage_mission', {
+  const { data: allowed, error } = await auth.serviceClient.rpc('can_manage_mission_by_role', {
     _mission_id: missionId,
     _user_id: auth.user.id
   });
 
   if (error || !allowed) return unauthorized('Non autorisé.', 403);
+  return auth;
+}
+
+/**
+ * Autorise la requête uniquement pour un administrateur système. Réservé aux
+ * opérations « super-pouvoir » qui bypassent la RLS de façon transverse (ex.
+ * import bulk de missions tous types confondus) et ne doivent donc pas
+ * s'appuyer sur une permission de domaine scopée.
+ */
+export async function requireAdmin(request: NextRequest): Promise<AuthorizeResult> {
+  const auth = await authenticate(request);
+  if (auth.errorResponse) return auth;
+
+  const { data: admin, error } = await auth.serviceClient.rpc('is_admin', { _user_id: auth.user.id });
+  if (error || !admin) return unauthorized('Réservé aux administrateurs.', 403);
   return auth;
 }
 

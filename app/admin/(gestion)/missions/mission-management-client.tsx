@@ -8,6 +8,7 @@ import { NewMissionSplitButton } from '@/components/missions/new-mission-split-b
 import { MissionManagementTimeline } from '@/components/missions/mission-management-timeline';
 import { MissionManagementTable } from '@/components/missions/mission-management-table';
 import { useMissionsData } from '@/components/missions/use-missions-data';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { PageHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
@@ -37,47 +38,20 @@ export function MissionManagementClient() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const { loading: permissionsLoading, isAdmin, can } = usePermissions();
+  const allowed = can('mission', 'can_manage');
 
-  const [accessChecked, setAccessChecked] = useState(false);
-  const [accessError, setAccessError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
-    async function checkAccess() {
+    async function checkAuth() {
       const { data: authData } = await supabase.auth.getUser();
-      if (!authData.user) {
-        router.replace('/login');
-        return;
-      }
-
-      const { data: profileData } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
-
-      if (!profileData) {
-        setAccessError('Accès réservé aux administrateurs et responsables.');
-        setAccessChecked(true);
-        return;
-      }
-
-      if (profileData.role !== 'admin') {
-        const { data: canManage } = await supabase.rpc('has_role_behavior', {
-          _user_id: authData.user.id,
-          _resource_type: 'mission',
-          _behavior: 'can_manage'
-        });
-        if (!canManage) {
-          setAccessError('Accès réservé aux administrateurs et responsables.');
-          setAccessChecked(true);
-          return;
-        }
-      }
-
-      setAccessChecked(true);
+      if (!authData.user) router.replace('/login');
     }
-    void checkAccess();
+    void checkAuth();
   }, [router]);
 
   const {
-    profile,
     missions,
     missionTypes,
     missionTypeById,
@@ -91,8 +65,6 @@ export function MissionManagementClient() {
     bulkUpdateMissionStatus,
     bulkDeleteMissions
   } = useMissionsData();
-
-  const isAdmin = profile?.role === 'admin';
 
   const missionTypeIds = useMemo(() => missionTypes.map((t) => t.id), [missionTypes]);
   const selectedTypeId = useMemo(() => parseTypeFilter(searchParams.get('type'), missionTypeIds), [searchParams, missionTypeIds]);
@@ -173,22 +145,22 @@ export function MissionManagementClient() {
     [manageableMissions, searchQuery, selectedTypeId, selectedStatus]
   );
 
-  if (!accessChecked || loading) {
+  if (permissionsLoading || loading) {
     return <p className="text-sm text-ink-2">Chargement...</p>;
   }
 
-  if (accessError) {
+  if (!allowed) {
     return (
       <div className="mx-auto w-full max-w-[880px]">
-        <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{accessError}</div>
+        <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">Accès refusé : page réservée aux gestionnaires de missions.</div>
       </div>
     );
   }
 
-  if (!profile) {
+  if (error) {
     return (
       <div className="mx-auto w-full max-w-[880px]">
-        <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error ?? 'Profil introuvable.'}</div>
+        <div className="rounded-[10px] border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div>
       </div>
     );
   }

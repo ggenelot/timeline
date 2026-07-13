@@ -1,21 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getBearerToken, hasRoleBehavior, requireAuthenticatedUser } from '@/lib/api/auth';
+import { requireMissionPermission } from '@/lib/api/permissions';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { SlackApiClientError, SlackService } from '@/lib/slack/service';
 
 export async function POST(request: NextRequest, { params }: { params: { missionId: string } }) {
-  const token = getBearerToken(request);
-  if (!token) {
-    return NextResponse.json({ error: 'Session invalide. Veuillez vous reconnecter.' }, { status: 401 });
-  }
-
-  const auth = await requireAuthenticatedUser(token);
-  if (auth.errorResponse || !auth.client || !auth.profile || !auth.user) {
-    return auth.errorResponse ?? NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
-  }
-
   const missionId = params.missionId;
-  const { data: mission } = await auth.client
+  const auth = await requireMissionPermission(request, missionId);
+  if (auth.errorResponse) return auth.errorResponse;
+
+  const { data: mission } = await auth.serviceClient
     .from('missions')
     .select('id,created_by,slack_channel_id')
     .eq('id', missionId)
@@ -23,13 +16,6 @@ export async function POST(request: NextRequest, { params }: { params: { mission
 
   if (!mission) {
     return NextResponse.json({ error: 'Mission introuvable.' }, { status: 404 });
-  }
-
-  const canManage =
-    auth.profile.role === 'admin' ||
-    (mission.created_by === auth.user.id && (await hasRoleBehavior(auth.client, auth.user.id, 'mission', 'can_manage')));
-  if (!canManage) {
-    return NextResponse.json({ error: 'Accès refusé.' }, { status: 403 });
   }
 
   if (!mission.slack_channel_id) {

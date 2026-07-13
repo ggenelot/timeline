@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/permissions-context';
-import type { OpeDashboardData, OpeMission, RoleBehavior } from '@/lib/types';
+import type { OpeDashboardData, OpeMission } from '@/lib/types';
 import { buildDayAxis, missionDayKey } from '@/lib/mission-timeline';
 import {
   buildMaterielSlots,
@@ -56,9 +56,8 @@ const TODAY_KEY = missionDayKey(new Date().toISOString());
 
 export default function MissionBoardPage() {
   const router = useRouter();
-  const { can } = usePermissions();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
-  const [role, setRole] = useState<string | null>(null);
+  const { loading: permissionsLoading, isAdmin, can } = usePermissions();
+  const allowed = can('mission', 'can_manage');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -80,13 +79,14 @@ export default function MissionBoardPage() {
 
   const fromISO = useMemo(() => startOfTodayMinus(3).toISOString(), []);
   const canEditMateriel = can('materiel', 'can_manage');
-  // "Rendre disponible" est admin-only côté API (assertAdmin) : la recherche
-  // plein répertoire n'a d'intérêt que pour ce profil, seul à pouvoir en
-  // exploiter le débouché (cf. placeVolunteer).
-  const canBrowseAllVolunteers = role === 'admin';
+  // "Rendre disponible" est admin-only côté API : la recherche plein répertoire
+  // n'a d'intérêt que pour ce profil, seul à pouvoir en exploiter le débouché.
+  const canBrowseAllVolunteers = isAdmin;
 
-  // Accès (une fois).
+  // Accès (une fois) : la vraie garde est la RLS/l'API OPE ; ici on ne fait
+  // que récupérer le token et gérer l'affichage selon `allowed`.
   useEffect(() => {
+    if (permissionsLoading) return;
     async function init() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
@@ -94,25 +94,11 @@ export default function MissionBoardPage() {
         return;
       }
       const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
-      setToken(tok);
-
-      const { data: profileData } = await supabase.from('profiles').select('role').eq('id', authData.user.id).single();
-      setRole(profileData?.role ?? null);
-
-      let ok = profileData?.role === 'admin' || profileData?.role === 'responsable';
-      if (!ok) {
-        const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-        if (res.ok) {
-          const { behaviors } = (await res.json()) as { behaviors: RoleBehavior[] };
-          ok = behaviors.some((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
-        }
-      }
-      setAllowed(ok);
-      if (!ok) setLoading(false);
+      setToken(sessionData.session?.access_token ?? '');
+      if (!allowed) setLoading(false);
     }
     void init();
-  }, [router]);
+  }, [router, permissionsLoading, allowed]);
 
   const load = useCallback(async () => {
     if (!token) return;
@@ -246,7 +232,7 @@ export default function MissionBoardPage() {
       void runAction(() => assignVolunteerToMission({ missionId, volunteerId, requiredSkillId, fromAssignmentId }));
       return;
     }
-    if (role === 'admin') {
+    if (isAdmin) {
       setConfirmMarkAvailable({ missionId, requiredSkillId, volunteerId, volunteerLabel, roleName, fromAssignmentId });
       return;
     }
@@ -386,10 +372,10 @@ export default function MissionBoardPage() {
     placeContainer(requirementId, containerId, fromAssignmentId);
   }
 
-  if (allowed === false) {
+  if (!permissionsLoading && !allowed) {
     return (
       <div className="rounded-[15px] border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée au pilotage opérationnel (admin, responsable ou gestionnaire de missions).
+        Accès refusé : page réservée aux gestionnaires de missions.
       </div>
     );
   }

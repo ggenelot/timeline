@@ -15,7 +15,8 @@ import {
   parseParisLocalToUtcIso,
   utcIsoToParisParts
 } from '@/lib/import-missions';
-import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, MissionStatus, Profile } from '@/lib/types';
+import { getMissionCategory, MISSION_CATEGORY_LABELS, MISSION_TYPE_OPTIONS, MissionStatus } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { supabase } from '@/lib/supabase/client';
 import { AdminBanner, AdminCard, AdminSectionLabel, ghostButtonStyle } from '@/components/admin/ui';
 import { Icon } from '@/components/ui/icon';
@@ -649,7 +650,7 @@ const MissionImportRow = memo(function MissionImportRow({
 
 export default function AdminMissionImportPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, isAdmin } = usePermissions();
   const [loadingProfile, setLoadingProfile] = useState(true);
   const [fileName, setFileName] = useState<string | null>(null);
   const [sourceKind, setSourceKind] = useState<'file' | 'sheet' | null>(null);
@@ -682,19 +683,6 @@ export default function AdminMissionImportPage() {
         return;
       }
 
-      const { data: profileData, error: profileError } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
-
-      if (profileError || !profileData) {
-        setError('Impossible de charger votre profil.');
-        setLoadingProfile(false);
-        return;
-      }
-
-      setProfile(profileData);
       setLoadingProfile(false);
     }
 
@@ -978,7 +966,7 @@ export default function AdminMissionImportPage() {
     setError(null);
     setSuccess(null);
 
-    if (!profile || profile.role !== 'admin') {
+    if (!isAdmin) {
       setError('Accès refusé : seuls les admins peuvent importer.');
       return;
     }
@@ -1044,7 +1032,7 @@ export default function AdminMissionImportPage() {
     setError(null);
     setSuccess(null);
 
-    if (!profile || profile.role !== 'admin') {
+    if (!isAdmin) {
       setError('Accès refusé : seuls les admins peuvent mettre à jour des missions.');
       return;
     }
@@ -1163,11 +1151,11 @@ export default function AdminMissionImportPage() {
     }
   }, [importStatus]);
 
-  if (loadingProfile) {
+  if (loadingProfile || permissionsLoading) {
     return <p style={{ fontSize: 14, color: '#5B6478' }}>Chargement…</p>;
   }
 
-  if (!profile || profile.role !== 'admin') {
+  if (!isAdmin) {
     return <AdminBanner tone="error">Accès refusé : page réservée aux admins.</AdminBanner>;
   }
 

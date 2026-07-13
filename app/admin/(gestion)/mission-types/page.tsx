@@ -6,9 +6,9 @@ import { supabase } from '@/lib/supabase/client';
 import {
   MissionType,
   MissionTypeRequiredSkill,
-  Profile,
   Skill,
 } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
 import { Icon } from '@/components/ui/icon';
@@ -212,7 +212,8 @@ function MissionTypeForm({
 
 export default function AdminMissionTypesPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const canManage = can('mission_type', 'can_manage');
   const [loading, setLoading] = useState(true);
   const [missionTypes, setMissionTypes] = useState<MissionType[]>([]);
   const [allSkills, setAllSkills] = useState<Skill[]>([]);
@@ -244,23 +245,13 @@ export default function AdminMissionTypesPage() {
   }, []);
 
   useEffect(() => {
+    if (permissionsLoading) return;
     async function init() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) { router.replace('/login'); return; }
 
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('id,full_name,email,role,sector,created_at')
-        .eq('id', authData.user.id)
-        .single();
+      if (!canManage) { setLoading(false); return; }
 
-      if (!profileData || profileData.role !== 'admin') {
-        setLoading(false);
-        setProfile(profileData ?? null);
-        return;
-      }
-
-      setProfile(profileData);
       const { data: sessionData } = await supabase.auth.getSession();
       const tok = sessionData.session?.access_token ?? '';
       setToken(tok);
@@ -268,7 +259,7 @@ export default function AdminMissionTypesPage() {
       setLoading(false);
     }
     void init();
-  }, [router, fetchData]);
+  }, [router, fetchData, permissionsLoading, canManage]);
 
   function flash(msg: string) {
     setSuccessMsg(msg);
@@ -359,12 +350,12 @@ export default function AdminMissionTypesPage() {
     }
   }
 
-  if (loading) return <p className="text-sm text-ink-2">Chargement...</p>;
+  if (loading || permissionsLoading) return <p className="text-sm text-ink-2">Chargement...</p>;
 
-  if (!profile || profile.role !== 'admin') {
+  if (!canManage) {
     return (
       <div className="rounded-xl border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée aux administrateurs.
+        Accès refusé : vous n&apos;avez pas la permission de gérer les types de mission.
       </div>
     );
   }

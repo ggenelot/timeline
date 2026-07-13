@@ -3,7 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
-import type { OpeDashboardData, OpeMission, RoleBehavior } from '@/lib/types';
+import type { OpeDashboardData, OpeMission } from '@/lib/types';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { buildDayAxis, missionDayKey } from '@/lib/mission-timeline';
 import { availableNotRetainedByDay, computeVolunteerConflicts, engagedMaterielByDay } from '@/lib/ope-dashboard';
 import { DayColumn } from '@/components/ope/day-column';
@@ -27,7 +28,8 @@ const TODAY_KEY = missionDayKey(new Date().toISOString());
 
 export default function OpeDashboardPage() {
   const router = useRouter();
-  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const { loading: permissionsLoading, can } = usePermissions();
+  const allowed = can('mission', 'can_manage');
   const [token, setToken] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -45,8 +47,9 @@ export default function OpeDashboardPage() {
     return d.toISOString();
   }, [offsetDays]);
 
-  // Accès (une fois)
+  // Accès (une fois) : garde effective = RLS/API OPE ; ici gestion UX seule.
   useEffect(() => {
+    if (permissionsLoading) return;
     async function init() {
       const { data: authData } = await supabase.auth.getUser();
       if (!authData.user) {
@@ -54,28 +57,11 @@ export default function OpeDashboardPage() {
         return;
       }
       const { data: sessionData } = await supabase.auth.getSession();
-      const tok = sessionData.session?.access_token ?? '';
-      setToken(tok);
-
-      const { data: profileData } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', authData.user.id)
-        .single();
-
-      let ok = profileData?.role === 'admin' || profileData?.role === 'responsable';
-      if (!ok) {
-        const res = await fetch('/api/roles/mine', { headers: { Authorization: `Bearer ${tok}` } });
-        if (res.ok) {
-          const { behaviors } = (await res.json()) as { behaviors: RoleBehavior[] };
-          ok = behaviors.some((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
-        }
-      }
-      setAllowed(ok);
-      if (!ok) setLoading(false);
+      setToken(sessionData.session?.access_token ?? '');
+      if (!allowed) setLoading(false);
     }
     void init();
-  }, [router]);
+  }, [router, permissionsLoading, allowed]);
 
   // Données (à chaque changement de fenêtre)
   useEffect(() => {
@@ -153,10 +139,10 @@ export default function OpeDashboardPage() {
     });
   }
 
-  if (allowed === false) {
+  if (!permissionsLoading && !allowed) {
     return (
       <div className="rounded-[15px] border border-bad/30 bg-bad-soft p-4 text-sm text-bad">
-        Accès refusé : page réservée au pilotage opérationnel (admin, responsable ou gestionnaire de missions).
+        Accès refusé : page réservée aux gestionnaires de missions.
       </div>
     );
   }

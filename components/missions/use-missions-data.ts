@@ -143,21 +143,18 @@ export function useMissionsData() {
     }
     setRetainedVolunteersByMission(nextRetainedVolunteersByMission);
 
-    const isAdmin = profileData.role === 'admin';
-
     if (rolesRes.ok) {
-      const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[] };
+      const rolesJson = (await rolesRes.json()) as { behaviors: RoleBehavior[]; isAdmin?: boolean };
+      const isAdmin = Boolean(rolesJson.isAdmin);
 
       const canManageBehaviors = rolesJson.behaviors.filter((b) => b.resource_type === 'mission' && b.behavior_type === 'can_manage');
       const manageIds = canManageBehaviors.some((b) => (b.mission_type_ids ?? []).length === 0)
         ? allTypeIds
         : Array.from(new Set(canManageBehaviors.flatMap((b) => b.mission_type_ids ?? [])));
 
-      // Admin status isn't backed by role_behaviors rows, so it must be forced here
-      // to keep management actions available to admins.
+      // L'admin (rôle système) n'a pas de lignes role_behaviors : on force donc
+      // tous les types pour garder les actions de gestion disponibles.
       setCanManageMissionTypeIds(isAdmin ? allTypeIds : manageIds);
-    } else if (isAdmin) {
-      setCanManageMissionTypeIds(allTypeIds);
     }
 
     const allMissionProposals = proposalsRes.data ?? [];
@@ -222,10 +219,21 @@ export function useMissionsData() {
     async (missionId: string) => {
       setError(null);
 
-      const { error: updateError } = await supabase.from('missions').update({ status: 'proposed' }).eq('id', missionId).eq('status', 'draft');
+      const { data, error: updateError } = await supabase
+        .from('missions')
+        .update({ status: 'proposed' })
+        .eq('id', missionId)
+        .eq('status', 'draft')
+        .select('id');
 
       if (updateError) {
         setError(`Impossible de passer la mission en proposé : ${updateError.message}`);
+        return;
+      }
+      // La RLS qui refuse la mise à jour ne renvoie pas d'erreur : elle exclut
+      // silencieusement la ligne. Sans ce contrôle, le clic paraît sans effet.
+      if (!data || data.length === 0) {
+        setError("Cette mission n'a pas pu être publiée (droits insuffisants ou statut modifié entre-temps).");
         return;
       }
 
