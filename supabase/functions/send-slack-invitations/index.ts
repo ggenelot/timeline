@@ -29,6 +29,47 @@ function randomPassword(): string {
   return crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 }
 
+// SHA-256 hex — doit rester compatible avec hashSlackLoginCode (lib/slack/auth.ts) pour que la
+// route de vérification côté Next puisse valider un code émis ici.
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// Code numérique à 6 chiffres, tiré uniformément par rejet (évite le biais modulo).
+function generateNumericCode(): string {
+  const buf = new Uint32Array(1);
+  let n: number;
+  do {
+    crypto.getRandomValues(buf);
+    n = buf[0];
+  } while (n >= Math.floor(0xffffffff / 1_000_000) * 1_000_000);
+  return String(n % 1_000_000).padStart(6, '0');
+}
+
+// Émet un code OTP 6 chiffres pour un couple Slack (team, user) : invalide les codes actifs
+// précédents (un seul code valable), ne stocke que le hash, retourne le code brut (jamais loggé).
+async function issueOtp(supabase: any, slackTeamId: string, slackUserId: string): Promise<string> {
+  await supabase
+    .from('slack_login_challenges')
+    .update({ consumed_at: new Date().toISOString() })
+    .eq('slack_team_id', slackTeamId)
+    .eq('slack_user_id', slackUserId)
+    .eq('channel', 'otp_login')
+    .is('consumed_at', null);
+
+  const code = generateNumericCode();
+  await supabase.from('slack_login_challenges').insert({
+    slack_team_id: slackTeamId,
+    slack_user_id: slackUserId,
+    code_hash: await sha256Hex(code),
+    channel: 'otp_login',
+    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    attempt_count: 0
+  });
+  return code;
+}
+
 type Target = {
   slack_user_id: string;
   slack_team_id: string;
@@ -120,7 +161,7 @@ Deno.serve(async (req) => {
             slack_name: target.slack_name ?? null,
             status: 'pending',
             invite_token: crypto.randomUUID(),
-            created_by: me.id
+            created_by: user.id
           })
           .select('id')
           .single();
@@ -133,64 +174,52 @@ Deno.serve(async (req) => {
 
       try {
         let profileId: string;
-        let email: string;
         let identifier: string | null = null;
-        let tempPassword: string | null = null;
-        let magicLink: string | null = null;
+        let isNewAccount = false;
 
         if (linkedProfileId) {
-          // Compte déjà existant (créé via l'ajout de compétences, un envoi précédent, ou tout autre
-          // moyen) : on régénère un mot de passe temporaire et on (re)envoie les identifiants.
+          // Compte déjà existant : on ne touche plus au mot de passe, on (re)émet un code OTP.
           profileId = linkedProfileId;
           const { data: existingProfile, error: profileFetchError } = await supabase
             .from('profiles')
-            .select('id,email,identifier')
+            .select('id,identifier')
             .eq('id', profileId)
             .single();
           if (profileFetchError || !existingProfile) throw new Error('Profil Timeline introuvable.');
-          email = existingProfile.email;
           identifier = existingProfile.identifier;
-          tempPassword = randomPassword();
-
-          const { error: passwordError } = await supabase.auth.admin.updateUserById(profileId, { password: tempPassword });
-          if (passwordError) throw new Error(passwordError.message);
 
           await supabase
             .from('profiles')
             .update({ slack_username: target.slack_username ?? null, slack_connected_at: new Date().toISOString() })
             .eq('id', profileId);
         } else if (target.matched_profile_id) {
+          // Profil Timeline existant repéré par email : on le relie à Slack puis on émet un code.
           profileId = target.matched_profile_id;
           const { data: existingProfile, error: profileFetchError } = await supabase
             .from('profiles')
-            .select('id,email')
+            .select('id,identifier')
             .eq('id', profileId)
             .single();
           if (profileFetchError || !existingProfile) throw new Error('Profil Timeline introuvable.');
-          email = existingProfile.email;
+          identifier = existingProfile.identifier;
 
           const { error: updateError } = await supabase
             .from('profiles')
             .update({ slack_user_id: slackUserId, slack_team_id: slackTeamId, slack_username: target.slack_username ?? null, slack_connected_at: new Date().toISOString() })
             .eq('id', profileId);
           if (updateError) throw new Error(updateError.message);
-
-          const { data: linkData } = await supabase.auth.admin.generateLink({
-            type: 'magiclink',
-            email,
-            options: { redirectTo: `${siteUrl ?? ''}/missions` }
-          });
-          magicLink = linkData?.properties?.action_link ?? null;
         } else {
           const fullName = target.slack_name?.trim() || target.slack_username?.trim() || 'Bénévole';
           identifier = await deriveUniqueIdentifier(supabase, target.slack_username ?? null, target.slack_name ?? null, slackUserId);
-          email = target.slack_email?.trim().toLowerCase() || `${identifier}@timeline.local`;
-          tempPassword = randomPassword();
+          const email = target.slack_email?.trim().toLowerCase() || `${identifier}@timeline.local`;
+          isNewAccount = true;
 
+          // Mot de passe aléatoire uniquement pour satisfaire createUser — jamais communiqué :
+          // la connexion se fait par code OTP.
           const { data: created, error: createError } = await supabase.auth.admin.createUser({
             email,
             email_confirm: true,
-            password: tempPassword,
+            password: randomPassword(),
             user_metadata: { full_name: fullName }
           });
           if (createError || !created.user?.id) throw new Error(createError?.message ?? 'Création du compte impossible.');
@@ -218,15 +247,18 @@ Deno.serve(async (req) => {
           { onConflict: 'slack_team_id,slack_user_id' }
         );
 
+        const otpCode = await issueOtp(supabase, slackTeamId, slackUserId);
+
         const openRes = await fetch('https://slack.com/api/conversations.open', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ users: slackUserId }) });
         const openJson = await openRes.json();
         const channel = openJson.channel?.id;
         if (!channel) throw new Error('missing_dm_channel');
 
         const loginUrl = `${siteUrl ?? ''}/login`;
-        const text = tempPassword
-          ? `Bonjour 👋\nTon compte Timeline vient d'être créé.\n\nIdentifiant : ${identifier}\nMot de passe temporaire : ${tempPassword}\n\nConnecte-toi ici : ${loginUrl}\n\nTu recevras ensuite les propositions de mission directement via Slack.`
-          : `Bonjour 👋\nTon compte Timeline vient d'être relié à Slack.\n\nConnecte-toi ici : ${magicLink ?? loginUrl}\n\nTu recevras ensuite les propositions de mission directement via Slack.`;
+        const identifierLine = identifier ? `ton identifiant « ${identifier} »` : 'ton identifiant Timeline';
+        const text = isNewAccount
+          ? `Bonjour 👋\nTon compte Timeline vient d'être créé.\n\nTon code de connexion (valable 10 min) : ${otpCode}\n\nPour te connecter :\n1. Va sur ${loginUrl}\n2. Choisis « Recevoir un code par Slack »\n3. Saisis ${identifierLine} puis ce code à 6 chiffres.\n\nLe code expire au bout de 10 minutes : tu peux en demander un nouveau à tout moment depuis la page de connexion.\nTu recevras ensuite les propositions de mission directement ici, sur Slack.`
+          : `Bonjour 👋\nVoici ton code de connexion Timeline (valable 10 min) : ${otpCode}\n\nConnecte-toi sur ${loginUrl} → « Recevoir un code par Slack », saisis ${identifierLine} puis ce code à 6 chiffres.\nBesoin d'un nouveau code ? Redemande-en un depuis la page de connexion.`;
 
         const postRes = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, text }) });
         const postJson = await postRes.json();
