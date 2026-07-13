@@ -120,7 +120,7 @@ Deno.serve(async (req) => {
             slack_name: target.slack_name ?? null,
             status: 'pending',
             invite_token: crypto.randomUUID(),
-            created_by: me.id
+            created_by: user.id
           })
           .select('id')
           .single();
