@@ -31,7 +31,8 @@ de test manuel.
 |---|---|
 | `is_admin(_user_id)` | membre du rôle système |
 | `has_permission(_user_id, _resource, _action)` | permission générique (admin implicite, manage ⇒ see) |
-| `can_read_mission` / `can_manage_mission` | décisions par mission (scoping type/statut) |
+| `can_read_mission` / `can_manage_mission` | décisions par mission (scoping type/statut) ; `can_manage_mission` inclut le créateur pour les sous-ressources (assignations, compétences, matériel) |
+| `can_manage_mission_by_role` | gestion du cycle de vie mission (éditer/supprimer/confirmer/staffer) : admin ou `can_manage` scopé au type, **sans** dérogation créateur |
 
 Côté code : `requirePermission()` / `requireMissionPermission()`
 (`lib/api/permissions.ts`) pour les routes API service-role ;

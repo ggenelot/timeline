@@ -48,16 +48,20 @@ create policy "missions_insert_draft_with_create_behavior"
     )
   );
 
+-- Édition/suppression de la ligne mission : admin ou can_manage scopé au type
+-- (can_manage_mission_by_role, SANS dérogation créateur) — sinon un auteur de
+-- brouillon (can_create) pourrait flipper le statut ou supprimer sa mission,
+-- court-circuitant la validation.
 drop policy if exists "missions_update_admin_only" on public.missions;
 create policy "missions_update_manager"
   on public.missions for update
-  using ((select public.is_admin(auth.uid())) or public.can_manage_mission(missions.id, auth.uid()))
-  with check ((select public.is_admin(auth.uid())) or public.can_manage_mission(missions.id, auth.uid()));
+  using (public.can_manage_mission_by_role(missions.id, auth.uid()))
+  with check (public.can_manage_mission_by_role(missions.id, auth.uid()));
 
 drop policy if exists "missions_delete_admin_only" on public.missions;
 create policy "missions_delete_manager"
   on public.missions for delete
-  using ((select public.is_admin(auth.uid())) or public.can_manage_mission(missions.id, auth.uid()));
+  using (public.can_manage_mission_by_role(missions.id, auth.uid()));
 
 -- ============================================================
 -- mission_proposals : select / insert / update
