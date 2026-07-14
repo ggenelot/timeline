@@ -5,5 +5,11 @@
       "staging": true,
       "*": true
     }
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/eope-sync",
+      "schedule": "0 5 * * *"
+    }
+  ]
 }

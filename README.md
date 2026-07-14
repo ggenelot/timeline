@@ -69,6 +69,8 @@ flowchart LR
 
 **Slack (optionnel)** — création automatique du canal privé d'une mission, invitations et messages aux bénévoles sélectionnés, connexion SSO. L'application fonctionne entièrement sans Slack.
 
+**eOPE (optionnel)** — synchronisation avec l'outil départemental de gestion des disponibilités : import des événements eOPE en missions et export des équipages engagés en engagements validés (voir [`docs/eope-api.md`](docs/eope-api.md)). L'application fonctionne entièrement sans eOPE.
+
 Pour le détail complet fonctionnalité par fonctionnalité, voir le [guide de prise en main](docs/guide-prise-en-main.md).
 
 ---

@@ -11,6 +11,7 @@ Ce document détaille l'implémentation technique de Timeline : structure du cod
 3. [Modèle de données principal](#modèle-de-données-principal)
 4. [Sécurité des données (RLS)](#sécurité-des-données-rls)
 5. [Intégration Slack](#intégration-slack)
+6. [Intégration eOPE](#intégration-eope)
 
 ---
 
@@ -116,6 +117,7 @@ sequenceDiagram
 | `help_pages` / `events` | Contenu des pages d'aide et événements d'agenda |
 | `activity_logs` | Historique métier immuable (écrit par triggers SQL) |
 | `slack_*` | Tables d'intégration Slack (identités, invitations, logs, templates) |
+| `eope_sync_runs` / `eope_commitment_links` | Intégration eOPE (journal des synchronisations, engagements poussés) |
 
 Les migrations se trouvent dans `supabase/migrations/` et sont appliquées dans l'ordre chronologique des timestamps. Elles couvrent :
 
@@ -191,3 +193,19 @@ La commande `/timeline login` sur le workspace Slack envoie un lien de connexion
 - Validation du workspace (`SLACK_TEAM_ID`) si configuré.
 
 Pour la configuration détaillée des flux OAuth, voir [`docs/slack-oauth-flows.md`](./slack-oauth-flows.md) et [`docs/slack-auth.md`](./slack-auth.md).
+
+---
+
+## Intégration eOPE
+
+Synchronisation bidirectionnelle avec eOPE, l'outil départemental de gestion des disponibilités : import des événements eOPE en missions (liées par `missions.eope_event_id`) et export des équipages engagés en engagements validés (API OAuth 2.1, client machine-à-machine au nom de l'antenne).
+
+- Code : `lib/eope/` (config, client, parseurs défensifs, mapping pur, orchestration).
+- Routes : `POST /api/admin/eope/sync` (manuel, admin), `GET /api/admin/eope/status`, `PATCH /api/admin/eope/missions/[missionId]` (lier/délier), `GET /api/cron/eope-sync` (cron Vercel quotidien, protégé par `CRON_SECRET`).
+- Page d'administration : `/admin/eope` (état, synchronisation manuelle, journal, conflits, bénévoles non liés).
+- Correspondance des personnes : manuelle, via `profiles.eope_user_id` (fiche bénévole).
+- L'application fonctionne entièrement sans eOPE si les variables ne sont pas configurées.
+
+> Sans rapport avec le « Tableau de bord OPE » interne (`/admin/ope-dashboard`).
+
+Documentation détaillée (configuration, algorithme, hypothèses de schéma et procédure de découverte de l'API) : [`docs/eope-api.md`](./eope-api.md).
