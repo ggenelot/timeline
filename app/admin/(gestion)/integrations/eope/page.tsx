@@ -124,37 +124,47 @@ export default function EopeAdminPage() {
   }, []);
 
   const loadStatus = useCallback(async () => {
-    const accessToken = await getAccessToken();
-    if (!accessToken) {
-      setError('Session invalide. Veuillez vous reconnecter.');
+    try {
+      const accessToken = await getAccessToken();
+      if (!accessToken) {
+        setError('Session invalide. Veuillez vous reconnecter.');
+        return;
+      }
+
+      const [statusRes, configRes] = await Promise.all([
+        fetch('/api/admin/integrations/eope/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' }),
+        fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
+      ]);
+
+      const statusPayload = (await statusRes.json().catch(() => ({}))) as EopeStatus & { error?: string };
+      const configPayload = (await configRes.json().catch(() => ({}))) as ConfigPayload;
+
+      if (!statusRes.ok || !configRes.ok) {
+        setError(statusPayload.error ?? configPayload.error ?? "Impossible de charger l'état de l'intégration eOPE.");
+        return;
+      }
+
+      setStatus(statusPayload);
+      setConfig(configPayload);
+      // Pré-remplit le formulaire avec les valeurs non secrètes ; les secrets
+      // restent vides (saisir une valeur les remplace, vide = conserver).
+      setConfigForm(
+        Object.fromEntries(
+          (configPayload.definition?.fields ?? []).map((field) => [
+            field.key,
+            field.secret ? '' : configPayload.values?.[field.key] ?? ''
+          ])
+        )
+      );
+    } catch (loadError) {
+      // Toute exception (réseau, réponse inattendue) doit être VISIBLE plutôt
+      // que de laisser la page figée dans son état précédent.
+      setError(
+        `Erreur au chargement de l'état eOPE : ${loadError instanceof Error ? loadError.message : String(loadError)}`
+      );
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const [statusRes, configRes] = await Promise.all([
-      fetch('/api/admin/integrations/eope/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' }),
-      fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
-    ]);
-
-    const statusPayload = (await statusRes.json()) as EopeStatus & { error?: string };
-    const configPayload = (await configRes.json()) as ConfigPayload;
-
-    if (!statusRes.ok || !configRes.ok) {
-      setError(statusPayload.error ?? configPayload.error ?? "Impossible de charger l'état de l'intégration eOPE.");
-      setLoading(false);
-      return;
-    }
-
-    setStatus(statusPayload);
-    setConfig(configPayload);
-    // Pré-remplit le formulaire avec les valeurs non secrètes ; les secrets
-    // restent vides (saisir une valeur les remplace, vide = conserver).
-    setConfigForm(
-      Object.fromEntries(
-        configPayload.definition.fields.map((field) => [field.key, field.secret ? '' : configPayload.values[field.key] ?? ''])
-      )
-    );
-    setLoading(false);
   }, [getAccessToken]);
 
   useEffect(() => {
