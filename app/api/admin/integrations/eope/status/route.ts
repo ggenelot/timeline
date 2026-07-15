@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePermission } from '@/lib/api/permissions';
-import { getEopeConfig, isEopeConfigured } from '@/lib/eope/config';
+import { isEopeConfigured, resolveEopeConfig } from '@/lib/eope/config';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,13 +25,13 @@ function firstOf<T>(rel: T | T[] | null | undefined): T | null {
   return rel ?? null;
 }
 
-// État de l'intégration eOPE pour la page /admin/eope : configuration,
+// État de l'intégration eOPE pour la page /admin/integrations/eope : configuration,
 // derniers runs, compteurs et bénévoles engagés non liés.
 export async function GET(request: NextRequest) {
   const auth = await requirePermission(request, 'settings', 'can_manage');
   if (auth.errorResponse) return auth.errorResponse;
 
-  const config = getEopeConfig();
+  const config = await resolveEopeConfig(auth.serviceClient);
   const configured = isEopeConfigured(config);
 
   const [{ data: runs }, { count: linkedMissionsCount }, { count: linkedVolunteersCount }, { data: assignmentRows }] =

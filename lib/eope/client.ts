@@ -4,7 +4,7 @@
 // run, jamais persisté. Sur un 401 en cours de run (jeton révoqué), on
 // re-demande un jeton une seule fois avant d'abandonner.
 
-import { getEopeConfig, isEopeConfigured, type EopeConfig } from './config';
+import { isEopeConfigured, type EopeConfig } from './config';
 
 export class EopeApiError extends Error {
   status: number;
@@ -21,7 +21,7 @@ export class EopeApiError extends Error {
 }
 
 export class EopeConfigurationError extends Error {
-  constructor(message = "L'intégration eOPE n'est pas configurée (EOPE_BASE_URL / EOPE_CLIENT_ID / EOPE_CLIENT_SECRET).") {
+  constructor(message = "L'intégration eOPE n'est pas configurée (URL du serveur, client ID et client secret requis — voir /admin/integrations/eope).") {
     super(message);
     this.name = 'EopeConfigurationError';
   }
@@ -58,7 +58,7 @@ export class EopeClient {
   private scopes: string[];
   private token: string | null = null;
 
-  constructor(scopes: string[], config: EopeConfig = getEopeConfig()) {
+  constructor(scopes: string[], config: EopeConfig) {
     this.config = config;
     this.scopes = scopes;
   }

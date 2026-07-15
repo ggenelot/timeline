@@ -1,31 +1,35 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
-import { getEopeConfig, isEopeConfigured } from '@/lib/eope/config';
+import { getEopeEnvConfig, isEopeConfigured, resolveEopeConfig } from '@/lib/eope/config';
 import { EopeSyncAlreadyRunningError, runEopeSync } from '@/lib/eope/sync';
 
 // Synchronisation eOPE planifiée (Vercel cron, cf. vercel.json). Protégée par
-// CRON_SECRET (convention Vercel : header "Authorization: Bearer $CRON_SECRET").
+// CRON_SECRET (convention Vercel : header "Authorization: Bearer $CRON_SECRET" —
+// variable d'environnement, contrairement au reste de la configuration eOPE
+// qui se fait depuis /admin/integrations/eope).
 export const maxDuration = 300;
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: NextRequest) {
-  const config = getEopeConfig();
+  const { cronSecret } = getEopeEnvConfig();
 
-  if (!config.cronSecret) {
+  if (!cronSecret) {
     return NextResponse.json({ error: 'CRON_SECRET non configuré : cron eOPE désactivé.' }, { status: 503 });
   }
 
   const authorization = request.headers.get('authorization');
-  if (authorization !== `Bearer ${config.cronSecret}`) {
+  if (authorization !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ error: 'Non autorisé.' }, { status: 401 });
   }
 
+  const serviceClient = createServerSupabaseServiceClient();
+  const config = await resolveEopeConfig(serviceClient);
   if (!isEopeConfigured(config)) {
     return NextResponse.json({ error: "L'intégration eOPE n'est pas configurée." }, { status: 503 });
   }
 
   try {
-    const result = await runEopeSync(createServerSupabaseServiceClient(), {
+    const result = await runEopeSync(serviceClient, {
       direction: 'full',
       triggerSource: 'cron',
       triggeredBy: null

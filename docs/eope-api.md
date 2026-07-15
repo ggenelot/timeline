@@ -5,7 +5,7 @@ eOPE est l'application départementale de gestion des disponibilités et des eng
 - **Import (pull)** : les événements eOPE (`GET /api/events`) sont matérialisés en missions Timeline, liées par `missions.eope_event_id`. À chaque synchronisation, les champs dont eOPE est propriétaire (titre, dates, lieu, description) sont mis à jour ; le reste (statut, effectif requis, type après création, équipage, disponibilités) appartient à Timeline et n'est jamais écrasé. Un événement annulé côté eOPE annule la mission liée (sauf si elle est déjà close).
 - **Export (push)** : les équipages engagés (`mission_assignments` en statut `selected`/`confirmed`) des missions liées non-draft/non-annulées sont poussés en engagements validés (`POST/DELETE /api/commitments`, portée `validation:write`). La réconciliation est un diff entre l'état désiré et l'état enregistré (`eope_commitment_links`) : elle est idempotente, et un bénévole retiré de l'équipage voit son engagement distant supprimé.
 
-La correspondance des personnes est **manuelle** : un admin renseigne « Identifiant eOPE » sur la fiche de chaque bénévole (`profiles.eope_user_id`). Les bénévoles engagés non liés sont listés en avertissement sur `/admin/eope` et ignorés par l'export.
+La correspondance des personnes est **manuelle** : un admin renseigne « Identifiant eOPE » sur la fiche de chaque bénévole (`profiles.eope_user_id`). Les bénévoles engagés non liés sont listés en avertissement sur `/admin/integrations/eope` et ignorés par l'export.
 
 > **Ne pas confondre** : le « Tableau de bord OPE » (`/admin/ope-dashboard`) est un outil interne de composition des équipages, sans rapport avec le système externe eOPE. Tout le code de cette intégration est préfixé `eope`.
 
@@ -16,28 +16,36 @@ La correspondance des personnes est **manuelle** : un admin renseigne « Identif
    - Portées : **`events:read`** et **`validation:write`** (ajouter `commitments:read`/`commitments:write` pour la future sync des disponibilités) ;
    - Type de client : **Machine à machine (M2M)** ;
    - Le `client_secret` n'est affiché qu'une seule fois.
-2. Renseigner les variables d'environnement (voir `.env.example`) : `EOPE_BASE_URL`, `EOPE_CLIENT_ID`, `EOPE_CLIENT_SECRET`, et optionnellement `EOPE_SYNC_WINDOW_DAYS` (fenêtre d'import, défaut 90 jours) et `CRON_SECRET` (active la synchronisation quotidienne `/api/cron/eope-sync`, cf. `vercel.json`).
-3. Lancer une première synchronisation manuelle depuis `/admin/eope`. (Le premier run manuel enregistre aussi l'admin déclencheur comme créateur des missions matérialisées par le cron.)
+2. Renseigner la configuration **depuis l'UI** : `/admin/integrations` → eOPE (URL du serveur, client ID, client secret, fenêtre d'import). Les réglages sont stockés dans la table `integration_settings` (inaccessible côté client, secrets compris) ; les secrets sont en écriture seule — jamais réaffichés, seulement « défini ». En repli, les variables d'environnement `EOPE_BASE_URL` / `EOPE_CLIENT_ID` / `EOPE_CLIENT_SECRET` / `EOPE_SYNC_WINDOW_DAYS` restent acceptées, champ par champ (la valeur saisie dans l'UI prime).
+3. Optionnel : définir la variable d'environnement `CRON_SECRET` pour activer la synchronisation quotidienne (`/api/cron/eope-sync`, cf. `vercel.json`) — elle reste en environnement car elle protège la route elle-même.
+4. Lancer une première synchronisation manuelle depuis `/admin/integrations/eope`. (Le premier run manuel enregistre aussi l'admin déclencheur comme créateur des missions matérialisées par le cron.)
 
-Sans ces variables, l'intégration est simplement désactivée : aucune page ni route n'en dépend.
+Sans configuration, l'intégration est simplement désactivée : aucune page ni route n'en dépend.
 
 ## Architecture
 
 | Élément | Rôle |
 |---|---|
-| `lib/eope/config.ts` | Lecture des variables d'environnement, `isEopeConfigured()` |
+| `lib/integrations/registry.ts` | Registre générique des intégrations (eOPE aujourd'hui, d'autres outils demain) : nom, champs de configuration, secrets |
+| `lib/integrations/settings.ts` | Lecture/écriture des réglages (`integration_settings`), masquage des secrets |
+| `lib/eope/config.ts` | Résolution de la configuration eOPE (UI d'abord, environnement en repli), `isEopeConfigured()` |
 | `lib/eope/client.ts` | Client HTTP OAuth 2.1 (`client_credentials`, un jeton par run, retry unique sur 401, jamais persisté) |
 | `lib/eope/types.ts` | Parseurs défensifs des payloads eOPE (voir « Schémas supposés » ci-dessous) |
-| `lib/eope/mapping.ts` | Fonctions pures : événement→mission, heuristique de type, diff d'engagements |
-| `lib/eope/sync.ts` | Orchestration pull/push, journalisation `eope_sync_runs`, garde anti-runs concurrents |
-| `app/api/admin/eope/sync` | POST — déclenchement manuel (admin) |
-| `app/api/admin/eope/status` | GET — état pour la page `/admin/eope` |
-| `app/api/admin/eope/missions/[missionId]` | PATCH — lier/délier une mission à un événement (résolution de conflits) |
+| `lib/eope/mapping.ts` | Fonctions pures : événement→mission, heuristique de type, diff d'engagements (recréation si la liaison distante change) |
+| `lib/eope/sync.ts` | Orchestration pull/push, journalisation `eope_sync_runs`, verrou atomique anti-runs concurrents |
+| `app/api/admin/integrations` | GET — liste des intégrations et leur état |
+| `app/api/admin/integrations/eope/config` | GET/PATCH — configuration (secrets en écriture seule, PATCH réservé admin) |
+| `app/api/admin/integrations/eope/sync` | POST — déclenchement manuel (admin) |
+| `app/api/admin/integrations/eope/status` | GET — état pour la page `/admin/integrations/eope` |
+| `app/api/admin/integrations/eope/missions/[missionId]` | PATCH — lier/délier une mission à un événement (résolution de conflits) |
 | `app/api/cron/eope-sync` | GET — cron Vercel quotidien, protégé par `CRON_SECRET` |
-| `eope_sync_runs` (table) | Journal des synchronisations (stats + erreurs, lisible admin) |
-| `eope_commitment_links` (table) | État distant enregistré (quel engagement eOPE pour quel couple mission/bénévole) |
+| `integration_settings` (table) | Réglages des intégrations, secrets compris — deny-all côté client, accès service role uniquement |
+| `eope_sync_runs` (table) | Journal des synchronisations (stats + erreurs, lisible admin) ; index unique partiel : un seul run `running` à la fois |
+| `eope_commitment_links` (table) | État distant enregistré (quel engagement eOPE, pour quel couple mission/bénévole, vers quel événement/compte eOPE) |
 
-Anti-doublon à l'import : si un événement eOPE non lié ressemble à une mission existante non liée (même clé titre + date Paris que l'import de missions, `buildMissionDedupKey`), rien n'est créé et un **conflit** est remonté sur `/admin/eope`, où l'admin peut lier la mission existante. Les missions créées par l'import arrivent en statut `draft`.
+Garde-fous : `profiles.eope_user_id` n'est modifiable que par un administrateur ou via les routes d'administration (trigger `guard_profiles_eope_user_id` — un bénévole ne peut pas se lier lui-même à un compte eOPE arbitraire) ; si la liaison d'un bénévole ou d'une mission change après un push, l'engagement distant est supprimé puis recréé au run suivant (l'identité poussée est mémorisée dans `eope_commitment_links`).
+
+Anti-doublon à l'import : si un événement eOPE non lié ressemble à une mission existante non liée (même clé titre + date Paris que l'import de missions, `buildMissionDedupKey`), rien n'est créé et un **conflit** est remonté sur `/admin/integrations/eope`, où l'admin peut lier la mission existante. Les missions créées par l'import arrivent en statut `draft`.
 
 Cas limite assumé : la suppression d'une mission ou d'un profil Timeline supprime en cascade ses lignes `eope_commitment_links` ; l'engagement correspondant peut alors rester orphelin côté eOPE (à nettoyer à la main). Préférer annuler une mission plutôt que la supprimer.
 

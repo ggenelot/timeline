@@ -1,11 +1,28 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { usePermissions } from '@/lib/permissions/permissions-context';
 import { Button } from '@/components/ui/button';
+
+type ConfigField = {
+  key: string;
+  label: string;
+  help?: string;
+  secret?: boolean;
+  required?: boolean;
+  placeholder?: string;
+};
+
+type ConfigPayload = {
+  definition: { key: string; name: string; description: string; fields: ConfigField[] };
+  values: Record<string, string | null>;
+  secretsSet: Record<string, boolean>;
+  configured: boolean;
+  error?: string;
+};
 
 type SyncConflict = {
   eope_event_id: string;
@@ -92,6 +109,9 @@ export default function EopeAdminPage() {
   const canManage = can('settings', 'can_manage');
 
   const [status, setStatus] = useState<EopeStatus | null>(null);
+  const [config, setConfig] = useState<ConfigPayload | null>(null);
+  const [configForm, setConfigForm] = useState<Record<string, string>>({});
+  const [savingConfig, setSavingConfig] = useState(false);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [linkingEventId, setLinkingEventId] = useState<string | null>(null);
@@ -111,17 +131,29 @@ export default function EopeAdminPage() {
       return;
     }
 
-    const response = await fetch('/api/admin/eope/status', {
-      headers: { Authorization: `Bearer ${accessToken}` }
-    });
-    const payload = (await response.json()) as EopeStatus & { error?: string };
-    if (!response.ok) {
-      setError(payload.error ?? "Impossible de charger l'état de l'intégration eOPE.");
+    const [statusRes, configRes] = await Promise.all([
+      fetch('/api/admin/integrations/eope/status', { headers: { Authorization: `Bearer ${accessToken}` } }),
+      fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` } })
+    ]);
+
+    const statusPayload = (await statusRes.json()) as EopeStatus & { error?: string };
+    const configPayload = (await configRes.json()) as ConfigPayload;
+
+    if (!statusRes.ok || !configRes.ok) {
+      setError(statusPayload.error ?? configPayload.error ?? "Impossible de charger l'état de l'intégration eOPE.");
       setLoading(false);
       return;
     }
 
-    setStatus(payload);
+    setStatus(statusPayload);
+    setConfig(configPayload);
+    // Pré-remplit le formulaire avec les valeurs non secrètes ; les secrets
+    // restent vides (saisir une valeur les remplace, vide = conserver).
+    setConfigForm(
+      Object.fromEntries(
+        configPayload.definition.fields.map((field) => [field.key, field.secret ? '' : configPayload.values[field.key] ?? ''])
+      )
+    );
     setLoading(false);
   }, [getAccessToken]);
 
@@ -156,7 +188,7 @@ export default function EopeAdminPage() {
       return;
     }
 
-    const response = await fetch('/api/admin/eope/sync', {
+    const response = await fetch('/api/admin/integrations/eope/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ direction: 'full' })
@@ -188,7 +220,7 @@ export default function EopeAdminPage() {
       return;
     }
 
-    const response = await fetch(`/api/admin/eope/missions/${missionId}`, {
+    const response = await fetch(`/api/admin/integrations/eope/missions/${missionId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify({ eope_event_id: eopeEventId })
@@ -201,6 +233,68 @@ export default function EopeAdminPage() {
     }
 
     setLinkingEventId(null);
+    await loadStatus();
+  }
+
+  async function handleSaveConfig(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+    setNotice(null);
+    setSavingConfig(true);
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      setSavingConfig(false);
+      return;
+    }
+
+    // Les secrets laissés vides ne sont pas envoyés : la valeur existante est
+    // conservée. Pour effacer un secret, utiliser le bouton dédié.
+    const updates: Record<string, string> = {};
+    for (const field of config?.definition.fields ?? []) {
+      const value = configForm[field.key] ?? '';
+      if (field.secret && !value.trim()) continue;
+      updates[field.key] = value;
+    }
+
+    const response = await fetch('/api/admin/integrations/eope/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(updates)
+    });
+    const payload = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? "L'enregistrement de la configuration a échoué.");
+    } else {
+      setNotice('Configuration enregistrée.');
+    }
+
+    setSavingConfig(false);
+    await loadStatus();
+  }
+
+  async function handleClearSecret(fieldKey: string) {
+    setError(null);
+    setNotice(null);
+
+    const accessToken = await getAccessToken();
+    if (!accessToken) {
+      setError('Session invalide. Veuillez vous reconnecter.');
+      return;
+    }
+
+    const response = await fetch('/api/admin/integrations/eope/config', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify({ [fieldKey]: '' })
+    });
+    const payload = (await response.json()) as { error?: string };
+    if (!response.ok) {
+      setError(payload.error ?? 'La suppression du secret a échoué.');
+    } else {
+      setNotice('Secret effacé.');
+    }
     await loadStatus();
   }
 
@@ -224,7 +318,10 @@ export default function EopeAdminPage() {
       <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h1 className="text-[26px] font-black leading-tight tracking-[-0.02em] text-ink">Intégration eOPE</h1>
+            <Link href="/admin/integrations" className="text-xs font-semibold text-ink-3 hover:text-ink-2">
+              ← Intégrations
+            </Link>
+            <h1 className="text-[26px] font-black leading-tight tracking-[-0.02em] text-ink">eOPE</h1>
             <p className="mt-1 text-sm text-ink-2">
               Synchronisation avec l’outil départemental : import des événements eOPE en missions, export des
               équipages engagés en engagements validés.
@@ -242,8 +339,7 @@ export default function EopeAdminPage() {
           <div className="rounded-md border border-warn-line bg-warn-soft p-3 text-sm text-warn-text">
             Intégration non configurée. Créez une application « machine à machine » dans eOPE (Mes applications,
             propriétaire = antenne, portées <code>events:read</code> + <code>validation:write</code>) puis renseignez
-            les variables d’environnement <code>EOPE_BASE_URL</code>, <code>EOPE_CLIENT_ID</code> et{' '}
-            <code>EOPE_CLIENT_SECRET</code> (voir docs/eope-api.md).
+            la configuration ci-dessous.
           </div>
         ) : (
           <dl className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
@@ -270,6 +366,51 @@ export default function EopeAdminPage() {
             </div>
           </dl>
         )}
+      </section>
+
+      <section className="space-y-3 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
+        <h2 className="text-sm font-bold text-ink">Configuration</h2>
+        <p className="text-xs text-ink-2">
+          Identifiants de l’application OAuth « machine à machine » créée dans eOPE. Les secrets sont stockés côté
+          serveur et ne sont jamais réaffichés.
+        </p>
+        <form className="space-y-3" onSubmit={handleSaveConfig}>
+          <div className="grid gap-3 md:grid-cols-2">
+            {(config?.definition.fields ?? []).map((field) => (
+              <label key={field.key} className="block text-sm text-ink-2">
+                {field.label}
+                {field.required ? ' *' : ''}
+                <input
+                  type={field.secret ? 'password' : 'text'}
+                  value={configForm[field.key] ?? ''}
+                  onChange={(e) => setConfigForm((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
+                  placeholder={
+                    field.secret && config?.secretsSet[field.key]
+                      ? '•••••••• (défini — saisir pour remplacer)'
+                      : field.placeholder ?? ''
+                  }
+                  disabled={savingConfig}
+                  autoComplete="off"
+                />
+                {field.help ? <span className="mt-1 block text-xs text-ink-3">{field.help}</span> : null}
+                {field.secret && config?.secretsSet[field.key] ? (
+                  <button
+                    type="button"
+                    onClick={() => handleClearSecret(field.key)}
+                    className="mt-1 text-xs font-semibold text-bad underline decoration-dotted underline-offset-2 hover:opacity-80"
+                    disabled={savingConfig}
+                  >
+                    Effacer le secret
+                  </button>
+                ) : null}
+              </label>
+            ))}
+          </div>
+          <Button type="submit" variant="primary" disabled={savingConfig}>
+            {savingConfig ? 'Enregistrement…' : 'Enregistrer la configuration'}
+          </Button>
+        </form>
       </section>
 
       {status && status.unlinkedEngaged.length > 0 ? (

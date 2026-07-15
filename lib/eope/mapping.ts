@@ -72,11 +72,15 @@ export type EopeDesiredCommitment = {
   full_name: string | null;
 };
 
-// Une ligne de eope_commitment_links (état distant enregistré).
+// Une ligne de eope_commitment_links (état distant enregistré). L'identité
+// distante poussée (événement + utilisateur) est mémorisée pour détecter les
+// changements de liaison après coup.
 export type EopeRecordedCommitment = {
   mission_id: string;
   volunteer_id: string;
   eope_commitment_id: string;
+  eope_event_id: string;
+  eope_user_id: string | null;
 };
 
 export type EopeCommitmentDiff = {
@@ -92,6 +96,16 @@ function commitmentKey(item: { mission_id: string; volunteer_id: string }) {
   return `${item.mission_id}:${item.volunteer_id}`;
 }
 
+// L'engagement distant enregistré correspond-il encore à ce qu'on veut pousser ?
+// Si la mission a été reliée à un autre événement ou le bénévole à un autre
+// compte eOPE, l'engagement existant pointe la mauvaise identité : il faut le
+// supprimer puis le recréer. Un eope_user_id enregistré nul (ligne antérieure
+// à sa mémorisation) est considéré comme correspondant.
+function sameRemoteIdentity(desired: EopeDesiredCommitment & { eope_user_id: string }, recorded: EopeRecordedCommitment) {
+  if (recorded.eope_event_id !== desired.eope_event_id) return false;
+  return recorded.eope_user_id === null || recorded.eope_user_id === desired.eope_user_id;
+}
+
 export function computeCommitmentDiff(
   desired: EopeDesiredCommitment[],
   recorded: EopeRecordedCommitment[]
@@ -102,12 +116,29 @@ export function computeCommitmentDiff(
   );
 
   const linkedKeys = new Set(linked.map(commitmentKey));
-  const recordedKeys = new Set(recorded.map(commitmentKey));
+  const recordedByKey = new Map(recorded.map((item) => [commitmentKey(item), item]));
 
-  return {
-    toCreate: linked.filter((item) => !recordedKeys.has(commitmentKey(item))),
-    toDelete: recorded.filter((item) => !linkedKeys.has(commitmentKey(item))),
-    unchanged: recorded.filter((item) => linkedKeys.has(commitmentKey(item))),
-    skippedUnlinked
-  };
+  const toCreate: EopeCommitmentDiff['toCreate'] = [];
+  const toDelete: EopeRecordedCommitment[] = [];
+  const unchanged: EopeRecordedCommitment[] = [];
+
+  for (const item of linked) {
+    const existing = recordedByKey.get(commitmentKey(item));
+    if (!existing) {
+      toCreate.push(item);
+    } else if (sameRemoteIdentity(item, existing)) {
+      unchanged.push(existing);
+    } else {
+      toDelete.push(existing);
+      toCreate.push(item);
+    }
+  }
+
+  for (const item of recorded) {
+    if (!linkedKeys.has(commitmentKey(item))) {
+      toDelete.push(item);
+    }
+  }
+
+  return { toCreate, toDelete, unchanged, skippedUnlinked };
 }

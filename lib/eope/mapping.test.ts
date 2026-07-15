@@ -92,8 +92,8 @@ export function runEopeMappingTests() {
     { mission_id: 'm2', volunteer_id: 'v3', eope_event_id: 'e2', eope_user_id: 'u3', full_name: 'Chris' }
   ];
   const recorded = [
-    { mission_id: 'm2', volunteer_id: 'v3', eope_commitment_id: 'c3' },
-    { mission_id: 'm2', volunteer_id: 'v9', eope_commitment_id: 'c9' }
+    { mission_id: 'm2', volunteer_id: 'v3', eope_commitment_id: 'c3', eope_event_id: 'e2', eope_user_id: 'u3' },
+    { mission_id: 'm2', volunteer_id: 'v9', eope_commitment_id: 'c9', eope_event_id: 'e2', eope_user_id: 'u9' }
   ];
 
   const diff = computeCommitmentDiff(desired, recorded);
@@ -109,6 +109,31 @@ export function runEopeMappingTests() {
     recorded
   );
   assert(diff2.toDelete.length === 2, 'Un profil délié doit voir son engagement distant supprimé.');
+
+  // Liaison distante modifiée après coup (bénévole relié à un autre compte
+  // eOPE, ou mission reliée à un autre événement) : supprimer puis recréer.
+  const diff3 = computeCommitmentDiff(
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_event_id: 'e2', eope_user_id: 'u3bis', full_name: 'Chris' }],
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_commitment_id: 'c3', eope_event_id: 'e2', eope_user_id: 'u3' }]
+  );
+  assert(
+    diff3.toDelete.length === 1 && diff3.toCreate.length === 1 && diff3.unchanged.length === 0,
+    'Un changement de compte eOPE lié doit provoquer une recréation (delete + create).'
+  );
+
+  const diff4 = computeCommitmentDiff(
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_event_id: 'e2bis', eope_user_id: 'u3', full_name: 'Chris' }],
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_commitment_id: 'c3', eope_event_id: 'e2', eope_user_id: 'u3' }]
+  );
+  assert(diff4.toDelete.length === 1 && diff4.toCreate.length === 1, "Un changement d'événement lié doit provoquer une recréation.");
+
+  // Ligne enregistrée sans eope_user_id (antérieure à sa mémorisation) :
+  // considérée comme correspondante, pas de recréation intempestive.
+  const diff5 = computeCommitmentDiff(
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_event_id: 'e2', eope_user_id: 'u3', full_name: 'Chris' }],
+    [{ mission_id: 'm2', volunteer_id: 'v3', eope_commitment_id: 'c3', eope_event_id: 'e2', eope_user_id: null }]
+  );
+  assert(diff5.unchanged.length === 1 && diff5.toCreate.length === 0, 'Un lien sans user_id mémorisé reste inchangé.');
 
   // ── Réponse de création d'engagement ───────────────────────────────────
   assert(parseEopeCommitmentResponse({ id: 'c1', event_id: 'e1', user_id: 'u1' })?.id === 'c1', 'Réponse plate acceptée.');

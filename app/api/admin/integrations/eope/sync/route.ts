@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/api/permissions';
-import { isEopeConfigured } from '@/lib/eope/config';
+import { isEopeConfigured, resolveEopeConfig } from '@/lib/eope/config';
 import { EopeSyncAlreadyRunningError, runEopeSync, type EopeSyncDirection } from '@/lib/eope/sync';
 
 // La synchronisation appelle l'API eOPE en série : laisser le temps aux runs
@@ -17,9 +17,10 @@ export async function POST(request: NextRequest) {
   const auth = await requireAdmin(request);
   if (auth.errorResponse) return auth.errorResponse;
 
-  if (!isEopeConfigured()) {
+  const config = await resolveEopeConfig(auth.serviceClient);
+  if (!isEopeConfigured(config)) {
     return NextResponse.json(
-      { error: "L'intégration eOPE n'est pas configurée (EOPE_BASE_URL / EOPE_CLIENT_ID / EOPE_CLIENT_SECRET)." },
+      { error: "L'intégration eOPE n'est pas configurée (URL du serveur, client ID et client secret requis)." },
       { status: 503 }
     );
   }

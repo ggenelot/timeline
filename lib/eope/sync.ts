@@ -11,7 +11,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildMissionDedupKey, getMissionDateForDedupFromStartsAt } from '@/lib/import-missions';
 import type { MissionStatus } from '@/lib/types';
 import { EopeClient, EopeApiError, EopeConfigurationError } from './client';
-import { getEopeConfig, isEopeConfigured } from './config';
+import { isEopeConfigured, resolveEopeConfig } from './config';
 import {
   computeCommitmentDiff,
   eopeEventToMissionFields,
@@ -269,6 +269,7 @@ type LinkRow = {
   volunteer_id: string;
   eope_commitment_id: string;
   eope_event_id: string;
+  eope_user_id: string | null;
 };
 
 function firstOf<T>(rel: T | T[] | null | undefined): T | null {
@@ -315,7 +316,7 @@ async function pushCrews(ctx: SyncContext) {
   // distants supprimés (réconciliation complète).
   const { data: linkRows, error: linksError } = await ctx.supabase
     .from('eope_commitment_links')
-    .select('mission_id, volunteer_id, eope_commitment_id, eope_event_id');
+    .select('mission_id, volunteer_id, eope_commitment_id, eope_event_id, eope_user_id');
   if (linksError) throw new Error(`Lecture des liens d'engagement : ${linksError.message}`);
 
   const recorded = (linkRows ?? []) as LinkRow[];
@@ -327,7 +328,45 @@ async function pushCrews(ctx: SyncContext) {
     full_name: item.full_name
   }));
 
+  // Suppressions d'abord : une recréation (liaison distante modifiée) doit
+  // libérer la ligne de lien (unique mission+bénévole) avant le nouveau POST.
+  for (const item of diff.toDelete) {
+    try {
+      await ctx.client.delete(
+        `/api/commitments/${encodeURIComponent(item.eope_commitment_id)}`,
+        `Suppression de l'engagement eOPE ${item.eope_commitment_id}`
+      );
+
+      const { error } = await ctx.supabase
+        .from('eope_commitment_links')
+        .delete()
+        .eq('mission_id', item.mission_id)
+        .eq('volunteer_id', item.volunteer_id)
+        .eq('eope_commitment_id', item.eope_commitment_id);
+      if (error) throw new Error(`Suppression du lien d'engagement : ${error.message}`);
+
+      ctx.stats.commitments_deleted += 1;
+    } catch (error) {
+      ctx.errors.push({
+        scope: 'push',
+        item_ref: `engagement eOPE ${item.eope_commitment_id}`,
+        message: errorMessage(error)
+      });
+    }
+  }
+
+  const failedDeleteKeys = new Set(
+    diff.toDelete
+      .filter((item) =>
+        ctx.errors.some((error) => error.item_ref === `engagement eOPE ${item.eope_commitment_id}`)
+      )
+      .map((item) => `${item.mission_id}:${item.volunteer_id}`)
+  );
+
   for (const item of diff.toCreate) {
+    // Si la suppression préalable du même couple a échoué, ne pas recréer par
+    // dessus : on retentera au prochain run.
+    if (failedDeleteKeys.has(`${item.mission_id}:${item.volunteer_id}`)) continue;
     try {
       // Corps provisoire (docs/eope-api.md) : à ajuster après le test préprod.
       const payload = await ctx.client.post(
@@ -345,6 +384,7 @@ async function pushCrews(ctx: SyncContext) {
         volunteer_id: item.volunteer_id,
         eope_commitment_id: commitment.id,
         eope_event_id: item.eope_event_id,
+        eope_user_id: item.eope_user_id,
         last_synced_at: new Date().toISOString()
       });
       if (error) throw new Error(`Enregistrement du lien d'engagement : ${error.message}`);
@@ -354,30 +394,6 @@ async function pushCrews(ctx: SyncContext) {
       ctx.errors.push({
         scope: 'push',
         item_ref: `mission ${item.mission_id} / bénévole ${item.full_name ?? item.volunteer_id}`,
-        message: errorMessage(error)
-      });
-    }
-  }
-
-  for (const item of diff.toDelete) {
-    try {
-      await ctx.client.delete(
-        `/api/commitments/${encodeURIComponent(item.eope_commitment_id)}`,
-        `Suppression de l'engagement eOPE ${item.eope_commitment_id}`
-      );
-
-      const { error } = await ctx.supabase
-        .from('eope_commitment_links')
-        .delete()
-        .eq('mission_id', item.mission_id)
-        .eq('volunteer_id', item.volunteer_id);
-      if (error) throw new Error(`Suppression du lien d'engagement : ${error.message}`);
-
-      ctx.stats.commitments_deleted += 1;
-    } catch (error) {
-      ctx.errors.push({
-        scope: 'push',
-        item_ref: `engagement eOPE ${item.eope_commitment_id}`,
         message: errorMessage(error)
       });
     }
@@ -401,23 +417,26 @@ export async function runEopeSync(
   supabase: SupabaseClient,
   options: { direction: EopeSyncDirection; triggerSource: EopeSyncTriggerSource; triggeredBy: string | null }
 ): Promise<EopeSyncResult> {
-  const config = getEopeConfig();
+  const config = await resolveEopeConfig(supabase);
   if (!isEopeConfigured(config)) {
     throw new EopeConfigurationError();
   }
 
-  // Garde anti-runs concurrents : un run « running » récent bloque le départ.
+  // Garde anti-runs concurrents, atomique : un index unique partiel n'autorise
+  // qu'une seule ligne « running » à la fois. Un run bloqué depuis plus de
+  // RUNNING_GUARD_MINUTES (crash, timeout) est d'abord clôturé en erreur pour
+  // ne pas verrouiller la synchronisation indéfiniment.
   const guardThreshold = new Date(Date.now() - RUNNING_GUARD_MINUTES * 60 * 1000).toISOString();
-  const { data: runningRows, error: guardError } = await supabase
+  const { error: staleError } = await supabase
     .from('eope_sync_runs')
-    .select('id')
+    .update({
+      status: 'error',
+      finished_at: new Date().toISOString(),
+      errors: [{ scope: 'run', item_ref: 'garde', message: 'Run interrompu (délai dépassé, clôturé par le run suivant).' }]
+    })
     .eq('status', 'running')
-    .gte('started_at', guardThreshold)
-    .limit(1);
-  if (guardError) throw new Error(`Vérification des runs en cours : ${guardError.message}`);
-  if ((runningRows ?? []).length > 0) {
-    throw new EopeSyncAlreadyRunningError();
-  }
+    .lt('started_at', guardThreshold);
+  if (staleError) throw new Error(`Clôture des runs bloqués : ${staleError.message}`);
 
   // En cron, aucune session utilisateur : on réutilise l'admin du dernier run
   // manuel comme créateur des missions matérialisées.
@@ -444,7 +463,14 @@ export async function runEopeSync(
     })
     .select('id')
     .single();
-  if (runError) throw new Error(`Création du journal de synchronisation : ${runError.message}`);
+  if (runError) {
+    // 23505 sur l'index partiel « single running » : un autre run vient de
+    // prendre le verrou (course cron/manuel).
+    if (runError.code === '23505') {
+      throw new EopeSyncAlreadyRunningError();
+    }
+    throw new Error(`Création du journal de synchronisation : ${runError.message}`);
+  }
   const runId = runRow.id as string;
 
   const ctx: SyncContext = {

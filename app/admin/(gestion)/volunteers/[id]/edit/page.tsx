@@ -270,7 +270,7 @@ export default function EditVolunteerPage() {
             disabled={submitting}
           />
           <span className="mt-1 block text-xs text-ink-3">
-            Identifiant du compte eOPE correspondant, pour la synchronisation départementale des équipages (voir Intégration eOPE).
+            Identifiant du compte eOPE correspondant, pour la synchronisation départementale des équipages (voir la page Intégrations).
           </span>
         </label>
 

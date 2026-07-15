@@ -60,7 +60,7 @@ const GESTION_ITEMS: GestionItem[] = [
   // timeline des bénévoles de base — il ne doit pas ouvrir les stats.
   { href: '/admin/stats', label: 'Statistiques', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'bar_chart' },
   { href: '/admin/apparence', label: 'Apparence', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'palette' },
-  { href: '/admin/eope', label: 'Intégration eOPE', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'sync_alt' },
+  { href: '/admin/integrations', label: 'Intégrations', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'sync_alt' },
   { href: '/admin/help', label: 'Aide', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'help' }
 ];
 
