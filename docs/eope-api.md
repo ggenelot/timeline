@@ -49,17 +49,35 @@ Anti-doublon à l'import : si un événement eOPE non lié ressemble à une miss
 
 Cas limite assumé : la suppression d'une mission ou d'un profil Timeline supprime en cascade ses lignes `eope_commitment_links` ; l'engagement correspondant peut alors rester orphelin côté eOPE (à nettoyer à la main). Préférer annuler une mission plutôt que la supprimer.
 
-## Schémas supposés (à valider contre la préprod)
+## Schéma des événements (observé sur la préprod le 15/07/2026)
 
-⚠️ **La documentation eOPE ne décrit pas les schémas JSON de `/api/events` ni `/api/commitments`.** Les parseurs (`lib/eope/types.ts`) et les corps de requête (`lib/eope/sync.ts`) reposent sur les hypothèses ci-dessous. Elles sont volontairement tolérantes (plusieurs noms de champs candidats, erreurs par élément remontées dans le journal), mais **doivent être validées lors du premier test réel**, puis resserrées.
+`GET /api/events` renvoie un **tableau JSON à plat** (pas d'enveloppe, pas de pagination constatée, 95 éléments). Champs utilisés par Timeline :
 
-Hypothèses actuelles :
+| Champ eOPE | Exemple | Usage Timeline |
+|---|---|---|
+| `id` | uuid | `missions.eope_event_id` |
+| `title` | `"30 seconds to mars"` | `missions.title` |
+| `datetimeStart` / `datetimeEnd` | `"2027-04-26T15:30:00.000Z"` (ISO UTC) | `missions.starts_at/ends_at` |
+| `location` | `"AA Bercy"` | `missions.location` |
+| `cancelled` | booléen | annulation de la mission liée |
+| `published` | booléen | `false` = brouillon départemental → pas de création |
+| `category` / `districtEventCategory` | souvent vides | heuristique de type (repli : poste de secours) |
+| `requiredStaffText` | `"CP: 2, PSE2: 16, PSE1: 3, VPS: 1"` | `missions.requirements_notes` |
+| `requiredStaff` | **chaîne JSON** `'{"CP":2,…}'` | effectif requis à la création (somme hors codes véhicules VPS/VPSP/VL/VTU/VTP) |
+| `requiredEquipement` | texte | `missions.equipment_notes` |
+| `source` | objet avec `icon` en base64 (~10 Ko) | **allégé** (id + displayName) avant stockage dans `eope_payload` |
 
-- **Liste d'événements** : tableau JSON, éventuellement enveloppé (`data`/`items`/`results`/`events`). Champs candidats par événement : id = `id`|`event_id`|`uuid` ; titre = `title`|`name`|`label` ; début = `starts_at`|`start_at`|`start_date`|`start`|`begin_at`|`from` ; fin = `ends_at`|`end_at`|`end_date`|`end`|`to` ; lieu = `location`|`place`|`address`|`venue` ; annulation = booléen `cancelled`/`is_cancelled` ou statut contenant « cancel »/« annul » ; type = `type`|`category` (chaîne ou objet `{name}`).
-- **Dates** : un ISO avec fuseau est converti en UTC ; un datetime naïf (sans fuseau) est interprété comme heure locale **Europe/Paris**.
-- **Fenêtre** : le pull appelle `GET /api/events?from=<ISO>&to=<ISO>` (J−7 → J+`EOPE_SYNC_WINDOW_DAYS`). Si le serveur ignore ces paramètres, il renverra simplement plus d'événements (sans effet de bord : un événement lié hors fenêtre reste intouché).
-- **Création d'engagement** : `POST /api/commitments` avec `{"event_id": ..., "user_id": ...}` ; la réponse contient l'engagement créé (éventuellement sous `data`/`commitment`) avec un champ `id`.
-- **Suppression** : `DELETE /api/commitments/{id}` ; un 404 est traité comme « déjà supprimé » (succès).
+Autres champs reçus, non exploités pour l'instant : `gsheetLink`, `gsheetEventDate`, `gsheetEventHours`, `sourceSheet`, `timeTBA`, `grossRevenue`, `netRevenue`, `disconnected`, `lastSyncBatchId`, `districtId`, `publishedAt`, `atRisk`, `minorsForbidden`, `reversionAntenne`, `dateValidationAntenne`, `eprotecUrl`, `adminNotice`, `roundRobinFamilyId`, `individualCommitmentsLocked`.
+
+Constats importants :
+
+- **Le serveur ignore les paramètres `?from=&to=`** : la fenêtre d'import (J−7 → J+`EOPE_SYNC_WINDOW_DAYS`) est appliquée **côté Timeline** après parsing (`filterEventsInWindow`), et uniquement à la **création** de nouvelles missions. Les missions déjà liées sont mises à jour quelle que soit la date de leur événement (un report lointain ou une annulation tardive se propagent).
+- **`GET /api/commitments` est refusé aux jetons M2M** (`403 insufficient_scope — endpoint not available to API tokens`) : la réconciliation du push repose uniquement sur l'état enregistré (`eope_commitment_links`), jamais sur une relecture distante.
+- Les parseurs restent tolérants (plusieurs noms de champs candidats, dont les anciens `starts_at`/`start`… ; un datetime naïf est interprété comme heure de **Paris**) et remontent une erreur par élément dans le journal, avec la liste des clés reçues.
+
+## Schéma des engagements (encore à valider)
+
+⚠️ La forme exacte du `POST /api/commitments` (portée `validation:write`) n'a pas pu être observée sans créer d'engagement réel. Hypothèses actuelles (`lib/eope/sync.ts`) : corps `{"event_id": ..., "user_id": ...}` ; réponse = l'engagement créé (éventuellement sous `data`/`commitment`) avec un champ `id` ; `DELETE /api/commitments/{id}` avec 404 traité comme « déjà supprimé » (succès). À valider lors du premier export réel (bénévole lié + engagé sur une mission liée) — toute erreur apparaîtra dans le journal de `/admin/integrations/eope`.
 
 ### Procédure de découverte (à exécuter par un admin avec le client M2M)
 

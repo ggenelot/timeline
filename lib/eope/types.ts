@@ -24,7 +24,14 @@ export type EopeEvent = {
   starts_at: string; // ISO UTC
   ends_at: string; // ISO UTC
   cancelled: boolean;
+  // false = non publié côté eOPE (brouillon départemental) : pas de création.
+  published: boolean;
   type_label: string | null;
+  // Besoins en personnel : texte libre ("CP: 2, PSE2: 16…") et décompte par
+  // rôle ({CP: 2, PSE2: 16, VPS: 1}) tels que fournis par eOPE.
+  required_staff_text: string | null;
+  required_equipment_text: string | null;
+  required_staff: Record<string, number> | null;
   raw: Record<string, unknown>;
 };
 
@@ -112,7 +119,7 @@ function parseCancelled(record: Record<string, unknown>): boolean {
 }
 
 function parseTypeLabel(record: Record<string, unknown>): string | null {
-  const flat = pickString(record, ['type', 'category', 'event_type', 'kind']);
+  const flat = pickString(record, ['category', 'districtEventCategory', 'type', 'event_type', 'kind']);
   if (flat) return flat;
   for (const key of ['type', 'category']) {
     const nested = record[key];
@@ -122,6 +129,38 @@ function parseTypeLabel(record: Record<string, unknown>): string | null {
     }
   }
   return null;
+}
+
+// requiredStaff arrive sous forme de chaîne JSON ('{"CP":2,"PSE2":16,"VPS":1}').
+function parseRequiredStaff(record: Record<string, unknown>): Record<string, number> | null {
+  const rawValue = record['requiredStaff'];
+  let parsed: unknown = rawValue;
+  if (typeof rawValue === 'string' && rawValue.trim()) {
+    try {
+      parsed = JSON.parse(rawValue);
+    } catch {
+      return null;
+    }
+  }
+  if (!isRecord(parsed)) return null;
+  const result: Record<string, number> = {};
+  for (const [key, value] of Object.entries(parsed)) {
+    if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+      result[key] = value;
+    }
+  }
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+// Allège le payload brut conservé dans missions.eope_payload : l'objet
+// source embarque un logo en base64 de plusieurs kilo-octets.
+function slimRawEvent(item: Record<string, unknown>): Record<string, unknown> {
+  const source = item['source'];
+  if (!isRecord(source)) return item;
+  return {
+    ...item,
+    source: { id: source['id'] ?? null, displayName: source['displayName'] ?? null }
+  };
 }
 
 export function parseEopeEvent(item: unknown, index: number): { event: EopeEvent | null; issue: EopeParseIssue | null } {
@@ -136,16 +175,18 @@ export function parseEopeEvent(item: unknown, index: number): { event: EopeEvent
 
   const title = pickString(item, ['title', 'name', 'label']);
   const starts_at = parseEopeDateToUtcIso(
-    pickString(item, ['starts_at', 'start_at', 'start_date', 'start', 'begin_at', 'from'])
+    pickString(item, ['datetimeStart', 'starts_at', 'start_at', 'start_date', 'start', 'begin_at', 'from'])
   );
-  const ends_at = parseEopeDateToUtcIso(pickString(item, ['ends_at', 'end_at', 'end_date', 'end', 'to']));
+  const ends_at = parseEopeDateToUtcIso(
+    pickString(item, ['datetimeEnd', 'ends_at', 'end_at', 'end_date', 'end', 'to'])
+  );
 
   if (!title || !starts_at || !ends_at) {
     return {
       event: null,
       issue: {
         item_ref: `events[${index}] (id=${id})`,
-        message: `Champs obligatoires manquants ou illisibles (titre: ${title ? 'ok' : 'manquant'}, début: ${starts_at ? 'ok' : 'manquant'}, fin: ${ends_at ? 'ok' : 'manquant'}).`
+        message: `Champs obligatoires manquants ou illisibles (titre: ${title ? 'ok' : 'manquant'}, début: ${starts_at ? 'ok' : 'manquant'}, fin: ${ends_at ? 'ok' : 'manquant'}). Clés reçues : ${Object.keys(item).join(', ')}.`
       }
     };
   }
@@ -159,8 +200,12 @@ export function parseEopeEvent(item: unknown, index: number): { event: EopeEvent
       starts_at,
       ends_at,
       cancelled: parseCancelled(item),
+      published: item['published'] !== false,
       type_label: parseTypeLabel(item),
-      raw: item
+      required_staff_text: pickString(item, ['requiredStaffText']),
+      required_equipment_text: pickString(item, ['requiredEquipement', 'requiredEquipment']),
+      required_staff: parseRequiredStaff(item),
+      raw: slimRawEvent(item)
     },
     issue: null
   };
