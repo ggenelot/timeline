@@ -117,6 +117,7 @@ export default function EopeAdminPage() {
   const [linkingEventId, setLinkingEventId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [copiedRuns, setCopiedRuns] = useState(false);
 
   const getAccessToken = useCallback(async () => {
     const { data: sessionData } = await supabase.auth.getSession();
@@ -136,15 +137,23 @@ export default function EopeAdminPage() {
         fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
       ]);
 
-      const statusPayload = (await statusRes.json().catch(() => ({}))) as EopeStatus & { error?: string };
-      const configPayload = (await configRes.json().catch(() => ({}))) as ConfigPayload;
-
       if (!statusRes.ok || !configRes.ok) {
-        setError(statusPayload.error ?? configPayload.error ?? "Impossible de charger l'état de l'intégration eOPE.");
+        const statusErr = (await statusRes.json().catch(() => ({})))?.error as string | undefined;
+        const configErr = (await configRes.json().catch(() => ({})))?.error as string | undefined;
+        setError(statusErr ?? configErr ?? "Impossible de charger l'état de l'intégration eOPE.");
         return;
       }
 
-      setStatus(statusPayload);
+      // Réponses 2xx : un corps illisible doit remonter au catch (erreur
+      // visible), pas devenir un payload vide qui ferait planter le rendu.
+      const statusPayload = (await statusRes.json()) as EopeStatus;
+      const configPayload = (await configRes.json()) as ConfigPayload;
+
+      setStatus({
+        ...statusPayload,
+        lastRuns: statusPayload.lastRuns ?? [],
+        unlinkedEngaged: statusPayload.unlinkedEngaged ?? []
+      });
       setConfig(configPayload);
       // Pré-remplit le formulaire avec les valeurs non secrètes ; les secrets
       // restent vides (saisir une valeur les remplace, vide = conserver).
@@ -328,6 +337,19 @@ export default function EopeAdminPage() {
     await loadStatus();
   }
 
+  async function handleCopyRuns() {
+    if (!status || status.lastRuns.length === 0) return;
+    try {
+      // Journal brut (stats + erreurs), pratique à coller dans un ticket ou
+      // un échange de support pour diagnostiquer une synchronisation.
+      await navigator.clipboard.writeText(JSON.stringify(status.lastRuns, null, 2));
+      setCopiedRuns(true);
+      setTimeout(() => setCopiedRuns(false), 2000);
+    } catch {
+      setError('Impossible de copier le journal (autorisation presse-papiers refusée).');
+    }
+  }
+
   if (loading || permissionsLoading) return <p className="text-sm text-ink-2">Chargement...</p>;
 
   if (!canManage) {
@@ -505,7 +527,14 @@ export default function EopeAdminPage() {
       ) : null}
 
       <section className="space-y-3 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
-        <h2 className="text-sm font-bold text-ink">Dernières synchronisations</h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-sm font-bold text-ink">Dernières synchronisations</h2>
+          {status && status.lastRuns.length > 0 ? (
+            <Button type="button" variant="ghost" size="sm" onClick={handleCopyRuns}>
+              {copiedRuns ? 'Copié !' : 'Copier le journal'}
+            </Button>
+          ) : null}
+        </div>
         {!status || status.lastRuns.length === 0 ? (
           <p className="text-sm text-ink-2">Aucune synchronisation pour le moment.</p>
         ) : (
