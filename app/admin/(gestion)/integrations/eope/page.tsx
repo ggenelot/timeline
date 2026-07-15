@@ -132,8 +132,8 @@ export default function EopeAdminPage() {
     }
 
     const [statusRes, configRes] = await Promise.all([
-      fetch('/api/admin/integrations/eope/status', { headers: { Authorization: `Bearer ${accessToken}` } }),
-      fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` } })
+      fetch('/api/admin/integrations/eope/status', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' }),
+      fetch('/api/admin/integrations/eope/config', { headers: { Authorization: `Bearer ${accessToken}` }, cache: 'no-store' })
     ]);
 
     const statusPayload = (await statusRes.json()) as EopeStatus & { error?: string };
@@ -263,11 +263,31 @@ export default function EopeAdminPage() {
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
       body: JSON.stringify(updates)
     });
-    const payload = (await response.json()) as { error?: string };
+    const payload = (await response.json()) as {
+      error?: string;
+      configured?: boolean;
+      values?: Record<string, string | null>;
+      secretsSet?: Record<string, boolean>;
+    };
     if (!response.ok) {
       setError(payload.error ?? "L'enregistrement de la configuration a échoué.");
     } else {
       setNotice('Configuration enregistrée.');
+      // Répercute immédiatement l'état renvoyé par le PATCH (source de
+      // vérité), sans attendre le rechargement complet : le bandeau « non
+      // configurée » et le bouton de synchronisation suivent instantanément.
+      const configured = Boolean(payload.configured);
+      setStatus((prev) => (prev ? { ...prev, configured } : prev));
+      setConfig((prev) =>
+        prev
+          ? {
+              ...prev,
+              configured,
+              values: payload.values ?? prev.values,
+              secretsSet: payload.secretsSet ?? prev.secretsSet
+            }
+          : prev
+      );
     }
 
     setSavingConfig(false);
@@ -313,6 +333,10 @@ export default function EopeAdminPage() {
     status?.lastRuns.find((run) => run.direction !== 'push' && (run.stats?.conflicts?.length ?? 0) > 0)?.stats
       .conflicts ?? [];
 
+  // Les deux endpoints calculent le même état depuis les mêmes réglages ; on
+  // tolère qu'une des deux réponses soit en retard (rafraîchissement partiel).
+  const isConfigured = Boolean(status?.configured || config?.configured);
+
   return (
     <div className="space-y-4">
       <section className="space-y-4 rounded-2xl border border-line bg-surface-card p-4 shadow-card">
@@ -327,7 +351,7 @@ export default function EopeAdminPage() {
               équipages engagés en engagements validés.
             </p>
           </div>
-          <Button type="button" variant="primary" onClick={handleSync} disabled={syncing || !status?.configured}>
+          <Button type="button" variant="primary" onClick={handleSync} disabled={syncing || !isConfigured}>
             {syncing ? 'Synchronisation…' : 'Synchroniser maintenant'}
           </Button>
         </div>
@@ -335,7 +359,7 @@ export default function EopeAdminPage() {
         {error ? <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
         {notice ? <div className="rounded-md border border-ok-line bg-ok-soft p-3 text-sm text-ok-text">{notice}</div> : null}
 
-        {!status?.configured ? (
+        {!isConfigured || !status ? (
           <div className="rounded-md border border-warn-line bg-warn-soft p-3 text-sm text-warn-text">
             Intégration non configurée. Créez une application « machine à machine » dans eOPE (Mes applications,
             propriétaire = antenne, portées <code>events:read</code> + <code>validation:write</code>) puis renseignez
