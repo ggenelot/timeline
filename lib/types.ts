@@ -20,6 +20,9 @@ export type Profile = {
   slack_username?: string | null;
   slack_connected_at?: string | null;
   avatar_url?: string | null;
+  // Identifiant du compte eOPE correspondant (liaison manuelle par un admin,
+  // cf. /admin/eope). Unique quand renseigné.
+  eope_user_id?: string | null;
 };
 
 // Réglages de charte graphique (logo, couleurs, polices), éditables depuis
@@ -332,6 +335,9 @@ export type Mission = {
   slack_channel_id?: string | null;
   slack_channel_name?: string | null;
   slack_channel_created_at?: string | null;
+  // Lien vers l'événement eOPE d'origine (sync départementale, cf. lib/eope/).
+  eope_event_id?: string | null;
+  eope_synced_at?: string | null;
 };
 
 export type MissionRequiredSkill = {

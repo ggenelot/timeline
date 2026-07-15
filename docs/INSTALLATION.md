@@ -193,6 +193,18 @@ L'application fonctionne sans Slack. Ces variables sont requises uniquement si l
 | `SLACK_TEAM_ID` | ID du workspace Slack (optionnel, restreint la connexion à un seul workspace) |
 | `SLACK_TEAM_DOMAIN` | Domaine du workspace Slack (optionnel, utilisé pour les redirections) |
 
+### Variables eOPE (optionnelles)
+
+L'application fonctionne sans eOPE. La synchronisation avec l'outil départemental (import d'événements, export des équipages) se configure normalement **depuis l'UI** (`/admin/integrations`) — voir [`docs/eope-api.md`](./eope-api.md). Les variables ci-dessous sont un repli facultatif (la valeur saisie dans l'UI prime, champ par champ) ; seule `CRON_SECRET` doit rester en environnement.
+
+| Variable | Description |
+|---|---|
+| `EOPE_BASE_URL` | (Repli) URL du serveur eOPE (ex. `https://eope-preprod.kube.gmcrd.fr`) |
+| `EOPE_CLIENT_ID` | (Repli) ID de l'application OAuth M2M créée dans eOPE (propriétaire = antenne) |
+| `EOPE_CLIENT_SECRET` | (Repli) Secret de l'application (affiché une seule fois à la création) |
+| `EOPE_SYNC_WINDOW_DAYS` | (Repli) Fenêtre d'import des événements en jours à venir (défaut : 90) |
+| `CRON_SECRET` | Secret protégeant la route de cron `/api/cron/eope-sync` (absent = cron désactivé) |
+
 ### Variables de test (optionnelles)
 
 | Variable | Description |

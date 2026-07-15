@@ -16,6 +16,7 @@ type EditVolunteerForm = {
   lastName: string;
   identifier: string;
   password: string;
+  eopeUserId: string;
   selectedSkillByCategory: Record<string, string | null>;
 };
 
@@ -23,6 +24,7 @@ type VolunteerPayload = {
   full_name: string | null;
   identifier: string | null;
   role: AppRole;
+  eope_user_id?: string | null;
 };
 
 type VolunteerSkill = { skill_id: string };
@@ -32,6 +34,7 @@ const INITIAL_FORM: EditVolunteerForm = {
   lastName: '',
   identifier: '',
   password: '',
+  eopeUserId: '',
   selectedSkillByCategory: {},
 };
 
@@ -115,7 +118,14 @@ export default function EditVolunteerPage() {
         }
       }
 
-      setForm({ firstName, lastName, identifier, password: '', selectedSkillByCategory });
+      setForm({
+        firstName,
+        lastName,
+        identifier,
+        password: '',
+        eopeUserId: payload.volunteer.eope_user_id?.trim() ?? '',
+        selectedSkillByCategory
+      });
       setLoading(false);
     }
 
@@ -159,6 +169,7 @@ export default function EditVolunteerPage() {
         identifier,
         skill_ids: skillIds,
         password: form.password || undefined,
+        eope_user_id: form.eopeUserId.trim() || null,
       }),
     });
 
@@ -246,6 +257,21 @@ export default function EditVolunteerPage() {
             minLength={10}
             autoComplete="new-password"
           />
+        </label>
+
+        <label className="block text-sm text-ink-2">
+          Identifiant eOPE
+          <input
+            type="text"
+            value={form.eopeUserId}
+            onChange={(e) => setForm((prev) => ({ ...prev, eopeUserId: e.target.value }))}
+            className="mt-1 w-full rounded-[10px] border border-line-field px-3 py-2 text-sm"
+            placeholder="Laisser vide si non lié"
+            disabled={submitting}
+          />
+          <span className="mt-1 block text-xs text-ink-3">
+            Identifiant du compte eOPE correspondant, pour la synchronisation départementale des équipages (voir la page Intégrations).
+          </span>
         </label>
 
         <div className="space-y-3 rounded-md border border-line p-3">

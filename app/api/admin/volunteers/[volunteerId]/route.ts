@@ -9,6 +9,7 @@ type UpdateVolunteerPayload = {
   sector?: string;
   skill_ids?: string[];
   password?: string;
+  eope_user_id?: string | null;
 };
 
 // Autorisation du domaine bénévoles : lecture avec can_see, écriture avec
@@ -30,7 +31,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: volunteer, error: volunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,identifier,sector,role,created_at')
+    .select('id,full_name,identifier,sector,role,created_at,eope_user_id')
     .eq('id', volunteerId)
     .single();
 
@@ -74,6 +75,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const skillIds = Array.from(new Set(payload.skill_ids ?? []));
   const password = payload.password?.trim() ?? '';
   const passwordProvided = password.length > 0;
+  const eopeUserIdProvided = payload.eope_user_id !== undefined;
+  const eopeUserId = typeof payload.eope_user_id === 'string' ? payload.eope_user_id.trim() : '';
 
   if (fullNameProvided && !fullName) {
     return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
@@ -123,11 +126,15 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   if (fullNameProvided) profileUpdates.full_name = fullName;
   if (identifierProvided) { profileUpdates.identifier = identifier; profileUpdates.email = authEmail; }
   if (sectorProvided) profileUpdates.sector = sector || null;
+  if (eopeUserIdProvided) profileUpdates.eope_user_id = eopeUserId || null;
 
   if (Object.keys(profileUpdates).length > 0) {
     const { error: profileUpdateError } = await serviceClient.from('profiles').update(profileUpdates).eq('id', volunteerId);
 
     if (profileUpdateError) {
+      if (profileUpdateError.code === '23505' && eopeUserIdProvided) {
+        return NextResponse.json({ error: 'Cet identifiant eOPE est déjà lié à un autre bénévole.' }, { status: 400 });
+      }
       return NextResponse.json({ error: `Impossible de mettre à jour le profil : ${profileUpdateError.message}` }, { status: 400 });
     }
   }
