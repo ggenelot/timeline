@@ -14,7 +14,9 @@ import { EopeClient, EopeApiError, EopeConfigurationError } from './client';
 import { isEopeConfigured, resolveEopeConfig } from './config';
 import {
   computeCommitmentDiff,
+  computeRequiredVolunteers,
   eopeEventToMissionFields,
+  filterEventsInWindow,
   mapEopeTypeToMissionTypeId,
   shouldCancelMission,
   type EopeDesiredCommitment,
@@ -116,12 +118,13 @@ async function pullEvents(ctx: SyncContext) {
   const from = new Date(now.getTime() - 7 * 24 * 3600 * 1000);
   const to = new Date(now.getTime() + ctx.windowDays * 24 * 3600 * 1000);
 
-  // Les paramètres de fenêtre sont une hypothèse (docs/eope-api.md) ; un
-  // serveur qui les ignore renverra simplement plus d'événements.
-  const query = `?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`;
-  const payload = await ctx.client.get(`/api/events${query}`, 'Lecture des événements eOPE');
+  // L'API eOPE renvoie tous les événements (les paramètres from/to sont
+  // ignorés côté serveur, constaté sur la préprod) : la fenêtre d'import est
+  // appliquée côté Timeline après parsing.
+  const payload = await ctx.client.get('/api/events', 'Lecture des événements eOPE');
 
-  const { events, issues } = parseEopeEvents(payload);
+  const { events: allEvents, issues } = parseEopeEvents(payload);
+  const events = filterEventsInWindow(allEvents, from.toISOString(), to.toISOString());
   ctx.stats.events_seen = events.length;
   for (const issue of issues) {
     ctx.errors.push({ scope: 'pull', item_ref: issue.item_ref, message: issue.message });
@@ -205,8 +208,8 @@ async function createMissionFromEvent(
   event: EopeEvent,
   unlinkedByDedupKey: Map<string, { id: string; title: string }>
 ) {
-  // Ne pas matérialiser des événements déjà annulés côté eOPE.
-  if (event.cancelled) return;
+  // Ne pas matérialiser les événements annulés ni les brouillons non publiés.
+  if (event.cancelled || !event.published) return;
 
   const dedupKey = buildMissionDedupKey({
     title: event.title,
@@ -233,13 +236,9 @@ async function createMissionFromEvent(
   }
 
   const { error } = await ctx.supabase.from('missions').insert({
-    title: event.title,
-    description: event.description,
-    location: event.location,
-    starts_at: event.starts_at,
-    ends_at: event.ends_at,
+    ...eopeEventToMissionFields(event),
     status: 'draft',
-    required_volunteers: 1,
+    required_volunteers: computeRequiredVolunteers(event),
     mission_type_id: mapEopeTypeToMissionTypeId(event.type_label),
     source_type_label: event.type_label,
     created_by: ctx.createdBy,

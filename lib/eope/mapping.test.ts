@@ -1,12 +1,15 @@
 import {
   computeCommitmentDiff,
+  computeRequiredVolunteers,
   eopeEventToMissionFields,
+  filterEventsInWindow,
   mapEopeTypeToMissionTypeId,
   shouldCancelMission
 } from '@/lib/eope/mapping';
 import {
   parseEopeCommitmentResponse,
   parseEopeDateToUtcIso,
+  parseEopeEvent,
   parseEopeEvents
 } from '@/lib/eope/types';
 import { MISSION_TYPE_SLUG_TO_ID } from '@/lib/types';
@@ -18,47 +21,68 @@ function assert(condition: unknown, message: string) {
 }
 
 export function runEopeMappingTests() {
-  // ── Parsing défensif des événements ────────────────────────────────────
-  const eventsPayload = {
-    data: [
-      {
-        id: 42,
-        title: 'DPS Semi-marathon',
-        start_at: '2026-09-12T08:00:00+02:00',
-        end_at: '2026-09-12T14:30:00+02:00',
-        location: 'Paris 8e',
-        status: 'published',
-        type: { name: 'Poste de secours' }
-      },
-      {
-        uuid: 'evt-2',
-        name: 'Maraude sociale',
-        start: '2026-09-14 20:00',
-        end: '2026-09-15 00:30',
-        cancelled: true
-      },
-      { title: 'Sans identifiant', start: '2026-09-14 20:00', end: '2026-09-15 00:30' },
-      'pas un objet'
-    ]
-  };
+  // ── Parsing des événements (schéma réel eOPE préprod, cf. docs/eope-api.md)
+  const eventsPayload = [
+    {
+      id: '905a052a-4af5-4c74-a087-000000000001',
+      gsheetEventDate: 'lundi 26 avril 2027',
+      sourceSheet: 'AA Bercy',
+      title: 'Concert test',
+      datetimeStart: '2027-04-26T15:30:00.000Z',
+      datetimeEnd: '2027-04-26T21:30:00.000Z',
+      timeTBA: false,
+      location: 'AA Bercy',
+      requiredStaffText: 'CP: 2, PSE2: 16, PSE1: 3, VPS: 1',
+      requiredStaff: '{"CP":2,"PSE2":16,"PSE1":3,"VPS":1}',
+      requiredEquipement: '',
+      category: '',
+      cancelled: false,
+      published: true,
+      source: { id: 'src-1', displayName: 'AA Bercy', icon: 'data:image/webp;base64,AAAA…grosse-image…' }
+    },
+    {
+      uuid: 'evt-2',
+      name: 'Maraude sociale',
+      start: '2026-09-14 20:00',
+      end: '2026-09-15 00:30',
+      cancelled: true
+    },
+    { title: 'Sans identifiant', start: '2026-09-14 20:00', end: '2026-09-15 00:30' },
+    'pas un objet'
+  ];
 
   const { events, issues } = parseEopeEvents(eventsPayload);
   assert(events.length === 2, `2 événements exploitables attendus (obtenu : ${events.length}).`);
   assert(issues.length === 2, `2 issues attendues pour les éléments inexploitables (obtenu : ${issues.length}).`);
 
   const [first, second] = events;
-  assert(first.id === '42', 'Un id numérique doit être normalisé en chaîne.');
-  assert(first.starts_at === '2026-09-12T06:00:00.000Z', `Un ISO avec fuseau doit être converti en UTC (obtenu : ${first.starts_at}).`);
-  assert(first.type_label === 'Poste de secours', 'Le libellé de type imbriqué doit être extrait.');
-  assert(!first.cancelled, 'Un statut "published" ne doit pas être lu comme annulé.');
+  assert(first.starts_at === '2027-04-26T15:30:00.000Z', `datetimeStart doit être lu (obtenu : ${first.starts_at}).`);
+  assert(first.ends_at === '2027-04-26T21:30:00.000Z', 'datetimeEnd doit être lu.');
+  assert(first.published, 'published=true doit être conservé.');
+  assert(first.required_staff_text === 'CP: 2, PSE2: 16, PSE1: 3, VPS: 1', 'requiredStaffText doit être extrait.');
+  assert(first.required_staff?.PSE2 === 16, 'requiredStaff (chaîne JSON) doit être parsé.');
+  assert(first.type_label === null, 'Une catégorie vide doit donner un type nul.');
+  assert(!JSON.stringify(first.raw).includes('grosse-image'), 'Le logo base64 de source doit être retiré du payload conservé.');
+  assert((first.raw.source as { displayName: string }).displayName === 'AA Bercy', 'source.displayName doit être conservé.');
 
   assert(second.id === 'evt-2', "L'id doit accepter le champ uuid.");
   // 20h heure de Paris le 14/09/2026 (été, UTC+2) = 18h UTC.
   assert(second.starts_at === '2026-09-14T18:00:00.000Z', `Un datetime naïf doit être lu comme heure de Paris (obtenu : ${second.starts_at}).`);
   assert(second.cancelled, 'Le booléen cancelled doit être détecté.');
+  assert(second.published, 'published absent doit valoir true.');
+
+  const unpublished = parseEopeEvent({ id: 'e9', title: 'Brouillon', datetimeStart: '2026-08-01T10:00:00Z', datetimeEnd: '2026-08-01T12:00:00Z', published: false }, 0);
+  assert(unpublished.event?.published === false, 'published=false doit être détecté.');
 
   const garbage = parseEopeEvents({ foo: 'bar' });
   assert(garbage.events.length === 0 && garbage.issues.length === 1, 'Une réponse sans liste doit remonter une issue globale.');
+
+  // ── Effectif requis et fenêtre d'import ────────────────────────────────
+  assert(computeRequiredVolunteers(first) === 21, `CP2+PSE2 16+PSE1 3 = 21 (VPS exclu) (obtenu : ${computeRequiredVolunteers(first)}).`);
+  assert(computeRequiredVolunteers(second) === 1, 'Sans requiredStaff, repli sur 1.');
+
+  const windowed = filterEventsInWindow([first, second], '2026-09-01T00:00:00.000Z', '2026-12-01T00:00:00.000Z');
+  assert(windowed.length === 1 && windowed[0].id === 'evt-2', "La fenêtre d'import doit être appliquée côté client (l'API ignore from/to).");
 
   // ── Dates ──────────────────────────────────────────────────────────────
   assert(parseEopeDateToUtcIso('2026-01-15T10:00:00Z') === '2026-01-15T10:00:00.000Z', 'Un ISO UTC doit rester UTC.');
@@ -69,7 +93,8 @@ export function runEopeMappingTests() {
 
   // ── Mapping événement → mission ────────────────────────────────────────
   const fields = eopeEventToMissionFields(first);
-  assert(fields.title === 'DPS Semi-marathon' && fields.location === 'Paris 8e', 'Les champs autoritaires doivent être repris tels quels.');
+  assert(fields.title === 'Concert test' && fields.location === 'AA Bercy', 'Les champs autoritaires doivent être repris tels quels.');
+  assert(fields.requirements_notes === 'CP: 2, PSE2: 16, PSE1: 3, VPS: 1', 'requiredStaffText doit alimenter requirements_notes.');
 
   assert(
     mapEopeTypeToMissionTypeId('DPS course à pied') === MISSION_TYPE_SLUG_TO_ID['poste_de_secours'],

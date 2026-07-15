@@ -13,6 +13,8 @@ export type EopeMissionFields = {
   location: string | null;
   starts_at: string;
   ends_at: string;
+  requirements_notes: string | null;
+  equipment_notes: string | null;
 };
 
 export function eopeEventToMissionFields(event: EopeEvent): EopeMissionFields {
@@ -21,8 +23,34 @@ export function eopeEventToMissionFields(event: EopeEvent): EopeMissionFields {
     description: event.description,
     location: event.location,
     starts_at: event.starts_at,
-    ends_at: event.ends_at
+    ends_at: event.ends_at,
+    requirements_notes: event.required_staff_text,
+    equipment_notes: event.required_equipment_text
   };
+}
+
+// Codes de requiredStaff qui désignent des véhicules/matériel, pas des
+// personnes — exclus du calcul de l'effectif requis.
+const VEHICLE_STAFF_CODES = new Set(['VPS', 'VPSP', 'VL', 'VTU', 'VTP', 'VLTT']);
+
+// Effectif requis par défaut à la CRÉATION d'une mission (jamais réécrit
+// ensuite : le champ appartient à Timeline). Somme des besoins humains de
+// requiredStaff ({CP: 2, PSE2: 16, VPS: 1} → 18), repli sur 1.
+export function computeRequiredVolunteers(event: EopeEvent): number {
+  if (!event.required_staff) return 1;
+  let total = 0;
+  for (const [code, quantity] of Object.entries(event.required_staff)) {
+    if (VEHICLE_STAFF_CODES.has(code.toUpperCase().trim())) continue;
+    total += quantity;
+  }
+  return total > 0 ? total : 1;
+}
+
+// L'API eOPE ignore les paramètres from/to : la fenêtre d'import est
+// appliquée côté Timeline. Les événements liés hors fenêtre restent
+// simplement intouchés (absence ambiguë, cf. docs/eope-api.md).
+export function filterEventsInWindow(events: EopeEvent[], fromIso: string, toIso: string): EopeEvent[] {
+  return events.filter((event) => event.starts_at >= fromIso && event.starts_at <= toIso);
 }
 
 // Même heuristique que l'import de missions (normalizeMissionTypeId,
