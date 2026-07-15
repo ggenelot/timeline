@@ -119,17 +119,22 @@ async function pullEvents(ctx: SyncContext) {
   const to = new Date(now.getTime() + ctx.windowDays * 24 * 3600 * 1000);
 
   // L'API eOPE renvoie tous les événements (les paramètres from/to sont
-  // ignorés côté serveur, constaté sur la préprod) : la fenêtre d'import est
-  // appliquée côté Timeline après parsing.
+  // ignorés côté serveur, constaté sur la préprod). La fenêtre d'import ne
+  // limite que la CRÉATION de nouvelles missions ; les missions déjà liées
+  // sont mises à jour quelle que soit la date de leur événement (un report
+  // lointain ou une annulation tardive doivent se propager).
   const payload = await ctx.client.get('/api/events', 'Lecture des événements eOPE');
 
-  const { events: allEvents, issues } = parseEopeEvents(payload);
-  const events = filterEventsInWindow(allEvents, from.toISOString(), to.toISOString());
+  const { events, issues } = parseEopeEvents(payload);
   ctx.stats.events_seen = events.length;
   for (const issue of issues) {
     ctx.errors.push({ scope: 'pull', item_ref: issue.item_ref, message: issue.message });
   }
   if (events.length === 0) return;
+
+  const creatableIds = new Set(
+    filterEventsInWindow(events, from.toISOString(), to.toISOString()).map((event) => event.id)
+  );
 
   const eventIds = events.map((event) => event.id);
   const { data: linkedRows, error: linkedError } = await ctx.supabase
@@ -167,7 +172,7 @@ async function pullEvents(ctx: SyncContext) {
       const existing = linkedByEventId.get(event.id);
       if (existing) {
         await updateLinkedMission(ctx, event, existing);
-      } else {
+      } else if (creatableIds.has(event.id)) {
         await createMissionFromEvent(ctx, event, unlinkedByDedupKey);
       }
     } catch (error) {

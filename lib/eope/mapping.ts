@@ -47,8 +47,8 @@ export function computeRequiredVolunteers(event: EopeEvent): number {
 }
 
 // L'API eOPE ignore les paramètres from/to : la fenêtre d'import est
-// appliquée côté Timeline. Les événements liés hors fenêtre restent
-// simplement intouchés (absence ambiguë, cf. docs/eope-api.md).
+// appliquée côté Timeline, et uniquement à la CRÉATION de nouvelles missions
+// (les missions déjà liées sont mises à jour quelle que soit la date).
 export function filterEventsInWindow(events: EopeEvent[], fromIso: string, toIso: string): EopeEvent[] {
   return events.filter((event) => event.starts_at >= fromIso && event.starts_at <= toIso);
 }

@@ -71,7 +71,7 @@ Autres champs reçus, non exploités pour l'instant : `gsheetLink`, `gsheetEvent
 
 Constats importants :
 
-- **Le serveur ignore les paramètres `?from=&to=`** : la fenêtre d'import (J−7 → J+`EOPE_SYNC_WINDOW_DAYS`) est appliquée **côté Timeline** après parsing (`filterEventsInWindow`). Un événement lié hors fenêtre reste intouché.
+- **Le serveur ignore les paramètres `?from=&to=`** : la fenêtre d'import (J−7 → J+`EOPE_SYNC_WINDOW_DAYS`) est appliquée **côté Timeline** après parsing (`filterEventsInWindow`), et uniquement à la **création** de nouvelles missions. Les missions déjà liées sont mises à jour quelle que soit la date de leur événement (un report lointain ou une annulation tardive se propagent).
 - **`GET /api/commitments` est refusé aux jetons M2M** (`403 insufficient_scope — endpoint not available to API tokens`) : la réconciliation du push repose uniquement sur l'état enregistré (`eope_commitment_links`), jamais sur une relecture distante.
 - Les parseurs restent tolérants (plusieurs noms de champs candidats, dont les anciens `starts_at`/`start`… ; un datetime naïf est interprété comme heure de **Paris**) et remontent une erreur par élément dans le journal, avec la liste des clés reçues.
 
