@@ -115,6 +115,11 @@ function palette(color: string) {
   return CATEGORY_PALETTE[color] ?? CATEGORY_PALETTE.slate;
 }
 
+// Onglet « Tout » : agrège les compétences de toutes les catégories dans une
+// catégorie synthétique. On utilise un id sentinelle qui ne peut pas entrer en
+// collision avec un vrai id de catégorie (UUID).
+const ALL_CATEGORIES_ID = '__all__';
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function initials(name: string) {
@@ -250,10 +255,19 @@ export default function CompetencesDashboardPage() {
 
   // ── Dérivés ─────────────────────────────────────────────────
 
-  const cat = useMemo(
-    () => data?.categories.find((c) => c.id === catId) ?? data?.categories[0] ?? null,
-    [data, catId]
-  );
+  const cat = useMemo<ApiCategory | null>(() => {
+    if (!data) return null;
+    if (catId === ALL_CATEGORIES_ID) {
+      return {
+        id: ALL_CATEGORIES_ID,
+        name: 'Toutes les catégories',
+        color: 'slate',
+        display_order: -1,
+        skills: data.categories.flatMap((c) => c.skills),
+      };
+    }
+    return data.categories.find((c) => c.id === catId) ?? data.categories[0] ?? null;
+  }, [data, catId]);
   const pal = cat ? palette(cat.color) : palette('slate');
 
   const profileById = useMemo(() => {
@@ -684,6 +698,32 @@ export default function CompetencesDashboardPage() {
 
       {/* category nav */}
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
+        {(() => {
+          const active = cat.id === ALL_CATEGORIES_ID;
+          const totalSkills = data.categories.reduce((n, c) => n + c.skills.length, 0);
+          return (
+            <button
+              type="button"
+              onClick={() => {
+                setCatId(ALL_CATEGORIES_ID);
+                setStatusFilter('all');
+                setQuery('');
+                setExpandedSkillIds(new Set());
+              }}
+              className={cn(
+                'inline-flex flex-none cursor-pointer items-center gap-[9px] rounded-[11px] border px-[15px] py-[9px] text-[13.5px] font-bold',
+                active ? 'border-ink bg-ink text-white' : 'border-line bg-surface-card text-ink-2'
+              )}
+              title="Toutes les catégories de compétence"
+            >
+              <span className="h-[9px] w-[9px] rounded-[3px]" style={{ background: active ? '#fff' : '#16203A' }} />
+              Tout
+              <span className={cn('text-xs font-bold', active ? 'text-white/70' : 'text-ink-3')}>
+                {totalSkills}
+              </span>
+            </button>
+          );
+        })()}
         {data.categories.map((c) => {
           const active = c.id === cat.id;
           const cp = palette(c.color);
