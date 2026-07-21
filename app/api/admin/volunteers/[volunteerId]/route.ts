@@ -10,6 +10,7 @@ type UpdateVolunteerPayload = {
   skill_ids?: string[];
   password?: string;
   eope_user_id?: string | null;
+  sponsor_id?: string | null;
 };
 
 // Autorisation du domaine bénévoles : lecture avec can_see, écriture avec
@@ -31,7 +32,7 @@ export async function GET(request: NextRequest, { params }: { params: { voluntee
 
   const { data: volunteer, error: volunteerError } = await serviceClient
     .from('profiles')
-    .select('id,full_name,identifier,sector,role,created_at,eope_user_id')
+    .select('id,full_name,identifier,sector,role,created_at,eope_user_id,sponsor_id,sponsor:sponsor_id(id,full_name,identifier)')
     .eq('id', volunteerId)
     .single();
 
@@ -77,6 +78,8 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   const passwordProvided = password.length > 0;
   const eopeUserIdProvided = payload.eope_user_id !== undefined;
   const eopeUserId = typeof payload.eope_user_id === 'string' ? payload.eope_user_id.trim() : '';
+  const sponsorIdProvided = payload.sponsor_id !== undefined;
+  const sponsorId = typeof payload.sponsor_id === 'string' ? payload.sponsor_id.trim() : '';
 
   if (fullNameProvided && !fullName) {
     return NextResponse.json({ error: 'Le nom complet est obligatoire.' }, { status: 400 });
@@ -120,6 +123,26 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
     }
   }
 
+  if (sponsorIdProvided && sponsorId) {
+    if (sponsorId === volunteerId) {
+      return NextResponse.json({ error: 'Un bénévole ne peut pas être son propre parrain.' }, { status: 400 });
+    }
+
+    const { data: sponsor, error: sponsorError } = await serviceClient
+      .from('profiles')
+      .select('id,role')
+      .eq('id', sponsorId)
+      .single();
+
+    if (sponsorError || !sponsor) {
+      return NextResponse.json({ error: 'Le parrain sélectionné est introuvable.' }, { status: 400 });
+    }
+
+    if (sponsor.role !== 'benevole') {
+      return NextResponse.json({ error: 'Le parrain doit être un bénévole.' }, { status: 400 });
+    }
+  }
+
   const authEmail = identifierProvided ? `${identifier}@timeline.local` : null;
 
   const profileUpdates: Record<string, unknown> = {};
@@ -127,6 +150,7 @@ export async function PATCH(request: NextRequest, { params }: { params: { volunt
   if (identifierProvided) { profileUpdates.identifier = identifier; profileUpdates.email = authEmail; }
   if (sectorProvided) profileUpdates.sector = sector || null;
   if (eopeUserIdProvided) profileUpdates.eope_user_id = eopeUserId || null;
+  if (sponsorIdProvided) profileUpdates.sponsor_id = sponsorId || null;
 
   if (Object.keys(profileUpdates).length > 0) {
     const { error: profileUpdateError } = await serviceClient.from('profiles').update(profileUpdates).eq('id', volunteerId);

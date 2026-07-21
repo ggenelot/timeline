@@ -12,6 +12,8 @@ import { initials } from '@/components/ope/atoms';
 
 type CategoryWithSkills = SkillCategory & { skills: Skill[] };
 
+type SponsorRef = { id: string; full_name: string | null; identifier: string | null };
+
 type VolunteerProfile = {
   id: string;
   full_name: string | null;
@@ -21,6 +23,8 @@ type VolunteerProfile = {
   slack_username: string | null;
   slack_connected_at: string | null;
   avatar_url: string | null;
+  sponsor_id: string | null;
+  sponsor: SponsorRef | SponsorRef[] | null;
   profile_skills: Array<{ skill_id: string }> | null;
 };
 
@@ -100,6 +104,8 @@ export default function VolunteerProfilePage() {
   const [confirmedAssignments, setConfirmedAssignments] = useState<Array<{ mission: MissionRef | MissionRef[] }>>([]);
   const [statPeriod, setStatPeriod] = useState<StatPeriod>(30);
 
+  const [godchildren, setGodchildren] = useState<SponsorRef[]>([]);
+
   const [availableProposals, setAvailableProposals] = useState<ProposalWithMission[]>([]);
   const [confirmedMissionIds, setConfirmedMissionIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
@@ -118,10 +124,10 @@ export default function VolunteerProfilePage() {
         return;
       }
 
-      const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes, availableProposalsRes] = await Promise.all([
+      const [volunteerRes, categoriesRes, proposalsRes, assignmentsRes, availableProposalsRes, godchildrenRes] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id,full_name,identifier,slack_user_id,slack_team_id,slack_username,slack_connected_at,avatar_url,profile_skills(skill_id)')
+          .select('id,full_name,identifier,slack_user_id,slack_team_id,slack_username,slack_connected_at,avatar_url,sponsor_id,sponsor:sponsor_id(id,full_name,identifier),profile_skills(skill_id)')
           .eq('id', volunteerId)
           .single(),
         supabase
@@ -140,6 +146,11 @@ export default function VolunteerProfilePage() {
           .eq('volunteer_id', volunteerId)
           .eq('response', 'available')
           .order('created_at', { ascending: false }),
+        supabase
+          .from('profiles')
+          .select('id,full_name,identifier')
+          .eq('sponsor_id', volunteerId)
+          .order('full_name', { ascending: true }),
       ]);
 
       if (volunteerRes.error || !volunteerRes.data) {
@@ -175,6 +186,7 @@ export default function VolunteerProfilePage() {
       );
 
       setAvailableProposals((availableProposalsRes.data ?? []) as ProposalWithMission[]);
+      setGodchildren((godchildrenRes.data ?? []) as SponsorRef[]);
       setLoading(false);
     }
 
@@ -260,6 +272,8 @@ export default function VolunteerProfilePage() {
   if (error) return <div className="rounded-md border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div>;
   if (!volunteer) return null;
 
+  const sponsor = Array.isArray(volunteer.sponsor) ? volunteer.sponsor[0] ?? null : volunteer.sponsor;
+
   const currentSkills: Array<Skill & { category?: CategoryWithSkills }> = [];
   for (const [catId, skillId] of Object.entries(selectedSkillByCategory)) {
     if (!skillId) continue;
@@ -324,6 +338,37 @@ export default function VolunteerProfilePage() {
                   </span>
                 ) : (
                   <span className="text-ink-3">Non connecté</span>
+                )}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-ink-3">Parrain</dt>
+              <dd className="text-ink">
+                {sponsor ? (
+                  <Link href={`/admin/volunteers/${sponsor.id}`} className="text-brand hover:underline">
+                    {sponsor.full_name?.trim() || sponsor.identifier || sponsor.id}
+                  </Link>
+                ) : (
+                  <span className="text-ink-3">Aucun</span>
+                )}
+              </dd>
+            </div>
+            <div className="flex gap-2">
+              <dt className="w-28 shrink-0 text-ink-3">Filleuls</dt>
+              <dd className="text-ink">
+                {godchildren.length === 0 ? (
+                  <span className="text-ink-3">Aucun</span>
+                ) : (
+                  <span className="flex flex-wrap gap-x-1.5 gap-y-0.5">
+                    {godchildren.map((g, i) => (
+                      <span key={g.id}>
+                        <Link href={`/admin/volunteers/${g.id}`} className="text-brand hover:underline">
+                          {g.full_name?.trim() || g.identifier || g.id}
+                        </Link>
+                        {i < godchildren.length - 1 ? ',' : ''}
+                      </span>
+                    ))}
+                  </span>
                 )}
               </dd>
             </div>

@@ -94,7 +94,7 @@ sequenceDiagram
 
 | Table | Rôle |
 |---|---|
-| `profiles` | Profils utilisateurs avec rôle (`admin`, `responsable`, `benevole`) |
+| `profiles` | Profils utilisateurs avec rôle (`admin`, `responsable`, `benevole`) ; `sponsor_id` (auto-référence) désigne le parrain, un autre bénévole |
 | `missions` | Missions avec statut, type, dates, équipe |
 | `mission_proposals` | Réponses des bénévoles aux missions |
 | `mission_assignments` | Équipe finale sélectionnée par mission |

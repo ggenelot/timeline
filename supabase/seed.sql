@@ -296,3 +296,11 @@ where m.title = 'Dispositif nuit - Festival communal'
       and l.action_type = 'mission_status_changed'
       and l.description = 'Statut modifié : proposed → confirmed.'
   );
+
+-- Parrainage de démonstration : Bruno Benevole parraine Bianca et Basile.
+update public.profiles p
+set sponsor_id = s.id
+from public.profiles s
+where s.email = 'benevole@pcivile.test'
+  and p.email in ('benevole2@pcivile.test', 'benevole3@pcivile.test')
+  and p.id <> s.id;

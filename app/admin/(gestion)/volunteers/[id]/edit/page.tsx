@@ -17,6 +17,7 @@ type EditVolunteerForm = {
   identifier: string;
   password: string;
   eopeUserId: string;
+  sponsorId: string;
   selectedSkillByCategory: Record<string, string | null>;
 };
 
@@ -25,9 +26,12 @@ type VolunteerPayload = {
   identifier: string | null;
   role: AppRole;
   eope_user_id?: string | null;
+  sponsor_id?: string | null;
 };
 
 type VolunteerSkill = { skill_id: string };
+
+type SponsorOption = { id: string; full_name: string | null; identifier: string | null };
 
 const INITIAL_FORM: EditVolunteerForm = {
   firstName: '',
@@ -35,6 +39,7 @@ const INITIAL_FORM: EditVolunteerForm = {
   identifier: '',
   password: '',
   eopeUserId: '',
+  sponsorId: '',
   selectedSkillByCategory: {},
 };
 
@@ -49,6 +54,7 @@ export default function EditVolunteerPage() {
   const [submitting, setSubmitting] = useState(false);
   const [form, setForm] = useState<EditVolunteerForm>(INITIAL_FORM);
   const [categories, setCategories] = useState<CategoryWithSkills[]>([]);
+  const [sponsorOptions, setSponsorOptions] = useState<SponsorOption[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -74,7 +80,7 @@ export default function EditVolunteerPage() {
         return;
       }
 
-      const [volunteerRes, categoriesRes] = await Promise.all([
+      const [volunteerRes, categoriesRes, sponsorsRes] = await Promise.all([
         fetch(`/api/admin/volunteers/${volunteerId}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
         }),
@@ -83,6 +89,11 @@ export default function EditVolunteerPage() {
           .select('id,name,color,display_order,created_at,skills(id,name,display_order,category_id,created_at)')
           .order('display_order', { ascending: true })
           .order('display_order', { referencedTable: 'skills', ascending: true }),
+        supabase
+          .from('profiles')
+          .select('id,full_name,identifier')
+          .eq('role', 'benevole')
+          .order('full_name', { ascending: true }),
       ]);
 
       const payload = (await volunteerRes.json()) as {
@@ -99,6 +110,11 @@ export default function EditVolunteerPage() {
 
       const cats = (categoriesRes.data ?? []) as CategoryWithSkills[];
       setCategories(cats);
+
+      // Le parrain est un autre bénévole : on exclut le bénévole en cours d'édition.
+      setSponsorOptions(
+        ((sponsorsRes.data ?? []) as SponsorOption[]).filter((s) => s.id !== volunteerId)
+      );
 
       const fullName = payload.volunteer.full_name?.trim() ?? '';
       const nameParts = fullName.split(/\s+/).filter(Boolean);
@@ -124,6 +140,7 @@ export default function EditVolunteerPage() {
         identifier,
         password: '',
         eopeUserId: payload.volunteer.eope_user_id?.trim() ?? '',
+        sponsorId: payload.volunteer.sponsor_id ?? '',
         selectedSkillByCategory
       });
       setLoading(false);
@@ -170,6 +187,7 @@ export default function EditVolunteerPage() {
         skill_ids: skillIds,
         password: form.password || undefined,
         eope_user_id: form.eopeUserId.trim() || null,
+        sponsor_id: form.sponsorId || null,
       }),
     });
 
@@ -271,6 +289,26 @@ export default function EditVolunteerPage() {
           />
           <span className="mt-1 block text-xs text-ink-3">
             Identifiant du compte eOPE correspondant, pour la synchronisation départementale des équipages (voir la page Intégrations).
+          </span>
+        </label>
+
+        <label className="block text-sm text-ink-2">
+          Parrain
+          <select
+            value={form.sponsorId}
+            onChange={(e) => setForm((prev) => ({ ...prev, sponsorId: e.target.value }))}
+            className="mt-1 w-full rounded-[10px] border border-line-field bg-surface-card px-3 py-2 text-sm text-ink"
+            disabled={submitting}
+          >
+            <option value="">Aucun parrain</option>
+            {sponsorOptions.map((sponsor) => (
+              <option key={sponsor.id} value={sponsor.id}>
+                {sponsor.full_name?.trim() || sponsor.identifier || sponsor.id}
+              </option>
+            ))}
+          </select>
+          <span className="mt-1 block text-xs text-ink-3">
+            Le bénévole qui parraine ce compte. Un parrain est lui-même un bénévole.
           </span>
         </label>
 

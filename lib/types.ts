@@ -23,6 +23,8 @@ export type Profile = {
   // Identifiant du compte eOPE correspondant (liaison manuelle par un admin,
   // cf. /admin/eope). Unique quand renseigné.
   eope_user_id?: string | null;
+  // Parrain du bénévole : un autre bénévole (auto-référence). Null si non parrainé.
+  sponsor_id?: string | null;
 };
 
 // Réglages de charte graphique (logo, couleurs, polices), éditables depuis
