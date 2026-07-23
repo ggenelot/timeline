@@ -129,9 +129,6 @@ function SegmentedBar({
   phases: CursusPhase[];
   validatedIds: Set<string>;
 }) {
-  // One group of cells per phase (phases without competences are skipped),
-  // separated by a discreet vertical rule and topped with the phase name so
-  // the green / grey cells read as belonging to a given phase.
   const groups = phases.filter((p) => (p.competences?.length ?? 0) > 0);
   return (
     <div style={{ display: 'flex', gap: 10, marginTop: 18, alignItems: 'flex-end' }}>
