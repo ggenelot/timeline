@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type {
@@ -123,25 +123,61 @@ function Pill({
 }
 
 function SegmentedBar({
-  total,
-  validated,
+  phases,
+  validatedIds,
 }: {
-  total: number;
-  validated: number;
+  phases: CursusPhase[];
+  validatedIds: Set<string>;
 }) {
+  // One group of cells per phase (phases without competences are skipped),
+  // separated by a discreet vertical rule and topped with the phase name so
+  // the green / grey cells read as belonging to a given phase.
+  const groups = phases.filter((p) => (p.competences?.length ?? 0) > 0);
   return (
-    <div style={{ display: 'flex', gap: 4, marginTop: 18 }}>
-      {Array.from({ length: total }).map((_, i) => (
-        <div
-          key={i}
-          style={{
-            flex: 1,
-            height: 9,
-            borderRadius: 5,
-            background: i < validated ? '#059669' : '#E6EAF2',
-          }}
-        />
-      ))}
+    <div style={{ display: 'flex', gap: 10, marginTop: 18, alignItems: 'flex-end' }}>
+      {groups.map((phase, gi) => {
+        const comps = phase.competences ?? [];
+        return (
+          <React.Fragment key={phase.id}>
+            {gi > 0 ? (
+              <div
+                aria-hidden
+                style={{ flexShrink: 0, width: 1, height: 15, background: '#DDE3EE', alignSelf: 'flex-end' }}
+              />
+            ) : null}
+            <div style={{ flex: comps.length, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div
+                title={phase.label}
+                style={{
+                  fontSize: 9.5,
+                  fontWeight: 700,
+                  letterSpacing: '.04em',
+                  textTransform: 'uppercase',
+                  color: '#A6AEBE',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {phase.label}
+              </div>
+              <div style={{ display: 'flex', gap: 4 }}>
+                {comps.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      flex: 1,
+                      height: 9,
+                      borderRadius: 5,
+                      background: validatedIds.has(c.id) ? '#059669' : '#E6EAF2',
+                    }}
+                  />
+                ))}
+              </div>
+            </div>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
 }
@@ -345,7 +381,7 @@ function compareDoublureChrono(a: Doublure, b: Doublure): number {
   return (a.created_at ?? '') < (b.created_at ?? '') ? -1 : 1;
 }
 
-// Discreet round "+" button to declare a doublure.
+// Prominent "+ Événement" button to declare a doublure.
 function DeclareDoublureButton({ onClick }: { onClick: () => void }) {
   return (
     <button
@@ -353,9 +389,10 @@ function DeclareDoublureButton({ onClick }: { onClick: () => void }) {
       onClick={onClick}
       aria-label="Déclarer une doublure"
       title="Déclarer une doublure"
-      style={{ cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, border: '1px solid #E6EAF2', background: '#fff', color: '#5B6478', borderRadius: '50%', fontSize: 17, fontWeight: 500, fontFamily: 'inherit', lineHeight: 1 }}
+      style={{ cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 5, padding: '7px 13px', border: 'none', background: '#00378F', color: '#fff', borderRadius: 9, fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', lineHeight: 1, boxShadow: '0 1px 3px rgba(0,55,143,.25)' }}
     >
-      +
+      <span style={{ fontSize: 15, fontWeight: 600, lineHeight: 1 }}>+</span>
+      Événement
     </button>
   );
 }
@@ -993,7 +1030,7 @@ export default function CompetencesPage() {
               {/* Segmented progress bar */}
               {allComps.length > 0 ? (
                 <>
-                  <SegmentedBar total={allComps.length} validated={allComps.filter((c) => validatedIds.has(c.id)).length} />
+                  <SegmentedBar phases={cursusDetail.phases} validatedIds={validatedIds} />
                   <div style={{ display: 'flex', gap: 16, marginTop: 11, fontSize: 12, color: '#5B6478' }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                       <span style={{ width: 9, height: 9, borderRadius: 3, background: '#059669', display: 'inline-block' }} />
