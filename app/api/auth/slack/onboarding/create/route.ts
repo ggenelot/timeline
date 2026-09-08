@@ -13,10 +13,6 @@ function slugify(value: string): string {
     .replace(/^\.+|\.+$/g, '');
 }
 
-function randomPassword(): string {
-  return crypto.randomUUID().replace(/-/g, '');
-}
-
 async function deriveUniqueIdentifier(
   service: ReturnType<typeof createServerSupabaseServiceClient>,
   fullName: string,
@@ -40,16 +36,21 @@ export async function POST(request: Request) {
   const body = (await request.json().catch(() => ({}))) as {
     token?: string;
     full_name?: string;
+    password?: string;
     skill_ids?: unknown;
   };
   const token = body.token?.trim();
   const fullName = body.full_name?.trim();
+  const password = typeof body.password === 'string' ? body.password : '';
   const skillIds = Array.isArray(body.skill_ids)
     ? Array.from(new Set(body.skill_ids.filter((id): id is string => typeof id === 'string' && id.length > 0)))
     : [];
 
   if (!token) return NextResponse.json({ error: 'Lien invalide.' }, { status: 400 });
   if (!fullName) return NextResponse.json({ error: 'Le nom est obligatoire.' }, { status: 400 });
+  if (password.length < 8) {
+    return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, { status: 400 });
+  }
 
   const service = createServerSupabaseServiceClient();
 
@@ -74,7 +75,7 @@ export async function POST(request: Request) {
   const { data: created, error: createError } = await service.auth.admin.createUser({
     email,
     email_confirm: true,
-    password: randomPassword(),
+    password,
     user_metadata: { full_name: fullName }
   });
   if (createError || !created.user?.id) {

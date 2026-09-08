@@ -26,7 +26,10 @@ function OnboardingContent() {
   const [mode, setMode] = useState<Mode>('choose');
   const [search, setSearch] = useState('');
   const [fullName, setFullName] = useState('');
+  const [password, setPassword] = useState('');
   const [selectedSkillIds, setSelectedSkillIds] = useState<string[]>([]);
+  const [selectedClaim, setSelectedClaim] = useState<Account | null>(null);
+  const [claimPassword, setClaimPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
@@ -100,14 +103,19 @@ function OnboardingContent() {
     );
   }, [accounts, search]);
 
-  const claimAccount = async (profileId: string) => {
+  const confirmClaim = async () => {
+    if (!selectedClaim) return;
+    if (claimPassword && claimPassword.length < 8) {
+      setActionError('Le mot de passe doit faire au moins 8 caractères (ou laisse-le vide).');
+      return;
+    }
     setBusy(true);
     setActionError(null);
     try {
       const resp = await fetch('/api/auth/slack/onboarding/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, profile_id: profileId })
+        body: JSON.stringify({ token, profile_id: selectedClaim.id, password: claimPassword || undefined })
       });
       const payload = (await resp.json().catch(() => ({}))) as AuthPayload;
       if (!resp.ok || !payload.ok) {
@@ -127,13 +135,17 @@ function OnboardingContent() {
       setActionError('Indique ton nom.');
       return;
     }
+    if (password.length < 8) {
+      setActionError('Choisis un mot de passe d’au moins 8 caractères.');
+      return;
+    }
     setBusy(true);
     setActionError(null);
     try {
       const resp = await fetch('/api/auth/slack/onboarding/create', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, full_name: fullName.trim(), skill_ids: selectedSkillIds })
+        body: JSON.stringify({ token, full_name: fullName.trim(), password, skill_ids: selectedSkillIds })
       });
       const payload = (await resp.json().catch(() => ({}))) as AuthPayload;
       if (!resp.ok || !payload.ok) {
@@ -197,7 +209,7 @@ function OnboardingContent() {
         </div>
       ) : null}
 
-      {mode === 'claim' ? (
+      {mode === 'claim' && !selectedClaim ? (
         <div className="space-y-3">
           <input
             type="search"
@@ -215,9 +227,12 @@ function OnboardingContent() {
                 <button
                   key={account.id}
                   type="button"
-                  onClick={() => claimAccount(account.id)}
-                  disabled={busy}
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-surface-sub disabled:opacity-50"
+                  onClick={() => {
+                    setSelectedClaim(account);
+                    setClaimPassword('');
+                    setActionError(null);
+                  }}
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-surface-sub"
                 >
                   <span className="text-sm font-bold text-ink">{account.full_name || account.identifier || 'Compte'}</span>
                   {account.identifier ? <span className="font-mono text-xs text-ink-3">{account.identifier}</span> : null}
@@ -227,6 +242,44 @@ function OnboardingContent() {
           </div>
           <button type="button" onClick={() => setMode('choose')} className="text-[13px] font-bold text-ink-3 underline">
             ← Retour
+          </button>
+        </div>
+      ) : null}
+
+      {mode === 'claim' && selectedClaim ? (
+        <div className="space-y-4">
+          <div className="rounded-[12px] border border-line-field bg-surface-sub px-4 py-3">
+            <div className="text-[12.5px] text-ink-2">Compte sélectionné</div>
+            <div className="text-[15px] font-bold text-ink">{selectedClaim.full_name || selectedClaim.identifier || 'Compte'}</div>
+            {selectedClaim.identifier ? <div className="font-mono text-xs text-ink-3">{selectedClaim.identifier}</div> : null}
+          </div>
+          <div>
+            <label htmlFor="claim-password" className="mb-1.5 block text-[12.5px] font-bold text-ink-2">
+              Définir un mot de passe (optionnel)
+            </label>
+            <input
+              id="claim-password"
+              type="password"
+              value={claimPassword}
+              onChange={(e) => setClaimPassword(e.target.value)}
+              placeholder="Laisse vide pour n’utiliser que Slack"
+              autoComplete="new-password"
+              className="w-full rounded-[12px] border border-line-field bg-surface-sub px-4 py-2.5 text-sm text-ink placeholder:text-ink-4 focus:border-brand focus:bg-surface-card focus:outline-none"
+            />
+            <p className="mt-1 text-[12px] text-ink-3">Utile si tu ne connais pas le mot de passe actuel de ce compte.</p>
+          </div>
+          <Button onClick={confirmClaim} disabled={busy} className="h-[50px] w-full rounded-[14px] text-[15px]">
+            {busy ? 'Connexion…' : 'C’est mon compte, me connecter'}
+          </Button>
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedClaim(null);
+              setClaimPassword('');
+            }}
+            className="block text-[13px] font-bold text-ink-3 underline"
+          >
+            ← Choisir un autre compte
           </button>
         </div>
       ) : null}
@@ -246,6 +299,22 @@ function OnboardingContent() {
               autoFocus
               className="w-full rounded-[12px] border border-line-field bg-surface-sub px-4 py-2.5 text-sm text-ink placeholder:text-ink-4 focus:border-brand focus:bg-surface-card focus:outline-none"
             />
+          </div>
+
+          <div>
+            <label htmlFor="ob-password" className="mb-1.5 block text-[12.5px] font-bold text-ink-2">
+              Choisis un mot de passe
+            </label>
+            <input
+              id="ob-password"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Au moins 8 caractères"
+              autoComplete="new-password"
+              className="w-full rounded-[12px] border border-line-field bg-surface-sub px-4 py-2.5 text-sm text-ink placeholder:text-ink-4 focus:border-brand focus:bg-surface-card focus:outline-none"
+            />
+            <p className="mt-1 text-[12px] text-ink-3">Il te servira à te reconnecter plus tard, en plus de Slack.</p>
           </div>
 
           {categories.length > 0 ? (
