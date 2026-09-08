@@ -194,11 +194,34 @@ function matchQuantifiedTokens(
 }
 
 /**
+ * Abréviations "métier" présentes dans les fichiers source d'import mais absentes du référentiel
+ * de compétences (ni code, ni nom). Ex: les plannings notent "SR" (secouriste) là où le
+ * référentiel enregistre la compétence "PSE1". La clé `code` cible la compétence du référentiel,
+ * les `aliases` sont les variantes reconnues dans les notes libres. Sans cette table, "4 SR dont
+ * 1 CP" ne reconnaissait que le CP et versait les 3 secouristes restants dans le générique "sans
+ * compétence" au lieu de les rattacher au PSE1.
+ */
+const SKILL_TOKEN_ALIASES: Array<{ code: string; aliases: string[] }> = [
+  { code: 'PSE1', aliases: ['SR', 'secouriste', 'secouristes'] }
+];
+
+function aliasTokensForSkill(skill: { name: string; code?: string | null }): string[] {
+  const skillCode = sanitize(skill.code ?? '');
+  const skillName = sanitize(skill.name ?? '');
+
+  return SKILL_TOKEN_ALIASES.filter((entry) => {
+    const target = sanitize(entry.code);
+    return target.length > 0 && (target === skillCode || target === skillName);
+  }).flatMap((entry) => entry.aliases);
+}
+
+/**
  * Pré-remplit l'éditeur "Besoins en bénévoles" à partir de la note libre `requirements_notes`
- * (ex: "2 SR dont 1 CP"). Les compétences reconnues (par code ou nom) dans le référentiel sont
- * extraites avec leur quantité ; le reste du décompte total tombe dans le besoin générique
- * (clé `''`, "bénévole sans compétence particulière"). Heuristique volontairement best-effort :
- * l'utilisateur corrige ensuite via les pastilles.
+ * (ex: "2 SR dont 1 CP"). Les compétences reconnues (par code, nom ou abréviation métier — cf.
+ * `SKILL_TOKEN_ALIASES`) dans le référentiel sont extraites avec leur quantité ; le reste du
+ * décompte total tombe dans le besoin générique (clé `''`, "bénévole sans compétence
+ * particulière"). Heuristique volontairement best-effort : l'utilisateur corrige ensuite via les
+ * pastilles.
  */
 export function inferSkillNeedsFromNotes(
   notes: string | null | undefined,
@@ -211,7 +234,9 @@ export function inferSkillNeedsFromNotes(
   const entries = availableSkills
     .map((skill) => ({
       id: skill.id,
-      tokens: [skill.code, skill.name].filter((token): token is string => Boolean(token && token.trim()))
+      tokens: [skill.code, skill.name, ...aliasTokensForSkill(skill)].filter(
+        (token): token is string => Boolean(token && token.trim())
+      )
     }))
     .filter((entry) => entry.tokens.length > 0);
 
