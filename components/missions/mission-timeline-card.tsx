@@ -121,10 +121,17 @@ export function MissionTimelineCard({
   })}`;
   const duration = formatMissionDuration(mission.starts_at, mission.ends_at);
 
-  // Réversion prévue (montant reversé à l'association), affichée à gauche de la durée.
+  // Réversion (montant reversé à l'association), affichée à gauche de la durée : on privilégie la
+  // réversion réelle dès qu'elle est renseignée, avec repli sur la réversion prévue.
+  const reversionAmount =
+    typeof mission.reversion_actual === 'number'
+      ? mission.reversion_actual
+      : typeof mission.reversion_expected === 'number'
+        ? mission.reversion_expected
+        : null;
   const reversionLabel =
-    typeof mission.reversion_expected === 'number'
-      ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(mission.reversion_expected)
+    reversionAmount !== null
+      ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(reversionAmount)
       : null;
 
   async function respond(response: MissionProposalResponse) {

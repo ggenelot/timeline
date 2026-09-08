@@ -65,7 +65,7 @@ export function useMissionsData() {
       supabase
         .from('missions')
         .select(
-          'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order)),mission_required_materiels(id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color))'
+          'id,title,description,location,mission_type_id,starts_at,ends_at,required_volunteers,status,created_by,created_at,reversion_expected,reversion_actual,mission_required_skills(id,mission_id,skill_id,quantity,created_at,skill:skills(id,name,category_id,display_order)),mission_required_materiels(id,mission_id,category_id,quantity,created_at,category:materiel_categories(id,name,color))'
         )
         .order('starts_at', { ascending: true }),
       supabase
