@@ -257,6 +257,65 @@ export async function verifySlackNumericLoginChallenge(params: {
   return { status: 'ok', row: { id: row.id, slack_team_id: row.slack_team_id, slack_user_id: row.slack_user_id } };
 }
 
+// Résout un profil Timeline directement à partir d'un couple Slack (team, user) — sans que le
+// bénévole ait à saisir quoi que ce soit. Utilisé par les flux où l'identité Slack est déjà prouvée
+// (DM au bot). On tente d'abord slack_identities, puis on retombe sur profiles.slack_user_id pour
+// couvrir les comptes reliés via le flux OAuth self-service (mêmes garanties que le magic-link).
+export async function resolveProfileBySlack(
+  slackTeamId: string,
+  slackUserId: string
+): Promise<{ profileId: string; email: string | null } | null> {
+  const service = createServerSupabaseServiceClient();
+
+  const { data: identity } = await service
+    .from('slack_identities')
+    .select('profile_id')
+    .eq('slack_team_id', slackTeamId)
+    .eq('slack_user_id', slackUserId)
+    .maybeSingle<{ profile_id: string | null }>();
+
+  let profileId = identity?.profile_id ?? null;
+  if (!profileId) {
+    const { data: linkedProfile } = await service
+      .from('profiles')
+      .select('id')
+      .eq('slack_team_id', slackTeamId)
+      .eq('slack_user_id', slackUserId)
+      .maybeSingle<{ id: string }>();
+    profileId = linkedProfile?.id ?? null;
+  }
+
+  if (!profileId) return null;
+
+  const { data: profile } = await service
+    .from('profiles')
+    .select('email')
+    .eq('id', profileId)
+    .maybeSingle<{ email: string | null }>();
+
+  return { profileId, email: profile?.email ?? null };
+}
+
+// Message de connexion Slack unifié : lien magique 1-clic en tête, code OTP en repli. Le point clé
+// est qu'aucun identifiant n'est demandé — le message lui-même prouve l'identité du destinataire.
+export function buildSlackLoginDm(params: {
+  magicUrl: string;
+  otpCode: string;
+  loginUrl: string;
+  isNewAccount?: boolean;
+}): string {
+  const { magicUrl, otpCode, loginUrl, isNewAccount } = params;
+  const intro = isNewAccount ? "Bonjour 👋\nTon compte Timeline est prêt." : 'Bonjour 👋';
+  return `${intro}
+
+🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}
+
+Si le lien ne s'ouvre pas, saisis ce code (valable 10 min) : *${otpCode}*
+→ ${loginUrl} → « Recevoir un code par Slack » → colle le code à 6 chiffres.
+
+Pas besoin de retenir d'identifiant : ce message t'identifie déjà. 🙂`;
+}
+
 type ResolvedSlackTarget = {
   profileId: string;
   email: string | null;

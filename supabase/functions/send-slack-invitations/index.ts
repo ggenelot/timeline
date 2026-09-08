@@ -47,6 +47,32 @@ function generateNumericCode(): string {
   return String(n % 1_000_000).padStart(6, '0');
 }
 
+// base64url d'un buffer d'octets — même encodage que randomBytes(...).toString('base64url')
+// côté Next (lib/slack/auth.ts) pour que les jetons magiques soient homogènes.
+function base64url(bytes: Uint8Array): string {
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+// Émet un jeton de lien magique (usage unique, 10 min) pour un couple Slack (team, user) et
+// retourne l'URL /auth/slack/magic correspondante. On ne stocke que le hash SHA-256 ; le canal
+// 'slash_magic' (≠ 'otp_login') est celui que consumeSlackLoginChallenge accepte côté Next.
+async function issueMagicLink(supabase: any, slackTeamId: string, slackUserId: string, siteUrl: string): Promise<string> {
+  const buf = new Uint8Array(24);
+  crypto.getRandomValues(buf);
+  const token = base64url(buf);
+  await supabase.from('slack_login_challenges').insert({
+    slack_team_id: slackTeamId,
+    slack_user_id: slackUserId,
+    code_hash: await sha256Hex(token),
+    channel: 'slash_magic',
+    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
+    attempt_count: 0
+  });
+  return `${siteUrl}/auth/slack/magic?token=${token}`;
+}
+
 // Émet un code OTP 6 chiffres pour un couple Slack (team, user) : invalide les codes actifs
 // précédents (un seul code valable), ne stocke que le hash, retourne le code brut (jamais loggé).
 async function issueOtp(supabase: any, slackTeamId: string, slackUserId: string): Promise<string> {
@@ -248,6 +274,7 @@ Deno.serve(async (req) => {
         );
 
         const otpCode = await issueOtp(supabase, slackTeamId, slackUserId);
+        const magicUrl = await issueMagicLink(supabase, slackTeamId, slackUserId, siteUrl);
 
         const openRes = await fetch('https://slack.com/api/conversations.open', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ users: slackUserId }) });
         const openJson = await openRes.json();
@@ -255,10 +282,10 @@ Deno.serve(async (req) => {
         if (!channel) throw new Error('missing_dm_channel');
 
         const loginUrl = `${siteUrl ?? ''}/login`;
-        const identifierLine = identifier ? `ton identifiant « ${identifier} »` : 'ton identifiant Timeline';
-        const text = isNewAccount
-          ? `Bonjour 👋\nTon compte Timeline vient d'être créé.\n\nTon code de connexion (valable 10 min) : ${otpCode}\n\nPour te connecter :\n1. Va sur ${loginUrl}\n2. Choisis « Recevoir un code par Slack »\n3. Saisis ${identifierLine} puis ce code à 6 chiffres.\n\nLe code expire au bout de 10 minutes : tu peux en demander un nouveau à tout moment depuis la page de connexion.\nTu recevras ensuite les propositions de mission directement ici, sur Slack.`
-          : `Bonjour 👋\nVoici ton code de connexion Timeline (valable 10 min) : ${otpCode}\n\nConnecte-toi sur ${loginUrl} → « Recevoir un code par Slack », saisis ${identifierLine} puis ce code à 6 chiffres.\nBesoin d'un nouveau code ? Redemande-en un depuis la page de connexion.`;
+        // Le lien magique 1-clic évite d'avoir à connaître son identifiant Timeline ; l'OTP reste en
+        // repli si le lien ne s'ouvre pas. Aucun identifiant n'est demandé au destinataire.
+        const intro = isNewAccount ? "Bonjour 👋\nTon compte Timeline est prêt." : 'Bonjour 👋';
+        const text = `${intro}\n\n🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}\n\nSi le lien ne s'ouvre pas, saisis ce code (valable 10 min) : ${otpCode}\n→ ${loginUrl} → « Recevoir un code par Slack » → colle le code à 6 chiffres.\n\nPas besoin de retenir d'identifiant : ce message t'identifie déjà. Tu recevras ensuite les propositions de mission directement ici, sur Slack.`;
 
         const postRes = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, text }) });
         const postJson = await postRes.json();
