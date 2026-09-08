@@ -98,8 +98,23 @@ Validation;;14/04/2026;15/04/2026`;
   const availableSkills = [cpSkill, pse1Skill];
 
   const needsSimple = inferSkillNeedsFromNotes('2 SR dont 1 CP', availableSkills);
+  assert(needsSimple[pse1Skill.id] === 2, 'Le besoin "2 SR dont 1 CP" doit reconnaître 2 SR comme 2 PSE1.');
   assert(needsSimple[cpSkill.id] === 1, 'Le besoin "2 SR dont 1 CP" doit reconnaître 1 CP.');
-  assert(needsSimple[''] === 1, 'Le reliquat générique doit valoir 1 (2 - 1 CP).');
+  assert(
+    !(('' in needsSimple) && needsSimple[''] > 0),
+    'Aucun reliquat générique attendu quand "SR" est reconnu comme PSE1.'
+  );
+
+  const needsTourAuto = inferSkillNeedsFromNotes('4 SR dont 1 CP', availableSkills);
+  assert(needsTourAuto[pse1Skill.id] === 4, 'Le besoin "4 SR dont 1 CP" doit donner 4 PSE1.');
+  assert(needsTourAuto[cpSkill.id] === 1, 'Le besoin "4 SR dont 1 CP" doit donner 1 CP.');
+  assert(
+    !(('' in needsTourAuto) && needsTourAuto[''] > 0),
+    'Aucun reliquat générique attendu pour "4 SR dont 1 CP".'
+  );
+
+  const needsSecouriste = inferSkillNeedsFromNotes('3 secouristes', availableSkills);
+  assert(needsSecouriste[pse1Skill.id] === 3, 'Le libellé "3 secouristes" doit être reconnu comme 3 PSE1.');
 
   const needsPse1 = inferSkillNeedsFromNotes('2 PSE1', availableSkills);
   assert(needsPse1[pse1Skill.id] === 2, 'Le besoin "2 PSE1" doit reconnaître 2 PSE1.');

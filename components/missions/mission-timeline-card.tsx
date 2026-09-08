@@ -40,6 +40,23 @@ function capitalize(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1);
 }
 
+// Pastille "compétence requise" (ex: "CP 0/1") : vert quand la couverture est atteinte, ambre
+// tant qu'il manque des bénévoles qualifiés. Partagée entre l'en-tête de carte et le détail
+// déplié pour un rendu identique.
+function SkillCoverageBadge({ name, have, need }: { name: string; have: number; need: number }) {
+  const met = have >= need;
+  return (
+    <span
+      className={cn(
+        'rounded-[7px] border px-2 py-0.5 text-[12px] font-semibold',
+        met ? 'border-ok-line bg-ok-soft text-ok-text' : 'border-warn-line bg-warn-soft text-warn-text'
+      )}
+    >
+      {name} {have}/{need}
+    </span>
+  );
+}
+
 export function MissionTimelineCard({
   mission,
   missionTypeName,
@@ -72,24 +89,27 @@ export function MissionTimelineCard({
   const swipeCapable = isBenevole && canPropose && relation === 'pending';
   const swipeInteractive = swipeCapable && pendingAction === null;
 
-  const skillCoverage = useMemo(
-    () =>
-      requiredSkills
-        .map((requiredSkill) => requiredSkill.skill?.name?.trim())
-        .filter((skillName): skillName is string => Boolean(skillName))
-        .map((skillName) => {
-          const requirement = requiredSkills.find((item) => item.skill?.name?.trim() === skillName);
-          const have = availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === skillName)).length;
-          return { name: skillName, have, need: requirement?.quantity ?? 0 };
-        })
-        .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' })),
-    [requiredSkills, availableVolunteers]
-  );
+  const skillCoverage = useMemo(() => {
+    const named = requiredSkills
+      .map((requiredSkill) => requiredSkill.skill?.name?.trim())
+      .filter((skillName): skillName is string => Boolean(skillName))
+      .map((skillName) => {
+        const requirement = requiredSkills.find((item) => item.skill?.name?.trim() === skillName);
+        const have = availableVolunteers.filter((volunteer) => volunteer.skills.some((skill) => skill.name === skillName)).length;
+        return { name: skillName, have, need: requirement?.quantity ?? 0 };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }));
 
-  const missingCount = useMemo(
-    () => skillCoverage.reduce((total, skill) => total + Math.max(0, skill.need - skill.have), 0),
-    [skillCoverage]
-  );
+    // Besoins sans compétence particulière (skill null) : n'importe quel bénévole disponible peut
+    // les couvrir. Regroupés en une seule pastille "Bénévole", affichée après les compétences.
+    const genericNeed = requiredSkills
+      .filter((requiredSkill) => !requiredSkill.skill)
+      .reduce((total, requiredSkill) => total + Math.max(0, requiredSkill.quantity), 0);
+
+    return genericNeed > 0
+      ? [...named, { name: 'Bénévole', have: availableVolunteers.length, need: genericNeed }]
+      : named;
+  }, [requiredSkills, availableVolunteers]);
 
   const start = new Date(mission.starts_at);
   const end = new Date(mission.ends_at);
@@ -261,26 +281,18 @@ export function MissionTimelineCard({
       </button>
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 sm:px-[18px] pb-[14px]">
-        <div className="inline-flex items-center gap-[7px] text-[13px] font-bold">
-          {requiredSkills.length === 0 ? (
-            <>
-              <span className="h-[7px] w-[7px] rounded-full bg-ink-4" />
-              <span className="text-ink-3">Ouvert à tous</span>
-            </>
-          ) : missingCount > 0 ? (
-            <>
-              <span className="h-[7px] w-[7px] rounded-full bg-warn-bar" />
-              <span className="text-warn-text">
-                Manque {missingCount} bénévole{missingCount > 1 ? 's' : ''}
-              </span>
-            </>
-          ) : (
-            <>
-              <span className="h-[7px] w-[7px] rounded-full bg-ok-bar" />
-              <span className="text-ok-text">Équipe complète</span>
-            </>
-          )}
-        </div>
+        {skillCoverage.length === 0 ? (
+          <div className="inline-flex items-center gap-[7px] text-[13px] font-bold">
+            <span className="h-[7px] w-[7px] rounded-full bg-ink-4" />
+            <span className="text-ink-3">Ouvert à tous</span>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {skillCoverage.map((skill) => (
+              <SkillCoverageBadge key={skill.name} name={skill.name} have={skill.have} need={skill.need} />
+            ))}
+          </div>
+        )}
 
         <div className="flex items-center justify-end gap-2">
           {isBenevole ? (
@@ -364,20 +376,9 @@ export function MissionTimelineCard({
             <div className="mt-3">
               <div className="text-[12px] font-bold text-ink-2">Compétences requises</div>
               <div className="mt-2 flex flex-wrap gap-2">
-                {skillCoverage.map((skill) => {
-                  const met = skill.have >= skill.need;
-                  return (
-                    <span
-                      key={skill.name}
-                      className={cn(
-                        'rounded-[7px] border px-2 py-0.5 text-[12px] font-semibold',
-                        met ? 'border-ok-line bg-ok-soft text-ok-text' : 'border-warn-line bg-warn-soft text-warn-text'
-                      )}
-                    >
-                      {skill.name} {skill.have}/{skill.need}
-                    </span>
-                  );
-                })}
+                {skillCoverage.map((skill) => (
+                  <SkillCoverageBadge key={skill.name} name={skill.name} have={skill.have} need={skill.need} />
+                ))}
               </div>
             </div>
           ) : null}
