@@ -7,10 +7,14 @@ import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 // non relié (le jeton ne doit jamais permettre de détourner un compte déjà rattaché), puis on lie
 // l'identité Slack et on renvoie de quoi ouvrir la session.
 export async function POST(request: Request) {
-  const body = (await request.json().catch(() => ({}))) as { token?: string; profile_id?: string };
+  const body = (await request.json().catch(() => ({}))) as { token?: string; profile_id?: string; password?: string };
   const token = body.token?.trim();
   const profileId = body.profile_id?.trim();
+  const password = typeof body.password === 'string' ? body.password : '';
   if (!token || !profileId) return NextResponse.json({ error: 'Requête invalide.' }, { status: 400 });
+  if (password && password.length < 8) {
+    return NextResponse.json({ error: 'Le mot de passe doit contenir au moins 8 caractères.' }, { status: 400 });
+  }
 
   const service = createServerSupabaseServiceClient();
 
@@ -47,6 +51,11 @@ export async function POST(request: Request) {
     { profile_id: profileId, slack_team_id: ctx.slackTeamId, slack_user_id: ctx.slackUserId, is_primary: true, last_login_at: new Date().toISOString() },
     { onConflict: 'slack_team_id,slack_user_id' }
   );
+
+  // Mot de passe optionnel : utile pour un compte de seed dont le mot de passe temporaire est inconnu.
+  if (password) {
+    await service.auth.admin.updateUserById(profileId, { password });
+  }
 
   const { data: linkData } = await service.auth.admin.generateLink({
     type: 'magiclink',
