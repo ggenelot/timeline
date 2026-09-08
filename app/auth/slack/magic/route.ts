@@ -13,6 +13,23 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(new URL('/login?slack=magic_invalid', base));
   }
 
+  // Slack (et les autres messageries) pré-chargent les URLs pour en générer un aperçu. Ce GET
+  // « robot » consommerait le jeton usage-unique AVANT le clic humain, rendant le lien invalide
+  // (observé : Slackbot consomme le jeton ~1,5 s après émission). On renvoie donc une page neutre,
+  // sans rien consommer, pour ces robots d'aperçu : seul un vrai navigateur déclenche la connexion.
+  const userAgent = request.headers.get('user-agent') ?? '';
+  const isLinkPreviewBot =
+    /slackbot|link-?expanding|facebookexternalhit|twitterbot|linkedinbot|whatsapp|discordbot|telegrambot|embedly|bot\b|crawler|spider|preview/i.test(
+      userAgent
+    );
+  if (isLinkPreviewBot) {
+    console.info('[slack-magic] skipping consumption for link-preview bot', { userAgent: userAgent.slice(0, 120) });
+    return new NextResponse(
+      '<!doctype html><meta charset="utf-8"><title>Connexion Timeline</title><p>Ouvre ce lien dans ton navigateur pour te connecter à Timeline.</p>',
+      { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }
+    );
+  }
+
   const challenge = await consumeSlackLoginChallenge(token);
   if (!challenge) {
     console.warn('[slack-magic] invalid or expired login challenge');
