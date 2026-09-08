@@ -150,6 +150,7 @@ export async function consumeSlackLoginChallenge(token: string) {
     .select('id,slack_team_id,slack_user_id,expires_at,consumed_at')
     .eq('code_hash', hash)
     .neq('channel', 'otp_login')
+    .neq('channel', 'onboarding')
     .maybeSingle();
 
   if (!data || data.consumed_at || new Date(data.expires_at) < new Date()) {
@@ -344,4 +345,60 @@ export async function resolveSlackTargetByIdentifier(rawIdentifier: string): Pro
     slackUserId: profile.slack_user_id,
     slackTeamId: profile.slack_team_id
   };
+}
+
+// ————————————————————————————————————————————————————————————————————————————
+// Onboarding self-service : jeton émis par le bot quand un membre Slack n'a PAS encore de compte
+// Timeline. Il identifie le couple Slack (team, user) et donne accès à la page /auth/slack/onboarding
+// où la personne peut soit réclamer un compte existant non relié, soit en créer un.
+// Point clé : le lien est déroulé par Slack (aperçu) — on VALIDE sans consommer au chargement
+// (peek) et on ne consomme qu'à l'action finale (associer / créer).
+const ONBOARDING_TTL_MS = 30 * 60_000;
+
+export async function createSlackOnboardingChallenge(
+  slackTeamId: string,
+  slackUserId: string,
+  ip: string | null,
+  userAgent: string | null
+) {
+  const service = createServerSupabaseServiceClient();
+  const token = randomBytes(24).toString('base64url');
+  await service.from('slack_login_challenges').insert({
+    slack_team_id: slackTeamId,
+    slack_user_id: slackUserId,
+    code_hash: hashSlackLoginCode(token),
+    channel: 'onboarding',
+    expires_at: new Date(Date.now() + ONBOARDING_TTL_MS).toISOString(),
+    requested_ip: ip,
+    user_agent: userAgent
+  });
+  return token;
+}
+
+async function findOnboardingChallenge(token: string) {
+  const service = createServerSupabaseServiceClient();
+  const { data } = await service
+    .from('slack_login_challenges')
+    .select('id,slack_team_id,slack_user_id,expires_at,consumed_at')
+    .eq('code_hash', hashSlackLoginCode(token))
+    .eq('channel', 'onboarding')
+    .maybeSingle<{ id: string; slack_team_id: string; slack_user_id: string; expires_at: string; consumed_at: string | null }>();
+  if (!data || data.consumed_at || new Date(data.expires_at) < new Date()) return null;
+  return data;
+}
+
+// Valide le jeton SANS le consommer (survit au pré-chargement Slack).
+export async function peekSlackOnboardingChallenge(token: string) {
+  const row = await findOnboardingChallenge(token);
+  if (!row) return null;
+  return { slackTeamId: row.slack_team_id, slackUserId: row.slack_user_id };
+}
+
+// Consomme le jeton (action finale : association ou création de compte).
+export async function consumeSlackOnboardingChallenge(token: string) {
+  const service = createServerSupabaseServiceClient();
+  const row = await findOnboardingChallenge(token);
+  if (!row) return null;
+  await service.from('slack_login_challenges').update({ consumed_at: new Date().toISOString() }).eq('id', row.id);
+  return { slackTeamId: row.slack_team_id, slackUserId: row.slack_user_id };
 }

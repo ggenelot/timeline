@@ -4,6 +4,7 @@ import {
   buildSlackLoginDm,
   createSlackLoginChallenge,
   createSlackNumericLoginChallenge,
+  createSlackOnboardingChallenge,
   resolveProfileBySlack
 } from '@/lib/slack/auth';
 import { getSlackConfig } from '@/lib/slack/config';
@@ -89,19 +90,23 @@ async function handleLoginDm(teamId: string, userId: string, request: NextReques
   const base = getSlackConfig().appBaseUrl ?? new URL(request.url).origin;
   const loginUrl = `${base}/login`;
 
+  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
+  const userAgent = request.headers.get('user-agent');
+
   const channel = await slack.openDirectMessage(userId);
   const profile = await resolveProfileBySlack(teamId, userId);
 
+  // Aucun compte Timeline relié : on n'envoie plus « contacte un admin ». On ouvre un parcours
+  // self-service (retrouver un compte existant ou en créer un) via un lien à usage unique.
   if (!profile) {
+    const onboardingToken = await createSlackOnboardingChallenge(teamId, userId, ip, userAgent);
+    const onboardingUrl = `${base}/auth/slack/onboarding?token=${onboardingToken}`;
     await slack.postMessage(
       channel,
-      "Bonjour 👋\nJe ne trouve pas encore de compte Timeline relié à ce compte Slack. Contacte un administrateur pour qu'il t'ajoute, puis réécris-moi ici."
+      `Bonjour 👋\nBienvenue sur Timeline ! Pour accéder à ton espace, ouvre ce lien (valable 30 min) :\n\n${onboardingUrl}\n\nTu pourras soit retrouver un compte existant, soit en créer un nouveau — aucun identifiant à connaître.`
     );
     return;
   }
-
-  const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
-  const userAgent = request.headers.get('user-agent');
 
   const token = await createSlackLoginChallenge(teamId, userId, ip, userAgent);
   const magicUrl = `${base}/auth/slack/magic?token=${token}`;
