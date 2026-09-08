@@ -121,6 +121,12 @@ export function MissionTimelineCard({
   })}`;
   const duration = formatMissionDuration(mission.starts_at, mission.ends_at);
 
+  // Réversion prévue (montant reversé à l'association), affichée à gauche de la durée.
+  const reversionLabel =
+    typeof mission.reversion_expected === 'number'
+      ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(mission.reversion_expected)
+      : null;
+
   async function respond(response: MissionProposalResponse) {
     setPendingAction(response);
     setError(null);
@@ -276,7 +282,10 @@ export function MissionTimelineCard({
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[12.5px] font-bold tabular-nums text-ink-2">{timeRange}</div>
-          <div className="text-[12px] text-ink-3">{duration}</div>
+          <div className="mt-0.5 flex items-baseline justify-end gap-2">
+            {reversionLabel ? <span className="text-[12px] font-semibold tabular-nums text-ink-2">{reversionLabel}</span> : null}
+            <span className="text-[12px] text-ink-3">{duration}</span>
+          </div>
         </div>
       </button>
 
@@ -372,27 +381,13 @@ export function MissionTimelineCard({
             <p className="text-[13px] leading-[1.55] text-ink-2">{mission.description}</p>
           ) : null}
 
-          {skillCoverage.length > 0 ? (
-            <div className="mt-3">
-              <div className="text-[12px] font-bold text-ink-2">Compétences requises</div>
-              <div className="mt-2 flex flex-wrap gap-2">
-                {skillCoverage.map((skill) => (
-                  <SkillCoverageBadge key={skill.name} name={skill.name} have={skill.have} need={skill.need} />
-                ))}
-              </div>
-            </div>
-          ) : null}
-
-          <div className="mt-3">
-            <div className="text-[12px] font-bold text-ink-2">
-              {isBenevole ? 'Déjà engagés' : 'Disponibles'} · {availableVolunteers.length}
-            </div>
-            {availableVolunteers.length > 0 ? (
-              <p className="mt-1 text-[13px] text-ink-2">{availableVolunteers.map((volunteer) => volunteer.name).join(', ')}</p>
-            ) : (
-              <p className="mt-1 text-[13px] text-ink-3">Personne pour l’instant.</p>
-            )}
-          </div>
+          {availableVolunteers.length > 0 ? (
+            <p className={cn('text-[13px] text-ink-2', mission.description?.trim() && 'mt-3')}>
+              {availableVolunteers.map((volunteer) => volunteer.name).join(', ')}
+            </p>
+          ) : (
+            <p className={cn('text-[13px] text-ink-3', mission.description?.trim() && 'mt-3')}>Personne pour l’instant.</p>
+          )}
         </div>
       ) : null}
     </article>
