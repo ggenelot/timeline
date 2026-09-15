@@ -297,22 +297,17 @@ export async function resolveProfileBySlack(
   return { profileId, email: profile?.email ?? null };
 }
 
-// Message de connexion Slack unifié : lien magique 1-clic en tête, code OTP en repli. Le point clé
-// est qu'aucun identifiant n'est demandé — le message lui-même prouve l'identité du destinataire.
+// Message de connexion Slack : un seul lien magique 1-clic. Le point clé est qu'aucun identifiant
+// n'est demandé — le message lui-même prouve l'identité du destinataire.
 export function buildSlackLoginDm(params: {
   magicUrl: string;
-  otpCode: string;
-  loginUrl: string;
   isNewAccount?: boolean;
 }): string {
-  const { magicUrl, otpCode, loginUrl, isNewAccount } = params;
+  const { magicUrl, isNewAccount } = params;
   const intro = isNewAccount ? "Bonjour 👋\nTon compte Timeline est prêt." : 'Bonjour 👋';
   return `${intro}
 
 🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}
-
-Si le lien ne s'ouvre pas, saisis ce code (valable 10 min) : *${otpCode}*
-→ ${loginUrl} → « Recevoir un code par Slack » → colle le code à 6 chiffres.
 
 Pas besoin de retenir d'identifiant : ce message t'identifie déjà. 🙂`;
 }

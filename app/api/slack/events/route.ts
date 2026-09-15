@@ -3,7 +3,6 @@ import { verifySlackRequestSignature } from '@/lib/slack/signature';
 import {
   buildSlackLoginDm,
   createSlackLoginChallenge,
-  createSlackNumericLoginChallenge,
   createSlackOnboardingChallenge,
   resolveProfileBySlack
 } from '@/lib/slack/auth';
@@ -11,9 +10,9 @@ import { getSlackConfig } from '@/lib/slack/config';
 import { SlackService } from '@/lib/slack/service';
 
 // Endpoint Slack Events API. Un DM adressé au bot Timeline déclenche l'envoi d'un lien magique
-// 1-clic + code OTP en repli, la personne étant identifiée par son seul compte Slack (aucun
-// identifiant Timeline à connaître). Voir aussi la slash command /timeline login et l'onboarding
-// poussé (edge function send-slack-invitations), qui partagent la même mécanique.
+// 1-clic, la personne étant identifiée par son seul compte Slack (aucun identifiant Timeline à
+// connaître). Voir aussi la slash command /timeline login et l'onboarding poussé (edge function
+// send-slack-invitations), qui partagent la même mécanique.
 export async function POST(request: NextRequest) {
   const rawBody = await request.text();
   const signature = request.headers.get('x-slack-signature');
@@ -88,7 +87,6 @@ export async function POST(request: NextRequest) {
 async function handleLoginDm(teamId: string, userId: string, request: NextRequest) {
   const slack = new SlackService();
   const base = getSlackConfig().appBaseUrl ?? new URL(request.url).origin;
-  const loginUrl = `${base}/login`;
 
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ?? null;
   const userAgent = request.headers.get('user-agent');
@@ -111,12 +109,5 @@ async function handleLoginDm(teamId: string, userId: string, request: NextReques
   const token = await createSlackLoginChallenge(teamId, userId, ip, userAgent);
   const magicUrl = `${base}/auth/slack/magic?token=${token}`;
 
-  const otp = await createSlackNumericLoginChallenge(teamId, userId, ip, userAgent);
-
-  const text =
-    otp.status === 'ok'
-      ? buildSlackLoginDm({ magicUrl, otpCode: otp.code, loginUrl })
-      : `Bonjour 👋\n\n🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}\n\n(Tu as demandé plusieurs codes récemment : patiente quelques minutes avant d'en générer un nouveau si le lien ne suffit pas.)`;
-
-  await slack.postMessage(channel, text);
+  await slack.postMessage(channel, buildSlackLoginDm({ magicUrl }));
 }
