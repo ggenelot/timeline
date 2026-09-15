@@ -86,3 +86,49 @@ test.describe.serial('P0 non-régression missions', () => {
     await expect(page.getByText(/Retiré/i)).toBeVisible();
   });
 });
+
+function isoDaysFromNow(offset: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + offset);
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+test.describe.serial('P0 disponibilités longue durée (sans engagement)', () => {
+  // Décalé dans le futur pour rester dans l'horizon (3 mois) et éviter les
+  // jours passés (non peignables) — une nouvelle date à chaque exécution.
+  const targetDay = isoDaysFromNow(14);
+
+  test('1) bénévole peint un jour (pinceau 3 par défaut), persisté après rechargement', async ({ page }) => {
+    await login(page, USERS.benevole);
+    await page.goto('/availability');
+
+    const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
+    await expect(cell).toBeVisible();
+    await cell.click();
+    await expect(page.getByText(/^1 jour renseigné/)).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`)).toHaveClass(/bg-engage/);
+  });
+
+  test('2) responsable voit le score agrégé de ce jour', async ({ page }) => {
+    await login(page, USERS.responsable);
+    await page.goto('/admin/availability');
+
+    const cell = page.locator(`[data-testid="availability-heatmap-cell"][data-day="${targetDay}"]`);
+    await expect(cell).toBeVisible();
+    await expect(cell).not.toContainText('·');
+  });
+
+  test('3) re-tap sur le même niveau efface la déclaration', async ({ page }) => {
+    await login(page, USERS.benevole);
+    await page.goto('/availability');
+
+    const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
+    await cell.click();
+    await expect(page.getByText(/^0 jour renseigné/)).toBeVisible();
+
+    await page.reload();
+    await expect(page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`)).not.toHaveClass(/bg-engage/);
+  });
+});
