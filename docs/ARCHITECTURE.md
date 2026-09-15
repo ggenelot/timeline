@@ -97,6 +97,7 @@ sequenceDiagram
 | `profiles` | Profils utilisateurs avec rôle (`admin`, `responsable`, `benevole`) |
 | `missions` | Missions avec statut, type, dates, équipe |
 | `mission_proposals` | Réponses des bénévoles aux missions |
+| `availability_declarations` | Tendance de disponibilité longue durée par jour (0-3, indicative, sans lien avec les missions) |
 | `mission_assignments` | Équipe finale sélectionnée par mission |
 | `mission_required_skills` / `mission_required_levels` | Compétences et niveaux requis par mission |
 | `mission_types` | Types de missions configurables (compétences/matériel par défaut) |

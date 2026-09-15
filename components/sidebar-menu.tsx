@@ -27,6 +27,7 @@ type GestionItem = NavItem & {
 // Éléments personnels — section « Moi » de la sidebar.
 const PERSO_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
+  { href: '/availability', label: 'Mes dispos', icon: 'event_available' },
   { href: '/competences', label: 'Compétences', icon: 'workspace_premium' },
   { href: '/verification', label: 'Vérification', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
@@ -35,6 +36,7 @@ const PERSO_ITEMS: NavItem[] = [
 // Onglets de la barre du bas (mobile) — sous-ensemble bénévole.
 const TAB_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
+  { href: '/availability', label: 'Dispos', icon: 'event_available' },
   { href: '/competences', label: 'Compét.', icon: 'workspace_premium' },
   { href: '/verification', label: 'Vérif', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
@@ -44,6 +46,7 @@ const GESTION_ITEMS: GestionItem[] = [
   // Console d'admin bénévoles (création de comptes, sync Slack) : can_manage.
   // La visibilité lecture seule des bénévoles passe par la RLS + le tableau
   // de bord compétences.
+  { href: '/admin/availability', label: "Dispos de l'équipe", required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'waving_hand' },
   { href: '/admin/volunteers', label: 'Bénévoles', required: { resource: 'volunteer', action: 'can_manage' }, section: 'gestion', icon: 'groups' },
   { href: '/admin/roles', label: 'Rôles', required: { resource: 'administration', action: 'can_manage' }, section: 'gestion', icon: 'badge' },
   { href: '/admin/skills', label: 'Compétences', required: { resource: 'skill', action: 'can_manage' }, section: 'gestion', icon: 'workspace_premium' },
@@ -296,7 +299,7 @@ export function BottomTabs({ session }: { session: Session | null }) {
             href={item.href}
             aria-current={active ? 'page' : undefined}
             className={cn(
-              'relative flex h-[52px] w-20 flex-col items-center justify-center gap-0.5 rounded-full text-[10.5px] transition-colors',
+              'relative flex h-[52px] flex-1 flex-col items-center justify-center gap-0.5 rounded-full text-[10.5px] transition-colors',
               active
                 ? 'bg-brand/10 font-bold text-brand shadow-[inset_0_1px_0_rgba(255,255,255,.65),inset_0_0_0_1px_rgba(0,45,116,.1)]'
                 : 'font-semibold text-ink-2'

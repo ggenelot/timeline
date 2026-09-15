@@ -267,6 +267,35 @@ export type MissionVerificationTree = {
   root: VerificationTreeContainerNode;
 };
 
+// ── Disponibilité longue durée bénévole (indicative, sans lien mission) ─
+// Tendance 0-3 déclarée par jour sur les prochains mois. N'engage à rien :
+// seule la réponse à une mission proposée (mission_proposals.response)
+// engage le bénévole.
+
+export type AvailabilityLevel = 0 | 1 | 2 | 3;
+
+export type AvailabilityDeclaration = {
+  id: string;
+  volunteer_id: string;
+  day: string;
+  level: AvailabilityLevel;
+  updated_at: string;
+};
+
+export type AvailabilityDayAggregate = {
+  day: string;
+  score: number;
+  respondedCount: number;
+  readyCount: number;
+  zeroCount: number;
+  levelCounts: Record<AvailabilityLevel, number>;
+};
+
+export type AvailabilityTeamData = {
+  volunteerCount: number;
+  days: AvailabilityDayAggregate[];
+};
+
 export type HelpPage = {
   id: string;
   page_path: string;
