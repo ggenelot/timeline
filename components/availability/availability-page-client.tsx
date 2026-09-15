@@ -96,13 +96,30 @@ export function AvailabilityPageClient() {
   }, [userId, loadDays]);
 
   useEffect(() => {
-    function onPointerUp() {
+    function onPointerEnd() {
       paintOnRef.current = false;
       void flushPending();
     }
-    window.addEventListener('pointerup', onPointerUp);
-    return () => window.removeEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointerup', onPointerEnd);
+    window.addEventListener('pointercancel', onPointerEnd);
+    return () => {
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
+    };
   }, [flushPending]);
+
+  // Palette compacte : visible dès que le sélecteur complet sort de l'écran,
+  // pour changer de pinceau sans remonter en haut de la page.
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [showMiniBrush, setShowMiniBrush] = useState(false);
+
+  useEffect(() => {
+    const el = pickerRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(([entry]) => setShowMiniBrush(!entry.isIntersecting), { threshold: 0 });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   function paintDay(iso: string, toggle: boolean) {
     setDays((prev) => {
@@ -154,40 +171,42 @@ export function AvailabilityPageClient() {
 
       {error ? <div className="mb-4 rounded-lg border border-bad/30 bg-bad-soft p-3 text-sm text-bad">{error}</div> : null}
 
-      <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-3">Je peins avec</div>
-      <div className="mt-2 grid grid-cols-2 gap-2">
-        {LEVELS.map((level) => {
-          const selected = brush === level;
-          const style = AVAILABILITY_LEVEL_STYLES[level];
-          const soloThree = selected && level === 3;
-          return (
-            <button
-              key={level}
-              type="button"
-              onClick={() => setBrush(level)}
-              className={cn(
-                'flex items-center gap-2 rounded-xl px-3 py-2.5 text-left font-sans transition',
-                selected ? cn(style.bg, 'border-[1.5px]', style.border, 'shadow-card') : 'border border-line bg-surface-card'
-              )}
-            >
-              <span
+      <div ref={pickerRef}>
+        <div className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-3">Je peins avec</div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
+          {LEVELS.map((level) => {
+            const selected = brush === level;
+            const style = AVAILABILITY_LEVEL_STYLES[level];
+            const soloThree = selected && level === 3;
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setBrush(level)}
                 className={cn(
-                  'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg text-xs font-extrabold',
-                  soloThree ? 'text-engage' : 'text-white'
+                  'flex items-center gap-2 rounded-xl px-3 py-2.5 text-left font-sans transition',
+                  selected ? cn(style.bg, 'border-[1.5px]', style.border, 'shadow-card') : 'border border-line bg-surface-card'
                 )}
-                style={{ background: soloThree ? '#FFFFFF' : style.solid }}
               >
-                {level}
-              </span>
-              <span className={cn('text-[13px] font-bold', selected ? style.text : 'text-ink-2')}>{AVAILABILITY_LEVEL_LABELS[level]}</span>
-            </button>
-          );
-        })}
+                <span
+                  className={cn(
+                    'flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-lg text-xs font-extrabold',
+                    soloThree ? 'text-engage' : 'text-white'
+                  )}
+                  style={{ background: soloThree ? '#FFFFFF' : style.solid }}
+                >
+                  {level}
+                </span>
+                <span className={cn('text-[13px] font-bold', selected ? style.text : 'text-ink-2')}>{AVAILABILITY_LEVEL_LABELS[level]}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <p className="mt-2.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3">
         <Icon name="swipe" size={16} />
-        Touche ou glisse sur les jours pour peindre
+        Touche un jour pour peindre (glisse à la souris pour peindre plusieurs jours d&apos;un coup)
       </p>
 
       {monthGrids.map((grid) => (
@@ -201,7 +220,7 @@ export function AvailabilityPageClient() {
                 </div>
               ))}
             </div>
-            <div className="grid grid-cols-7 gap-1" style={{ touchAction: 'none' }}>
+            <div className="grid grid-cols-7 gap-1" style={{ touchAction: 'pan-y' }}>
               {grid.cells.map((cell, i) => {
                 if (!cell) return <div key={i} />;
                 const level = days[cell.iso];
@@ -223,8 +242,10 @@ export function AvailabilityPageClient() {
                     onPointerEnter={
                       cell.isPast
                         ? undefined
-                        : () => {
-                            if (paintOnRef.current) paintDay(cell.iso, false);
+                        : (event) => {
+                            // Le tactile ne déclenche pas d'enter en continu (capture implicite du
+                            // pointeur) : seul le tap fonctionne, ce qui laisse le scroll natif intact.
+                            if (paintOnRef.current && event.pointerType !== 'touch') paintDay(cell.iso, false);
                           }
                     }
                     className={cn(
@@ -258,6 +279,41 @@ export function AvailabilityPageClient() {
           Tout effacer
         </Button>
       </Card>
+
+      <div
+        aria-hidden={!showMiniBrush}
+        className={cn(
+          'fixed inset-x-0 z-20 flex justify-center px-4 transition-all duration-200 lg:inset-x-auto lg:right-6 lg:justify-end lg:px-0',
+          'bottom-[calc(94px+env(safe-area-inset-bottom))] lg:bottom-6',
+          showMiniBrush ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
+        )}
+      >
+        <div className="flex items-center gap-1.5 rounded-full border border-white/70 bg-white/90 p-1.5 shadow-[0_18px_40px_-16px_rgba(12,19,38,.45)] backdrop-blur-md backdrop-saturate-[2]">
+          {LEVELS.map((level) => {
+            const selected = brush === level;
+            const style = AVAILABILITY_LEVEL_STYLES[level];
+            const soloThree = selected && level === 3;
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={() => setBrush(level)}
+                aria-label={`Peindre avec : ${AVAILABILITY_LEVEL_LABELS[level]}`}
+                aria-pressed={selected}
+                tabIndex={showMiniBrush ? 0 : -1}
+                className={cn(
+                  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-extrabold transition',
+                  soloThree ? 'text-engage' : 'text-white',
+                  selected ? 'ring-2 ring-ink/70 ring-offset-2 ring-offset-white' : 'opacity-55'
+                )}
+                style={{ background: soloThree ? '#FFFFFF' : style.solid }}
+              >
+                {level}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
