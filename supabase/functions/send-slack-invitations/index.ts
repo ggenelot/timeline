@@ -36,17 +36,6 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Code numérique à 6 chiffres, tiré uniformément par rejet (évite le biais modulo).
-function generateNumericCode(): string {
-  const buf = new Uint32Array(1);
-  let n: number;
-  do {
-    crypto.getRandomValues(buf);
-    n = buf[0];
-  } while (n >= Math.floor(0xffffffff / 1_000_000) * 1_000_000);
-  return String(n % 1_000_000).padStart(6, '0');
-}
-
 // base64url d'un buffer d'octets — même encodage que randomBytes(...).toString('base64url')
 // côté Next (lib/slack/auth.ts) pour que les jetons magiques soient homogènes.
 function base64url(bytes: Uint8Array): string {
@@ -71,29 +60,6 @@ async function issueMagicLink(supabase: any, slackTeamId: string, slackUserId: s
     attempt_count: 0
   });
   return `${siteUrl}/auth/slack/magic?token=${token}`;
-}
-
-// Émet un code OTP 6 chiffres pour un couple Slack (team, user) : invalide les codes actifs
-// précédents (un seul code valable), ne stocke que le hash, retourne le code brut (jamais loggé).
-async function issueOtp(supabase: any, slackTeamId: string, slackUserId: string): Promise<string> {
-  await supabase
-    .from('slack_login_challenges')
-    .update({ consumed_at: new Date().toISOString() })
-    .eq('slack_team_id', slackTeamId)
-    .eq('slack_user_id', slackUserId)
-    .eq('channel', 'otp_login')
-    .is('consumed_at', null);
-
-  const code = generateNumericCode();
-  await supabase.from('slack_login_challenges').insert({
-    slack_team_id: slackTeamId,
-    slack_user_id: slackUserId,
-    code_hash: await sha256Hex(code),
-    channel: 'otp_login',
-    expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
-    attempt_count: 0
-  });
-  return code;
 }
 
 type Target = {
@@ -204,7 +170,7 @@ Deno.serve(async (req) => {
         let isNewAccount = false;
 
         if (linkedProfileId) {
-          // Compte déjà existant : on ne touche plus au mot de passe, on (re)émet un code OTP.
+          // Compte déjà existant : on ne touche plus au mot de passe, on (re)émet un lien magique.
           profileId = linkedProfileId;
           const { data: existingProfile, error: profileFetchError } = await supabase
             .from('profiles')
@@ -219,7 +185,7 @@ Deno.serve(async (req) => {
             .update({ slack_username: target.slack_username ?? null, slack_connected_at: new Date().toISOString() })
             .eq('id', profileId);
         } else if (target.matched_profile_id) {
-          // Profil Timeline existant repéré par email : on le relie à Slack puis on émet un code.
+          // Profil Timeline existant repéré par email : on le relie à Slack puis on émet un lien.
           profileId = target.matched_profile_id;
           const { data: existingProfile, error: profileFetchError } = await supabase
             .from('profiles')
@@ -241,7 +207,7 @@ Deno.serve(async (req) => {
           isNewAccount = true;
 
           // Mot de passe aléatoire uniquement pour satisfaire createUser — jamais communiqué :
-          // la connexion se fait par code OTP.
+          // la connexion se fait par lien magique.
           const { data: created, error: createError } = await supabase.auth.admin.createUser({
             email,
             email_confirm: true,
@@ -273,7 +239,6 @@ Deno.serve(async (req) => {
           { onConflict: 'slack_team_id,slack_user_id' }
         );
 
-        const otpCode = await issueOtp(supabase, slackTeamId, slackUserId);
         const magicUrl = await issueMagicLink(supabase, slackTeamId, slackUserId, siteUrl);
 
         const openRes = await fetch('https://slack.com/api/conversations.open', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ users: slackUserId }) });
@@ -281,11 +246,10 @@ Deno.serve(async (req) => {
         const channel = openJson.channel?.id;
         if (!channel) throw new Error('missing_dm_channel');
 
-        const loginUrl = `${siteUrl ?? ''}/login`;
-        // Le lien magique 1-clic évite d'avoir à connaître son identifiant Timeline ; l'OTP reste en
-        // repli si le lien ne s'ouvre pas. Aucun identifiant n'est demandé au destinataire.
+        // Le lien magique 1-clic évite d'avoir à connaître son identifiant Timeline. Aucun
+        // identifiant n'est demandé au destinataire.
         const intro = isNewAccount ? "Bonjour 👋\nTon compte Timeline est prêt." : 'Bonjour 👋';
-        const text = `${intro}\n\n🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}\n\nSi le lien ne s'ouvre pas, saisis ce code (valable 10 min) : ${otpCode}\n→ ${loginUrl} → « Recevoir un code par Slack » → colle le code à 6 chiffres.\n\nPas besoin de retenir d'identifiant : ce message t'identifie déjà. Tu recevras ensuite les propositions de mission directement ici, sur Slack.`;
+        const text = `${intro}\n\n🔗 Connexion en 1 clic (valable 10 min) : ${magicUrl}\n\nPas besoin de retenir d'identifiant : ce message t'identifie déjà. Tu recevras ensuite les propositions de mission directement ici, sur Slack.`;
 
         const postRes = await fetch('https://slack.com/api/chat.postMessage', { method: 'POST', headers: { Authorization: `Bearer ${Deno.env.get('SLACK_BOT_TOKEN')}`, 'Content-Type': 'application/json' }, body: JSON.stringify({ channel, text }) });
         const postJson = await postRes.json();
