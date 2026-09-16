@@ -120,19 +120,17 @@ test.describe.serial('P0 disponibilités longue durée (sans engagement)', () =>
     await expect(cell).not.toContainText('·');
   });
 
-  test('3) appui long ouvre la feuille « Préciser » sans repeindre ni effacer le jour', async ({ page }) => {
+  test('3) double-tap ouvre la feuille « Préciser » sans repeindre ni effacer le jour', async ({ page }) => {
     await login(page, USERS.benevole);
     await page.goto('/availability');
 
-    // Jour déjà peint au niveau 3 (test 1, état sérialisé) avant l'appui long.
+    // Jour déjà peint au niveau 3 (test 1, état sérialisé) avant le double-tap.
     const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
     await expect(cell).toHaveClass(/bg-engage/);
 
-    // Appui long (> 450 ms, pointeur maintenu, sans glisser) : ouvre la feuille.
-    await cell.hover();
-    await page.mouse.down();
+    // Double-tap : ouvre la feuille sans changer l'état du jour.
+    await cell.dblclick();
     await expect(page.locator('[data-testid="availability-precise-sheet"]')).toBeVisible();
-    await page.mouse.up();
 
     // Le jour n'a été ni repeint ni effacé.
     await expect(cell).toHaveClass(/bg-engage/);
