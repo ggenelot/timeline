@@ -50,6 +50,11 @@ export function AvailabilityPageClient() {
   const pendingDeletesRef = useRef<Set<string>>(new Set());
   const precisionsRef = useRef<Record<string, Precision>>({});
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Position de départ de l'appui long : on annule sur un vrai déplacement
+  // (glisser/scroll) au-delà d'un seuil, pas sur le `pointercancel` que le
+  // tactile déclenche seul (rappel de menu iOS/Android) sur un doigt immobile —
+  // sinon la feuille ne s'ouvrait jamais sur mobile.
+  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
   // Chaîne d'écritures : sérialise tous les upsert/delete d'un même écran pour
   // que leur ordre d'arrivée corresponde à l'ordre d'émission (sinon un flush de
   // peinture lent peut écraser une précision enregistrée juste après).
@@ -159,19 +164,53 @@ export function AvailabilityPageClient() {
       clearTimeout(longPressTimerRef.current);
       longPressTimerRef.current = null;
     }
+    longPressStartRef.current = null;
   }, []);
 
   useEffect(() => {
-    function onPointerEnd() {
+    const MOVE_THRESHOLD = 10; // px : au-delà, c'est un glisser/scroll, pas un appui long.
+
+    function onPointerUp() {
       paintOnRef.current = false;
       clearLongPress();
       void flushPending();
     }
-    window.addEventListener('pointerup', onPointerEnd);
-    window.addEventListener('pointercancel', onPointerEnd);
+    function onPointerCancel() {
+      // Un `pointercancel` alors que l'appui long est encore en cours et que le
+      // doigt n'a pas bougé vient du geste natif (menu contextuel/rappel) : on
+      // laisse le minuteur aller au bout plutôt que de tout annuler. Le flush de
+      // la peinture est différé — le minuteur, en s'ouvrant, annulera le toggle.
+      if (longPressTimerRef.current !== null) {
+        paintOnRef.current = false;
+        return;
+      }
+      paintOnRef.current = false;
+      void flushPending();
+    }
+    function onPointerMove(event: PointerEvent) {
+      const start = longPressStartRef.current;
+      if (longPressTimerRef.current === null || !start) return;
+      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > MOVE_THRESHOLD) {
+        clearLongPress();
+      }
+    }
+    // `touchend` reste émis même après un `pointercancel` (contrairement à
+    // `pointerup`) : c'est le signal fiable de lever du doigt, qui annule un
+    // appui trop court relâché avant les 450 ms.
+    function onTouchEnd() {
+      paintOnRef.current = false;
+      clearLongPress();
+      void flushPending();
+    }
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('touchend', onTouchEnd);
     return () => {
-      window.removeEventListener('pointerup', onPointerEnd);
-      window.removeEventListener('pointercancel', onPointerEnd);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('touchend', onTouchEnd);
     };
   }, [flushPending, clearLongPress]);
 
@@ -371,15 +410,18 @@ export function AvailabilityPageClient() {
                     onPointerDown={
                       cell.isPast
                         ? undefined
-                        : () => {
+                        : (event) => {
                             paintOnRef.current = true;
                             const previousLevel = days[cell.iso];
                             const previousPrecision = precisions[cell.iso];
                             paintDay(cell.iso, true);
                             clearLongPress();
+                            longPressStartRef.current = { x: event.clientX, y: event.clientY };
                             longPressTimerRef.current = setTimeout(() => {
                               // Appui long maintenu sans glisser : on annule le toggle
                               // et on ouvre la feuille « Préciser » (jour dispo uniquement).
+                              longPressTimerRef.current = null;
+                              longPressStartRef.current = null;
                               paintOnRef.current = false;
                               revertDay(cell.iso, previousLevel, previousPrecision);
                               if (previousLevel !== undefined && previousLevel > 0) setSheetIso(cell.iso);
@@ -397,6 +439,9 @@ export function AvailabilityPageClient() {
                             if (paintOnRef.current && event.pointerType !== 'touch') paintDay(cell.iso, false);
                           }
                     }
+                    // Empêche le rappel de menu/sélection natif (iOS surtout) qui, sur
+                    // un appui maintenu, déclenchait un `pointercancel` avant les 450 ms.
+                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
                     className={cn(
                       'relative flex aspect-square select-none items-center justify-center rounded-[9px] border text-[13px]',
                       style
@@ -507,6 +552,11 @@ function PreciseSheet({
   onClear: () => void;
   onClose: () => void;
 }) {
+  // Le tap résiduel du geste d'appui long qui vient d'ouvrir la feuille retombe
+  // sur l'overlay : on l'ignore pendant un court instant pour ne pas la refermer
+  // aussitôt (les boutons et Échap, eux, ferment sans délai).
+  const openedAtRef = useRef(Date.now());
+
   useEffect(() => {
     function onKey(event: KeyboardEvent) {
       if (event.key === 'Escape') onClose();
@@ -522,7 +572,10 @@ function PreciseSheet({
       data-testid="availability-precise-sheet"
       className="fixed inset-0 z-50 flex flex-col justify-end"
       style={{ background: 'rgba(12,19,38,.45)' }}
-      onClick={onClose}
+      onClick={() => {
+        if (Date.now() - openedAtRef.current < 500) return;
+        onClose();
+      }}
     >
       <div
         className="w-full rounded-t-[20px] bg-white p-5 pb-[calc(20px+env(safe-area-inset-bottom))] shadow-[0_-16px_40px_-18px_rgba(12,19,38,.5)] sm:mx-auto sm:mb-6 sm:max-w-[440px] sm:rounded-[20px]"
