@@ -22,7 +22,7 @@ import { cn } from '@/lib/cn';
 
 const HORIZON_MONTHS = 3;
 const LEVELS: AvailabilityLevel[] = [0, 1, 2, 3];
-const LONG_PRESS_MS = 450;
+const DOUBLE_TAP_MS = 300;
 
 type Precision = { from: string | null; until: string | null };
 
@@ -46,15 +46,18 @@ export function AvailabilityPageClient() {
   const [sheetIso, setSheetIso] = useState<string | null>(null);
 
   const paintOnRef = useRef(false);
+  // Un glisser (peinture multi-jours) est en cours : on écrit tout de suite au
+  // relâchement, sans laisser de fenêtre double-tap.
+  const draggedRef = useRef(false);
   const pendingUpsertsRef = useRef<Map<string, AvailabilityLevel>>(new Map());
   const pendingDeletesRef = useRef<Set<string>>(new Set());
   const precisionsRef = useRef<Record<string, Precision>>({});
-  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Position de départ de l'appui long : on annule sur un vrai déplacement
-  // (glisser/scroll) au-delà d'un seuil, pas sur le `pointercancel` que le
-  // tactile déclenche seul (rappel de menu iOS/Android) sur un doigt immobile —
-  // sinon la feuille ne s'ouvrait jamais sur mobile.
-  const longPressStartRef = useRef<{ x: number; y: number } | null>(null);
+  // Double-tap pour ouvrir la feuille « Préciser ». On mémorise le dernier tap
+  // (cellule, horodatage, état d'avant le tap) et on diffère l'enregistrement
+  // d'un tap simple le temps de la fenêtre double-tap, de sorte qu'un double-tap
+  // n'écrive rien en base et laisse le jour tel qu'il était.
+  const lastTapRef = useRef<{ iso: string; time: number; prevLevel: AvailabilityLevel | undefined; prevPrecision: Precision | undefined } | null>(null);
+  const deferredFlushRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Chaîne d'écritures : sérialise tous les upsert/delete d'un même écran pour
   // que leur ordre d'arrivée corresponde à l'ordre d'émission (sinon un flush de
   // peinture lent peut écraser une précision enregistrée juste après).
@@ -159,60 +162,51 @@ export function AvailabilityPageClient() {
     });
   }, [userId, loadDays, enqueueWrite]);
 
-  const clearLongPress = useCallback(() => {
-    if (longPressTimerRef.current !== null) {
-      clearTimeout(longPressTimerRef.current);
-      longPressTimerRef.current = null;
+  const cancelDeferredFlush = useCallback(() => {
+    if (deferredFlushRef.current !== null) {
+      clearTimeout(deferredFlushRef.current);
+      deferredFlushRef.current = null;
     }
-    longPressStartRef.current = null;
   }, []);
 
   useEffect(() => {
-    const MOVE_THRESHOLD = 10; // px : au-delà, c'est un glisser/scroll, pas un appui long.
-
-    function onPointerUp() {
+    function onPointerEnd() {
+      const wasDragging = draggedRef.current;
       paintOnRef.current = false;
-      clearLongPress();
-      void flushPending();
-    }
-    function onPointerCancel() {
-      // Un `pointercancel` alors que l'appui long est encore en cours et que le
-      // doigt n'a pas bougé vient du geste natif (menu contextuel/rappel) : on
-      // laisse le minuteur aller au bout plutôt que de tout annuler. Le flush de
-      // la peinture est différé — le minuteur, en s'ouvrant, annulera le toggle.
-      if (longPressTimerRef.current !== null) {
-        paintOnRef.current = false;
+      draggedRef.current = false;
+      if (wasDragging) {
+        // Glisser terminé : rien à disambiguïser, on écrit tout de suite.
+        cancelDeferredFlush();
+        void flushPending();
         return;
       }
-      paintOnRef.current = false;
-      void flushPending();
+      // Tap simple : on diffère l'écriture pour laisser une fenêtre au 2e tap.
+      // S'il n'arrive pas, ce flush persiste le tap ; s'il arrive, il est annulé.
+      cancelDeferredFlush();
+      deferredFlushRef.current = setTimeout(() => {
+        deferredFlushRef.current = null;
+        void flushPending();
+      }, DOUBLE_TAP_MS);
     }
-    function onPointerMove(event: PointerEvent) {
-      const start = longPressStartRef.current;
-      if (longPressTimerRef.current === null || !start) return;
-      if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > MOVE_THRESHOLD) {
-        clearLongPress();
-      }
-    }
-    // `touchend` reste émis même après un `pointercancel` (contrairement à
-    // `pointerup`) : c'est le signal fiable de lever du doigt, qui annule un
-    // appui trop court relâché avant les 450 ms.
-    function onTouchEnd() {
-      paintOnRef.current = false;
-      clearLongPress();
-      void flushPending();
-    }
-    window.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('pointercancel', onPointerCancel);
-    window.addEventListener('pointermove', onPointerMove);
-    window.addEventListener('touchend', onTouchEnd);
+    window.addEventListener('pointerup', onPointerEnd);
+    window.addEventListener('pointercancel', onPointerEnd);
     return () => {
-      window.removeEventListener('pointerup', onPointerUp);
-      window.removeEventListener('pointercancel', onPointerCancel);
-      window.removeEventListener('pointermove', onPointerMove);
-      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('pointerup', onPointerEnd);
+      window.removeEventListener('pointercancel', onPointerEnd);
     };
-  }, [flushPending, clearLongPress]);
+  }, [flushPending, cancelDeferredFlush]);
+
+  // Garantit l'écriture des derniers taps si la page est quittée pendant la
+  // fenêtre double-tap (le flush différé n'aurait pas eu le temps de partir).
+  useEffect(() => {
+    return () => {
+      if (deferredFlushRef.current !== null) {
+        clearTimeout(deferredFlushRef.current);
+        deferredFlushRef.current = null;
+        void flushPending();
+      }
+    };
+  }, [flushPending]);
 
   // Palette compacte : visible dès que le sélecteur complet sort de l'écran,
   // pour changer de pinceau sans remonter en haut de la page.
@@ -380,7 +374,7 @@ export function AvailabilityPageClient() {
 
       <p className="mt-2.5 flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-3">
         <Icon name="swipe" size={16} />
-        Touche ou glisse pour peindre · appui long pour préciser un horaire
+        Touche ou glisse pour peindre · double-tape un jour pour préciser un horaire
       </p>
 
       {monthGrids.map((grid) => (
@@ -406,42 +400,48 @@ export function AvailabilityPageClient() {
                     key={cell.iso}
                     data-testid="availability-day-cell"
                     data-day={cell.iso}
-                    onContextMenu={(event) => event.preventDefault()}
                     onPointerDown={
                       cell.isPast
                         ? undefined
-                        : (event) => {
-                            paintOnRef.current = true;
-                            const previousLevel = days[cell.iso];
-                            const previousPrecision = precisions[cell.iso];
-                            paintDay(cell.iso, true);
-                            clearLongPress();
-                            longPressStartRef.current = { x: event.clientX, y: event.clientY };
-                            longPressTimerRef.current = setTimeout(() => {
-                              // Appui long maintenu sans glisser : on annule le toggle
-                              // et on ouvre la feuille « Préciser » (jour dispo uniquement).
-                              longPressTimerRef.current = null;
-                              longPressStartRef.current = null;
+                        : () => {
+                            const now = Date.now();
+                            const last = lastTapRef.current;
+                            const isDoubleTap = last !== null && last.iso === cell.iso && now - last.time < DOUBLE_TAP_MS;
+                            if (isDoubleTap && last) {
+                              // 2e tap : on annule le toggle du 1er (dont l'écriture est
+                              // encore différée, donc rien n'a été écrit en base) et on
+                              // ouvre la feuille « Préciser » sur un jour dispo.
+                              lastTapRef.current = null;
                               paintOnRef.current = false;
-                              revertDay(cell.iso, previousLevel, previousPrecision);
-                              if (previousLevel !== undefined && previousLevel > 0) setSheetIso(cell.iso);
-                            }, LONG_PRESS_MS);
+                              cancelDeferredFlush();
+                              revertDay(cell.iso, last.prevLevel, last.prevPrecision);
+                              if (last.prevLevel !== undefined && last.prevLevel > 0) setSheetIso(cell.iso);
+                              return;
+                            }
+                            // 1er tap : peinture immédiate (tap/glisser inchangés).
+                            paintOnRef.current = true;
+                            draggedRef.current = false;
+                            lastTapRef.current = { iso: cell.iso, time: now, prevLevel: days[cell.iso], prevPrecision: precisions[cell.iso] };
+                            paintDay(cell.iso, true);
                           }
                     }
                     onPointerEnter={
                       cell.isPast
                         ? undefined
                         : (event) => {
-                            // Glisser vers une autre cellule annule l'appui long.
-                            clearLongPress();
                             // Le tactile ne déclenche pas d'enter en continu (capture implicite du
                             // pointeur) : seul le tap fonctionne, ce qui laisse le scroll natif intact.
-                            if (paintOnRef.current && event.pointerType !== 'touch') paintDay(cell.iso, false);
+                            if (paintOnRef.current && event.pointerType !== 'touch') {
+                              // Glisser : ce n'est plus un tap → pas de double-tap possible.
+                              draggedRef.current = true;
+                              lastTapRef.current = null;
+                              paintDay(cell.iso, false);
+                            }
                           }
                     }
-                    // Empêche le rappel de menu/sélection natif (iOS surtout) qui, sur
-                    // un appui maintenu, déclenchait un `pointercancel` avant les 450 ms.
-                    style={{ WebkitTouchCallout: 'none', WebkitUserSelect: 'none' }}
+                    // Désactive le zoom double-tap et le délai de clic tactile, tout en
+                    // laissant le scroll (pan) ; empêche la sélection de texte au 2e tap.
+                    style={{ touchAction: 'manipulation', WebkitUserSelect: 'none' }}
                     className={cn(
                       'relative flex aspect-square select-none items-center justify-center rounded-[9px] border text-[13px]',
                       style
@@ -552,8 +552,8 @@ function PreciseSheet({
   onClear: () => void;
   onClose: () => void;
 }) {
-  // Le tap résiduel du geste d'appui long qui vient d'ouvrir la feuille retombe
-  // sur l'overlay : on l'ignore pendant un court instant pour ne pas la refermer
+  // Le tap résiduel du double-tap qui vient d'ouvrir la feuille peut retomber sur
+  // l'overlay : on l'ignore pendant un court instant pour ne pas la refermer
   // aussitôt (les boutons et Échap, eux, ferment sans délai).
   const openedAtRef = useRef(Date.now());
 
