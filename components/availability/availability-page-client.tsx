@@ -306,6 +306,39 @@ export function AvailabilityPageClient() {
     pendingDeletesRef.current.delete(iso);
   }
 
+  // Fixe un jour à un niveau donné (avec sa précision) et l'enregistre — utilisé
+  // par le double-tap, qui inscrit le jour puis ouvre la réserve horaire.
+  function commitDay(iso: string, level: AvailabilityLevel, precision: Precision | undefined) {
+    setDays((prev) => ({ ...prev, [iso]: level }));
+    setPrecisions((prev) => {
+      const next = { ...prev };
+      if (!precision || (precision.from === null && precision.until === null)) delete next[iso];
+      else next[iso] = precision;
+      return next;
+    });
+    pendingUpsertsRef.current.delete(iso);
+    pendingDeletesRef.current.delete(iso);
+
+    if (!userId) return;
+    const uid = userId;
+    void enqueueWrite(async () => {
+      const { error: upsertError } = await supabase.from('availability_declarations').upsert(
+        [
+          {
+            volunteer_id: uid,
+            day: iso,
+            level,
+            available_from: precision?.from ?? null,
+            available_until: precision?.until ?? null,
+            updated_at: new Date().toISOString()
+          }
+        ],
+        { onConflict: 'volunteer_id,day' }
+      );
+      if (upsertError) setError(`Enregistrement impossible : ${upsertError.message}`);
+    });
+  }
+
   async function savePrecision(iso: string, from: string | null, until: string | null) {
     if (!userId) return;
     const uid = userId;
@@ -441,14 +474,22 @@ export function AvailabilityPageClient() {
                             const last = lastTapRef.current;
                             const isDoubleTap = last !== null && last.iso === cell.iso && now - last.time < DOUBLE_TAP_MS;
                             if (isDoubleTap && last) {
-                              // 2e tap : on annule le toggle du 1er (dont l'écriture est
-                              // encore différée, donc rien n'a été écrit en base) et on
-                              // ouvre la feuille « Préciser » sur un jour dispo.
+                              // 2e tap = « je m'inscris avec réserve », en un seul geste :
+                              // on inscrit le jour (niveau conservé s'il l'était déjà,
+                              // sinon niveau du pinceau) et on ouvre la réserve horaire.
                               lastTapRef.current = null;
                               paintOnRef.current = false;
                               cancelDeferredFlush();
-                              revertDay(cell.iso, last.prevLevel, last.prevPrecision);
-                              if (last.prevLevel !== undefined && last.prevLevel > 0) setSheetIso(cell.iso);
+                              const wasAvailable = last.prevLevel !== undefined && last.prevLevel > 0;
+                              const targetLevel = wasAvailable ? last.prevLevel : brush > 0 ? brush : undefined;
+                              if (targetLevel !== undefined && targetLevel > 0) {
+                                commitDay(cell.iso, targetLevel, wasAvailable ? last.prevPrecision : undefined);
+                                setSheetIso(cell.iso);
+                              } else {
+                                // Pinceau « indispo » sur un jour non dispo : pas de réserve
+                                // possible, on laisse le jour dans son état d'avant le geste.
+                                revertDay(cell.iso, last.prevLevel, last.prevPrecision);
+                              }
                               return;
                             }
                             // 1er tap : peinture immédiate (tap/glisser inchangés).

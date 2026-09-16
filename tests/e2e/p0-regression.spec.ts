@@ -174,4 +174,25 @@ test.describe.serial('P0 disponibilités longue durée (sans engagement)', () =>
     await expect(page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`)).not.toHaveClass(/bg-engage/);
     await expect(page.getByText(/précisé/)).toHaveCount(0);
   });
+
+  test('6) double-tap sur un jour vierge inscrit ET ouvre la réserve en un geste', async ({ page }) => {
+    await login(page, USERS.benevole);
+    await page.goto('/availability');
+
+    // Jour vierge (effacé au test 5) : le double-tap doit inscrire au pinceau (3)
+    // et ouvrir la feuille, sans exiger un tap préalable.
+    const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
+    await expect(cell).not.toHaveClass(/bg-engage/);
+
+    await cell.dblclick();
+    await expect(page.locator('[data-testid="availability-precise-sheet"]')).toBeVisible();
+    await expect(cell).toHaveClass(/bg-engage/);
+
+    await page.getByRole('button', { name: /C'est noté/ }).click();
+    await expect(page.getByText(/^1 jour renseigné/)).toBeVisible();
+
+    // Persistance de l'inscription faite au double-tap.
+    await page.reload();
+    await expect(page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`)).toHaveClass(/bg-engage/);
+  });
 });
