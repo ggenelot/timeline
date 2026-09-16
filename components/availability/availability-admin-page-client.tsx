@@ -51,6 +51,19 @@ export function AvailabilityAdminPageClient() {
 
   const monthGrids = useMemo(() => buildMonthGrids(HORIZON_MONTHS), []);
 
+  // Échelle dynamique : le jour le plus « chargé » observé fixe le sommet de la
+  // gamme de couleurs, à la manière d'une heatmap GitHub. Les jours se comparent
+  // ainsi entre eux plutôt que contre un maximum théorique rarement atteint.
+  const dynamicMax = useMemo(() => {
+    let max = 0;
+    for (const entry of daysByIso.values()) {
+      if (entry.respondedCount === 0 || entry.zeroCount === entry.respondedCount) continue;
+      const value = metric === 'score' ? entry.score : entry.readyCount;
+      if (value > max) max = value;
+    }
+    return Math.max(1, max);
+  }, [daysByIso, metric]);
+
   // Accès (une fois) : garde effective = permission côté API ; ici gestion UX seule.
   useEffect(() => {
     if (permissionsLoading) return;
@@ -100,15 +113,12 @@ export function AvailabilityAdminPageClient() {
     );
   }
 
-  const scoreMax = Math.max(1, volunteerCount * 3);
-
   function cellVisual(entry: AvailabilityDayAggregate | undefined): { background: string; textClass: string; onDark: boolean } {
     if (!entry || entry.respondedCount === 0) return { background: '#F7F9FC', textClass: 'text-ink-3', onDark: false };
     if (entry.zeroCount === entry.respondedCount) return { background: '#FDEAEA', textClass: 'text-bad', onDark: false };
 
     const value = metric === 'score' ? entry.score : entry.readyCount;
-    const max = metric === 'score' ? scoreMax : Math.max(1, volunteerCount);
-    const fraction = Math.max(0, Math.min(1, value / max));
+    const fraction = Math.max(0, Math.min(1, value / dynamicMax));
     const alpha = 0.12 + 0.88 * fraction;
     return { background: `rgba(5,150,105,${alpha})`, textClass: fraction > 0.5 ? 'text-white' : 'text-ink', onDark: fraction > 0.5 };
   }
@@ -210,7 +220,7 @@ export function AvailabilityAdminPageClient() {
               <span key={alpha} className="h-4 w-4" style={{ background: `rgba(5,150,105,${alpha})` }} />
             ))}
           </span>
-          <span>{scoreMax} pts</span>
+          <span>{metric === 'score' ? `${dynamicMax} pts` : `${dynamicMax} prêts`}</span>
         </div>
         <div className="flex items-center gap-1.5">
           <span className="h-4 w-4 rounded" style={{ background: '#FDEAEA' }} />
