@@ -30,19 +30,47 @@ export async function GET(req: NextRequest) {
   const fromISO = isoDate(fromMonthStart);
   const toISO = isoDate(toMonthStart);
 
+  type DeclRow = {
+    volunteer_id: string;
+    day: string;
+    level: AvailabilityLevel;
+    available_from: string | null;
+    available_until: string | null;
+  };
+  type ProfileRow = { id: string; full_name: string | null };
+
+  // PostgREST plafonne chaque réponse (max-rows, 1000 par défaut) : on pagine
+  // pour ne tronquer ni les déclarations (volontaires × jours peut dépasser 1000)
+  // ni la liste des profils (sinon volunteerCount et « sans réponse » faussés).
+  const PAGE_SIZE = 1000;
+  async function fetchAllPages<T>(build: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>) {
+    const rows: T[] = [];
+    for (let from = 0; ; from += PAGE_SIZE) {
+      const { data, error } = await build(from, from + PAGE_SIZE - 1);
+      if (error) return { data: null, error };
+      const page = data ?? [];
+      rows.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
+    return { data: rows, error: null };
+  }
+
   const [declarationsRes, volunteersRes] = await Promise.all([
-    client!
-      .from('availability_declarations')
-      .select('volunteer_id,day,level,available_from,available_until')
-      .gte('day', fromISO)
-      .lt('day', toISO),
-    client!.from('profiles').select('id,full_name')
+    fetchAllPages<DeclRow>((from, to) =>
+      client!
+        .from('availability_declarations')
+        .select('volunteer_id,day,level,available_from,available_until')
+        .gte('day', fromISO)
+        .lt('day', toISO)
+        .range(from, to)
+    ),
+    fetchAllPages<ProfileRow>((from, to) => client!.from('profiles').select('id,full_name').range(from, to))
   ]);
 
   if (declarationsRes.error) return NextResponse.json({ error: declarationsRes.error.message }, { status: 500 });
   if (volunteersRes.error) return NextResponse.json({ error: volunteersRes.error.message }, { status: 500 });
 
-  const volunteers = (volunteersRes.data ?? []) as Array<{ id: string; full_name: string | null }>;
+  const volunteers = volunteersRes.data ?? [];
   const volunteerCount = volunteers.length;
   const nameById = new Map(volunteers.map((v) => [v.id, shortName(v.full_name)]));
 
@@ -53,15 +81,7 @@ export async function GET(req: NextRequest) {
   const byDay = new Map<string, AvailabilityDayAggregate>();
   const respondersByDay = new Map<string, Set<string>>();
 
-  type DeclRow = {
-    volunteer_id: string;
-    day: string;
-    level: AvailabilityLevel;
-    available_from: string | null;
-    available_until: string | null;
-  };
-
-  for (const row of (declarationsRes.data ?? []) as DeclRow[]) {
+  for (const row of declarationsRes.data ?? []) {
     const entry =
       byDay.get(row.day) ??
       ({

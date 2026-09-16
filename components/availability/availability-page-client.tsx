@@ -50,6 +50,19 @@ export function AvailabilityPageClient() {
   const pendingDeletesRef = useRef<Set<string>>(new Set());
   const precisionsRef = useRef<Record<string, Precision>>({});
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Chaîne d'écritures : sérialise tous les upsert/delete d'un même écran pour
+  // que leur ordre d'arrivée corresponde à l'ordre d'émission (sinon un flush de
+  // peinture lent peut écraser une précision enregistrée juste après).
+  const writeChainRef = useRef<Promise<unknown>>(Promise.resolve());
+
+  const enqueueWrite = useCallback(<T,>(task: () => Promise<T>): Promise<T> => {
+    const run = writeChainRef.current.then(task, task);
+    writeChainRef.current = run.then(
+      () => undefined,
+      () => undefined
+    );
+    return run as Promise<T>;
+  }, []);
 
   useEffect(() => {
     precisionsRef.current = precisions;
@@ -103,6 +116,7 @@ export function AvailabilityPageClient() {
 
   const flushPending = useCallback(async () => {
     if (!userId) return;
+    const uid = userId;
     const upserts = Array.from(pendingUpsertsRef.current.entries());
     const deletes = Array.from(pendingDeletesRef.current);
     if (upserts.length === 0 && deletes.length === 0) return;
@@ -110,37 +124,35 @@ export function AvailabilityPageClient() {
     pendingUpsertsRef.current = new Map();
     pendingDeletesRef.current = new Set();
 
-    if (upserts.length > 0) {
-      // On renseigne toujours les colonnes horaires : niveau 0 => null (invariant
-      // de la contrainte CHECK), niveau > 0 => on préserve la précision existante.
-      const { error: upsertError } = await supabase.from('availability_declarations').upsert(
-        upserts.map(([day, level]) => {
-          const precision = level > 0 ? precisionsRef.current[day] : undefined;
-          return {
-            volunteer_id: userId,
-            day,
-            level,
-            available_from: precision?.from ?? null,
-            available_until: precision?.until ?? null,
-            updated_at: new Date().toISOString()
-          };
-        }),
-        { onConflict: 'volunteer_id,day' }
-      );
-      if (upsertError) setError(`Enregistrement impossible : ${upsertError.message}`);
-    }
+    await enqueueWrite(async () => {
+      if (upserts.length > 0) {
+        // On renseigne toujours les colonnes horaires : niveau 0 => null (invariant
+        // de la contrainte CHECK), niveau > 0 => on préserve la précision existante.
+        const { error: upsertError } = await supabase.from('availability_declarations').upsert(
+          upserts.map(([day, level]) => {
+            const precision = level > 0 ? precisionsRef.current[day] : undefined;
+            return {
+              volunteer_id: uid,
+              day,
+              level,
+              available_from: precision?.from ?? null,
+              available_until: precision?.until ?? null,
+              updated_at: new Date().toISOString()
+            };
+          }),
+          { onConflict: 'volunteer_id,day' }
+        );
+        if (upsertError) setError(`Enregistrement impossible : ${upsertError.message}`);
+      }
 
-    if (deletes.length > 0) {
-      const { error: deleteError } = await supabase
-        .from('availability_declarations')
-        .delete()
-        .eq('volunteer_id', userId)
-        .in('day', deletes);
-      if (deleteError) setError(`Enregistrement impossible : ${deleteError.message}`);
-    }
+      if (deletes.length > 0) {
+        const { error: deleteError } = await supabase.from('availability_declarations').delete().eq('volunteer_id', uid).in('day', deletes);
+        if (deleteError) setError(`Enregistrement impossible : ${deleteError.message}`);
+      }
 
-    await loadDays(userId);
-  }, [userId, loadDays]);
+      await loadDays(uid);
+    });
+  }, [userId, loadDays, enqueueWrite]);
 
   const clearLongPress = useCallback(() => {
     if (longPressTimerRef.current !== null) {
@@ -209,11 +221,19 @@ export function AvailabilityPageClient() {
 
   // Annule le toggle de peinture appliqué au pointerdown (utilisé quand l'appui
   // long prend le relais : préciser un horaire ne doit ni repeindre ni effacer).
-  function revertDay(iso: string, previous: AvailabilityLevel | undefined) {
+  // Restaure aussi la précision, que `paintDay` a pu effacer via le chemin toggle
+  // ou le pinceau 0 — sinon la feuille s'ouvrirait avec des horaires vidés.
+  function revertDay(iso: string, previousLevel: AvailabilityLevel | undefined, previousPrecision: Precision | undefined) {
     setDays((prev) => {
       const next = { ...prev };
-      if (previous === undefined) delete next[iso];
-      else next[iso] = previous;
+      if (previousLevel === undefined) delete next[iso];
+      else next[iso] = previousLevel;
+      return next;
+    });
+    setPrecisions((prev) => {
+      const next = { ...prev };
+      if (previousPrecision === undefined) delete next[iso];
+      else next[iso] = previousPrecision;
       return next;
     });
     pendingUpsertsRef.current.delete(iso);
@@ -222,6 +242,7 @@ export function AvailabilityPageClient() {
 
   async function savePrecision(iso: string, from: string | null, until: string | null) {
     if (!userId) return;
+    const uid = userId;
     const level = days[iso];
     if (level === undefined || level === 0) return;
 
@@ -232,15 +253,18 @@ export function AvailabilityPageClient() {
       return next;
     });
 
-    const { error: upsertError } = await supabase.from('availability_declarations').upsert(
-      [{ volunteer_id: userId, day: iso, level, available_from: from, available_until: until, updated_at: new Date().toISOString() }],
-      { onConflict: 'volunteer_id,day' }
-    );
-    if (upsertError) setError(`Enregistrement impossible : ${upsertError.message}`);
+    await enqueueWrite(async () => {
+      const { error: upsertError } = await supabase.from('availability_declarations').upsert(
+        [{ volunteer_id: uid, day: iso, level, available_from: from, available_until: until, updated_at: new Date().toISOString() }],
+        { onConflict: 'volunteer_id,day' }
+      );
+      if (upsertError) setError(`Enregistrement impossible : ${upsertError.message}`);
+    });
   }
 
   async function clearAllDays() {
     if (!userId) return;
+    const uid = userId;
     setError(null);
     pendingUpsertsRef.current = new Map();
     pendingDeletesRef.current = new Set();
@@ -248,17 +272,19 @@ export function AvailabilityPageClient() {
     setPrecisions({});
     setSheetIso(null);
 
-    const { error: deleteError } = await supabase
-      .from('availability_declarations')
-      .delete()
-      .eq('volunteer_id', userId)
-      .gte('day', fromISO)
-      .lt('day', toISO);
+    await enqueueWrite(async () => {
+      const { error: deleteError } = await supabase
+        .from('availability_declarations')
+        .delete()
+        .eq('volunteer_id', uid)
+        .gte('day', fromISO)
+        .lt('day', toISO);
 
-    if (deleteError) {
-      setError(`Impossible de tout effacer : ${deleteError.message}`);
-      await loadDays(userId);
-    }
+      if (deleteError) {
+        setError(`Impossible de tout effacer : ${deleteError.message}`);
+        await loadDays(uid);
+      }
+    });
   }
 
   const filledCount = Object.keys(days).length;
@@ -347,15 +373,16 @@ export function AvailabilityPageClient() {
                         ? undefined
                         : () => {
                             paintOnRef.current = true;
-                            const previous = days[cell.iso];
+                            const previousLevel = days[cell.iso];
+                            const previousPrecision = precisions[cell.iso];
                             paintDay(cell.iso, true);
                             clearLongPress();
                             longPressTimerRef.current = setTimeout(() => {
                               // Appui long maintenu sans glisser : on annule le toggle
                               // et on ouvre la feuille « Préciser » (jour dispo uniquement).
                               paintOnRef.current = false;
-                              revertDay(cell.iso, previous);
-                              if (previous !== undefined && previous > 0) setSheetIso(cell.iso);
+                              revertDay(cell.iso, previousLevel, previousPrecision);
+                              if (previousLevel !== undefined && previousLevel > 0) setSheetIso(cell.iso);
                             }, LONG_PRESS_MS);
                           }
                     }
