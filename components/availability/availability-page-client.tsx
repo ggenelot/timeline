@@ -241,7 +241,10 @@ export function AvailabilityPageClient() {
       window.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
     };
-  }, []);
+    // Dépend de `loading` : tant que la page affiche « Chargement… », le bloc de
+    // boutons (donc `pickerRef`) n'est pas monté et l'effet ressort aussitôt.
+    // Il faut le relancer une fois les données chargées pour attacher le listener.
+  }, [loading]);
 
   // Rangée mini injectée dans le header sticky (mobile) — même état que les gros
   // boutons. Mémorisée pour ne reposer le slot que sur changement de sélection.
