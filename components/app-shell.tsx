@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { Profile } from '@/lib/types';
 import { Header } from '@/components/header';
 import { SidebarMenu, DesktopSidebar, BottomTabs, useVisibleGestionItems } from '@/components/sidebar-menu';
+import { HeaderSlotProvider } from '@/lib/header-slot';
 import { cn } from '@/lib/cn';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -49,25 +50,27 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const gestionItems = useVisibleGestionItems();
 
   return (
-    <div className="min-h-screen">
-      <DesktopSidebar profile={profile} session={session} gestionItems={gestionItems} />
-      <Header
-        session={session}
-        profile={profile}
-        menuOpen={menuOpen}
-        onToggleMenu={() => setMenuOpen((o) => !o)}
-      />
-      <div className={cn('flex min-h-screen flex-col', session && 'lg:pl-[250px]')}>
-        <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-[calc(112px+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
+    <HeaderSlotProvider>
+      <div className="min-h-screen">
+        <DesktopSidebar profile={profile} session={session} gestionItems={gestionItems} />
+        <Header
+          session={session}
+          profile={profile}
+          menuOpen={menuOpen}
+          onToggleMenu={() => setMenuOpen((o) => !o)}
+        />
+        <div className={cn('flex min-h-screen flex-col', session && 'lg:pl-[250px]')}>
+          <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-[calc(112px+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
+        </div>
+        <BottomTabs session={session} />
+        <SidebarMenu
+          open={menuOpen}
+          onClose={() => setMenuOpen(false)}
+          profile={profile}
+          session={session}
+          gestionItems={gestionItems}
+        />
       </div>
-      <BottomTabs session={session} />
-      <SidebarMenu
-        open={menuOpen}
-        onClose={() => setMenuOpen(false)}
-        profile={profile}
-        session={session}
-        gestionItems={gestionItems}
-      />
-    </div>
+    </HeaderSlotProvider>
   );
 }
