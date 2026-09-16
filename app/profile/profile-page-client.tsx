@@ -368,40 +368,40 @@ export function ProfilePageClient() {
               })}
             </div>
           </Card>
-
-          <Card as="form" onSubmit={handleChangePassword} className="p-4">
-            <p className={overlineClass}>Sécurité</p>
-            <p className="mt-2 font-semibold text-ink">Changer mon mot de passe</p>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2">
-              <label className="text-xs font-medium text-ink-2">
-                Nouveau mot de passe
-                <input
-                  type="password"
-                  value={newPassword}
-                  onChange={(event) => setNewPassword(event.target.value)}
-                  className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
-              <label className="text-xs font-medium text-ink-2">
-                Confirmer le mot de passe
-                <input
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(event) => setConfirmPassword(event.target.value)}
-                  className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
-                  autoComplete="new-password"
-                  required
-                />
-              </label>
-            </div>
-            <Button type="submit" variant="primary" disabled={working} className="mt-4">
-              Mettre à jour le mot de passe
-            </Button>
-          </Card>
         </div>
       ) : null}
+
+      <Card as="form" onSubmit={handleChangePassword} className="p-4">
+        <p className={overlineClass}>Sécurité</p>
+        <p className="mt-2 font-semibold text-ink">Changer mon mot de passe</p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <label className="text-xs font-medium text-ink-2">
+            Nouveau mot de passe
+            <input
+              type="password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
+              autoComplete="new-password"
+              required
+            />
+          </label>
+          <label className="text-xs font-medium text-ink-2">
+            Confirmer le mot de passe
+            <input
+              type="password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              className="mt-1.5 h-11 w-full rounded-[10px] border-[1.5px] border-line-field bg-surface-card px-3 text-sm text-ink outline-none focus:border-brand"
+              autoComplete="new-password"
+              required
+            />
+          </label>
+        </div>
+        <Button type="submit" variant="primary" disabled={working} className="mt-4">
+          Mettre à jour le mot de passe
+        </Button>
+      </Card>
 
       <Card className="p-4 text-sm">
         <div className="flex items-center gap-2">
