@@ -18,6 +18,7 @@ import {
 import { Card, PageHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Icon } from '@/components/ui/icon';
+import { useHeaderSlot } from '@/lib/header-slot';
 import { cn } from '@/lib/cn';
 
 const HORIZON_MONTHS = 3;
@@ -214,18 +215,47 @@ export function AvailabilityPageClient() {
     };
   }, [flushPending, clearLongPress]);
 
-  // Palette compacte : visible dès que le sélecteur complet sort de l'écran,
-  // pour changer de pinceau sans remonter en haut de la page.
+  // Palette compacte : visible dès que le sélecteur complet passe sous le header
+  // sticky, pour changer de pinceau sans remonter en haut de la page.
   const pickerRef = useRef<HTMLDivElement>(null);
   const [showMiniBrush, setShowMiniBrush] = useState(false);
 
   useEffect(() => {
     const el = pickerRef.current;
     if (!el) return;
-    const observer = new IntersectionObserver(([entry]) => setShowMiniBrush(!entry.isIntersecting), { threshold: 0 });
-    observer.observe(el);
-    return () => observer.disconnect();
+    // Seuils avec hystérésis : afficher quand le bas des gros boutons passe
+    // au-dessus du header (~56px), masquer seulement bien plus haut. L'écart doit
+    // dépasser la hauteur de la rangée mini — sinon, comme celle-ci s'insère dans
+    // le header sticky (flux normal) et repousse le contenu, montrer/masquer près
+    // du seuil oscillerait à chaque frame.
+    const SHOW_AT = 56;
+    const HIDE_AT = 140;
+    let visible = false;
+    // Listener scroll passif : on ne met à jour l'état React que sur changement.
+    const update = () => {
+      const bottom = el.getBoundingClientRect().bottom;
+      const next = visible ? bottom < HIDE_AT : bottom <= SHOW_AT;
+      if (next !== visible) {
+        visible = next;
+        setShowMiniBrush(next);
+      }
+    };
+    update();
+    window.addEventListener('scroll', update, { passive: true });
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update);
+      window.removeEventListener('resize', update);
+    };
   }, []);
+
+  // Rangée mini injectée dans le header sticky (mobile) — même état que les gros
+  // boutons. Mémorisée pour ne reposer le slot que sur changement de sélection.
+  const miniBrushRow = useMemo(
+    () => (showMiniBrush ? <MiniBrushRow brush={brush} onSelect={setBrush} /> : null),
+    [showMiniBrush, brush]
+  );
+  useHeaderSlot(miniBrushRow);
 
   function dropPrecision(iso: string) {
     setPrecisions((prev) => {
@@ -482,11 +512,12 @@ export function AvailabilityPageClient() {
         </Button>
       </Card>
 
+      {/* Desktop : pas de header sticky global (lg:hidden) — on garde une pastille
+          flottante en bas à droite ; sur mobile, la rangée mini vit dans le header. */}
       <div
         aria-hidden={!showMiniBrush}
         className={cn(
-          'fixed inset-x-0 z-20 flex justify-center px-4 transition-all duration-200 lg:inset-x-auto lg:right-6 lg:justify-end lg:px-0',
-          'bottom-[calc(94px+env(safe-area-inset-bottom))] lg:bottom-6',
+          'fixed bottom-6 right-6 z-20 hidden justify-end transition-all duration-200 lg:flex',
           showMiniBrush ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-3 opacity-0'
         )}
       >
@@ -622,6 +653,38 @@ function PreciseSheet({
             C&apos;est noté
           </Button>
         </div>
+      </div>
+    </div>
+  );
+}
+
+// Rangée compacte affichée dans le header sticky (mobile) quand les gros boutons
+// « Je peins avec » sortent de l'écran : 4 carrés couleur + chiffre, même état.
+function MiniBrushRow({ brush, onSelect }: { brush: AvailabilityLevel; onSelect: (level: AvailabilityLevel) => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5">
+      <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-ink-3">Je peins avec</span>
+      <div className="flex items-center gap-1.5">
+        {LEVELS.map((level) => {
+          const selected = brush === level;
+          const solid = AVAILABILITY_LEVEL_STYLES[level].solid;
+          return (
+            <button
+              key={level}
+              type="button"
+              onClick={() => onSelect(level)}
+              aria-label={`Peindre avec : ${AVAILABILITY_LEVEL_LABELS[level]}`}
+              aria-pressed={selected}
+              className={cn(
+                'flex h-10 w-11 shrink-0 items-center justify-center rounded-[11px] text-[15px] font-extrabold transition',
+                selected ? 'text-white shadow-[0_5px_12px_-5px_rgba(12,19,38,.45)]' : 'border bg-white'
+              )}
+              style={selected ? { background: solid } : { borderColor: '#E6EAF2', color: solid }}
+            >
+              {level}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

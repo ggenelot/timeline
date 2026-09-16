@@ -50,10 +50,16 @@ const config: Config = {
         pop: {
           '0%': { transform: 'scale(.85)', opacity: '0' },
           '100%': { transform: 'scale(1)', opacity: '1' }
+        },
+        // Entrée du mini-sélecteur de peinture dans le header sticky (« Mes dispos »).
+        'brush-in': {
+          '0%': { transform: 'translateY(-6px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' }
         }
       },
       animation: {
-        pop: 'pop .22s ease-out'
+        pop: 'pop .22s ease-out',
+        'brush-in': 'brush-in .18s ease-out'
       }
     }
   },

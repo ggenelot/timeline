@@ -6,6 +6,7 @@ import { Session } from '@supabase/supabase-js';
 import { Profile } from '@/lib/types';
 import { Icon } from '@/components/ui/icon';
 import { useBranding } from '@/lib/branding/branding-context';
+import { useHeaderSlotOutlet } from '@/lib/header-slot';
 import { cn } from '@/lib/cn';
 
 export function Header({
@@ -20,6 +21,7 @@ export function Header({
   onToggleMenu: () => void;
 }) {
   const branding = useBranding();
+  const slot = useHeaderSlotOutlet();
 
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -72,6 +74,11 @@ export function Header({
           </Link>
         )}
       </div>
+      {slot ? (
+        <div className="animate-brush-in border-b border-line/70 bg-white/70 shadow-[0_10px_24px_-20px_rgba(12,19,38,.45)] backdrop-blur-md backdrop-saturate-[2]">
+          {slot}
+        </div>
+      ) : null}
     </header>
   );
 }
