@@ -279,7 +279,18 @@ export type AvailabilityDeclaration = {
   volunteer_id: string;
   day: string;
   level: AvailabilityLevel;
+  // Contrainte horaire facultative — non null uniquement si level > 0.
+  available_from: string | null;
+  available_until: string | null;
   updated_at: string;
+};
+
+// Un bénévole dispo sur un jour, avec sa contrainte horaire éventuelle, pour la
+// carte de survol « qui est dispo » côté responsable.
+export type AvailabilityPersonName = {
+  name: string;
+  available_from: string | null;
+  available_until: string | null;
 };
 
 export type AvailabilityDayAggregate = {
@@ -289,6 +300,11 @@ export type AvailabilityDayAggregate = {
   readyCount: number;
   zeroCount: number;
   levelCounts: Record<AvailabilityLevel, number>;
+  // Noms groupés par niveau (avec contrainte horaire par nom) + non-répondants,
+  // pour la carte de survol. `constraintCount` = nb de dispos portant une contrainte.
+  namesByLevel: Record<AvailabilityLevel, AvailabilityPersonName[]>;
+  noResponseNames: string[];
+  constraintCount: number;
 };
 
 export type AvailabilityTeamData = {

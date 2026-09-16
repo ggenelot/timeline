@@ -120,15 +120,60 @@ test.describe.serial('P0 disponibilités longue durée (sans engagement)', () =>
     await expect(cell).not.toContainText('·');
   });
 
-  test('3) re-tap sur le même niveau efface la déclaration', async ({ page }) => {
+  test('3) appui long ouvre la feuille « Préciser » sans repeindre ni effacer le jour', async ({ page }) => {
+    await login(page, USERS.benevole);
+    await page.goto('/availability');
+
+    // Jour déjà peint au niveau 3 (test 1, état sérialisé) avant l'appui long.
+    const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
+    await expect(cell).toHaveClass(/bg-engage/);
+
+    // Appui long (> 450 ms, pointeur maintenu, sans glisser) : ouvre la feuille.
+    await cell.hover();
+    await page.mouse.down();
+    await expect(page.locator('[data-testid="availability-precise-sheet"]')).toBeVisible();
+    await page.mouse.up();
+
+    // Le jour n'a été ni repeint ni effacé.
+    await expect(cell).toHaveClass(/bg-engage/);
+
+    // Sélection d'un horaire « dès 13h » — autosave, pas de submit.
+    await page.locator('[data-testid="availability-precise-sheet"]').getByRole('button', { name: '13h' }).click();
+    await page.getByRole('button', { name: /C'est noté/ }).click();
+    await expect(page.getByText(/1 précisé/)).toBeVisible();
+
+    // Persistance de la précision après rechargement.
+    await page.reload();
+    await expect(page.getByText(/1 précisé/)).toBeVisible();
+  });
+
+  test('4) responsable voit la contrainte horaire dans le tooltip (score inchangé)', async ({ page }) => {
+    await login(page, USERS.responsable);
+    await page.goto('/admin/availability');
+
+    const cell = page.locator(`[data-testid="availability-heatmap-cell"][data-day="${targetDay}"]`);
+    await expect(cell).toBeVisible();
+    await cell.hover();
+
+    const tooltip = page.locator('[data-testid="availability-tooltip"]');
+    await expect(tooltip).toBeVisible();
+    // La contrainte est collée au nom, en bleu marque.
+    await expect(tooltip).toContainText('(dès 13h)');
+    // Le score agrégé ignore la contrainte : « N pts » cohérent avec la cellule.
+    await expect(tooltip).toContainText(/\d+ pts/);
+  });
+
+  test('5) re-tap efface la déclaration et sa précision', async ({ page }) => {
     await login(page, USERS.benevole);
     await page.goto('/availability');
 
     const cell = page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`);
     await cell.click();
     await expect(page.getByText(/^0 jour renseigné/)).toBeVisible();
+    await expect(page.getByText(/précisé/)).toHaveCount(0);
 
     await page.reload();
     await expect(page.locator(`[data-testid="availability-day-cell"][data-day="${targetDay}"]`)).not.toHaveClass(/bg-engage/);
+    await expect(page.getByText(/précisé/)).toHaveCount(0);
   });
 });

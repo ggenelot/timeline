@@ -80,3 +80,51 @@ export function monthRangeISO(monthCount: number, referenceDate: Date = new Date
 }
 
 export const DOW_LABELS = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
+
+// Bleu marque (#002D74) pour le point « précision » et les parenthèses de
+// contrainte dans la carte de survol responsable.
+export const AVAILABILITY_CONSTRAINT_COLOR = '#002D74';
+
+// Seuils proposés dans la feuille « Préciser » (heures pleines). Stockés en
+// `HH:MM` côté base (colonne `time`).
+export const AVAILABILITY_FROM_HOURS = [9, 12, 13, 14, 17, 18];
+export const AVAILABILITY_UNTIL_HOURS = [12, 14, 17, 18, 19, 21, 23, 1];
+
+/** `9 → "09:00"` — valeur stockée dans les colonnes `time`. */
+export function hourToTime(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+/** `"13:00:00" | "13:00" → 13` ; `null → null`. Tolère les formats `time` de Postgres. */
+export function timeToHour(value: string | null): number | null {
+  if (!value) return null;
+  const hour = Number.parseInt(value.slice(0, 2), 10);
+  return Number.isFinite(hour) ? hour : null;
+}
+
+/**
+ * Nom court « Prénom N. » à partir d'un nom complet.
+ * Un seul mot → tel quel ; vide/null → repli « Bénévole ».
+ */
+export function shortName(fullName: string | null | undefined): string {
+  const parts = (fullName ?? '').trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return 'Bénévole';
+  if (parts.length === 1) return parts[0];
+  const first = parts[0];
+  const lastInitial = parts[parts.length - 1].charAt(0).toUpperCase();
+  return `${first} ${lastInitial}.`;
+}
+
+/**
+ * Contrainte horaire d'un nom, prête à coller après le nom :
+ * « (dès 13h) », « (parti avant 19h) », « (dès 13h, parti avant 19h) ».
+ * Renvoie `''` si aucune contrainte.
+ */
+export function formatConstraint(from: string | null, until: string | null): string {
+  const parts: string[] = [];
+  const fromHour = timeToHour(from);
+  const untilHour = timeToHour(until);
+  if (fromHour !== null) parts.push(`dès ${fromHour}h`);
+  if (untilHour !== null) parts.push(`parti avant ${untilHour}h`);
+  return parts.length > 0 ? `(${parts.join(', ')})` : '';
+}
