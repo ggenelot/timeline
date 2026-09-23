@@ -21,6 +21,8 @@ import {
   getDoubluresForVolunteerCursus,
   getValidationsForVolunteerCursus,
   getDoublureNotes,
+  getDoublure,
+  getPhaseCompetences,
   listSupervisedDoublures,
   declareDoublure,
   updateDoublure,
@@ -108,6 +110,14 @@ const MODAL_INIT: Omit<ModalState, 'phaseId' | 'role'> = {
 function fmt(d: string | null | undefined) {
   if (!d) return '';
   return new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// Validations rattachées à une doublure. Les anciennes validations sans
+// doublure_id sont rattachées par nom d'événement.
+function linkedValidationsOf(d: Doublure, validations: CompetenceValidation[]): CompetenceValidation[] {
+  return validations.filter(
+    (v) => v.doublure_id === d.id || (!v.doublure_id && !!d.event_name && v.event_name === d.event_name)
+  );
 }
 
 // ── Visual primitives ─────────────────────────────────────────
@@ -614,52 +624,264 @@ function SupervisorField({
 
 // ── Doublures encadrées ───────────────────────────────────────
 
-function SupervisedDoubluresCard({ items }: { items: SupervisedDoublure[] }) {
-  const [showAll, setShowAll] = useState(false);
-  const visible = showAll ? items : items.slice(0, 5);
-  const toComment = items.filter((d) => !d.has_pedago_comment).length;
+function SupervisedDoubluresCard({ items, onChanged }: { items: SupervisedDoublure[]; onChanged: () => void }) {
+  const [showDone, setShowDone] = useState(false);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const toComment = items.filter((d) => !d.has_pedago_comment);
+  const done = items.filter((d) => d.has_pedago_comment);
+
+  function row(d: SupervisedDoublure) {
+    return (
+      <button
+        key={d.doublure_id}
+        type="button"
+        onClick={() => setOpenId(d.doublure_id)}
+        style={{ display: 'flex', width: '100%', alignItems: 'center', gap: 12, padding: '11px 18px', border: 'none', borderBottom: '1px solid #EEF1F6', background: '#fff', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit' }}
+      >
+        <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, color: '#5B6478', background: '#F4F6FA', border: '1px solid #E5E9F0', borderRadius: 7, padding: '3px 8px' }}>
+          {d.cursus_code}
+        </span>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.trainee_name ?? '—'}</div>
+          <div style={{ fontSize: 12, color: '#8A93A6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {[d.phase_label, d.event_name].filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        {d.has_pedago_comment ? (
+          <Pill color="#12805A" bg="#E9F7EF" border="#BDE7CE">Commentée</Pill>
+        ) : (
+          <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">À commenter</Pill>
+        )}
+        <span style={{ flexShrink: 0, fontSize: 12, color: '#8A93A6', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
+      </button>
+    );
+  }
+
+  const opened = items.find((d) => d.doublure_id === openId) ?? null;
+
   return (
     <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 16, boxShadow: '0 1px 3px rgba(20,32,58,.06)', marginBottom: 20, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid #EEF1F6' }}>
         <span style={{ fontSize: 15, fontWeight: 800, color: '#16203A' }}>Doublures que j&apos;encadre</span>
-        {toComment > 0 ? (
+        {toComment.length > 0 ? (
           <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">
-            {toComment} sans commentaire
+            {toComment.length} à commenter
           </Pill>
         ) : null}
       </div>
-      {visible.map((d) => (
-        // <a> et non <Link> : même route, et la page ne charge ses données qu'au montage.
-        <a
-          key={d.doublure_id}
-          href={`/competences?profile=${encodeURIComponent(d.trainee_id)}&cursus=${encodeURIComponent(d.cursus_id)}&doublure=${encodeURIComponent(d.doublure_id)}`}
-          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid #EEF1F6', textDecoration: 'none' }}
-        >
-          <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, color: '#5B6478', background: '#F4F6FA', border: '1px solid #E5E9F0', borderRadius: 7, padding: '3px 8px' }}>
-            {d.cursus_code}
-          </span>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.trainee_name ?? '—'}</div>
-            <div style={{ fontSize: 12, color: '#8A93A6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {[d.phase_label, d.event_name].filter(Boolean).join(' · ')}
-            </div>
-          </div>
-          {!d.has_pedago_comment ? (
-            <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">À commenter</Pill>
-          ) : null}
-          <span style={{ flexShrink: 0, fontSize: 12, color: '#8A93A6', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
-        </a>
-      ))}
-      {items.length > 5 ? (
+      {toComment.map(row)}
+      {toComment.length === 0 ? (
+        <div style={{ padding: '12px 18px', fontSize: 12.5, color: '#8A93A6', borderBottom: done.length > 0 ? '1px solid #EEF1F6' : 'none' }}>
+          Toutes vos doublures sont commentées.
+        </div>
+      ) : null}
+      {showDone ? done.map(row) : null}
+      {done.length > 0 ? (
         <button
           type="button"
-          onClick={() => setShowAll((v) => !v)}
+          onClick={() => setShowDone((v) => !v)}
           style={{ display: 'block', width: '100%', cursor: 'pointer', border: 'none', background: '#F7F9FC', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: '10px 18px' }}
         >
-          {showAll ? 'Afficher moins' : `Afficher les ${items.length} doublures`}
+          {showDone ? 'Masquer les doublures commentées' : `Voir les ${done.length} doublure${done.length > 1 ? 's' : ''} déjà commentée${done.length > 1 ? 's' : ''}`}
         </button>
       ) : null}
+      {opened ? (
+        <SupervisorDoublureModal
+          item={opened}
+          onClose={() => setOpenId(null)}
+          onSaved={() => { setOpenId(null); onChanged(); }}
+        />
+      ) : null}
     </div>
+  );
+}
+
+// Formulaire du doubleur : commentaire pédagogique, note privée pour l'admin
+// formation et compétences validées lors de la doublure — sans accès au
+// carnet complet du stagiaire.
+function SupervisorDoublureModal({
+  item,
+  onClose,
+  onSaved,
+}: {
+  item: SupervisedDoublure;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [doublure, setDoublure] = useState<Doublure | null>(null);
+  const [comps, setComps] = useState<CursusCompetence[]>([]);
+  const [validations, setValidations] = useState<CompetenceValidation[]>([]);
+  const [pedago, setPedago] = useState('');
+  const [privateNote, setPrivateNote] = useState('');
+  const [selected, setSelected] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const d = await getDoublure(item.doublure_id);
+        const [phaseComps, vals, nts] = await Promise.all([
+          getPhaseCompetences(d.phase_id),
+          getValidationsForVolunteerCursus(d.volunteer_cursus_id),
+          getDoublureNotes([d.id]),
+        ]);
+        if (cancelled) return;
+        setDoublure(d);
+        setComps(phaseComps);
+        setValidations(vals);
+        setPedago(d.supervisor_comment ?? '');
+        setPrivateNote(nts.find((n) => n.kind === 'doubleur')?.body ?? '');
+        setSelected(linkedValidationsOf(d, vals).map((v) => v.competence_id));
+      } catch (e) {
+        if (!cancelled) setLoadError((e as Error).message);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, [item.doublure_id]);
+
+  const linked = doublure ? linkedValidationsOf(doublure, validations) : [];
+  const linkedIds = new Set(linked.map((v) => v.competence_id));
+  // Compétences déjà validées lors d'une autre doublure : affichées mais figées.
+  const validatedElsewhere = new Set(validations.map((v) => v.competence_id).filter((id) => !linkedIds.has(id)));
+
+  function toggle(id: string) {
+    setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  async function save() {
+    if (!doublure) return;
+    setSaving(true);
+    setSaveError(null);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Session expirée, veuillez vous reconnecter.');
+      await updateDoublure(doublure.id, { supervisor_comment: pedago.trim() ? pedago : null });
+      await saveDoublureNote(doublure.id, 'doubleur', privateNote);
+      const copy = {
+        doublure_id: doublure.id,
+        mission_id: doublure.mission_id,
+        event_name: doublure.event_name,
+        event_date: doublure.event_date,
+        event_lieu: doublure.event_lieu,
+        supervisor_id: doublure.supervisor_id,
+        supervisor_name: doublure.supervisor_name,
+        supervisor_antenne: doublure.supervisor_antenne,
+      };
+      for (const val of linked) {
+        if (!selected.includes(val.competence_id)) await deleteCompetenceValidation(val.id);
+      }
+      for (const compId of selected) {
+        if (linkedIds.has(compId)) continue;
+        await declareCompetenceValidation({
+          volunteer_cursus_id: doublure.volunteer_cursus_id,
+          competence_id: compId,
+          ...copy,
+          declared_by: user.id,
+        });
+      }
+      onSaved();
+    } catch (e) {
+      setSaveError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hint = (text: string) => <span style={{ color: '#8A93A6', fontWeight: 600 }}>{text}</span>;
+
+  return (
+    <Modal
+      title={item.trainee_name ?? 'Doublure'}
+      subtitle={[item.cursus_code, item.phase_label, item.event_name, fmt(item.event_date)].filter(Boolean).join(' · ')}
+      onClose={onClose}
+      footer={
+        <>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{ cursor: 'pointer', border: '1px solid #E6EAF2', background: '#fff', color: '#5B6478', borderRadius: 9, padding: '9px 16px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit' }}
+          >
+            Annuler
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving || !doublure}
+            style={{ cursor: saving || !doublure ? 'not-allowed' : 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: saving || !doublure ? 0.5 : 1 }}
+          >
+            {saving ? 'Enregistrement…' : 'Valider'}
+          </button>
+        </>
+      }
+    >
+      {loadError ? (
+        <div style={{ background: '#FDEAEA', border: '1px solid #F3C6C6', borderRadius: 10, padding: '10px 13px', fontSize: 12.5, color: '#D14343' }}>{loadError}</div>
+      ) : !doublure ? (
+        <p style={{ fontSize: 13, color: '#8A93A6', margin: 0 }}>Chargement…</p>
+      ) : (
+        <>
+          {saveError ? (
+            <div style={{ background: '#FDEAEA', border: '1px solid #F3C6C6', borderRadius: 10, padding: '10px 13px', fontSize: 12.5, color: '#D14343' }}>{saveError}</div>
+          ) : null}
+          <div>
+            <FieldLabel>Commentaire pédagogique {hint('· visible par le stagiaire et l\'admin formation')}</FieldLabel>
+            <MarkdownEditor
+              value={pedago}
+              onChange={setPedago}
+              placeholder="Votre retour au stagiaire : points forts, axes de progression…"
+              rows={4}
+            />
+          </div>
+          <div>
+            <FieldLabel>Commentaire pour l&apos;admin formation {hint('· jamais visible par le stagiaire')}</FieldLabel>
+            <MarkdownEditor
+              value={privateNote}
+              onChange={setPrivateNote}
+              placeholder="Observations réservées à l'équipe formation…"
+              rows={3}
+            />
+          </div>
+          <div>
+            <FieldLabel>Compétences validées lors de cette doublure</FieldLabel>
+            {comps.length === 0 ? (
+              <p style={{ fontSize: 13, color: '#8A93A6', margin: '4px 0 0' }}>Aucune compétence dans cette phase.</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                {comps.map((c) => {
+                  const locked = validatedElsewhere.has(c.id);
+                  const checked = locked || selected.includes(c.id);
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      disabled={locked}
+                      onClick={() => toggle(c.id)}
+                      style={{ cursor: locked ? 'default' : 'pointer', textAlign: 'left', display: 'flex', alignItems: 'flex-start', gap: 11, border: `1.5px solid ${checked && !locked ? '#BDE7CE' : '#E6EAF2'}`, background: locked ? '#F7F9FC' : checked ? '#E9F7EF' : '#fff', borderRadius: 11, padding: '10px 13px', fontFamily: 'inherit', opacity: locked ? 0.7 : 1 }}
+                    >
+                      <span style={{ flexShrink: 0, marginTop: 1, width: 22, height: 22, borderRadius: 6, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, background: checked ? (locked ? '#A6AEBE' : '#059669') : '#F7F9FC', color: checked ? '#fff' : '#A6AEBE', border: `1.5px solid ${checked ? (locked ? '#A6AEBE' : '#059669') : '#E6EAF2'}` }}>
+                        {checked ? '✓' : ''}
+                      </span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{c.name}</div>
+                        {locked ? (
+                          <div style={{ marginTop: 2, fontSize: 12, color: '#8A93A6' }}>Déjà validée lors d&apos;une autre doublure</div>
+                        ) : c.description ? (
+                          <div style={{ marginTop: 2, fontSize: 12, color: '#5B6478', lineHeight: 1.45 }}>{c.description}</div>
+                        ) : null}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </Modal>
   );
 }
 
@@ -672,8 +894,9 @@ export default function CompetencesPage() {
   // l'admin formation (cursus/can_manage), et par le doubleur pour les seules
   // doublures qu'il encadre ; lecture seule sinon.
   const [isOther, setIsOther] = useState(false);
-  const { can } = usePermissions();
+  const { can, loading: permissionsLoading } = usePermissions();
   const canManage = can('cursus', 'can_manage');
+  const canSeeOthers = can('cursus', 'can_see');
   const [notes, setNotes] = useState<DoublureNote[]>([]);
   const [supervised, setSupervised] = useState<SupervisedDoublure[]>([]);
   const [viewingName, setViewingName] = useState<string | null>(null);
@@ -824,12 +1047,8 @@ export default function CompetencesPage() {
     return { supervisor_id: null as string | null, supervisor_name: m.supName || null, supervisor_antenne: m.supAntenne || null };
   }
 
-  // Validations rattachées à une doublure. Les anciennes validations sans
-  // doublure_id sont rattachées par nom d'événement.
   function linkedValidations(d: Doublure): CompetenceValidation[] {
-    return validations.filter(
-      (v) => v.doublure_id === d.id || (!v.doublure_id && !!d.event_name && v.event_name === d.event_name)
-    );
+    return linkedValidationsOf(d, validations);
   }
 
   const canDeclare = !isOther || canManage;
@@ -1074,6 +1293,27 @@ export default function CompetencesPage() {
   const selectedCursusCode = currentCursusData?.code ?? '';
   const selectedCursusName = currentCursusData?.name ?? '';
 
+  // Le carnet complet d'un autre bénévole est réservé à cursus/can_see
+  // (et can_manage) ; un doubleur passe par « Doublures que j'encadre ».
+  if (isOther && (permissionsLoading || !canSeeOthers)) {
+    return (
+      <div style={{ paddingBottom: 48 }}>
+        {permissionsLoading ? (
+          <p style={{ color: '#8A93A6' }}>Chargement…</p>
+        ) : (
+          <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 18 }}>
+            <EmptyState
+              tone="brand"
+              icon="lock"
+              title="Accès réservé"
+              text="Le carnet de doublure d'un autre bénévole est réservé à l'équipe formation. Vos doublures encadrées se commentent depuis votre page Suivi des compétences."
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div style={{ paddingBottom: 48 }}>
 
@@ -1107,7 +1347,10 @@ export default function CompetencesPage() {
         ) : null}
 
         {!isOther && supervised.length > 0 ? (
-          <SupervisedDoubluresCard items={supervised} />
+          <SupervisedDoubluresCard
+            items={supervised}
+            onChanged={() => { listSupervisedDoublures().then(setSupervised).catch(() => {}); }}
+          />
         ) : null}
 
         {/* Cursus tab selector : en cours en plein, terminés en plus léger */}
