@@ -6,7 +6,10 @@ import type {
   CursusCompetence,
   VolunteerCursus,
   Doublure,
+  DoublureNote,
+  DoublureNoteKind,
   CompetenceValidation,
+  SupervisedDoublure,
 } from '@/lib/types';
 
 // ── Read ─────────────────────────────────────────────────────
@@ -83,6 +86,23 @@ export async function getValidationsForVolunteerCursus(
   return data ?? [];
 }
 
+// La RLS ne renvoie que les notes que l'utilisateur a le droit de voir.
+export async function getDoublureNotes(doublureIds: string[]): Promise<DoublureNote[]> {
+  if (doublureIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('doublure_notes')
+    .select('*')
+    .in('doublure_id', doublureIds);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function listSupervisedDoublures(): Promise<SupervisedDoublure[]> {
+  const { data, error } = await supabase.rpc('list_supervised_doublures');
+  if (error) throw error;
+  return data ?? [];
+}
+
 // ── Write ─────────────────────────────────────────────────────
 
 export async function enrollInCursus(
@@ -110,6 +130,48 @@ export async function declareDoublure(
   return data;
 }
 
+export async function updateDoublure(
+  id: string,
+  patch: Partial<Omit<Doublure, 'id' | 'created_at' | 'volunteer_cursus_id' | 'declared_by'>>
+): Promise<Doublure> {
+  const { data, error } = await supabase
+    .from('doublures')
+    .update(patch)
+    .eq('id', id)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Une note vide est supprimée plutôt que stockée.
+export async function saveDoublureNote(
+  doublureId: string,
+  kind: DoublureNoteKind,
+  body: string
+): Promise<DoublureNote | null> {
+  if (!body.trim()) {
+    const { error } = await supabase
+      .from('doublure_notes')
+      .delete()
+      .eq('doublure_id', doublureId)
+      .eq('kind', kind);
+    if (error) throw error;
+    return null;
+  }
+  const { data: { user } } = await supabase.auth.getUser();
+  const { data, error } = await supabase
+    .from('doublure_notes')
+    .upsert(
+      { doublure_id: doublureId, kind, body, updated_by: user?.id ?? null, updated_at: new Date().toISOString() },
+      { onConflict: 'doublure_id,kind' }
+    )
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 export async function deleteDoublure(id: string): Promise<void> {
   const { error } = await supabase.from('doublures').delete().eq('id', id);
   if (error) throw error;
@@ -121,6 +183,20 @@ export async function declareCompetenceValidation(
   const { data, error } = await supabase
     .from('competence_validations')
     .insert(payload)
+    .select('*')
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateCompetenceValidation(
+  id: string,
+  patch: Partial<Omit<CompetenceValidation, 'id' | 'volunteer_cursus_id' | 'competence_id' | 'declared_by' | 'validated_at'>>
+): Promise<CompetenceValidation> {
+  const { data, error } = await supabase
+    .from('competence_validations')
+    .update(patch)
+    .eq('id', id)
     .select('*')
     .single();
   if (error) throw error;

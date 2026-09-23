@@ -611,11 +611,37 @@ export type Doublure = {
   supervisor_id: string | null;
   supervisor_name: string | null;
   supervisor_antenne: string | null;
-  message: string | null;
   supervisor_comment: string | null;
   is_pending: boolean;
   declared_by: string;
   created_at: string;
+};
+
+// 'stagiaire' : stagiaire + admin formation ; 'doubleur' : doubleur + admin
+// formation (note privée, jamais visible par le stagiaire).
+export type DoublureNoteKind = 'stagiaire' | 'doubleur';
+
+export type DoublureNote = {
+  doublure_id: string;
+  kind: DoublureNoteKind;
+  body: string;
+  updated_by: string | null;
+  updated_at: string;
+};
+
+export type SupervisedDoublure = {
+  doublure_id: string;
+  volunteer_cursus_id: string;
+  trainee_id: string;
+  trainee_name: string | null;
+  cursus_id: string;
+  cursus_code: string;
+  cursus_name: string;
+  phase_label: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  has_pedago_comment: boolean;
+  has_private_note: boolean;
 };
 
 export type CompetenceValidation = {
