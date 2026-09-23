@@ -86,6 +86,22 @@ export async function getValidationsForVolunteerCursus(
   return data ?? [];
 }
 
+export async function getDoublure(id: string): Promise<Doublure> {
+  const { data, error } = await supabase.from('doublures').select('*').eq('id', id).single();
+  if (error) throw error;
+  return data;
+}
+
+export async function getPhaseCompetences(phaseId: string): Promise<CursusCompetence[]> {
+  const { data, error } = await supabase
+    .from('cursus_competences')
+    .select('*')
+    .eq('phase_id', phaseId)
+    .order('order_idx');
+  if (error) throw error;
+  return data ?? [];
+}
+
 // La RLS ne renvoie que les notes que l'utilisateur a le droit de voir.
 export async function getDoublureNotes(doublureIds: string[]): Promise<DoublureNote[]> {
   if (doublureIds.length === 0) return [];
