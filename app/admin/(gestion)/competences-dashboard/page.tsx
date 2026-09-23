@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { MarkdownText } from '@/components/ui/markdown-text';
 import { cn } from '@/lib/cn';
 import { usePermissions } from '@/lib/permissions/permissions-context';
 
@@ -1181,13 +1182,15 @@ export default function CompetencesDashboardPage() {
                         {expanded ? (
                           <div className="border-t border-line-row px-4 pb-[14px] pt-3">
                             {g.supervisorComment ? (
-                              <div className="mb-2 text-xs italic leading-snug text-ink-2">
-                                « {g.supervisorComment} » <span className="not-italic text-ink-3">— doubleur</span>
+                              <div className="mb-2 text-xs leading-snug text-ink-2">
+                                <div className="text-[11px] font-bold text-ink-3">Commentaire du doubleur</div>
+                                <MarkdownText>{g.supervisorComment}</MarkdownText>
                               </div>
                             ) : null}
                             {g.message ? (
                               <div className="mb-2 text-xs leading-snug text-ink-3">
-                                Note perso : {g.message}
+                                <div className="text-[11px] font-bold">Note perso</div>
+                                <MarkdownText>{g.message}</MarkdownText>
                               </div>
                             ) : null}
                             {g.competences.length === 0 ? (

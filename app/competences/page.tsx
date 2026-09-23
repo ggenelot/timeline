@@ -24,6 +24,8 @@ import {
   deleteCompetenceValidation,
 } from '@/lib/queries/cursus';
 import { EmptyState } from '@/components/ui/empty-state';
+import { MarkdownEditor } from '@/components/ui/markdown-editor';
+import { MarkdownText } from '@/components/ui/markdown-text';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -1241,13 +1243,15 @@ export default function CompetencesPage() {
                                             </div>
                                           ) : null}
                                           {d.supervisor_comment ? (
-                                            <div style={{ marginTop: 6, fontSize: 12, color: '#5B6478', fontStyle: 'italic', lineHeight: 1.45 }}>
-                                              « {d.supervisor_comment} » <span style={{ fontStyle: 'normal', color: '#8A93A6' }}>— doubleur</span>
+                                            <div style={{ marginTop: 6, fontSize: 12, color: '#5B6478', lineHeight: 1.45 }}>
+                                              <div style={{ fontSize: 11, fontWeight: 700, color: '#8A93A6' }}>Commentaire du doubleur</div>
+                                              <MarkdownText>{d.supervisor_comment}</MarkdownText>
                                             </div>
                                           ) : null}
                                           {d.message ? (
                                             <div style={{ marginTop: 4, fontSize: 12, color: '#8A93A6', lineHeight: 1.45 }}>
-                                              Note perso : {d.message}
+                                              <div style={{ fontSize: 11, fontWeight: 700 }}>Note perso</div>
+                                              <MarkdownText>{d.message}</MarkdownText>
                                             </div>
                                           ) : null}
                                         </>
@@ -1538,22 +1542,20 @@ export default function CompetencesPage() {
               <>
                 <div>
                   <FieldLabel>Commentaire du doubleur <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
-                  <textarea
+                  <MarkdownEditor
                     value={modal.supervisorComment}
-                    onChange={(e) => setModal((m) => m ? { ...m, supervisorComment: e.target.value } : m)}
+                    onChange={(v) => setModal((m) => m ? { ...m, supervisorComment: v } : m)}
                     placeholder="Retour du doubleur sur la doublure…"
                     rows={3}
-                    style={{ width: '100%', border: '1px solid #A6AEBE', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#16203A', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
                   />
                 </div>
                 <div>
                   <FieldLabel>Commentaire personnel <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
-                  <textarea
+                  <MarkdownEditor
                     value={modal.personalComment}
-                    onChange={(e) => setModal((m) => m ? { ...m, personalComment: e.target.value } : m)}
+                    onChange={(v) => setModal((m) => m ? { ...m, personalComment: v } : m)}
                     placeholder="Vos remarques, ressenti, points à retravailler…"
                     rows={3}
-                    style={{ width: '100%', border: '1px solid #A6AEBE', borderRadius: 9, padding: '10px 12px', fontSize: 14, color: '#16203A', outline: 'none', resize: 'vertical', fontFamily: 'inherit' }}
                   />
                 </div>
               </>
