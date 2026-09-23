@@ -79,6 +79,24 @@ type ApiCompetenceEvent = {
   validated_at: string;
 };
 
+type ApiDoublureSession = {
+  id: string;
+  profile_id: string;
+  cursus_id: string;
+  volunteer_cursus_id: string;
+  phase_name: string | null;
+  event_name: string | null;
+  event_date: string | null;
+  event_lieu: string | null;
+  supervisor_name: string | null;
+  supervisor_antenne: string | null;
+  message: string | null;
+  supervisor_comment: string | null;
+  is_external: boolean;
+  is_pending: boolean;
+  created_at: string;
+};
+
 type DashboardData = {
   categories: ApiCategory[];
   profiles: ApiProfile[];
@@ -88,6 +106,7 @@ type DashboardData = {
   enrolledCursus: ApiEnrolledCursus[];
   statuses: ApiStatus[];
   competenceEvents: ApiCompetenceEvent[];
+  doublureSessions: ApiDoublureSession[];
 };
 
 // ── Palette des catégories (couleur nommée → accents) ─────────
@@ -497,6 +516,28 @@ export default function CompetencesDashboardPage() {
         competences: { id: string; name: string }[];
       }
     >();
+    // Chaque séance de doublure apparaît, même sans compétence validée.
+    for (const d of data.doublureSessions ?? []) {
+      const groupKey = `d:${d.id}`;
+      groups.set(groupKey, {
+        key: groupKey,
+        profileId: d.profile_id,
+        cursusId: d.cursus_id,
+        doublureId: d.id,
+        eventName: d.event_name,
+        eventDate: d.event_date,
+        eventLieu: d.event_lieu,
+        supervisorName: d.supervisor_name,
+        supervisorAntenne: d.supervisor_antenne,
+        message: d.message,
+        supervisorComment: d.supervisor_comment,
+        isExternal: d.is_external,
+        isPending: d.is_pending,
+        phaseName: d.phase_name,
+        validatedAt: d.created_at,
+        competences: [],
+      });
+    }
     for (const ev of data.competenceEvents) {
       const groupKey = ev.doublure_id
         ? `d:${ev.doublure_id}`
@@ -1101,9 +1142,15 @@ export default function CompetencesDashboardPage() {
                             <span className="flex-1 text-center text-[13.5px] font-bold text-ink">
                               {g.profileName}
                             </span>
-                            <span className="flex-none rounded-full bg-engage px-[9px] py-0.5 text-xs font-extrabold tabular-nums text-white">
-                              +{g.competences.length}
-                            </span>
+                            {g.competences.length > 0 ? (
+                              <span className="flex-none rounded-full bg-engage px-[9px] py-0.5 text-xs font-extrabold tabular-nums text-white">
+                                +{g.competences.length}
+                              </span>
+                            ) : (
+                              <span className="flex-none rounded-full border border-line px-[9px] py-0.5 text-xs font-bold text-ink-3">
+                                0 compétence
+                              </span>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -1142,6 +1189,9 @@ export default function CompetencesDashboardPage() {
                               <div className="mb-2 text-xs leading-snug text-ink-3">
                                 Note perso : {g.message}
                               </div>
+                            ) : null}
+                            {g.competences.length === 0 ? (
+                              <div className="text-xs text-ink-3">Aucune compétence validée lors de cette doublure.</div>
                             ) : null}
                             <div className="flex flex-col gap-1.5">
                               {g.competences.map((c) => (
