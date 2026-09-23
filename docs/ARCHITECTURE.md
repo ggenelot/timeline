@@ -183,6 +183,12 @@ users:read       # Lire les profils utilisateurs (pour invite/liaison)
 | `/api/auth/slack/otp/verify` | POST | Vérifie l'OTP |
 | `/api/auth/slack/signup` | POST | Inscription via Slack |
 | `/api/admin/slack/health` | GET | Health check du bot Slack |
+| `/api/admin/slack/templates/[type]` | PUT / DELETE / PATCH | Modifier, réinitialiser ou activer/désactiver un message automatique |
+| `/api/doublures/[doublureId]/notify-supervisor` | POST | DM au doubleur désigné sur une doublure (idempotent par couple doublure/doubleur) |
+
+### Messages automatiques
+
+Les messages envoyés par le bot sont des templates éditables depuis l'Admin Slack (`/admin/slack/messages`, table `slack_message_templates`). Chaque template peut être désactivé (`enabled`) : l'envoi correspondant est alors journalisé en `skipped` dans `slack_notification_logs`. Le template `doublure_supervisor_dm` prévient le doubleur quand une doublure le désigne (déclaration ou changement de doubleur).
 
 ### Slash command
 

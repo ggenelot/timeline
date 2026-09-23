@@ -9,7 +9,8 @@ const TEMPLATE_TYPES = [
   'volunteer_rejected_dm',
   'mission_confirmed_dm',
   'mission_cancelled_dm',
-  'admin_role_updated_dm'
+  'admin_role_updated_dm',
+  'doublure_supervisor_dm'
 ];
 
 export async function GET(request: NextRequest) {
@@ -19,7 +20,7 @@ export async function GET(request: NextRequest) {
   const serviceClient = createServerSupabaseServiceClient();
   const { data, error } = await serviceClient
     .from('slack_message_templates')
-    .select('type,label,description,template,available_variables,updated_at')
+    .select('type,label,description,template,available_variables,enabled,updated_at')
     .in('type', TEMPLATE_TYPES)
     .order('created_at', { ascending: true });
 
@@ -34,6 +35,7 @@ export async function GET(request: NextRequest) {
     description: null,
     template: DEFAULT_TEMPLATES[type] ?? '',
     available_variables: [],
+    enabled: true,
     updated_at: null
   }));
 

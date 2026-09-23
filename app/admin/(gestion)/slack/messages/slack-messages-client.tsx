@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/ui/card';
+import { Toggle } from '@/components/ui/toggle';
 
 type TemplateVariable = { key: string; label: string };
 
@@ -13,11 +14,21 @@ type Template = {
   description: string | null;
   template: string;
   available_variables: TemplateVariable[];
+  enabled: boolean;
   updated_at: string | null;
 };
 
-function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: string, newText: string) => void }) {
+function TemplateEditor({
+  tpl,
+  onSaved,
+  onToggled
+}: {
+  tpl: Template;
+  onSaved: (type: string, newText: string) => void;
+  onToggled: (type: string, enabled: boolean) => void;
+}) {
   const [editing, setEditing] = useState(false);
+  const [toggling, setToggling] = useState(false);
   const [text, setText] = useState(tpl.template);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
@@ -72,13 +83,38 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
     }
   };
 
+  const toggleEnabled = async (enabled: boolean) => {
+    setToggling(true);
+    setError(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch(`/api/admin/slack/templates/${tpl.type}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token}` },
+        body: JSON.stringify({ enabled })
+      });
+      const p = await r.json().catch(() => ({}));
+      if (!r.ok) { setError(p.error ?? `Erreur HTTP ${r.status}`); return; }
+      onToggled(tpl.type, enabled);
+    } catch {
+      setError("Impossible de modifier l'activation de la notification.");
+    } finally {
+      setToggling(false);
+    }
+  };
+
   const cancel = () => { setText(tpl.template); setEditing(false); setError(null); setSuccess(false); };
 
   return (
-    <div className="rounded-2xl border border-line bg-surface-card shadow-card">
+    <div className={`rounded-2xl border border-line bg-surface-card shadow-card ${tpl.enabled ? '' : 'opacity-70'}`}>
       <div className="flex items-start justify-between gap-4 p-4">
         <div className="min-w-0">
-          <p className="font-medium text-ink">{tpl.label}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-medium text-ink">{tpl.label}</p>
+            {!tpl.enabled && (
+              <span className="rounded bg-surface-sub px-1.5 py-0.5 text-xs font-semibold text-ink-3">Désactivée</span>
+            )}
+          </div>
           {tpl.description && <p className="mt-0.5 text-sm text-ink-2">{tpl.description}</p>}
           {tpl.updated_at && (
             <p className="mt-0.5 text-xs text-ink-3">
@@ -86,6 +122,16 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
             </p>
           )}
         </div>
+        <div className="flex shrink-0 items-center gap-3">
+          <label className="flex items-center gap-2 text-xs font-semibold text-ink-2">
+            {tpl.enabled ? 'Activée' : 'Désactivée'}
+            <Toggle
+              value={tpl.enabled}
+              onChange={toggleEnabled}
+              disabled={toggling}
+              label={`${tpl.enabled ? 'Désactiver' : 'Activer'} la notification « ${tpl.label} »`}
+            />
+          </label>
         {!editing && (
           <Button
             variant="ghost"
@@ -95,6 +141,7 @@ function TemplateEditor({ tpl, onSaved }: { tpl: Template; onSaved: (type: strin
             Modifier
           </Button>
         )}
+        </div>
       </div>
 
       <div className="border-t border-line-row px-4 pb-4 pt-3">
@@ -180,6 +227,10 @@ export function SlackMessagesClient() {
     })();
   }, []);
 
+  const handleToggled = (type: string, enabled: boolean) => {
+    setTemplates((prev) => prev.map((t) => t.type === type ? { ...t, enabled, updated_at: new Date().toISOString() } : t));
+  };
+
   const handleSaved = (type: string, newText: string) => {
     setTemplates((prev) => prev.map((t) => t.type === type ? { ...t, template: newText, updated_at: new Date().toISOString() } : t));
   };
@@ -193,6 +244,7 @@ export function SlackMessagesClient() {
             Personnalisez les messages envoyés automatiquement par le bot Slack.
             Utilisez les variables <code className="rounded bg-surface-sub px-1 font-mono text-xs text-ink-2">{'{{variable}}'}</code> pour insérer des valeurs dynamiques.
             Une ligne contenant une variable sans valeur est automatiquement supprimée du message.
+            Une notification désactivée n&apos;est plus envoyée.
           </>
         }
       />
@@ -203,7 +255,7 @@ export function SlackMessagesClient() {
       {!loading && !error && (
         <div className="space-y-4">
           {templates.map((tpl) => (
-            <TemplateEditor key={tpl.type} tpl={tpl} onSaved={handleSaved} />
+            <TemplateEditor key={tpl.type} tpl={tpl} onSaved={handleSaved} onToggled={handleToggled} />
           ))}
         </div>
       )}

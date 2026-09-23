@@ -188,6 +188,21 @@ export async function saveDoublureNote(
   return data;
 }
 
+// Notification Slack du doubleur : ne bloque jamais l'enregistrement, un
+// échec (Slack non configuré, compte non lié…) est simplement ignoré.
+export async function notifyDoublureSupervisor(doublureId: string): Promise<void> {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    await fetch(`/api/doublures/${encodeURIComponent(doublureId)}/notify-supervisor`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${session.access_token}` },
+    });
+  } catch {
+    /* best-effort */
+  }
+}
+
 export async function deleteDoublure(id: string): Promise<void> {
   const { error } = await supabase.from('doublures').delete().eq('id', id);
   if (error) throw error;
