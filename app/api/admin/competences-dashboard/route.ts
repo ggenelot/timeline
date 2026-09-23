@@ -46,7 +46,11 @@ export async function GET(req: NextRequest) {
       )
       .order('validated_at', { ascending: false }),
     client!.from('cursus_phases').select('id,cursus_id,label'),
-    client!.from('doublures').select('id,message,supervisor_comment,is_external,is_pending'),
+    client!
+      .from('doublures')
+      .select(
+        'id,volunteer_cursus_id,phase_id,event_name,event_date,event_lieu,supervisor_name,supervisor_antenne,message,supervisor_comment,is_external,is_pending,created_at'
+      ),
   ]);
 
   if (categoriesRes.error) return NextResponse.json({ error: categoriesRes.error.message }, { status: 500 });
@@ -121,6 +125,32 @@ export async function GET(req: NextRequest) {
     })
     .filter((e): e is NonNullable<typeof e> => e !== null);
 
+  // Toutes les séances de doublure, y compris celles qui n'ont (encore)
+  // validé aucune compétence : la chronologie doit les afficher aussi.
+  const doublureSessions = (doubluresRes.data ?? [])
+    .map((d) => {
+      const vc = vcById[d.volunteer_cursus_id];
+      if (!vc) return null;
+      return {
+        id: d.id,
+        profile_id: vc.profile_id,
+        cursus_id: vc.cursus_id,
+        volunteer_cursus_id: d.volunteer_cursus_id,
+        phase_name: (d.phase_id && phaseLabelById[d.phase_id]) || null,
+        event_name: d.event_name,
+        event_date: d.event_date,
+        event_lieu: d.event_lieu,
+        supervisor_name: d.supervisor_name,
+        supervisor_antenne: d.supervisor_antenne,
+        message: d.message,
+        supervisor_comment: d.supervisor_comment,
+        is_external: d.is_external,
+        is_pending: d.is_pending,
+        created_at: d.created_at,
+      };
+    })
+    .filter((d): d is NonNullable<typeof d> => d !== null);
+
   return NextResponse.json({
     categories: categoriesRes.data ?? [],
     profiles: profilesRes.data ?? [],
@@ -134,6 +164,7 @@ export async function GET(req: NextRequest) {
     })),
     statuses: statusesRes.data ?? [],
     competenceEvents,
+    doublureSessions,
   });
 }
 
