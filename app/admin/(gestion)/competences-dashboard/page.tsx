@@ -74,6 +74,7 @@ type ApiCompetenceEvent = {
   supervisor_name: string | null;
   supervisor_antenne: string | null;
   message: string | null;
+  supervisor_note: string | null;
   supervisor_comment: string | null;
   is_external: boolean;
   is_pending: boolean;
@@ -92,6 +93,7 @@ type ApiDoublureSession = {
   supervisor_name: string | null;
   supervisor_antenne: string | null;
   message: string | null;
+  supervisor_note: string | null;
   supervisor_comment: string | null;
   is_external: boolean;
   is_pending: boolean;
@@ -509,6 +511,7 @@ export default function CompetencesDashboardPage() {
         supervisorName: string | null;
         supervisorAntenne: string | null;
         message: string | null;
+        supervisorNote: string | null;
         supervisorComment: string | null;
         isExternal: boolean;
         isPending: boolean;
@@ -531,6 +534,7 @@ export default function CompetencesDashboardPage() {
         supervisorName: d.supervisor_name,
         supervisorAntenne: d.supervisor_antenne,
         message: d.message,
+        supervisorNote: d.supervisor_note,
         supervisorComment: d.supervisor_comment,
         isExternal: d.is_external,
         isPending: d.is_pending,
@@ -560,6 +564,7 @@ export default function CompetencesDashboardPage() {
           supervisorName: ev.supervisor_name,
           supervisorAntenne: ev.supervisor_antenne,
           message: ev.message,
+          supervisorNote: ev.supervisor_note,
           supervisorComment: ev.supervisor_comment,
           isExternal: ev.is_external,
           isPending: ev.is_pending,
@@ -1183,14 +1188,20 @@ export default function CompetencesDashboardPage() {
                           <div className="border-t border-line-row px-4 pb-[14px] pt-3">
                             {g.supervisorComment ? (
                               <div className="mb-2 text-xs leading-snug text-ink-2">
-                                <div className="text-[11px] font-bold text-ink-3">Commentaire du doubleur</div>
+                                <div className="text-[11px] font-bold text-ink-3">Commentaire pédagogique du doubleur</div>
                                 <MarkdownText>{g.supervisorComment}</MarkdownText>
                               </div>
                             ) : null}
                             {g.message ? (
-                              <div className="mb-2 text-xs leading-snug text-ink-3">
-                                <div className="text-[11px] font-bold">Note perso</div>
+                              <div className="mb-2 text-xs leading-snug text-ink-2">
+                                <div className="text-[11px] font-bold text-ink-3">Note du stagiaire</div>
                                 <MarkdownText>{g.message}</MarkdownText>
+                              </div>
+                            ) : null}
+                            {g.supervisorNote ? (
+                              <div className="mb-2 rounded-lg border border-[#E3D6EF] bg-[#F5EDFA] px-2.5 py-1.5 text-xs leading-snug text-ink-2">
+                                <div className="text-[11px] font-bold text-[#7A2E86]">Note privée du doubleur</div>
+                                <MarkdownText>{g.supervisorNote}</MarkdownText>
                               </div>
                             ) : null}
                             {g.competences.length === 0 ? (

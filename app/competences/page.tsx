@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase/client';
 import type {
@@ -10,7 +10,9 @@ import type {
   CursusRule,
   VolunteerCursus,
   Doublure,
+  DoublureNote,
   CompetenceValidation,
+  SupervisedDoublure,
 } from '@/lib/types';
 import {
   getAllCursus,
@@ -18,11 +20,17 @@ import {
   getVolunteerCursus,
   getDoubluresForVolunteerCursus,
   getValidationsForVolunteerCursus,
+  getDoublureNotes,
+  listSupervisedDoublures,
   declareDoublure,
+  updateDoublure,
   deleteDoublure,
+  saveDoublureNote,
   declareCompetenceValidation,
+  updateCompetenceValidation,
   deleteCompetenceValidation,
 } from '@/lib/queries/cursus';
+import { usePermissions } from '@/lib/permissions/permissions-context';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { MarkdownText } from '@/components/ui/markdown-text';
@@ -39,8 +47,14 @@ type SupOption = { id: string; name: string; sub: string };
 // compétences validées.
 const STEP_LABELS = ['Événement', 'Doubleur', 'Commentaires', 'Compétences validées'];
 
+// Rôle du viewer vis-à-vis d'une doublure : détermine les champs éditables
+// et les notes visibles (cf. migration doublure_notes).
+type DoublureRole = 'trainee' | 'supervisor' | 'manager';
+
 type ModalState = {
   phaseId: string;
+  editingId: string | null;
+  role: DoublureRole;
   step: number;
   // event
   eventMode: 'search' | 'manual' | 'chosen';
@@ -62,11 +76,13 @@ type ModalState = {
   // comments
   supervisorComment: string;
   personalComment: string;
+  supervisorNote: string;
   // validated competences
   selectedCompetences: string[];
 };
 
-const MODAL_INIT: Omit<ModalState, 'phaseId'> = {
+const MODAL_INIT: Omit<ModalState, 'phaseId' | 'role'> = {
+  editingId: null,
   step: 0,
   eventMode: 'search',
   eventQuery: '',
@@ -83,6 +99,7 @@ const MODAL_INIT: Omit<ModalState, 'phaseId'> = {
   supAntenne: '',
   supervisorComment: '',
   personalComment: '',
+  supervisorNote: '',
   selectedCompetences: [],
 };
 
@@ -595,13 +612,70 @@ function SupervisorField({
   );
 }
 
+// ── Doublures encadrées ───────────────────────────────────────
+
+function SupervisedDoubluresCard({ items }: { items: SupervisedDoublure[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const visible = showAll ? items : items.slice(0, 5);
+  const toComment = items.filter((d) => !d.has_pedago_comment).length;
+  return (
+    <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 16, boxShadow: '0 1px 3px rgba(20,32,58,.06)', marginBottom: 20, overflow: 'hidden' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid #EEF1F6' }}>
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#16203A' }}>Doublures que j&apos;encadre</span>
+        {toComment > 0 ? (
+          <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">
+            {toComment} sans commentaire
+          </Pill>
+        ) : null}
+      </div>
+      {visible.map((d) => (
+        // <a> et non <Link> : même route, et la page ne charge ses données qu'au montage.
+        <a
+          key={d.doublure_id}
+          href={`/competences?profile=${encodeURIComponent(d.trainee_id)}&cursus=${encodeURIComponent(d.cursus_id)}&doublure=${encodeURIComponent(d.doublure_id)}`}
+          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 18px', borderBottom: '1px solid #EEF1F6', textDecoration: 'none' }}
+        >
+          <span style={{ flexShrink: 0, fontSize: 11.5, fontWeight: 800, color: '#5B6478', background: '#F4F6FA', border: '1px solid #E5E9F0', borderRadius: 7, padding: '3px 8px' }}>
+            {d.cursus_code}
+          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.trainee_name ?? '—'}</div>
+            <div style={{ fontSize: 12, color: '#8A93A6', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {[d.phase_label, d.event_name].filter(Boolean).join(' · ')}
+            </div>
+          </div>
+          {!d.has_pedago_comment ? (
+            <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">À commenter</Pill>
+          ) : null}
+          <span style={{ flexShrink: 0, fontSize: 12, color: '#8A93A6', fontVariantNumeric: 'tabular-nums' }}>{fmt(d.event_date)}</span>
+        </a>
+      ))}
+      {items.length > 5 ? (
+        <button
+          type="button"
+          onClick={() => setShowAll((v) => !v)}
+          style={{ display: 'block', width: '100%', cursor: 'pointer', border: 'none', background: '#F7F9FC', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: '10px 18px' }}
+        >
+          {showAll ? 'Afficher moins' : `Afficher les ${items.length} doublures`}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 // ── Main page ─────────────────────────────────────────────────
 
 export default function CompetencesPage() {
   const [profileId, setProfileId] = useState<string | null>(null);
-  // Lecture seule : consultation du carnet d'un autre bénévole via
-  // ?profile=<id>&cursus=<id> (depuis le tableau de bord compétences).
-  const [readOnly, setReadOnly] = useState(false);
+  const [viewerId, setViewerId] = useState<string | null>(null);
+  // Carnet d'un autre bénévole via ?profile=<id>&cursus=<id> : modifiable par
+  // l'admin formation (cursus/can_manage), et par le doubleur pour les seules
+  // doublures qu'il encadre ; lecture seule sinon.
+  const [isOther, setIsOther] = useState(false);
+  const { can } = usePermissions();
+  const canManage = can('cursus', 'can_manage');
+  const [notes, setNotes] = useState<DoublureNote[]>([]);
+  const [supervised, setSupervised] = useState<SupervisedDoublure[]>([]);
   const [viewingName, setViewingName] = useState<string | null>(null);
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [volunteerCursus, setVolunteerCursus] = useState<VolunteerCursus[]>([]);
@@ -625,33 +699,44 @@ export default function CompetencesPage() {
     async function load() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.user) return;
-      const viewerId = session.user.id;
+      const viewer = session.user.id;
+      setViewerId(viewer);
 
       // Cible : un autre bénévole si ?profile= est fourni et diffère du viewer.
       const params = new URLSearchParams(window.location.search);
       const targetParam = params.get('profile');
       const cursusParam = params.get('cursus');
-      const isOther = !!targetParam && targetParam !== viewerId;
-      const pid = isOther ? targetParam! : viewerId;
+      const other = !!targetParam && targetParam !== viewer;
+      const pid = other ? targetParam! : viewer;
       setProfileId(pid);
-      setReadOnly(isOther);
+      setIsOther(other);
+      const doublureParam = params.get('doublure');
+      if (doublureParam) setExpandedDoublures(new Set([doublureParam]));
 
       try {
-        const [cursusAll, vcAll] = await Promise.all([getAllCursus(), getVolunteerCursus(pid)]);
+        const [cursusAll, vcAll, supervisedAll] = await Promise.all([
+          getAllCursus(),
+          getVolunteerCursus(pid),
+          listSupervisedDoublures().catch(() => [] as SupervisedDoublure[]),
+        ]);
         setAllCursus(cursusAll);
+        setSupervised(supervisedAll);
         setVolunteerCursus(vcAll);
         // Présélection du cursus demandé, sinon le premier disponible.
         const target = cursusParam ? vcAll.find((v) => v.cursus_id === cursusParam) : null;
         if (target) setSelectedVCId(target.id);
         else if (vcAll.length > 0) setSelectedVCId(vcAll[0].id);
 
-        if (isOther) {
+        if (other) {
           const { data: targetProfile } = await supabase
             .from('profiles')
             .select('full_name,email')
             .eq('id', pid)
-            .single();
-          setViewingName(targetProfile?.full_name ?? targetProfile?.email ?? 'ce bénévole');
+            .maybeSingle();
+          // Un doubleur ne peut pas lire la fiche profil du stagiaire : le nom
+          // vient alors de la liste des doublures qu'il encadre.
+          const fromSupervised = supervisedAll.find((sd) => sd.trainee_id === pid)?.trainee_name;
+          setViewingName(targetProfile?.full_name ?? targetProfile?.email ?? fromSupervised ?? 'ce bénévole');
         }
       } catch (e) {
         setError((e as Error).message);
@@ -662,26 +747,34 @@ export default function CompetencesPage() {
     load();
   }, []);
 
+  const reloadDoublures = useCallback(async (vcId: string) => {
+    const [dbl, val] = await Promise.all([
+      getDoubluresForVolunteerCursus(vcId),
+      getValidationsForVolunteerCursus(vcId),
+    ]);
+    const nts = await getDoublureNotes(dbl.map((d) => d.id));
+    setDoublures(dbl);
+    setValidations(val);
+    setNotes(nts);
+  }, []);
+
   useEffect(() => {
-    if (!selectedVCId) { setCursusDetail(null); setDoublures([]); setValidations([]); return; }
+    if (!selectedVCId) { setCursusDetail(null); setDoublures([]); setValidations([]); setNotes([]); return; }
     const vc = volunteerCursus.find((v) => v.id === selectedVCId);
     if (!vc) return;
     async function loadDetail() {
       try {
-        const [detail, dbl, val] = await Promise.all([
+        const [detail] = await Promise.all([
           getCursusWithDetails(vc!.cursus_id),
-          getDoubluresForVolunteerCursus(selectedVCId!),
-          getValidationsForVolunteerCursus(selectedVCId!),
+          reloadDoublures(selectedVCId!),
         ]);
         setCursusDetail(detail);
-        setDoublures(dbl);
-        setValidations(val);
       } catch (e) {
         setError((e as Error).message);
       }
     }
     loadDetail();
-  }, [selectedVCId, volunteerCursus]);
+  }, [selectedVCId, volunteerCursus, reloadDoublures]);
 
   // ── Derived ────────────────────────────────────────────────
 
@@ -731,9 +824,35 @@ export default function CompetencesPage() {
     return { supervisor_id: null as string | null, supervisor_name: m.supName || null, supervisor_antenne: m.supAntenne || null };
   }
 
+  // Validations rattachées à une doublure. Les anciennes validations sans
+  // doublure_id sont rattachées par nom d'événement.
+  function linkedValidations(d: Doublure): CompetenceValidation[] {
+    return validations.filter(
+      (v) => v.doublure_id === d.id || (!v.doublure_id && !!d.event_name && v.event_name === d.event_name)
+    );
+  }
+
+  const canDeclare = !isOther || canManage;
+
+  function roleFor(d: Doublure | null): DoublureRole | null {
+    if (canManage) return 'manager';
+    if (!isOther) return 'trainee';
+    if (d && viewerId && d.supervisor_id === viewerId) return 'supervisor';
+    return null;
+  }
+
+  function canDeleteDoublure(): boolean {
+    return !isOther || canManage;
+  }
+
+  function noteFor(doublureId: string, kind: DoublureNote['kind']): string | null {
+    return notes.find((n) => n.doublure_id === doublureId && n.kind === kind)?.body ?? null;
+  }
+
   async function handleConfirm() {
-    if (readOnly) return;
-    if (!modal || !selectedVCId || !profileId) return;
+    if (!modal || !selectedVCId || !viewerId) return;
+    if (modal.editingId) return handleUpdate(modal);
+    if (!canDeclare) return;
     setError(null);
     setSubmitting(true);
     // Track what we persisted so we can roll back if a later insert fails,
@@ -751,11 +870,16 @@ export default function CompetencesPage() {
         phase_id: modal.phaseId,
         ...ev,
         ...sup,
-        message: modal.personalComment || null,
         supervisor_comment: modal.supervisorComment || null,
         is_pending: false,
-        declared_by: profileId,
+        declared_by: viewerId,
       });
+      if (modal.personalComment.trim()) {
+        await saveDoublureNote(createdDoublure.id, 'stagiaire', modal.personalComment);
+      }
+      if (modal.role === 'manager' && modal.supervisorNote.trim()) {
+        await saveDoublureNote(createdDoublure.id, 'doubleur', modal.supervisorNote);
+      }
       for (const compId of modal.selectedCompetences) {
         const val = await declareCompetenceValidation({
           volunteer_cursus_id: selectedVCId,
@@ -763,16 +887,15 @@ export default function CompetencesPage() {
           doublure_id: createdDoublure.id,
           ...evForValidation,
           ...sup,
-          declared_by: profileId,
+          declared_by: viewerId,
         });
         createdVals.push(val);
       }
-      // Everything persisted — commit to local state in one go.
-      setDoublures((prev) => [createdDoublure as Doublure, ...prev]);
-      if (createdVals.length > 0) setValidations((prev) => [...prev, ...createdVals]);
+      await reloadDoublures(selectedVCId);
       setModal(null);
     } catch (e) {
-      // Roll back partial inserts so a retry doesn't leave duplicate/orphan rows.
+      // Roll back partial inserts so a retry doesn't leave duplicate/orphan rows
+      // (les notes partent en cascade avec la doublure).
       for (const val of createdVals) {
         try { await deleteCompetenceValidation(val.id); } catch { /* best-effort rollback */ }
       }
@@ -785,10 +908,106 @@ export default function CompetencesPage() {
     }
   }
 
-  function openDoublureModal(phaseId: string) {
-    if (readOnly) return;
+  async function handleUpdate(m: ModalState) {
+    const d = doublures.find((x) => x.id === m.editingId);
+    if (!d || !selectedVCId || !viewerId) return;
     setError(null);
-    setModal({ ...MODAL_INIT, phaseId });
+    setSubmitting(true);
+    try {
+      const ev = getEventData(m);
+      // Le doubleur ne peut pas changer qui encadre la doublure (RLS).
+      const sup = m.role === 'supervisor'
+        ? { supervisor_id: d.supervisor_id, supervisor_name: d.supervisor_name, supervisor_antenne: d.supervisor_antenne }
+        : getSupData(m);
+      const { is_external: _omitExternal, ...evForValidation } = ev;
+      await updateDoublure(d.id, {
+        ...ev,
+        ...sup,
+        supervisor_comment: m.supervisorComment || null,
+      });
+      if (m.role !== 'supervisor') await saveDoublureNote(d.id, 'stagiaire', m.personalComment);
+      if (m.role !== 'trainee') await saveDoublureNote(d.id, 'doubleur', m.supervisorNote);
+
+      const selected = new Set(m.selectedCompetences);
+      const linked = linkedValidations(d);
+      for (const val of linked) {
+        if (!selected.has(val.competence_id)) {
+          await deleteCompetenceValidation(val.id);
+        } else {
+          await updateCompetenceValidation(val.id, { doublure_id: d.id, ...evForValidation, ...sup });
+        }
+      }
+      const linkedCompIds = new Set(linked.map((v) => v.competence_id));
+      for (const compId of m.selectedCompetences) {
+        if (linkedCompIds.has(compId)) continue;
+        await declareCompetenceValidation({
+          volunteer_cursus_id: selectedVCId,
+          competence_id: compId,
+          doublure_id: d.id,
+          ...evForValidation,
+          ...sup,
+          declared_by: viewerId,
+        });
+      }
+      await reloadDoublures(selectedVCId);
+      setModal(null);
+    } catch (e) {
+      setError((e as Error).message);
+      // Rechargement pour refléter ce qui a été enregistré avant l'erreur.
+      try { await reloadDoublures(selectedVCId); } catch { /* affichage déjà en erreur */ }
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDeleteDoublure(d: Doublure) {
+    if (!selectedVCId || !canDeleteDoublure()) return;
+    const linked = validations.filter((v) => v.doublure_id === d.id);
+    const msg = linked.length > 0
+      ? `Supprimer cette doublure et les ${linked.length} compétence${linked.length > 1 ? 's' : ''} validée${linked.length > 1 ? 's' : ''} lors de celle-ci ?`
+      : 'Supprimer cette doublure ?';
+    if (!window.confirm(msg)) return;
+    setError(null);
+    try {
+      for (const val of linked) await deleteCompetenceValidation(val.id);
+      await deleteDoublure(d.id);
+      await reloadDoublures(selectedVCId);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  }
+
+  function openDoublureModal(phaseId: string) {
+    if (!canDeclare) return;
+    setError(null);
+    setModal({ ...MODAL_INIT, phaseId, role: canManage ? 'manager' : 'trainee' });
+  }
+
+  function openEditModal(d: Doublure) {
+    const role = roleFor(d);
+    if (!role) return;
+    setError(null);
+    setModal({
+      ...MODAL_INIT,
+      phaseId: d.phase_id,
+      editingId: d.id,
+      role,
+      eventMode: d.mission_id ? 'chosen' : 'manual',
+      chosenEvent: d.mission_id
+        ? { id: d.mission_id, name: d.event_name ?? 'Événement', sub: fmt(d.event_date), date: d.event_date ?? undefined }
+        : null,
+      evName: d.mission_id ? '' : d.event_name ?? '',
+      evDate: d.mission_id ? '' : d.event_date ?? '',
+      evAntenne: d.mission_id ? '' : d.event_lieu ?? '',
+      supMode: d.supervisor_id ? 'chosen' : 'manual',
+      chosenSup: d.supervisor_id ? { id: d.supervisor_id, name: d.supervisor_name ?? '—', sub: '' } : null,
+      supName: d.supervisor_id ? '' : d.supervisor_name ?? '',
+      supAntenne: d.supervisor_id ? '' : d.supervisor_antenne ?? '',
+      supervisorComment: d.supervisor_comment ?? '',
+      personalComment: noteFor(d.id, 'stagiaire') ?? '',
+      supervisorNote: noteFor(d.id, 'doubleur') ?? '',
+      selectedCompetences: linkedValidations(d).map((v) => v.competence_id),
+    });
   }
 
   function toggleDoublureExpanded(id: string) {
@@ -810,10 +1029,13 @@ export default function CompetencesPage() {
   }
 
   // Compétences proposées à la validation pour la phase de la doublure :
-  // celles non encore validées.
-  function selectableComps(phaseId: string): CursusCompetence[] {
+  // celles non encore validées, plus celles déjà validées par la doublure
+  // en cours de modification.
+  function selectableComps(phaseId: string, editingId: string | null): CursusCompetence[] {
     const phase = cursusDetail?.phases.find((p) => p.id === phaseId);
-    return ((phase?.competences ?? []) as CursusCompetence[]).filter((c) => !validatedIds.has(c.id));
+    const editing = editingId ? doublures.find((d) => d.id === editingId) : null;
+    const ownIds = new Set(editing ? linkedValidations(editing).map((v) => v.competence_id) : []);
+    return ((phase?.competences ?? []) as CursusCompetence[]).filter((c) => !validatedIds.has(c.id) || ownIds.has(c.id));
   }
 
   function toggleSelectedComp(compId: string) {
@@ -874,10 +1096,18 @@ export default function CompetencesPage() {
           </div>
         ) : null}
 
-        {readOnly ? (
+        {isOther ? (
           <div style={{ background: '#E7EEFB', border: '1px solid #CFDDF6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1E3C87', fontWeight: 600 }}>
-            Vous consultez le carnet de doublure de {viewingName ?? 'ce bénévole'} en lecture seule.
+            {canManage
+              ? `Vous gérez le carnet de doublure de ${viewingName ?? 'ce bénévole'} en tant qu'admin formation : vous pouvez déclarer, modifier et supprimer ses doublures.`
+              : doublures.some((d) => d.supervisor_id === viewerId)
+                ? `Vous consultez le carnet de doublure de ${viewingName ?? 'ce bénévole'} : vous pouvez modifier les doublures que vous avez encadrées (commentaires et compétences).`
+                : `Vous consultez le carnet de doublure de ${viewingName ?? 'ce bénévole'} en lecture seule.`}
           </div>
+        ) : null}
+
+        {!isOther && supervised.length > 0 ? (
+          <SupervisedDoubluresCard items={supervised} />
         ) : null}
 
         {/* Cursus tab selector : en cours en plein, terminés en plus léger */}
@@ -945,7 +1175,7 @@ export default function CompetencesPage() {
               icon="workspace_premium"
               title="Aucun cursus de doublure"
               text={
-                readOnly
+                isOther
                   ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
                   : "Vous n'êtes inscrit dans aucun cursus de doublure. Un administrateur peut vous y inscrire."
               }
@@ -1189,15 +1419,16 @@ export default function CompetencesPage() {
                             <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8A93A6' }}>
                               Doublures &amp; événements
                             </span>
-                            {!readOnly ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
+                            {canDeclare ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
                           </div>
 
                           {/* Events with their competences */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginBottom: 6 }}>
                             {phDoublures.map((d) => {
-                              const dVals = validations.filter(
-                                (v) => v.doublure_id === d.id || (d.event_name && v.event_name === d.event_name)
-                              );
+                              const dVals = linkedValidations(d);
+                              const dRole = roleFor(d);
+                              const traineeNote = noteFor(d.id, 'stagiaire');
+                              const privateNote = noteFor(d.id, 'doubleur');
                               const expanded = expandedDoublures.has(d.id);
                               return (
                                 <div key={d.id} style={{ border: '1px solid #E6EAF2', borderRadius: 13, background: '#fff', overflow: 'hidden' }}>
@@ -1244,14 +1475,48 @@ export default function CompetencesPage() {
                                           ) : null}
                                           {d.supervisor_comment ? (
                                             <div style={{ marginTop: 6, fontSize: 12, color: '#5B6478', lineHeight: 1.45 }}>
-                                              <div style={{ fontSize: 11, fontWeight: 700, color: '#8A93A6' }}>Commentaire du doubleur</div>
+                                              <div style={{ fontSize: 11, fontWeight: 700, color: '#8A93A6' }}>Commentaire pédagogique du doubleur</div>
                                               <MarkdownText>{d.supervisor_comment}</MarkdownText>
                                             </div>
                                           ) : null}
-                                          {d.message ? (
-                                            <div style={{ marginTop: 4, fontSize: 12, color: '#8A93A6', lineHeight: 1.45 }}>
-                                              <div style={{ fontSize: 11, fontWeight: 700 }}>Note perso</div>
-                                              <MarkdownText>{d.message}</MarkdownText>
+                                          {traineeNote ? (
+                                            <div style={{ marginTop: 6, fontSize: 12, color: '#5B6478', lineHeight: 1.45 }}>
+                                              <div style={{ fontSize: 11, fontWeight: 700, color: '#8A93A6' }}>
+                                                {isOther ? 'Note du stagiaire' : 'Note perso'} <span style={{ fontWeight: 600 }}>· visible par le stagiaire et l&apos;admin formation</span>
+                                              </div>
+                                              <MarkdownText>{traineeNote}</MarkdownText>
+                                            </div>
+                                          ) : null}
+                                          {privateNote ? (
+                                            <div style={{ marginTop: 6, fontSize: 12, color: '#5B6478', lineHeight: 1.45, background: '#F5EDFA', border: '1px solid #E3D6EF', borderRadius: 8, padding: '6px 9px' }}>
+                                              <div style={{ fontSize: 11, fontWeight: 700, color: '#7A2E86' }}>
+                                                Note privée du doubleur <span style={{ fontWeight: 600 }}>· visible par le doubleur et l&apos;admin formation</span>
+                                              </div>
+                                              <MarkdownText>{privateNote}</MarkdownText>
+                                            </div>
+                                          ) : null}
+                                          {dRole || canDeleteDoublure() ? (
+                                            <div style={{ marginTop: 9, display: 'flex', gap: 7, flexWrap: 'wrap' }}>
+                                              {dRole ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => { e.stopPropagation(); openEditModal(d); }}
+                                                  onKeyDown={(e) => e.stopPropagation()}
+                                                  style={{ cursor: 'pointer', border: '1px solid #A6AEBE', background: '#fff', color: '#16203A', borderRadius: 8, padding: '5px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+                                                >
+                                                  {dRole === 'supervisor' ? 'Commenter / modifier' : 'Modifier'}
+                                                </button>
+                                              ) : null}
+                                              {canDeleteDoublure() ? (
+                                                <button
+                                                  type="button"
+                                                  onClick={(e) => { e.stopPropagation(); handleDeleteDoublure(d); }}
+                                                  onKeyDown={(e) => e.stopPropagation()}
+                                                  style={{ cursor: 'pointer', border: '1px solid #F5C6C6', background: '#fff', color: '#D14343', borderRadius: 8, padding: '5px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+                                                >
+                                                  Supprimer
+                                                </button>
+                                              ) : null}
                                             </div>
                                           ) : null}
                                         </>
@@ -1392,7 +1657,7 @@ export default function CompetencesPage() {
                           </span>
                           {phase.provisional ? <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">Provisoire</Pill> : null}
                         </div>
-                        {!readOnly ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
+                        {canDeclare ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
                       </div>
 
                       {/* Doublures compact */}
@@ -1405,6 +1670,15 @@ export default function CompetencesPage() {
                                   <span style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.event_name ?? 'Doublure'}</span>
                                   {d.is_external ? <Pill color="#8E1279" bg="#F8E6F4" border="#E9C9E4">Ext.</Pill> : null}
                                   {d.mission_id ? <Pill color="#1E3C87" bg="#E7EEFB" border="#CFDDF6">Timeline</Pill> : null}
+                                  {roleFor(d) ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => openEditModal(d)}
+                                      style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#00378F', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+                                    >
+                                      Modifier
+                                    </button>
+                                  ) : null}
                                 </div>
                               </div>
                               <div style={{ textAlign: 'right' }}>
@@ -1453,7 +1727,7 @@ export default function CompetencesPage() {
                               {isDone && val ? (
                                 <>
                                   <div style={{ fontSize: 12.5, fontWeight: 700, color: '#5B6478' }}>{val.supervisor_name ?? '—'}</div>
-                                  <div style={{ fontSize: 11.5, color: '#8A93A6' }}>déclarée par moi</div>
+                                  <div style={{ fontSize: 11.5, color: '#8A93A6' }}>{val.declared_by === viewerId ? 'déclarée par moi' : 'déclarée'}</div>
                                 </>
                               ) : (
                                 <span style={{ fontSize: 12, fontWeight: 600, color: '#8A93A6' }}>À valider en doublure</span>
@@ -1474,10 +1748,12 @@ export default function CompetencesPage() {
       {modal ? (() => {
         const setModalDoublure = setModal as React.Dispatch<React.SetStateAction<ModalState>>;
         const isLast = modal.step === STEP_LABELS.length - 1;
-        const comps = selectableComps(modal.phaseId);
+        const isEdit = !!modal.editingId;
+        const comps = selectableComps(modal.phaseId, modal.editingId);
+        const hint = (text: string) => <span style={{ color: '#8A93A6', fontWeight: 600 }}>{text}</span>;
         return (
           <Modal
-            title="Déclarer une doublure"
+            title={isEdit ? 'Modifier la doublure' : 'Déclarer une doublure'}
             subtitle={`Étape ${modal.step + 1}/${STEP_LABELS.length} · ${STEP_LABELS[modal.step]}`}
             onClose={() => setModal(null)}
             footer={
@@ -1489,6 +1765,16 @@ export default function CompetencesPage() {
                 >
                   {modal.step === 0 ? 'Annuler' : '‹ Précédent'}
                 </button>
+                {isEdit && !isLast ? (
+                  <button
+                    type="button"
+                    onClick={handleConfirm}
+                    disabled={submitting || !canProceed({ ...modal, step: 0 }) || !canProceed({ ...modal, step: 1 })}
+                    style={{ marginLeft: 'auto', cursor: submitting ? 'not-allowed' : 'pointer', border: '1px solid #BDE7CE', background: '#E9F7EF', color: '#12805A', borderRadius: 9, padding: '9px 14px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
+                  >
+                    Enregistrer
+                  </button>
+                ) : null}
                 {isLast ? (
                   <button
                     type="button"
@@ -1496,7 +1782,7 @@ export default function CompetencesPage() {
                     disabled={submitting}
                     style={{ cursor: submitting ? 'not-allowed' : 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
                   >
-                    {submitting ? 'Enregistrement…' : 'Confirmer la doublure'}
+                    {submitting ? 'Enregistrement…' : isEdit ? 'Enregistrer les modifications' : 'Confirmer la doublure'}
                   </button>
                 ) : (
                   <button
@@ -1516,7 +1802,10 @@ export default function CompetencesPage() {
               {STEP_LABELS.map((_, i) => (
                 <div
                   key={i}
-                  style={{ flex: 1, height: 5, borderRadius: 4, background: i <= modal.step ? '#059669' : '#E6EAF2' }}
+                  role={isEdit ? 'button' : undefined}
+                  title={isEdit ? STEP_LABELS[i] : undefined}
+                  onClick={isEdit ? () => setModal((m) => (m ? { ...m, step: i } : m)) : undefined}
+                  style={{ flex: 1, height: isEdit ? 7 : 5, borderRadius: 4, cursor: isEdit ? 'pointer' : 'default', background: i <= modal.step ? '#059669' : '#E6EAF2' }}
                 />
               ))}
             </div>
@@ -1534,30 +1823,54 @@ export default function CompetencesPage() {
 
             {/* Page 2 — Doubleur */}
             {modal.step === 1 ? (
-              <SupervisorField modal={modal} setModal={setModalDoublure} />
+              modal.role === 'supervisor' ? (
+                <div>
+                  <FieldLabel>Encadré par</FieldLabel>
+                  <p style={{ fontSize: 13, color: '#5B6478', margin: 0 }}>
+                    Vous êtes le doubleur de cette doublure. Seuls le stagiaire et l&apos;admin formation peuvent changer le doubleur.
+                  </p>
+                </div>
+              ) : (
+                <SupervisorField modal={modal} setModal={setModalDoublure} />
+              )
             ) : null}
 
             {/* Page 3 — Commentaires */}
             {modal.step === 2 ? (
               <>
                 <div>
-                  <FieldLabel>Commentaire du doubleur <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
+                  <FieldLabel>Commentaire pédagogique du doubleur {hint('· visible par le stagiaire, le doubleur et l\'admin formation')}</FieldLabel>
                   <MarkdownEditor
                     value={modal.supervisorComment}
                     onChange={(v) => setModal((m) => m ? { ...m, supervisorComment: v } : m)}
-                    placeholder="Retour du doubleur sur la doublure…"
+                    placeholder={modal.role === 'supervisor' ? 'Votre retour au stagiaire : points forts, axes de progression…' : 'Retour du doubleur sur la doublure…'}
                     rows={3}
                   />
                 </div>
-                <div>
-                  <FieldLabel>Commentaire personnel <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
-                  <MarkdownEditor
-                    value={modal.personalComment}
-                    onChange={(v) => setModal((m) => m ? { ...m, personalComment: v } : m)}
-                    placeholder="Vos remarques, ressenti, points à retravailler…"
-                    rows={3}
-                  />
-                </div>
+                {modal.role !== 'supervisor' ? (
+                  <div>
+                    <FieldLabel>
+                      {modal.role === 'manager' && isOther ? 'Note du stagiaire' : 'Commentaire personnel'} {hint('· visible par le stagiaire et l\'admin formation')}
+                    </FieldLabel>
+                    <MarkdownEditor
+                      value={modal.personalComment}
+                      onChange={(v) => setModal((m) => m ? { ...m, personalComment: v } : m)}
+                      placeholder="Vos remarques, ressenti, points à retravailler…"
+                      rows={3}
+                    />
+                  </div>
+                ) : null}
+                {modal.role !== 'trainee' ? (
+                  <div>
+                    <FieldLabel>Note privée du doubleur {hint('· visible uniquement par le doubleur et l\'admin formation')}</FieldLabel>
+                    <MarkdownEditor
+                      value={modal.supervisorNote}
+                      onChange={(v) => setModal((m) => m ? { ...m, supervisorNote: v } : m)}
+                      placeholder="Observations réservées à l'équipe formation…"
+                      rows={3}
+                    />
+                  </div>
+                ) : null}
               </>
             ) : null}
 

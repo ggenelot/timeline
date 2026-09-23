@@ -106,6 +106,7 @@ sequenceDiagram
 | `aptitudes` / `profile_aptitudes` | Aptitudes transverses et leur attribution aux bénévoles |
 | `cursus` / `cursus_phases` / `cursus_rules` / `cursus_competences` | Définition des cursus de formation |
 | `volunteer_cursus` / `doublures` / `competence_validations` | Inscriptions aux cursus, doublures (tutorat) et validations |
+| `doublure_notes` | Notes à visibilité restreinte d'une doublure : `stagiaire` (stagiaire + admin formation) et `doubleur` (note privée : doubleur + admin formation). Le commentaire pédagogique du doubleur reste sur `doublures.supervisor_comment` (visible par le stagiaire) |
 | `profile_domain_progress` | Progression des bénévoles par domaine |
 | `materiel_types` / `materiel_categories` / `materiel_type_contents` | Catalogue de matériel et contenus de conteneurs |
 | `materiel_instances` | Exemplaires de matériel avec statut et stockage |

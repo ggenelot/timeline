@@ -7,12 +7,12 @@ import type { PermissionAction } from '@/lib/types';
 // via has_permission.
 async function authorize(req: NextRequest, action: PermissionAction) {
   const auth = await requirePermission(req, 'cursus', action);
-  if (auth.errorResponse) return { client: null, error: auth.errorResponse };
-  return { client: auth.serviceClient, error: null };
+  if (auth.errorResponse) return { client: null, userId: null, error: auth.errorResponse };
+  return { client: auth.serviceClient, userId: auth.user.id, error: null };
 }
 
 export async function GET(req: NextRequest) {
-  const { client, error } = await authorize(req, 'can_see');
+  const { client, userId, error } = await authorize(req, 'can_see');
   if (error) return error;
 
   const [
@@ -49,7 +49,7 @@ export async function GET(req: NextRequest) {
     client!
       .from('doublures')
       .select(
-        'id,volunteer_cursus_id,phase_id,event_name,event_date,event_lieu,supervisor_name,supervisor_antenne,message,supervisor_comment,is_external,is_pending,created_at'
+        'id,volunteer_cursus_id,phase_id,event_name,event_date,event_lieu,supervisor_name,supervisor_antenne,supervisor_comment,is_external,is_pending,created_at'
       ),
   ]);
 
@@ -81,15 +81,40 @@ export async function GET(req: NextRequest) {
     phaseLabelById[ph.id] = ph.label;
   }
 
+  // Notes stagiaire / doubleur : réservées à l'admin formation (cursus/can_manage).
+  // Le client service contourne la RLS, d'où ce contrôle explicite.
+  const { data: canManage } = await client!.rpc('has_permission', {
+    _user_id: userId,
+    _resource: 'cursus',
+    _action: 'can_manage',
+  });
+  const notesByDoublure: Record<string, { stagiaire?: string; doubleur?: string }> = {};
+  if (canManage) {
+    const { data: notesData, error: notesError } = await client!
+      .from('doublure_notes')
+      .select('doublure_id,kind,body');
+    if (notesError) return NextResponse.json({ error: notesError.message }, { status: 500 });
+    for (const n of notesData ?? []) {
+      (notesByDoublure[n.doublure_id] ??= {})[n.kind as 'stagiaire' | 'doubleur'] = n.body;
+    }
+  }
+
   // message / supervisor_comment ne sont portés que par `doublures`, pas par
   // `competence_validations` : on les rattache via doublure_id quand présent.
   const doublureById: Record<
     string,
-    { message: string | null; supervisor_comment: string | null; is_external: boolean; is_pending: boolean }
+    {
+      message: string | null;
+      supervisor_note: string | null;
+      supervisor_comment: string | null;
+      is_external: boolean;
+      is_pending: boolean;
+    }
   > = {};
   for (const d of doubluresRes.data ?? []) {
     doublureById[d.id] = {
-      message: d.message,
+      message: notesByDoublure[d.id]?.stagiaire ?? null,
+      supervisor_note: notesByDoublure[d.id]?.doubleur ?? null,
       supervisor_comment: d.supervisor_comment,
       is_external: d.is_external,
       is_pending: d.is_pending,
@@ -117,6 +142,7 @@ export async function GET(req: NextRequest) {
         supervisor_name: cv.supervisor_name,
         supervisor_antenne: cv.supervisor_antenne,
         message: doublure?.message ?? null,
+        supervisor_note: doublure?.supervisor_note ?? null,
         supervisor_comment: doublure?.supervisor_comment ?? null,
         is_external: doublure?.is_external ?? false,
         is_pending: doublure?.is_pending ?? false,
@@ -142,7 +168,8 @@ export async function GET(req: NextRequest) {
         event_lieu: d.event_lieu,
         supervisor_name: d.supervisor_name,
         supervisor_antenne: d.supervisor_antenne,
-        message: d.message,
+        message: notesByDoublure[d.id]?.stagiaire ?? null,
+        supervisor_note: notesByDoublure[d.id]?.doubleur ?? null,
         supervisor_comment: d.supervisor_comment,
         is_external: d.is_external,
         is_pending: d.is_pending,
