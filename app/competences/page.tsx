@@ -27,6 +27,7 @@ import {
   declareDoublure,
   updateDoublure,
   deleteDoublure,
+  notifyDoublureSupervisor,
   saveDoublureNote,
   declareCompetenceValidation,
   updateCompetenceValidation,
@@ -1110,6 +1111,7 @@ export default function CompetencesPage() {
         });
         createdVals.push(val);
       }
+      if (createdDoublure.supervisor_id) void notifyDoublureSupervisor(createdDoublure.id);
       await reloadDoublures(selectedVCId);
       setModal(null);
     } catch (e) {
@@ -1144,6 +1146,7 @@ export default function CompetencesPage() {
         ...sup,
         supervisor_comment: m.supervisorComment || null,
       });
+      if (sup.supervisor_id && sup.supervisor_id !== d.supervisor_id) void notifyDoublureSupervisor(d.id);
       if (m.role !== 'supervisor') await saveDoublureNote(d.id, 'stagiaire', m.personalComment);
       if (m.role !== 'trainee') await saveDoublureNote(d.id, 'doubleur', m.supervisorNote);
 

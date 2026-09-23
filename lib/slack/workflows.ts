@@ -1,6 +1,6 @@
 import { createServerSupabaseServiceClient } from '@/lib/supabase/server';
 import { SlackService } from '@/lib/slack/service';
-import { applyTemplate, getTemplateText } from '@/lib/slack/templates';
+import { applyTemplate, getTemplateText, isTemplateEnabled, TEMPLATE_DISABLED_MESSAGE } from '@/lib/slack/templates';
 
 type MissionSlackData = {
   id: string;
@@ -241,7 +241,10 @@ export async function ensureMissionSlackChannel(
   const welcomeKey = `mission:${missionId}:channel:welcome`;
   const { data: welcomeLog } = await serviceClient.from('slack_notification_logs').select('status').eq('dedupe_key', welcomeKey).maybeSingle();
 
-  if (welcomeLog?.status !== 'sent') {
+  const welcomeEnabled = Boolean(options?.welcomeMessage?.trim()) || (await isTemplateEnabled('mission_channel_welcome'));
+  if (welcomeLog?.status !== 'sent' && !welcomeEnabled) {
+    await upsertSlackLog({ missionId, profileId: null, type: 'mission_channel_welcome', status: 'skipped', dedupeKey: welcomeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+  } else if (welcomeLog?.status !== 'sent') {
     const crewComposition = await buildCrewCompositionMessage(missionId);
     const templateText = await getTemplateText('mission_channel_welcome');
     const text =
@@ -409,6 +412,11 @@ export async function notifyVolunteerAvailabilityUpdatedByAdmin(args: {
     throw new Error('Mission introuvable pour notification de disponibilité.');
   }
 
+  if (!(await isTemplateEnabled('admin_availability_updated_dm'))) {
+    await upsertSlackLog({ missionId, profileId, type: 'admin_availability_updated_dm', status: 'skipped', dedupeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+    return { sent: false, reason: 'disabled' as const };
+  }
+
   const appBaseUrl = await getAppBaseUrl();
   const templateText = await getTemplateText('admin_availability_updated_dm');
   const dmText = applyTemplate(templateText, {
@@ -459,6 +467,11 @@ export async function notifyVolunteerRejected(missionId: string, profileId: stri
 
   if (!mission) {
     throw new Error('Mission introuvable pour notification de refus.');
+  }
+
+  if (!(await isTemplateEnabled('volunteer_rejected_dm'))) {
+    await upsertSlackLog({ missionId, profileId, type: 'volunteer_rejected_dm', status: 'skipped', dedupeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+    return { sent: false, reason: 'disabled' as const };
   }
 
   const appBaseUrl = await getAppBaseUrl();
@@ -542,6 +555,11 @@ export async function notifyMissionProposerOnStatusChange(missionId: string, new
     return;
   }
 
+  if (!(await isTemplateEnabled(notifType))) {
+    await upsertSlackLog({ missionId, profileId: profile.id, type: notifType, status: 'skipped', dedupeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+    return;
+  }
+
   const appBaseUrl = await getAppBaseUrl();
   const templateText = await getTemplateText(notifType);
   const dmText = applyTemplate(templateText, {
@@ -591,6 +609,11 @@ export async function notifyVolunteerRoleUpdatedByAdmin(args: {
     return { sent: false, reason: 'skipped' as const };
   }
 
+  if (!(await isTemplateEnabled('admin_role_updated_dm'))) {
+    await upsertSlackLog({ missionId: null, profileId, type: 'admin_role_updated_dm', status: 'skipped', dedupeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+    return { sent: false, reason: 'disabled' as const };
+  }
+
   const formatRole = (role: 'benevole' | 'responsable') => (role === 'responsable' ? 'responsable' : 'bénévole');
   const templateText = await getTemplateText('admin_role_updated_dm');
   const dmText = applyTemplate(templateText, {
@@ -609,6 +632,100 @@ export async function notifyVolunteerRoleUpdatedByAdmin(args: {
       missionId: null,
       profileId,
       type: 'admin_role_updated_dm',
+      status: 'error',
+      dedupeKey,
+      errorMessage: error instanceof Error ? error.message : 'Erreur inconnue'
+    });
+    throw error;
+  }
+}
+
+export async function notifySupervisorOfDoublure(doublureId: string) {
+  const serviceClient = createServerSupabaseServiceClient();
+  const slack = new SlackService();
+
+  const { data: doublure } = await serviceClient
+    .from('doublures')
+    .select('id,volunteer_cursus_id,phase_id,event_name,event_date,supervisor_id,declared_by')
+    .eq('id', doublureId)
+    .maybeSingle<{
+      id: string;
+      volunteer_cursus_id: string;
+      phase_id: string;
+      event_name: string | null;
+      event_date: string | null;
+      supervisor_id: string | null;
+      declared_by: string;
+    }>();
+
+  if (!doublure) throw new Error('Doublure introuvable pour notification du doubleur.');
+  if (!doublure.supervisor_id) return { sent: false, reason: 'no_supervisor' as const };
+
+  const { data: vc } = await serviceClient
+    .from('volunteer_cursus')
+    .select('profile_id,cursus:cursus(code,name)')
+    .eq('id', doublure.volunteer_cursus_id)
+    .maybeSingle();
+  const traineeId = (vc as { profile_id: string } | null)?.profile_id ?? null;
+
+  // Personne ne se notifie soi-même (stagiaire doubleur de sa propre doublure).
+  if (doublure.supervisor_id === traineeId) return { sent: false, reason: 'self' as const };
+
+  // Une notification par couple doublure / doubleur : un nouvel enregistrement
+  // de la même doublure ne renvoie rien, un changement de doubleur si.
+  const dedupeKey = `doublure:${doublure.id}:supervisor:${doublure.supervisor_id}:doublure_supervisor_dm`;
+  const { data: existing } = await serviceClient.from('slack_notification_logs').select('status').eq('dedupe_key', dedupeKey).maybeSingle();
+  if (existing?.status === 'sent') return { sent: false, reason: 'already_sent' as const };
+
+  if (!(await isTemplateEnabled('doublure_supervisor_dm'))) {
+    await upsertSlackLog({ missionId: null, profileId: doublure.supervisor_id, type: 'doublure_supervisor_dm', status: 'skipped', dedupeKey, errorMessage: TEMPLATE_DISABLED_MESSAGE });
+    return { sent: false, reason: 'disabled' as const };
+  }
+
+  const profileIds = [doublure.supervisor_id, traineeId, doublure.declared_by].filter((id): id is string => !!id);
+  const [{ data: profiles }, { data: phase }] = await Promise.all([
+    serviceClient.from('profiles').select('id,full_name,email,slack_user_id').in('id', profileIds),
+    serviceClient.from('cursus_phases').select('label').eq('id', doublure.phase_id).maybeSingle<{ label: string }>()
+  ]);
+  const byId = new Map(
+    (profiles ?? []).map((p: { id: string; full_name: string | null; email: string; slack_user_id: string | null }) => [p.id, p])
+  );
+  const supervisor = byId.get(doublure.supervisor_id);
+  const nameOf = (id: string | null) => (id ? byId.get(id)?.full_name ?? byId.get(id)?.email ?? null : null);
+
+  if (!supervisor?.slack_user_id) {
+    await upsertSlackLog({ missionId: null, profileId: doublure.supervisor_id, type: 'doublure_supervisor_dm', status: 'skipped', dedupeKey, errorMessage: 'Compte Slack non lié.' });
+    return { sent: false, reason: 'no_link' as const };
+  }
+
+  const cursusRel = (vc as { cursus: { code: string; name: string } | { code: string; name: string }[] | null } | null)?.cursus;
+  const cursus = Array.isArray(cursusRel) ? cursusRel[0] : cursusRel;
+  const appBaseUrl = await getAppBaseUrl();
+  const templateText = await getTemplateText('doublure_supervisor_dm');
+  const dmText = applyTemplate(templateText, {
+    supervisor_name: supervisor.full_name ?? 'doubleur',
+    trainee_name: nameOf(traineeId) ?? 'Un stagiaire',
+    event_name: doublure.event_name ?? 'sans nom',
+    event_date: doublure.event_date
+      ? new Date(doublure.event_date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+      : null,
+    cursus_code: cursus?.code ?? null,
+    cursus_name: cursus?.name ?? null,
+    phase_label: phase?.label ?? null,
+    declared_by_name: nameOf(doublure.declared_by),
+    doublures_url: appBaseUrl ? `${appBaseUrl}/competences` : null
+  });
+
+  try {
+    const channel = await slack.openDirectMessage(supervisor.slack_user_id);
+    await slack.postMessage(channel, dmText);
+    await upsertSlackLog({ missionId: null, profileId: doublure.supervisor_id, type: 'doublure_supervisor_dm', status: 'sent', dedupeKey });
+    return { sent: true, reason: 'sent' as const };
+  } catch (error) {
+    await upsertSlackLog({
+      missionId: null,
+      profileId: doublure.supervisor_id,
+      type: 'doublure_supervisor_dm',
       status: 'error',
       dedupeKey,
       errorMessage: error instanceof Error ? error.message : 'Erreur inconnue'

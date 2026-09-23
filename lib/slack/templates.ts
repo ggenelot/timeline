@@ -11,6 +11,7 @@ export type SlackMessageTemplate = {
   description: string | null;
   template: string;
   available_variables: TemplateVariable[];
+  enabled: boolean;
   updated_at: string;
 };
 
@@ -45,8 +46,15 @@ Voir la mission : {{mission_url}}`,
 
   admin_role_updated_dm: `Bonjour {{volunteer_name}},
 Un administrateur a modifié votre statut sur Timeline.
-Changement : {{previous_role}} → {{next_role}}.`
+Changement : {{previous_role}} → {{next_role}}.`,
+
+  doublure_supervisor_dm: `Bonjour {{supervisor_name}},
+{{trainee_name}} vous a désigné·e comme doubleur·se pour la doublure *{{event_name}}* ({{cursus_code}} · {{phase_label}}).
+📅 {{event_date}}
+Pensez à laisser votre commentaire pédagogique et à cocher les compétences validées : {{doublures_url}}`
 };
+
+export const TEMPLATE_DISABLED_MESSAGE = "Notification désactivée dans l'Admin Slack.";
 
 export function applyTemplate(template: string, variables: Record<string, string | null | undefined>): string {
   return template
@@ -75,5 +83,16 @@ export async function getTemplateText(type: string): Promise<string> {
     return data?.template || DEFAULT_TEMPLATES[type] || '';
   } catch {
     return DEFAULT_TEMPLATES[type] || '';
+  }
+}
+
+// Un template absent de la base (migration non appliquée) reste actif.
+export async function isTemplateEnabled(type: string): Promise<boolean> {
+  try {
+    const serviceClient = createServerSupabaseServiceClient();
+    const { data } = await serviceClient.from('slack_message_templates').select('enabled').eq('type', type).maybeSingle();
+    return data?.enabled ?? true;
+  } catch {
+    return true;
   }
 }
