@@ -7,42 +7,31 @@ Ce document décrit le workflow de contribution depuis le passage en production 
 | Environnement | Branche | URL | Base de données |
 |---|---|---|---|
 | Production | `main` | domaine de production | Projet Supabase production |
-| Staging | `staging` | URL Vercel stable de la branche `staging` | Projet Supabase staging |
-| Preview (par PR) | branche de la PR | URL Vercel générée par PR | Projet Supabase staging (partagé) |
+| Preview (par PR) | branche de la PR | URL Vercel générée par PR | Branche de preview Supabase si la PR modifie `supabase/` |
 
-Le Preview Deployment d'une PR partage la base staging avec toutes les autres PR en cours. Si une PR ajoute une migration, celle-ci n'est appliquée qu'au merge dans `staging` — la preview de cette PR peut donc ne pas refléter le nouveau schéma avant le merge.
+Les PR ciblent directement `main` : il n'y a plus d'étape `staging` (la branche existe encore mais n'est plus utilisée). Une migration mergée est appliquée en production dans les minutes qui suivent — voir `AGENTS.md` § 7.
 
 ## Workflow de contribution
 
-1. **Créer une branche** depuis `staging` (pas depuis `main`) :
+1. **Créer une branche** depuis `main` à jour :
    ```bash
-   git checkout staging
-   git pull origin staging
-   git checkout -b feature/ma-fonctionnalite
+   git fetch origin main
+   git checkout -b feature/ma-fonctionnalite origin/main
    ```
 2. **Développer et tester en local** (voir le README pour le setup Supabase local).
-3. **Ouvrir une PR vers `staging`**.
-   - Les branches `claude/` et `codex/` sont auto-mergées dès que CI passe (sauf label `do-not-merge`).
-   - Les autres branches (`feature/`, `fix/`) demandent une review humaine avant merge.
-4. **Vérifier sur l'environnement staging** une fois la PR mergée : la migration (s'il y en a une) est appliquée automatiquement, et le déploiement staging est mis à jour.
-5. **Promotion en production** : une fois que `staging` est jugé stable, ouvrir une PR `staging → main`. Cette PR est **toujours revue et mergée manuellement** par un humain, jamais auto-mergée. Une fois mergée, les migrations déjà validées sur staging sont rejouées automatiquement sur le projet Supabase production.
+3. **Ouvrir une PR vers `main`**. Attendre la CI verte et, si la PR contient une migration, le check `Supabase Preview` vert.
+4. **Tester sur le Preview Deployment** de la PR.
+5. **Merger** (humain). La CI tourne sur `main`, `supabase-prod.yml` applique les migrations en production et Vercel déploie.
 
 ## Branches d'intégration ad-hoc
 
-Pour une fonctionnalité qui s'étend sur plusieurs PR ou plusieurs sessions de travail, ouvrir une branche d'intégration dédiée depuis `staging` (ex. `suivi-competences`) plutôt que de viser `staging` à chaque sous-PR :
-
-- Toutes les sous-PR de la fonctionnalité ciblent cette branche d'intégration comme base, pas `staging` directement.
-- Une fois la fonctionnalité complète et validée, ouvrir une PR `<branche d'intégration> → staging`.
-- La promotion `staging → main` se fait ensuite normalement (revue humaine, jamais d'auto-merge).
-
-Voir `AGENTS.md` § 7 pour le détail. Cette convention s'applique aussi aux agents IA : si une fonctionnalité est déjà en cours sur une branche d'intégration ad-hoc, les PR suivantes doivent cibler cette branche, pas `main` ni `staging`.
+Pour une fonctionnalité qui s'étend sur plusieurs PR et qu'on ne veut pas livrer par morceaux, ouvrir une branche d'intégration depuis `main` (ex. `suivi-competences`) : les sous-PR la ciblent, puis une PR `<branche d'intégration> → main` livre l'ensemble. Voir `AGENTS.md` § 7.
 
 ## Règles
 
-- Ne jamais ouvrir de PR de feature directement vers `main`.
-- Ne jamais force-push sur `staging` ou `main`.
-- Une PR qui modifie le schéma (nouvelle migration) doit être testée sur staging avant la promotion vers `main`.
-- En cas de problème détecté sur `main` après une promotion, revert via une nouvelle PR (jamais de force-push ni de rewrite d'historique).
+- Ne jamais pusher directement ni force-pusher sur `main`.
+- Une PR qui modifie le schéma doit avoir le check `Supabase Preview` vert et rester compatible avec le code en production le temps du déploiement (voir `AGENTS.md` § 7).
+- En cas de problème détecté sur `main`, corriger ou revert via une nouvelle PR (jamais de force-push ni de réécriture d'historique).
 
 ## Avant d'ouvrir une PR
 
@@ -58,7 +47,7 @@ Voir `AGENTS.md` § 7 pour le détail des workflows CI/CD.
 
 Les workflows ne suffisent pas seuls à empêcher un contournement humain (force-push, merge manuel sans attendre CI). Tant que ces réglages ne sont pas faits, les règles ci-dessus ne sont que des conventions documentées.
 
-**Branche par défaut du repo** (**Settings → General → Default branch**) : mettre `staging`, pas `main`. C'est la branche que GitHub propose par défaut comme base de PR et comme point de départ pour une nouvelle branche — y compris pour les agents IA qui n'ont pas reçu d'instruction explicite. La garder sur `main` pousse les agents à créer leurs branches et PR depuis/vers `main` par défaut, ce qui contredit directement le reste de ce document.
+**Branche par défaut du repo** (**Settings → General → Default branch**) : `main`.
 
 À configurer dans **Settings → Branches** :
 
@@ -70,12 +59,9 @@ Les workflows ne suffisent pas seuls à empêcher un contournement humain (force
 - Do not allow deletions.
 - (Optionnel) Restreindre qui peut merger, si l'équipe grossit.
 
-**Branche `staging` :**
-- Require status checks to pass before merging — mêmes checks que ci-dessus. C'est de la défense en profondeur : `auto-merge.yml` attend déjà lui-même la fin des checks (`gh pr checks --watch`), mais ce réglage empêche aussi qu'un merge manuel par un humain contourne la vérification.
-- Do not allow force pushes.
-- Pas de "require pull request review" : l'auto-merge des agents doit continuer à fonctionner sans approbation humaine.
+## Configuration du projet Supabase staging (inactif)
 
-## Configuration du projet Supabase staging
+> Le circuit `staging` n'est plus utilisé. Cette section est conservée pour mémoire, au cas où il serait réactivé.
 
 Le déploiement des migrations passe par les workflows GitHub Actions (`supabase-staging.yml` / `supabase-prod.yml`, voir `AGENTS.md` § 7), pas par l'intégration GitHub native de Supabase. Lors de la création du projet Supabase staging :
 
