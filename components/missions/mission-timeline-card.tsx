@@ -122,13 +122,16 @@ export function MissionTimelineCard({
   const duration = formatMissionDuration(mission.starts_at, mission.ends_at);
 
   // Réversion (montant reversé à l'association), affichée à gauche de la durée : on privilégie la
-  // réversion réelle dès qu'elle est renseignée, avec repli sur la réversion prévue.
+  // réversion réelle dès qu'elle est renseignée, avec repli sur la réversion prévue. Réservé aux
+  // admins, le montant ne concerne pas les bénévoles.
   const reversionAmount =
-    typeof mission.reversion_actual === 'number'
-      ? mission.reversion_actual
-      : typeof mission.reversion_expected === 'number'
-        ? mission.reversion_expected
-        : null;
+    variant === 'admin'
+      ? typeof mission.reversion_actual === 'number'
+        ? mission.reversion_actual
+        : typeof mission.reversion_expected === 'number'
+          ? mission.reversion_expected
+          : null
+      : null;
   const reversionLabel =
     reversionAmount !== null
       ? new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 2 }).format(reversionAmount)
