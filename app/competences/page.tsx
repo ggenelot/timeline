@@ -69,7 +69,7 @@ type ModalState = {
   evDate: string;
   evAntenne: string;
   // supervisor / doubleur
-  supMode: 'search' | 'manual' | 'chosen';
+  supMode: 'search' | 'manual' | 'chosen' | 'none';
   supQuery: string;
   supResults: SupOption[];
   chosenSup: SupOption | null;
@@ -375,14 +375,14 @@ function compareDoublureChrono(a: Doublure, b: Doublure): number {
   return (a.created_at ?? '') < (b.created_at ?? '') ? -1 : 1;
 }
 
-// Discreet round "+" button to declare a doublure.
+// Discreet round "+" button to declare an event.
 function DeclareDoublureButton({ onClick }: { onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      aria-label="Déclarer une doublure"
-      title="Déclarer une doublure"
+      aria-label="Déclarer un événement"
+      title="Déclarer un événement"
       style={{ cursor: 'pointer', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 30, height: 30, border: '1px solid #E6EAF2', background: '#fff', color: '#5B6478', borderRadius: '50%', fontSize: 17, fontWeight: 500, fontFamily: 'inherit', lineHeight: 1 }}
     >
       +
@@ -509,7 +509,7 @@ function EventField({
         onClick={() => setModal((m) => ({ ...m, eventMode: 'manual' }))}
         style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
       >
-        + Événement hors timeline (doublure externe)
+        + Événement hors timeline
       </button>
     </div>
   );
@@ -574,6 +574,35 @@ function SupervisorField({
     );
   }
 
+  if (modal.supMode === 'none') {
+    return (
+      <div>
+        <FieldLabel>Encadré par</FieldLabel>
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            border: '1.5px solid #E6EAF2',
+            background: '#F7F9FC',
+            borderRadius: 10,
+            padding: '10px 12px',
+          }}
+        >
+          <div style={{ fontSize: 13.5, fontWeight: 700, color: '#5B6478' }}>Personne · auto-événement</div>
+          <button
+            type="button"
+            onClick={() => setModal((m) => ({ ...m, supMode: 'search' }))}
+            style={{ cursor: 'pointer', border: '1px solid #A6AEBE', background: '#fff', color: '#5B6478', borderRadius: 8, padding: '6px 11px', fontSize: 12, fontWeight: 700, fontFamily: 'inherit' }}
+          >
+            Changer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (modal.supMode === 'manual') {
     return (
       <div>
@@ -612,13 +641,22 @@ function SupervisorField({
           ))}
         </div>
       ) : null}
-      <button
-        type="button"
-        onClick={() => setModal((m) => ({ ...m, supMode: 'manual' }))}
-        style={{ marginTop: 8, cursor: 'pointer', border: 'none', background: 'transparent', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
-      >
-        + Saisir un superviseur hors liste
-      </button>
+      <div style={{ marginTop: 8, display: 'flex', gap: 14 }}>
+        <button
+          type="button"
+          onClick={() => setModal((m) => ({ ...m, supMode: 'manual' }))}
+          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+        >
+          + Saisir un superviseur hors liste
+        </button>
+        <button
+          type="button"
+          onClick={() => setModal((m) => ({ ...m, supMode: 'none', chosenSup: null, supName: '', supAntenne: '' }))}
+          style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#5B6478', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
+        >
+          Personne · auto-événement
+        </button>
+      </div>
     </div>
   );
 }
@@ -663,7 +701,7 @@ function SupervisedDoubluresCard({ items, onChanged }: { items: SupervisedDoublu
   return (
     <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 16, boxShadow: '0 1px 3px rgba(20,32,58,.06)', marginBottom: 20, overflow: 'hidden' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', padding: '14px 18px', borderBottom: '1px solid #EEF1F6' }}>
-        <span style={{ fontSize: 15, fontWeight: 800, color: '#16203A' }}>Doublures que j&apos;encadre</span>
+        <span style={{ fontSize: 15, fontWeight: 800, color: '#16203A' }}>Événements que j&apos;encadre</span>
         {toComment.length > 0 ? (
           <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">
             {toComment.length} à commenter
@@ -673,7 +711,7 @@ function SupervisedDoubluresCard({ items, onChanged }: { items: SupervisedDoublu
       {toComment.map(row)}
       {toComment.length === 0 ? (
         <div style={{ padding: '12px 18px', fontSize: 12.5, color: '#8A93A6', borderBottom: done.length > 0 ? '1px solid #EEF1F6' : 'none' }}>
-          Toutes vos doublures sont commentées.
+          Tous vos événements sont commentés.
         </div>
       ) : null}
       {showDone ? done.map(row) : null}
@@ -683,7 +721,7 @@ function SupervisedDoubluresCard({ items, onChanged }: { items: SupervisedDoublu
           onClick={() => setShowDone((v) => !v)}
           style={{ display: 'block', width: '100%', cursor: 'pointer', border: 'none', background: '#F7F9FC', color: '#00378F', fontSize: 12.5, fontWeight: 700, fontFamily: 'inherit', padding: '10px 18px' }}
         >
-          {showDone ? 'Masquer les doublures commentées' : `Voir les ${done.length} doublure${done.length > 1 ? 's' : ''} déjà commentée${done.length > 1 ? 's' : ''}`}
+          {showDone ? 'Masquer les événements commentés' : `Voir les ${done.length} événement${done.length > 1 ? 's' : ''} déjà commenté${done.length > 1 ? 's' : ''}`}
         </button>
       ) : null}
       {opened ? (
@@ -796,7 +834,7 @@ function SupervisorDoublureModal({
 
   return (
     <Modal
-      title={item.trainee_name ?? 'Doublure'}
+      title={item.trainee_name ?? 'Événement'}
       subtitle={[item.cursus_code, item.phase_label, item.event_name, fmt(item.event_date)].filter(Boolean).join(' · ')}
       onClose={onClose}
       footer={
@@ -847,7 +885,7 @@ function SupervisorDoublureModal({
             />
           </div>
           <div>
-            <FieldLabel>Compétences validées lors de cette doublure</FieldLabel>
+            <FieldLabel>Compétences validées lors de cet événement</FieldLabel>
             {comps.length === 0 ? (
               <p style={{ fontSize: 13, color: '#8A93A6', margin: '4px 0 0' }}>Aucune compétence dans cette phase.</p>
             ) : (
@@ -869,7 +907,7 @@ function SupervisorDoublureModal({
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{c.name}</div>
                         {locked ? (
-                          <div style={{ marginTop: 2, fontSize: 12, color: '#8A93A6' }}>Déjà validée lors d&apos;une autre doublure</div>
+                          <div style={{ marginTop: 2, fontSize: 12, color: '#8A93A6' }}>Déjà validée lors d&apos;un autre événement</div>
                         ) : c.description ? (
                           <div style={{ marginTop: 2, fontSize: 12, color: '#5B6478', lineHeight: 1.45 }}>{c.description}</div>
                         ) : null}
@@ -1186,8 +1224,8 @@ export default function CompetencesPage() {
     if (!selectedVCId || !canDeleteDoublure()) return;
     const linked = validations.filter((v) => v.doublure_id === d.id);
     const msg = linked.length > 0
-      ? `Supprimer cette doublure et les ${linked.length} compétence${linked.length > 1 ? 's' : ''} validée${linked.length > 1 ? 's' : ''} lors de celle-ci ?`
-      : 'Supprimer cette doublure ?';
+      ? `Supprimer cet événement et les ${linked.length} compétence${linked.length > 1 ? 's' : ''} validée${linked.length > 1 ? 's' : ''} lors de celui-ci ?`
+      : 'Supprimer cet événement ?';
     if (!window.confirm(msg)) return;
     setError(null);
     try {
@@ -1278,7 +1316,7 @@ export default function CompetencesPage() {
       return (m.eventMode === 'chosen' && !!m.chosenEvent) || m.evName.trim().length > 0;
     }
     if (m.step === 1) {
-      return (m.supMode === 'chosen' && !!m.chosenSup) || m.supName.trim().length > 0;
+      return (m.supMode === 'chosen' && !!m.chosenSup) || m.supName.trim().length > 0 || m.supMode === 'none';
     }
     return true;
   }
@@ -1309,7 +1347,7 @@ export default function CompetencesPage() {
               tone="brand"
               icon="lock"
               title="Accès réservé"
-              text="Le carnet de doublure d'un autre bénévole est réservé à l'équipe formation. Vos doublures encadrées se commentent depuis votre page Suivi des compétences."
+              text="Le carnet d'événements d'un autre bénévole est réservé à l'équipe formation. Vos événements encadrés se commentent depuis votre page Suivi des compétences."
             />
           </div>
         )}
@@ -1342,10 +1380,10 @@ export default function CompetencesPage() {
         {isOther ? (
           <div style={{ background: '#E7EEFB', border: '1px solid #CFDDF6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1E3C87', fontWeight: 600 }}>
             {canManage
-              ? `Vous gérez le carnet de doublure de ${viewingName ?? 'ce bénévole'} en tant qu'admin formation : vous pouvez déclarer, modifier et supprimer ses doublures.`
+              ? `Vous gérez le carnet d'événements de ${viewingName ?? 'ce bénévole'} en tant qu'admin formation : vous pouvez déclarer, modifier et supprimer ses événements.`
               : doublures.some((d) => d.supervisor_id === viewerId)
-                ? `Vous consultez le carnet de doublure de ${viewingName ?? 'ce bénévole'} : vous pouvez modifier les doublures que vous avez encadrées (commentaires et compétences).`
-                : `Vous consultez le carnet de doublure de ${viewingName ?? 'ce bénévole'} en lecture seule.`}
+                ? `Vous consultez le carnet d'événements de ${viewingName ?? 'ce bénévole'} : vous pouvez modifier les événements que vous avez encadrés (commentaires et compétences).`
+                : `Vous consultez le carnet d'événements de ${viewingName ?? 'ce bénévole'} en lecture seule.`}
           </div>
         ) : null}
 
@@ -1419,11 +1457,11 @@ export default function CompetencesPage() {
             <EmptyState
               tone="brand"
               icon="workspace_premium"
-              title="Aucun cursus de doublure"
+              title="Aucun cursus d'événements"
               text={
                 isOther
-                  ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus de doublure.`
-                  : "Vous n'êtes inscrit dans aucun cursus de doublure. Un administrateur peut vous y inscrire."
+                  ? `${viewingName ?? 'Ce bénévole'} n'est inscrit dans aucun cursus d'événements.`
+                  : "Vous n'êtes inscrit dans aucun cursus d'événements. Un administrateur peut vous y inscrire."
               }
             />
           </div>
@@ -1653,7 +1691,7 @@ export default function CompetencesPage() {
                           </div>
                           {phase.sub ? (
                             <div style={{ marginTop: 5, fontSize: 13, color: '#5B6478' }}>
-                              {phase.sub} · {phDoublures.length}/{phase.min_doublures} doublure{phase.min_doublures > 1 ? 's' : ''}
+                              {phase.sub} · {phDoublures.length}/{phase.min_doublures} événement{phase.min_doublures > 1 ? 's' : ''}
                               {phase.min_externe > 0 ? ` (dont ${phase.min_externe} externe${phase.min_externe > 1 ? 's' : ''})` : ''}
                             </div>
                           ) : null}
@@ -1663,7 +1701,7 @@ export default function CompetencesPage() {
                         <div style={{ padding: '15px 18px 6px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 11 }}>
                             <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8A93A6' }}>
-                              Doublures &amp; événements
+                              Événements
                             </span>
                             {canDeclare ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
                           </div>
@@ -1689,7 +1727,7 @@ export default function CompetencesPage() {
                                   >
                                     <div style={{ flex: 1, minWidth: 0 }}>
                                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                        <span style={{ fontSize: 14, fontWeight: 800, color: '#16203A' }}>{d.event_name ?? 'Doublure'}</span>
+                                        <span style={{ fontSize: 14, fontWeight: 800, color: '#16203A' }}>{d.event_name ?? 'Événement'}</span>
                                         {expanded ? (
                                           <>
                                             {d.is_external ? <Pill color="#8E1279" bg="#F8E6F4" border="#E9C9E4">Externe</Pill> : null}
@@ -1700,7 +1738,7 @@ export default function CompetencesPage() {
                                         ) : (
                                           dVals.length > 0 ? (
                                             <span
-                                              aria-label={`${dVals.length} compétence${dVals.length > 1 ? 's' : ''} signée${dVals.length > 1 ? 's' : ''} sur cette doublure`}
+                                              aria-label={`${dVals.length} compétence${dVals.length > 1 ? 's' : ''} signée${dVals.length > 1 ? 's' : ''} sur cet événement`}
                                               style={{ marginLeft: 'auto', fontSize: 12.5, fontWeight: 800, color: '#fff', background: '#059669', borderRadius: 999, padding: '2px 9px', fontVariantNumeric: 'tabular-nums' }}
                                             >
                                               +{dVals.length}
@@ -1805,7 +1843,7 @@ export default function CompetencesPage() {
                             })}
 
                             {phDoublures.length === 0 ? (
-                              <div style={{ fontSize: 12.5, color: '#8A93A6' }}>Aucune doublure déclarée pour l&apos;instant.</div>
+                              <div style={{ fontSize: 12.5, color: '#8A93A6' }}>Aucun événement déclaré pour l&apos;instant.</div>
                             ) : null}
                           </div>
                         </div>
@@ -1817,7 +1855,7 @@ export default function CompetencesPage() {
                               <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8A93A6' }}>
                                 Compétences à valider
                               </div>
-                              <span style={{ fontSize: 11.5, color: '#8A93A6' }}>À cocher lors d&apos;une doublure</span>
+                              <span style={{ fontSize: 11.5, color: '#8A93A6' }}>À cocher lors d&apos;un événement</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                               {todoComps.map((c) => {
@@ -1862,7 +1900,7 @@ export default function CompetencesPage() {
                 {cursusDetail.rules.length > 0 ? (
                   <div style={{ background: '#fff', border: '1px solid #E6EAF2', borderRadius: 14, padding: '16px 18px', marginBottom: 16 }}>
                     <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', color: '#8A93A6', marginBottom: 11 }}>
-                      Règles du cursus de doublure
+                      Règles du cursus d&apos;événements
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '9px 22px' }}>
                       {cursusDetail.rules.map((r) => (
@@ -1913,7 +1951,7 @@ export default function CompetencesPage() {
                             <div key={d.id} style={{ display: 'grid', gridTemplateColumns: '1fr 168px', gap: 14, alignItems: 'start', padding: '10px 12px', borderBottom: '1px solid #EEF1F6' }}>
                               <div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.event_name ?? 'Doublure'}</span>
+                                  <span style={{ fontSize: 13.5, fontWeight: 700, color: '#16203A' }}>{d.event_name ?? 'Événement'}</span>
                                   {d.is_external ? <Pill color="#8E1279" bg="#F8E6F4" border="#E9C9E4">Ext.</Pill> : null}
                                   {d.mission_id ? <Pill color="#1E3C87" bg="#E7EEFB" border="#CFDDF6">Timeline</Pill> : null}
                                   {roleFor(d) ? (
@@ -1976,7 +2014,7 @@ export default function CompetencesPage() {
                                   <div style={{ fontSize: 11.5, color: '#8A93A6' }}>{val.declared_by === viewerId ? 'déclarée par moi' : 'déclarée'}</div>
                                 </>
                               ) : (
-                                <span style={{ fontSize: 12, fontWeight: 600, color: '#8A93A6' }}>À valider en doublure</span>
+                                <span style={{ fontSize: 12, fontWeight: 600, color: '#8A93A6' }}>À valider lors d&apos;un événement</span>
                               )}
                             </div>
                           </div>
@@ -1999,7 +2037,7 @@ export default function CompetencesPage() {
         const hint = (text: string) => <span style={{ color: '#8A93A6', fontWeight: 600 }}>{text}</span>;
         return (
           <Modal
-            title={isEdit ? 'Modifier la doublure' : 'Déclarer une doublure'}
+            title={isEdit ? 'Modifier l’événement' : 'Déclarer un événement'}
             subtitle={`Étape ${modal.step + 1}/${STEP_LABELS.length} · ${STEP_LABELS[modal.step]}`}
             onClose={() => setModal(null)}
             footer={
@@ -2028,7 +2066,7 @@ export default function CompetencesPage() {
                     disabled={submitting}
                     style={{ cursor: submitting ? 'not-allowed' : 'pointer', border: 'none', background: '#059669', color: '#fff', borderRadius: 9, padding: '9px 18px', fontSize: 13, fontWeight: 700, fontFamily: 'inherit', opacity: submitting ? 0.5 : 1 }}
                   >
-                    {submitting ? 'Enregistrement…' : isEdit ? 'Enregistrer les modifications' : 'Confirmer la doublure'}
+                    {submitting ? 'Enregistrement…' : isEdit ? 'Enregistrer les modifications' : 'Confirmer l’événement'}
                   </button>
                 ) : (
                   <button
@@ -2073,7 +2111,7 @@ export default function CompetencesPage() {
                 <div>
                   <FieldLabel>Encadré par</FieldLabel>
                   <p style={{ fontSize: 13, color: '#5B6478', margin: 0 }}>
-                    Vous êtes le doubleur de cette doublure. Seuls le stagiaire et l&apos;admin formation peuvent changer le doubleur.
+                    Vous êtes le doubleur de cet événement. Seuls le stagiaire et l&apos;admin formation peuvent changer le doubleur.
                   </p>
                 </div>
               ) : (
@@ -2089,7 +2127,7 @@ export default function CompetencesPage() {
                   <MarkdownEditor
                     value={modal.supervisorComment}
                     onChange={(v) => setModal((m) => m ? { ...m, supervisorComment: v } : m)}
-                    placeholder={modal.role === 'supervisor' ? 'Votre retour au stagiaire : points forts, axes de progression…' : 'Retour du doubleur sur la doublure…'}
+                    placeholder={modal.role === 'supervisor' ? 'Votre retour au stagiaire : points forts, axes de progression…' : 'Retour du doubleur sur l’événement…'}
                     rows={3}
                   />
                 </div>
@@ -2123,7 +2161,7 @@ export default function CompetencesPage() {
             {/* Page 4 — Compétences validées */}
             {modal.step === 3 ? (
               <div>
-                <FieldLabel>Compétences validées lors de cette doublure <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
+                <FieldLabel>Compétences validées lors de cet événement <span style={{ color: '#8A93A6', fontWeight: 600 }}>(optionnel)</span></FieldLabel>
                 {comps.length === 0 ? (
                   <p style={{ fontSize: 13, color: '#8A93A6', margin: '4px 0 0' }}>
                     Toutes les compétences de cette phase sont déjà validées.

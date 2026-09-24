@@ -28,7 +28,7 @@ type GestionItem = NavItem & {
 const PERSO_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
   { href: '/availability', label: 'Mes dispos', icon: 'event_available' },
-  { href: '/competences', label: 'Compétences', icon: 'workspace_premium' },
+  { href: '/competences', label: 'Cursus', icon: 'workspace_premium' },
   { href: '/verification', label: 'Vérification', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
 ];
@@ -37,7 +37,7 @@ const PERSO_ITEMS: NavItem[] = [
 const TAB_ITEMS: NavItem[] = [
   { href: '/missions', label: 'Timeline', icon: 'event_note' },
   { href: '/availability', label: 'Dispos', icon: 'event_available' },
-  { href: '/competences', label: 'Compét.', icon: 'workspace_premium' },
+  { href: '/competences', label: 'Cursus', icon: 'workspace_premium' },
   { href: '/verification', label: 'Vérif', icon: 'fact_check' },
   { href: '/profile', label: 'Profil', icon: 'person' }
 ];
@@ -54,7 +54,7 @@ const GESTION_ITEMS: GestionItem[] = [
   // Éditeur du référentiel cursus : réservé à can_manage. La supervision
   // lecture seule (présidente) passe par le tableau de bord compétences.
   { href: '/admin/cursus', label: 'Cursus', required: { resource: 'cursus', action: 'can_manage' }, section: 'pilotage', icon: 'school' },
-  { href: '/admin/competences-dashboard', label: 'Tableau de bord compétences', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'insights' },
+  { href: '/admin/competences-dashboard', label: 'Suivi compétences', required: { resource: 'cursus', action: 'can_see' }, section: 'pilotage', icon: 'insights' },
   { href: '/admin/mission-types', label: 'Missions', required: { resource: 'mission_type', action: 'can_manage' }, section: 'gestion', icon: 'category' },
   { href: '/admin/missions', label: 'Gestion des missions', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'edit_calendar' },
   { href: '/admin/ope-dashboard', label: 'Tableau de bord OPE', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'dashboard' },
