@@ -64,6 +64,7 @@ const GESTION_ITEMS: GestionItem[] = [
   { href: '/admin/stats', label: 'Statistiques', required: { resource: 'mission', action: 'can_manage' }, section: 'pilotage', icon: 'bar_chart' },
   { href: '/admin/apparence', label: 'Apparence', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'palette' },
   { href: '/admin/integrations', label: 'Intégrations', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'sync_alt' },
+  { href: '/admin/slack/messages', label: 'Messages Slack', required: { resource: 'settings', action: 'can_see' }, section: 'gestion', icon: 'forum' },
   { href: '/admin/help', label: 'Aide', required: { resource: 'settings', action: 'can_manage' }, section: 'gestion', icon: 'help' }
 ];
 

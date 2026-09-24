@@ -151,7 +151,7 @@ npm run test               # typecheck + E2E P0
 npm run test:e2e:p0        # Suite Playwright P0 uniquement
 ```
 
-### Comptes de test E2E (local/staging uniquement)
+### Comptes de test E2E (local/preview uniquement)
 
 | Rôle | Email |
 |---|---|
@@ -172,54 +172,57 @@ Mot de passe via la variable d'env `E2E_TEST_PASSWORD` (défaut : `DemoPass123!`
 
 ## 7. CI/CD et branches
 
-### Environnements
+### Fonctionnement : tout passe par `main`
 
-Le projet a deux environnements depuis le passage en prod multi-contributeurs :
+Les PR ciblent **directement `main`**. Il n'y a plus d'étape `staging` : la branche `staging` et ses workflows existent encore dans le dépôt mais ne sont plus utilisés (la branche n'est plus mise à jour).
 
 | Environnement | Branche | Déploiement Vercel | Base Supabase |
 |---|---|---|---|
-| **Staging** | `staging` | URL stable (déploiement de branche) | Projet Supabase staging |
+| **Preview (par PR)** | branche de la PR | URL Vercel générée par PR | Branche de preview Supabase si la PR modifie `supabase/` |
 | **Production** | `main` | Domaine de production | Projet Supabase production |
 
-Chaque PR (quelle que soit sa branche source) génère en plus un **Preview Deployment** Vercel dédié, pointant vers la base staging.
+- Chaque PR génère un **Preview Deployment** Vercel.
+- Si la PR modifie `supabase/`, l'intégration Supabase crée une **branche de preview** et y applique les nouvelles migrations (check `Supabase Preview`). C'est la seule validation d'une migration sur une vraie base Supabase avant la production.
+- Au merge dans `main`, la CI tourne sur `main`, puis `supabase-prod.yml` applique les migrations **en production**, et Vercel déploie le domaine de production.
 
 ### Workflows GitHub Actions
 
 | Workflow | Déclencheur | Rôle |
 |---|---|---|
-| `ci.yml` | PR + push main/staging | Typecheck → Lint → Build |
-| `supabase-staging.yml` | CI vert sur staging | Déploiement migrations sur le projet Supabase staging |
-| `supabase-prod.yml` | CI vert sur main | Déploiement migrations en production |
-| `supabase-migration-timestamp-guard.yml` | PR + push main/staging | Bloque les collisions de timestamp |
-| `auto-merge.yml` | PR dont la base est `staging` | Auto-merge des branches agents vers staging |
+| `ci.yml` | PR + push `main` | Typecheck → Lint → Build |
+| `supabase-migration-timestamp-guard.yml` | PR + push `main` | Bloque les collisions de timestamp |
+| `supabase-prod.yml` | CI vert sur `main` | Déploiement des migrations en production |
+| `supabase-staging.yml`, `auto-merge.yml` | branche `staging` | Inactifs (ne concernent que `staging`, qui n'est plus utilisée) |
 
-Toute PR doit passer le workflow **CI** (typecheck → lint → build) avant de pouvoir être mergée.
+Toute PR doit passer le workflow **CI** (typecheck → lint → build) avant d'être mergée. Il n'y a pas d'auto-merge vers `main` : le merge est fait par un humain.
 
 ### Conventions de branches
 
 | Préfixe | Usage | Base de la PR |
 |---|---|---|
-| `feature/` | Nouvelles fonctionnalités | `staging` |
-| `fix/` | Corrections de bugs | `staging` |
-| `claude/` | Branches Claude Code (auto-merge éligible) | `staging` |
-| `codex/` | Branches Codex (auto-merge éligible) | `staging` |
+| `feature/` | Nouvelles fonctionnalités | `main` |
+| `fix/` | Corrections de bugs | `main` |
+| `claude/` | Branches Claude Code | `main` |
+| `codex/` | Branches Codex | `main` |
 
-Les branches agents (`claude/`, `codex/`) sont auto-mergées en squash sur **`staging`** une fois tous les checks verts et sans label `do-not-merge`. L'auto-merge ne se déclenche pas si la PR cible `main`.
-
-`main` ne reçoit que des PR de promotion `staging → main`, ouvertes et mergées manuellement par un humain après validation sur l'environnement staging. Aucun auto-merge ni push direct n'est autorisé sur `main`.
-
-Ne **jamais** force-pusher sur `main` ni sur `staging`.
+- Créer la branche depuis `origin/main` à jour.
+- Une PR déjà mergée est terminée : pour une suite, repartir de `main` à jour et ouvrir une nouvelle PR.
+- Ne **jamais** pusher directement sur `main`, ni force-pusher sur `main`.
+- En cas de problème en production, corriger ou revert via une nouvelle PR (jamais de réécriture d'historique).
 
 ### Branches d'intégration ad-hoc (fonctionnalités multi-PR)
 
-Quand une fonctionnalité demande plusieurs itérations ou plusieurs PR successives (ex. une série de changements liés sur une même feature, parfois étalés sur plusieurs sessions d'agent), créer une **branche d'intégration ad-hoc** dédiée plutôt que de cibler `staging` directement :
+Pour une fonctionnalité longue, qu'on ne veut pas livrer en production morceau par morceau, on peut créer une **branche d'intégration** depuis `main` (ex. `git checkout -b suivi-competences origin/main`, nom décrivant la fonctionnalité). Les sous-PR ciblent cette branche, puis une PR `<branche d'intégration> → main` livre l'ensemble.
 
-1. Créer la branche d'intégration depuis `staging` : `git checkout -b suivi-competences origin/staging` puis `git push -u origin suivi-competences`. Le nom doit décrire la fonctionnalité, pas l'agent qui l'a créée.
-2. Toutes les PR de la fonctionnalité (y compris les branches `claude/`, `codex/`) ciblent cette branche d'intégration comme base — **pas** `staging`. L'auto-merge ne se déclenche que si la base est `staging`, donc ces PR sont mergées manuellement (ou par un agent) sur la branche d'intégration au fil de l'eau.
-3. Une fois la fonctionnalité jugée complète et testée sur cette branche, ouvrir une PR `<branche d'intégration> → staging`. Cette PR suit les règles normales (CI verte, etc.) et peut être auto-mergée comme une PR `claude/`/`codex/` classique si elle en a le préfixe.
-4. La promotion finale `staging → main` reste inchangée (revue humaine obligatoire, jamais d'auto-merge).
+Si un agent reprend une fonctionnalité déjà en cours sur une branche d'intégration existante, il cible cette branche plutôt que `main`.
 
-Si un agent reprend une fonctionnalité déjà en cours sur une branche d'intégration ad-hoc existante, il doit retargeter ses PR vers cette branche plutôt que vers `main` ou `staging`.
+### Migrations : elles partent en production au merge
+
+Comme il n'y a plus d'étape intermédiaire, une migration mergée est appliquée en production dans les minutes qui suivent :
+
+- Vérifier que le check `Supabase Preview` est vert (migration appliquée sans erreur sur la branche de preview).
+- Rendre les changements de schéma compatibles avec le code déjà en production pendant le court intervalle entre la migration et le déploiement Vercel. En particulier, supprimer ou renommer une colonne encore lue par le code actuel provoque des erreurs le temps du déploiement : préférer ajouter d'abord, puis supprimer dans une PR ultérieure, ou le signaler explicitement dans la PR.
+- Si la migration déplace des données, le tester sur une base de test avant de pousser, et le décrire dans la PR.
 
 ### Avant chaque PR
 
@@ -228,20 +231,13 @@ Si un agent reprend une fonctionnalité déjà en cours sur une branche d'intég
 3. `npm test` — tests P0 verts.
 4. Pas de collision de timestamp de migration.
 5. Pas de secret dans les fichiers modifiés.
-
-### Avant une promotion `staging → main`
-
-1. Vérifier que `staging` est vert (CI + migration staging appliquée sans erreur).
-2. Tester manuellement le parcours impacté sur l'URL staging.
-3. Ouvrir une PR `staging → main`, revue par un humain (pas d'auto-merge).
-4. Une fois mergée, `supabase-prod.yml` rejoue automatiquement les mêmes migrations déjà validées sur staging.
+6. Tester le parcours impacté sur le Preview Deployment de la PR quand c'est possible.
 
 ### Déploiement d'urgence (bypass CI)
 
-`supabase-staging.yml` et `supabase-prod.yml` exposent aussi un déclencheur manuel (`workflow_dispatch`) qui **bypasse la vérification CI verte** :
+`supabase-prod.yml` expose aussi un déclencheur manuel (`workflow_dispatch`) qui **bypasse la vérification CI verte** :
 
 ```bash
-gh workflow run supabase-staging.yml
 gh workflow run supabase-prod.yml
 ```
 
