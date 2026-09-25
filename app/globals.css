@@ -30,3 +30,29 @@ body {
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
+
+/* Export PDF (impression navigateur) : masque le chrome applicatif (nav,
+   header, boutons interactifs) et révèle l'en-tête dédié à l'impression.
+   Voir app/competences/page.tsx (cahier de doublure). */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .print-only {
+    display: block !important;
+  }
+
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  @page {
+    margin: 14mm 12mm;
+  }
+}
