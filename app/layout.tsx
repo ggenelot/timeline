@@ -66,7 +66,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <PermissionsProvider>
             <AuthGuard>
               <AppShell>{children}</AppShell>
-              <HelpButton />
+              <div className="no-print">
+                <HelpButton />
+              </div>
             </AuthGuard>
           </PermissionsProvider>
         </BrandingProvider>

@@ -34,6 +34,7 @@ import {
   deleteCompetenceValidation,
 } from '@/lib/queries/cursus';
 import { usePermissions } from '@/lib/permissions/permissions-context';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { MarkdownEditor } from '@/components/ui/markdown-editor';
 import { MarkdownText } from '@/components/ui/markdown-text';
@@ -939,6 +940,8 @@ export default function CompetencesPage() {
   const [notes, setNotes] = useState<DoublureNote[]>([]);
   const [supervised, setSupervised] = useState<SupervisedDoublure[]>([]);
   const [viewingName, setViewingName] = useState<string | null>(null);
+  const [subjectName, setSubjectName] = useState<string | null>(null);
+  const [pendingPrint, setPendingPrint] = useState(false);
   const [allCursus, setAllCursus] = useState<Cursus[]>([]);
   const [volunteerCursus, setVolunteerCursus] = useState<VolunteerCursus[]>([]);
   const [selectedVCId, setSelectedVCId] = useState<string | null>(null);
@@ -998,7 +1001,16 @@ export default function CompetencesPage() {
           // Un doubleur ne peut pas lire la fiche profil du stagiaire : le nom
           // vient alors de la liste des doublures qu'il encadre.
           const fromSupervised = supervisedAll.find((sd) => sd.trainee_id === pid)?.trainee_name;
-          setViewingName(targetProfile?.full_name ?? targetProfile?.email ?? fromSupervised ?? 'ce bénévole');
+          const name = targetProfile?.full_name ?? targetProfile?.email ?? fromSupervised ?? null;
+          setViewingName(name ?? 'ce bénévole');
+          setSubjectName(name);
+        } else {
+          const { data: ownProfile } = await supabase
+            .from('profiles')
+            .select('full_name,email')
+            .eq('id', pid)
+            .maybeSingle();
+          setSubjectName(ownProfile?.full_name ?? ownProfile?.email ?? null);
         }
       } catch (e) {
         setError((e as Error).message);
@@ -1088,6 +1100,25 @@ export default function CompetencesPage() {
 
   function linkedValidations(d: Doublure): CompetenceValidation[] {
     return linkedValidationsOf(d, validations);
+  }
+
+  // Export PDF : l'impression ne montre que la vue « carnet » (cf. CSS
+  // .no-print / .print-only) ; si l'utilisateur est sur « parcours » on bascule
+  // d'abord la vue, puis on imprime une fois le carnet effectivement rendu.
+  useEffect(() => {
+    if (!pendingPrint || view !== 'carnet') return;
+    setPendingPrint(false);
+    const raf = requestAnimationFrame(() => window.print());
+    return () => cancelAnimationFrame(raf);
+  }, [pendingPrint, view]);
+
+  function handleExportPdf() {
+    if (view === 'carnet') {
+      window.print();
+    } else {
+      setView('carnet');
+      setPendingPrint(true);
+    }
   }
 
   const canDeclare = !isOther || canManage;
@@ -1359,7 +1390,7 @@ export default function CompetencesPage() {
     <div style={{ paddingBottom: 48 }}>
 
         {/* Breadcrumb */}
-        <div style={{ fontSize: 12.5, color: '#8A93A6', fontWeight: 600, marginBottom: 18 }}>
+        <div className="no-print" style={{ fontSize: 12.5, color: '#8A93A6', fontWeight: 600, marginBottom: 18 }}>
           <Link href="/missions" style={{ color: '#8A93A6', textDecoration: 'none' }}>Missions</Link>
           <span style={{ color: '#A6AEBE' }}> › </span>
           <span>Suivi des compétences</span>
@@ -1372,13 +1403,13 @@ export default function CompetencesPage() {
         </div>
 
         {error ? (
-          <div style={{ background: '#FDEAEA', border: '1px solid #F3C6C6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#D14343' }}>
+          <div className="no-print" style={{ background: '#FDEAEA', border: '1px solid #F3C6C6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#D14343' }}>
             {error}
           </div>
         ) : null}
 
         {isOther ? (
-          <div style={{ background: '#E7EEFB', border: '1px solid #CFDDF6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1E3C87', fontWeight: 600 }}>
+          <div className="no-print" style={{ background: '#E7EEFB', border: '1px solid #CFDDF6', borderRadius: 10, padding: '12px 16px', marginBottom: 16, fontSize: 13, color: '#1E3C87', fontWeight: 600 }}>
             {canManage
               ? `Vous gérez le carnet d'événements de ${viewingName ?? 'ce bénévole'} en tant qu'admin formation : vous pouvez déclarer, modifier et supprimer ses événements.`
               : doublures.some((d) => d.supervisor_id === viewerId)
@@ -1388,14 +1419,16 @@ export default function CompetencesPage() {
         ) : null}
 
         {!isOther && supervised.length > 0 ? (
-          <SupervisedDoubluresCard
-            items={supervised}
-            onChanged={() => { listSupervisedDoublures().then(setSupervised).catch(() => {}); }}
-          />
+          <div className="no-print">
+            <SupervisedDoubluresCard
+              items={supervised}
+              onChanged={() => { listSupervisedDoublures().then(setSupervised).catch(() => {}); }}
+            />
+          </div>
         ) : null}
 
         {/* Cursus tab selector : en cours en plein, terminés en plus léger */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
+        <div className="no-print" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20, flexWrap: 'wrap' }}>
           {inProgressCursus.map((vc) => {
             const c = allCursus.find((x) => x.id === vc.cursus_id);
             return (
@@ -1480,6 +1513,9 @@ export default function CompetencesPage() {
             >
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
                 <div style={{ minWidth: 0 }}>
+                  <div className="print-only" style={{ fontSize: 12, fontWeight: 700, color: '#5B6478', marginBottom: 6 }}>
+                    Cahier de doublure · {subjectName ?? viewingName ?? 'Bénévole'} · Exporté le {fmt(new Date().toISOString())}
+                  </div>
                   {cursusDetail.category || cursusDetail.level ? (
                     <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, fontWeight: 700, letterSpacing: '.1em', textTransform: 'uppercase', color: '#00378F', marginBottom: 7 }}>
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#00378F', display: 'inline-block' }} />
@@ -1527,6 +1563,7 @@ export default function CompetencesPage() {
             {/* ── Phase stepper grid ── */}
             {cursusDetail.phases.length > 0 ? (
               <div
+                className="no-print"
                 style={{
                   display: 'flex',
                   gap: 10,
@@ -1588,35 +1625,40 @@ export default function CompetencesPage() {
             ) : null}
 
             {/* ── View switcher ── */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: '#8A93A6' }}>Affichage</span>
-              <div style={{ display: 'inline-flex', background: '#fff', border: '1px solid #E6EAF2', borderRadius: 10, padding: 3 }}>
-                {(['parcours', 'carnet'] as ViewMode[]).map((v) => (
-                  <button
-                    key={v}
-                    type="button"
-                    onClick={() => setView(v)}
-                    style={{
-                      cursor: 'pointer',
-                      border: 'none',
-                      borderRadius: 7,
-                      padding: '7px 16px',
-                      fontSize: 13,
-                      fontWeight: 700,
-                      fontFamily: 'inherit',
-                      background: view === v ? '#16203A' : 'transparent',
-                      color: view === v ? '#fff' : '#5B6478',
-                    }}
-                  >
-                    {v === 'parcours' ? 'Parcours' : 'Carnet'}
-                  </button>
-                ))}
+            <div className="no-print" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: '#8A93A6' }}>Affichage</span>
+                <div style={{ display: 'inline-flex', background: '#fff', border: '1px solid #E6EAF2', borderRadius: 10, padding: 3 }}>
+                  {(['parcours', 'carnet'] as ViewMode[]).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setView(v)}
+                      style={{
+                        cursor: 'pointer',
+                        border: 'none',
+                        borderRadius: 7,
+                        padding: '7px 16px',
+                        fontSize: 13,
+                        fontWeight: 700,
+                        fontFamily: 'inherit',
+                        background: view === v ? '#16203A' : 'transparent',
+                        color: view === v ? '#fff' : '#5B6478',
+                      }}
+                    >
+                      {v === 'parcours' ? 'Parcours' : 'Carnet'}
+                    </button>
+                  ))}
+                </div>
               </div>
+              <Button variant="ghost" size="sm" icon="picture_as_pdf" onClick={handleExportPdf}>
+                Exporter le cahier en PDF
+              </Button>
             </div>
 
             {/* ══════════════ PARCOURS VIEW ══════════════ */}
             {view === 'parcours' ? (
-              <div style={{ position: 'relative', paddingLeft: 38 }}>
+              <div className="no-print" style={{ position: 'relative', paddingLeft: 38 }}>
                 {/* vertical timeline line */}
                 <div style={{ position: 'absolute', left: 13, top: 6, bottom: 14, width: 2, background: '#E6EAF2' }} />
 
@@ -1941,7 +1983,11 @@ export default function CompetencesPage() {
                           </span>
                           {phase.provisional ? <Pill color="#b45309" bg="#FEF3E2" border="#F6DFB0">Provisoire</Pill> : null}
                         </div>
-                        {canDeclare ? <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} /> : null}
+                        {canDeclare ? (
+                          <span className="no-print">
+                            <DeclareDoublureButton onClick={() => openDoublureModal(phase.id)} />
+                          </span>
+                        ) : null}
                       </div>
 
                       {/* Doublures compact */}
@@ -1957,6 +2003,7 @@ export default function CompetencesPage() {
                                   {roleFor(d) ? (
                                     <button
                                       type="button"
+                                      className="no-print"
                                       onClick={() => openEditModal(d)}
                                       style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#00378F', fontSize: 12, fontWeight: 700, fontFamily: 'inherit', padding: 0 }}
                                     >

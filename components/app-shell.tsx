@@ -52,24 +52,28 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <HeaderSlotProvider>
       <div className="min-h-screen">
-        <DesktopSidebar profile={profile} session={session} gestionItems={gestionItems} />
-        <Header
-          session={session}
-          profile={profile}
-          menuOpen={menuOpen}
-          onToggleMenu={() => setMenuOpen((o) => !o)}
-        />
+        <div className="no-print">
+          <DesktopSidebar profile={profile} session={session} gestionItems={gestionItems} />
+          <Header
+            session={session}
+            profile={profile}
+            menuOpen={menuOpen}
+            onToggleMenu={() => setMenuOpen((o) => !o)}
+          />
+        </div>
         <div className={cn('flex min-h-screen flex-col', session && 'lg:pl-[250px]')}>
           <main className="mx-auto w-full max-w-4xl px-4 py-8 pb-[calc(112px+env(safe-area-inset-bottom))] lg:pb-8">{children}</main>
         </div>
-        <BottomTabs session={session} />
-        <SidebarMenu
-          open={menuOpen}
-          onClose={() => setMenuOpen(false)}
-          profile={profile}
-          session={session}
-          gestionItems={gestionItems}
-        />
+        <div className="no-print">
+          <BottomTabs session={session} />
+          <SidebarMenu
+            open={menuOpen}
+            onClose={() => setMenuOpen(false)}
+            profile={profile}
+            session={session}
+            gestionItems={gestionItems}
+          />
+        </div>
       </div>
     </HeaderSlotProvider>
   );
