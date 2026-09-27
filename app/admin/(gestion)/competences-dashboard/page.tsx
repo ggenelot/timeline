@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { MarkdownText } from '@/components/ui/markdown-text';
@@ -142,6 +142,11 @@ function palette(color: string) {
 // collision avec un vrai id de catégorie (UUID).
 const ALL_CATEGORIES_ID = '__all__';
 
+// Statut sélectionné par défaut à l'ouverture du tableau de bord (tant que
+// l'URL ne restaure pas un autre filtre) : la clé du statut « En formation »
+// définie dans `skill_statuses` (voir migration `configurable_skill_statuses`).
+const DEFAULT_STATUS_FILTER = 'formation';
+
 // ── Helpers ───────────────────────────────────────────────────
 
 function initials(name: string) {
@@ -164,8 +169,21 @@ type EditorState = {
 
 // ── Page ──────────────────────────────────────────────────────
 
+// `useSearchParams` (utilisé pour restaurer les filtres depuis l'URL) impose
+// une frontière Suspense au-dessus, sans quoi Next.js échoue au build lors du
+// pré-rendu statique de la page (CSR bailout).
 export default function CompetencesDashboardPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-ink-2">Chargement…</p>}>
+      <CompetencesDashboardPageContent />
+    </Suspense>
+  );
+}
+
+function CompetencesDashboardPageContent() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { loading: permissionsLoading, can } = usePermissions();
   const canSee = can('cursus', 'can_see');
   const canManage = can('cursus', 'can_manage');
@@ -174,17 +192,26 @@ export default function CompetencesDashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<DashboardData | null>(null);
 
-  const [catId, setCatId] = useState<string | null>(null);
-  const [view, setView] = useState<'arbre' | 'tableau' | 'chronologie'>('arbre');
-  const [statusFilter, setStatusFilter] = useState<'all' | string>('all');
-  const [query, setQuery] = useState('');
+  // Filtres restaurés depuis l'URL au premier rendu (si présents), pour que
+  // le bouton « retour » du navigateur retombe sur la même vue après avoir
+  // consulté le cahier de doublure de quelqu'un. `statusParamProvided`
+  // permet de distinguer « pas de filtre dans l'URL » (→ défaut « en
+  // formation » une fois les statuts chargés) de « filtre "tous" explicite ».
+  const [statusParamProvided] = useState(() => searchParams.has('status'));
+  const [catId, setCatId] = useState<string>(() => searchParams.get('cat') ?? ALL_CATEGORIES_ID);
+  const [view, setView] = useState<'arbre' | 'tableau' | 'chronologie'>(() => {
+    const v = searchParams.get('view');
+    return v === 'tableau' || v === 'chronologie' ? v : 'arbre';
+  });
+  const [statusFilter, setStatusFilter] = useState<'all' | string>(() => searchParams.get('status') ?? 'all');
+  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
   const [expandedSkillIds, setExpandedSkillIds] = useState<Set<string>>(new Set());
   const [editor, setEditor] = useState<EditorState | null>(null);
 
   // ── Chronologie des montées en compétence ────────────────────
-  const [chronoProfileId, setChronoProfileId] = useState<'all' | string>('all');
-  const [chronoCursusId, setChronoCursusId] = useState<'all' | string>('all');
-  const [chronoQuery, setChronoQuery] = useState('');
+  const [chronoProfileId, setChronoProfileId] = useState<'all' | string>(() => searchParams.get('cp') ?? 'all');
+  const [chronoCursusId, setChronoCursusId] = useState<'all' | string>(() => searchParams.get('cc') ?? 'all');
+  const [chronoQuery, setChronoQuery] = useState(() => searchParams.get('cq') ?? '');
   const [expandedEventIds, setExpandedEventIds] = useState<Set<string>>(new Set());
 
   // Statuts effectifs, clé `${profileId}|${skillId}` → statut brut.
@@ -236,11 +263,36 @@ export default function CompetencesDashboardPage() {
       const map: Record<string, string> = {};
       for (const ps of json.profileSkills) map[`${ps.profile_id}|${ps.skill_id}`] = ps.status;
       setStatusMap(map);
-      if (json.categories.length > 0) setCatId(json.categories[0].id);
+      if (!statusParamProvided && json.statuses.some((s) => s.key === DEFAULT_STATUS_FILTER)) {
+        setStatusFilter(DEFAULT_STATUS_FILTER);
+      }
       setLoading(false);
     }
     void init();
-  }, [router, permissionsLoading, canSee]);
+  }, [router, permissionsLoading, canSee, statusParamProvided]);
+
+  // ── Filtres reflétés dans l'URL ──────────────────────────────
+  // Chaque changement de filtre remplace (sans empiler d'entrée d'historique)
+  // le query string de la page courante. Ainsi, quand on navigue vers le
+  // cahier de doublure de quelqu'un puis qu'on revient en arrière, le
+  // navigateur restaure l'URL avec les filtres tels qu'ils étaient — et le
+  // rendu initial ci-dessus les relit depuis `searchParams`.
+  useEffect(() => {
+    // Ne pas toucher à l'URL tant que les statuts n'ont pas fini de charger :
+    // sinon on écrirait `status=all` dans l'URL avant que le défaut « en
+    // formation » ne soit appliqué juste au-dessus.
+    if (loading) return;
+    const params = new URLSearchParams();
+    if (catId !== ALL_CATEGORIES_ID) params.set('cat', catId);
+    if (view !== 'arbre') params.set('view', view);
+    if (statusFilter !== DEFAULT_STATUS_FILTER) params.set('status', statusFilter);
+    if (query) params.set('q', query);
+    if (chronoProfileId !== 'all') params.set('cp', chronoProfileId);
+    if (chronoCursusId !== 'all') params.set('cc', chronoCursusId);
+    if (chronoQuery) params.set('cq', chronoQuery);
+    const qs = params.toString();
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+  }, [catId, view, statusFilter, query, chronoProfileId, chronoCursusId, chronoQuery, loading, pathname, router]);
 
   // ── Mutation d'une cellule ──────────────────────────────────
 
@@ -288,7 +340,15 @@ export default function CompetencesDashboardPage() {
         skills: data.categories.flatMap((c) => c.skills),
       };
     }
-    return data.categories.find((c) => c.id === catId) ?? data.categories[0] ?? null;
+    const found = data.categories.find((c) => c.id === catId);
+    if (found) return found;
+    return {
+      id: ALL_CATEGORIES_ID,
+      name: 'Toutes les catégories',
+      color: 'slate',
+      display_order: -1,
+      skills: data.categories.flatMap((c) => c.skills),
+    };
   }, [data, catId]);
   const pal = cat ? palette(cat.color) : palette('slate');
 
@@ -604,7 +664,13 @@ export default function CompetencesDashboardPage() {
           .toLowerCase();
         return haystack.includes(chronoQ);
       })
-      .sort((a, b) => (a.validatedAt < b.validatedAt ? 1 : -1));
+      .sort((a, b) => {
+        // Trié par date de l'événement (et non par date d'ajout/validation) :
+        // même référence que le regroupement par jour ci-dessous.
+        const da = a.eventDate ?? a.validatedAt;
+        const db = b.eventDate ?? b.validatedAt;
+        return da < db ? 1 : da > db ? -1 : a.validatedAt < b.validatedAt ? 1 : -1;
+      });
   }, [data, chronoProfileId, chronoCursusId, chronoQ, profileById, cursusById]);
 
   // Regroupe les séances par jour calendaire pour un en-tête de date commun,
