@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -169,7 +169,18 @@ type EditorState = {
 
 // ── Page ──────────────────────────────────────────────────────
 
+// `useSearchParams` (utilisé pour restaurer les filtres depuis l'URL) impose
+// une frontière Suspense au-dessus, sans quoi Next.js échoue au build lors du
+// pré-rendu statique de la page (CSR bailout).
 export default function CompetencesDashboardPage() {
+  return (
+    <Suspense fallback={<p className="text-sm text-ink-2">Chargement…</p>}>
+      <CompetencesDashboardPageContent />
+    </Suspense>
+  );
+}
+
+function CompetencesDashboardPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
